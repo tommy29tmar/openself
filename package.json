@@ -1,0 +1,41 @@
+{
+  "name": "openself",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "ai": "^4",
+    "@ai-sdk/openai": "^1",
+    "@ai-sdk/anthropic": "^1",
+    "@ai-sdk/google": "^1",
+    "better-sqlite3": "^11",
+    "drizzle-orm": "^0.38",
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.30",
+    "typescript": "^5",
+    "tailwindcss": "^4",
+    "@tailwindcss/postcss": "^4",
+    "postcss": "^8",
+    "@eslint/eslintrc": "^3",
+    "eslint": "^9",
+    "eslint-config-next": "^15"
+  }
+}
