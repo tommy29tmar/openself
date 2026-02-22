@@ -1,15 +1,15 @@
-# SyncPage — Architecture
+# OpenSelf — Architecture
 
 > Talk for 5 minutes. Get a living personal page.
 
-This document is the **single source of truth** for what SyncPage is, how it works,
+This document is the **single source of truth** for what OpenSelf is, how it works,
 and how it will be built. Everything else in this repo is background research.
 
 ---
 
 ## Table of Contents
 
-1. [What Is SyncPage](#1-what-is-the-social-hub)
+1. [What Is OpenSelf](#1-what-is-openself)
 2. [How It Works](#2-how-it-works)
 3. [System Architecture](#3-system-architecture)
 4. [The Agent](#4-the-agent)
@@ -27,9 +27,9 @@ and how it will be built. Everything else in this repo is background research.
 
 ---
 
-## 1. What Is SyncPage
+## 1. What Is OpenSelf
 
-SyncPage is an open-source tool that builds and maintains your personal web page
+OpenSelf is an open-source tool that builds and maintains your personal web page
 through conversation. You talk to an AI for 5 minutes. It creates a beautiful page about
 you. As your life changes, you tell it (or it learns from connected services), and the
 page evolves with you.
@@ -47,13 +47,35 @@ like you would talk to a friend. It handles the rest.
 
 ### What Makes It Different
 
-| Traditional profiles | SyncPage |
+| Traditional profiles | OpenSelf |
 |---|---|
 | You fill out forms | You have a conversation |
 | Static until you manually update | Evolves autonomously |
 | One format fits all | Your page, your way |
 | Platform owns your data | You own everything |
 | Closed, proprietary | Open-source, AGPL-3.0 |
+
+### The Bigger Vision
+
+OpenSelf is not just a page builder. It is the beginning of a **user-owned digital
+identity infrastructure**.
+
+1. **Identity Infrastructure** — Today people scatter their identity across CMS, LinkedIn,
+   Instagram, GitHub. OpenSelf is the unified layer that represents who you are, under
+   your control.
+2. **User-Owned Digital Twin** — Not a profile. Not a social. A digital twin controlled
+   by its owner, that evolves as you evolve.
+3. **AI Aligned With the User** — Every existing AI-powered platform optimizes for
+   engagement, ads, or retention. OpenSelf optimizes for identity coherence, personal
+   growth, and privacy. This is a philosophical shift.
+
+What OpenSelf is **not**:
+- No feed, no likes, no followers, no algorithmic ranking
+- No engagement metrics, no competition, no advertising
+- No "others are watching you" notifications
+- No public comparisons or vanity leaderboards
+
+The model is: **personal assistant**, not social platform.
 
 ---
 
@@ -62,42 +84,53 @@ like you would talk to a friend. It handles the rest.
 ### First Time (~5 minutes)
 
 ```
-1. Open syncpage.com (or your self-hosted instance)
+1. Open openself.com (or your self-hosted instance)
 2. Click "Create your page"
-3. Chat opens. The agent says:
+3. Language selection:
+
+   The app asks the user to pick their preferred language BEFORE starting the
+   conversation. This is critical: if the agent cannot understand the user's
+   language, the entire experience breaks.
+
+   - UI shows a language picker (auto-detected from browser locale + manual override)
+   - The agent's conversation language, fact extraction, and page generation
+     all adapt to the selected language
+   - Language can be changed later in settings
+
+4. Chat opens. The agent says (in the selected language):
 
    "Hey! I'm going to build your personal page.
     Tell me — who are you and what are you into?"
 
-4. You talk naturally for 3-5 minutes. The agent guides you:
+5. You talk naturally for 3-5 minutes. The agent guides you:
    - "What are you working on these days?"
    - "Anything you're particularly proud of?"
    - "What do people come to you for?"
 
-5. After ~5 exchanges, the agent says:
+6. After ~5 exchanges, the agent says:
 
    "Got it! Let me build your page — watch this →"
 
-6. Split view: chat on the left, live page preview on the right.
+7. Split view: chat on the left, live page preview on the right.
    The page builds itself in front of your eyes.
 
-7. "Here's your page! Want to change anything?"
+8. "Here's your page! Want to change anything?"
    - "Make it darker"
    - "The bio sounds too formal"
    - "Put my projects before the bio"
    - "Add my Instagram link"
 
-8. The agent adjusts in real time.
+9. The agent adjusts in real time.
 
-9. One publish checkpoint (single confirmation):
-   "I drafted this page with these facts as public. Publish?"
-   - Approve all
-   - Edit and approve
-   - Keep as draft (nothing public)
+10. One publish checkpoint (single confirmation):
+    "I drafted this page with these facts as public. Publish?"
+    - Approve all
+    - Edit and approve
+    - Keep as draft (nothing public)
 
-10. Choose your username → syncpage.com/yourname
+11. Choose your username → openself.com/yourname
 
-11. Live. Done. Under 5 minutes.
+12. Live. Done. Under 5 minutes.
 ```
 
 ### Returning (~2 minutes)
@@ -135,7 +168,7 @@ After onboarding, approvals are per change category (unless you enable auto-appr
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        THE SOCIAL HUB                            │
+│                          OPENSELF                          │
 │                                                                  │
 │  ┌───────────┐     ┌──────────────────┐     ┌────────────────┐  │
 │  │           │     │                  │     │                │  │
@@ -180,13 +213,13 @@ the knowledge base as facts, and flows out through the page engine as a public p
 
 ## 4. The Agent
 
-The agent is the heart of SyncPage. Inspired by OpenClaw's living agent architecture,
+The agent is the heart of OpenSelf. Inspired by OpenClaw's living agent architecture,
 it is not a stateless chatbot — it is an entity that knows you, remembers you, and evolves
 its understanding of you over time.
 
 ### 4.1 Agent Identity
 
-Every instance of SyncPage has an agent with a defined identity. This is stored in a
+Every instance of OpenSelf has an agent with a defined identity. This is stored in a
 configuration file (similar to OpenClaw's SOUL.md) that shapes how the agent behaves:
 
 ```yaml
@@ -194,7 +227,7 @@ configuration file (similar to OpenClaw's SOUL.md) that shapes how the agent beh
 
 personality:
   tone: "warm-casual"          # How the agent talks (warm-casual, professional, playful, minimal)
-  language: "auto"             # Detected from user's first message, or set explicitly
+  language: "it"               # Set explicitly at onboarding (language picker), required before first message
   humor: true                  # Light humor when appropriate
   verbosity: "concise"         # concise | balanced | detailed
   emoji: false                 # Use emoji in responses
@@ -382,21 +415,155 @@ Execution note:
 
 The agent's memory has three tiers (inspired by OpenClaw):
 
-**Tier 1 — Conversation History (ephemeral)**
-Raw chat messages. Kept for context within sessions. Older messages are summarized
-and key facts are extracted to the KB before being archived.
+**Tier 1 — Short-Term: Conversation History (ephemeral)**
+Raw chat messages from the current session. Kept for immediate context. Older
+messages are summarized (Tier 2) and key facts are extracted to the KB (Tier 3)
+before being archived.
 
-**Tier 2 — Knowledge Base (durable)**
-Structured facts about the user. The source of truth. See Section 5.
+**Tier 2 — Medium-Term: Conversation Summaries (rolling)**
+Compressed summaries of past conversations. The agent does not re-read full
+transcripts — it works from distilled summaries that capture the essential
+information, emotional tone, and unresolved threads. Summaries are updated
+progressively: each new conversation enriches or refines previous summaries.
 
-**Tier 3 — Agent Memory (meta-knowledge)**
-The agent's own notes about the user — not facts, but observations:
-- "User gets annoyed when I ask too many questions in a row"
-- "User prefers to talk about projects rather than skills"
-- "User's mood is usually better in evening conversations"
+**Tier 3 — Long-Term: Consolidated Knowledge (durable)**
+Two sub-layers:
 
-This is stored separately from the KB and used to improve conversation quality
-over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
+- **Knowledge Base** — Structured facts about the user. The source of truth for
+  page generation. See Section 5.
+- **Agent Memory** — The agent's own meta-observations about the user — not facts,
+  but behavioral notes:
+  - "User gets annoyed when I ask too many questions in a row"
+  - "User prefers to talk about projects rather than skills"
+  - "User's mood is usually better in evening conversations"
+
+Agent memory is stored separately from the KB and used to improve conversation
+quality over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
+
+### 4.5.1 Fact Visibility Lifecycle
+
+Every fact in the KB follows a four-state visibility lifecycle:
+
+```
+┌──────────┐     ┌──────────────┐     ┌──────────┐     ┌────────────┐
+│ PRIVATE  │────▶│   PROPOSED   │────▶│  PUBLIC  │────▶│  ARCHIVED  │
+│          │     │              │     │          │     │            │
+│ Not on   │     │ Agent thinks │     │ Live on  │     │ Was active,│
+│ page,    │     │ it could go  │     │ the page │     │ now hidden │
+│ internal │     │ on the page  │     │          │     │ but kept   │
+│ only     │     │              │     │          │     │            │
+└──────────┘     └──────────────┘     └──────────┘     └────────────┘
+      ▲                                     │
+      └─────────────────────────────────────┘
+                  (user revokes)
+```
+
+- **Private**: stored in KB, never shown on the page. Used by the agent for
+  understanding context (e.g., salary, personal struggles).
+- **Proposed**: the agent believes this fact could be on the page.
+  Shown in draft preview. Requires user approval to go live.
+- **Public**: live on the public page.
+- **Archived**: was active, now removed from the page. Still stored in KB for
+  history and potential future reactivation.
+
+The agent manages these transitions through heartbeat cycles, optimizing for
+relevance without wasting LLM calls on facts that haven't changed.
+
+### 4.5.2 Heartbeat Cost Optimization
+
+The heartbeat should be event-driven, not blindly periodic:
+
+- If nothing has changed (no new connector data, no new conversations, no
+  time-sensitive facts), the heartbeat skips LLM calls entirely.
+- The heartbeat checks for change signals first (cheap), then invokes the LLM
+  only when reasoning is needed (expensive).
+- Batch processing: multiple pending changes are processed in a single LLM call
+  rather than one call per change.
+
+### 4.6 Agent Evolution Levels
+
+The agent is designed to grow in capability over time. Each level builds on the
+previous one. Level 1 is the MVP; higher levels are unlocked as the knowledge base
+deepens and the user opts in.
+
+**Level 1 — Smart Curator** (Phase 0-1)
+
+The agent keeps your page up to date. It adapts tone and style, manages privacy,
+asks for confirmations, and suggests small improvements.
+
+Value: *"I never have to think about my online presence."*
+
+**Level 2 — Identity Coach** (Phase 2+)
+
+The agent goes beyond describing who you are — it helps you understand how you are
+perceived and how you want to be perceived. This is not a motivational coach. It is
+an operational identity coach based on your real data.
+
+Capabilities:
+- **Gap analysis** — "You want to reposition as an AI strategist, but 70% of your
+  content still talks about data engineering. Want to rebalance?"
+- **Trend alignment** — "In the last 6 months, these topics are growing in your
+  field: X, Y, Z. Want to integrate them into your positioning?"
+- **Narrative refinement** — "You talk a lot about what you do, but not why you
+  do it. Want to work on your positioning?"
+- **Targeted opportunities** — Not a feed. Only things filtered by your profile:
+  "This open-source project aligns perfectly with your skills. Interested?"
+
+This is not engagement. It is relevance.
+
+**Level 3 — Career / Life Navigator** (Phase 3+)
+
+Strategic repositioning mode. The user says: "I want to move into product management
+in the next 12 months." The agent can:
+- Analyze the current profile
+- Highlight gaps
+- Suggest what to develop
+- Help rewrite the narrative
+- Reorganize the page to support the new positioning
+- Suggest coherent content and connections
+
+Not a social network. A trajectory simulation system.
+
+**Level 4 — Personal Knowledge Core** (Vision)
+
+The page becomes just the public interface. Behind it lives a complete map of the
+user's competencies, passions, goals, and evolution over time.
+
+The agent can:
+- Show evolution: "In the last 3 years you went from X to Y. Your focus is
+  shifting toward..."
+- Suggest growth cycles: "You are neglecting the creative side that used to
+  motivate you a lot."
+- Time Capsule: yearly review of identity evolution.
+
+This is not a feature. It is a new product category:
+**the operating system of your digital identity**.
+
+**Anti-social boundary:** At every level, the agent remains a private assistant.
+No public feed, no likes, no ranking, no comparison. Only private suggestions,
+only with consent. Zero engagement mechanics.
+
+### 4.7 Voice Interaction Architecture
+
+Voice is a first-class modality, not an accessory. The goal is an agent that
+listens, reasons, and speaks.
+
+**Speech-to-Text (input):**
+- Browser: Web Speech API (real-time, no server round-trip)
+- Server fallback: Whisper (OpenAI open-source model). Supports many languages,
+  runs locally via Whisper.cpp or via API. Critical for the language-agnostic promise.
+
+**Text-to-Speech (output):**
+- Open-source engines: eSpeak NG (lightweight, many languages, predefined voices),
+  Piper (higher quality neural TTS, still open-source and local).
+- Cloud fallback: provider TTS APIs (OpenAI, Google, ElevenLabs) for premium voice
+  quality, opt-in only.
+
+**Design principle:** The voice pipeline must work fully offline when using local
+models (Whisper + eSpeak/Piper + Ollama). This preserves the privacy-first guarantee.
+
+Voice data is ephemeral: audio is transcribed and discarded. Only the text
+transcription enters the conversation and fact extraction pipeline.
 
 ---
 
@@ -430,7 +597,7 @@ It is the single source of truth from which the page is generated.
 │  value       JSON NOT NULL        (flexible structure)    │
 │  source      TEXT DEFAULT 'chat'  (chat|github|strava|…) │
 │  confidence  REAL DEFAULT 1.0     (0.0 to 1.0)           │
-│  visibility  TEXT DEFAULT 'private' (private|proposed|public)│
+│  visibility  TEXT DEFAULT 'private' (private|proposed|public|archived)│
 │  created_at  DATETIME                                     │
 │  updated_at  DATETIME                                     │
 ├──────────────────────────────────────────────────────────┤
@@ -457,13 +624,17 @@ The agent creates these autonomously during conversations and from connectors:
 { "category": "interest", "key": "jazz", "value": { "name": "Jazz music", "detail": "Plays piano, loves Coltrane" } }
 
 // Projects
-{ "category": "project", "key": "the-social-hub", "value": { "name": "SyncPage", "description": "Open-source AI profile builder", "url": "https://github.com/...", "status": "active", "role": "Creator" } }
+{ "category": "project", "key": "openself", "value": { "name": "OpenSelf", "description": "Open-source AI profile builder", "url": "https://github.com/...", "status": "active", "role": "Creator" } }
 
 // Achievements
 { "category": "achievement", "key": "berlin-marathon-2025", "value": { "title": "Berlin Marathon 2025", "detail": "Finished in 3:45:00", "date": "2025-09-28" }, "source": "strava" }
 
 // Experience
 { "category": "experience", "key": "acme-corp", "value": { "role": "Product Manager", "company": "Acme Corp", "start": "2026-02", "end": null, "status": "current" } }
+
+// Activities (with geolocation)
+{ "category": "activity", "key": "ai-conf-2026", "value": { "title": "Spoke at AI Conference 2026", "date": "2026-02-15", "location": { "name": "Palazzo delle Esposizioni", "city": "Rome", "country": "IT", "coords": [41.8992, 12.4892] }, "tags": ["conference", "AI", "speaking"] } }
+{ "category": "activity", "key": "berlin-meetup-feb", "value": { "title": "Berlin TypeScript Meetup", "date": "2026-02-10", "location": { "name": "Factory Berlin", "city": "Berlin", "country": "DE" }, "tags": ["meetup", "TypeScript"] } }
 
 // The agent can create any category it wants:
 { "category": "philosophy", "key": "open-source", "value": { "text": "Believes software should be free and open" } }
@@ -549,7 +720,7 @@ components.
 ### 6.1 Design System — Components
 
 A curated set of pre-built, responsive, accessible React components. Every component
-follows SyncPage's visual identity.
+follows OpenSelf's visual identity.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -597,10 +768,15 @@ follows SyncPage's visual identity.
 │  music         Listening habits, playlists                   │
 │                Variants: player-style, list, grid            │
 │                                                              │
+│  activities    Latest activities, events, places              │
+│                Variants: feed, cards, map, compact            │
+│                Supports geolocation (venue, city, coords)    │
+│                e.g., "Spoke at AI Conf @ Palazzo Esposizioni"│
+│                                                              │
 │  contact       Contact information, availability             │
 │                Variants: form, links, card                   │
 │                                                              │
-│  footer        "Made with SyncPage" + meta info        │
+│  footer        "Made with OpenSelf" + meta info        │
 │                Always present (subtle, non-intrusive)        │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
@@ -655,7 +831,7 @@ interface PageComponentModule {
 ```
 
 SDK guardrails:
-- Components consume SyncPage design tokens from the theme API.
+- Components consume OpenSelf design tokens from the theme API.
 - No global CSS resets, no external font injection, no tracking scripts.
 - SSR/SSG compatibility is mandatory.
 - Static export mode fallback is mandatory.
@@ -698,7 +874,7 @@ Reference TypeScript shape:
 ```ts
 type ComponentType =
   | "hero" | "bio" | "skills" | "projects" | "timeline" | "interests"
-  | "achievements" | "stats" | "social" | "custom" | "reading"
+  | "achievements" | "activities" | "stats" | "social" | "custom" | "reading"
   | "music" | "contact" | "footer";
 
 type StyleConfig = {
@@ -718,6 +894,7 @@ type Section = {
 type PageConfig = {
   version: number;
   username: string;
+  sourceLanguage: string;     // ISO 639-1 code (e.g., "it", "en", "de") — set from onboarding
   theme: string;
   style: StyleConfig;
   sections: Section[];
@@ -770,8 +947,8 @@ Runtime rules:
       "content": {
         "items": [
           {
-            "factRef": "project:the-social-hub",
-            "title": "SyncPage",
+            "factRef": "project:openself",
+            "title": "OpenSelf",
             "description": "Open-source AI that builds your personal page",
             "url": "https://github.com/...",
             "tags": ["TypeScript", "AI", "Open Source"]
@@ -868,17 +1045,17 @@ it does not regenerate everything:
 | "Use a different color" | `style.primaryColor = "#..."` |
 | "Make it more minimal" | `theme = "minimal"`, reduce variant complexity |
 
-### 6.5 SyncPage Visual Identity
+### 6.5 OpenSelf Visual Identity
 
 All pages share a recognizable DNA. Like how you can spot a Notion page or a Read.cv
-profile at a glance, TSH pages should be instantly recognizable.
+profile at a glance, OpenSelf pages should be instantly recognizable.
 
 **Shared across all themes:**
 - Typography: limited font set (Inter, Source Serif, JetBrains Mono)
 - Spacing rhythm: consistent 8px grid
 - Border radius: consistent roundness
 - Transitions: subtle, smooth animations
-- Footer: small "Made with SyncPage" badge with link
+- Footer: small "Made with OpenSelf" badge with link
 - Component structure: same HTML skeleton regardless of theme
 - Responsiveness: all components work on all screen sizes
 
@@ -937,12 +1114,132 @@ This means:
 - The renderer can be tested independently (input JSON → assert output)
 - Third parties can build alternative renderers
 
+### 6.7 Automatic Page Translation
+
+The page is written in the owner's language. But visitors may speak a different language.
+
+**How it works:**
+1. The public page detects the visitor's browser language (`Accept-Language` header).
+2. If it differs from the page's source language, a translation banner appears:
+   "This page is originally in Italian. [View in English]"
+3. On request, the page content is translated and cached.
+
+**Translation strategy:**
+- **Preferred (cost-effective):** pre-translate the page into major languages during
+  page generation or heartbeat. Cache translated versions as static variants.
+- **On-demand fallback:** translate via LLM or translation API (DeepL, Google Translate)
+  when a visitor requests an uncached language.
+- **Static export:** exported HTML can include pre-translated variants as alternate
+  `<link hreflang>` pages for SEO.
+
+**What gets translated:** section content (bio text, descriptions, taglines). What
+does **not** get translated: proper nouns, project names, skill labels, URLs.
+
+The source language is stored in the page config. The agent sets it based on the
+user's onboarding language selection.
+
+### 6.8 Activities Component
+
+The `activities` component shows recent activities, events, and places. It supports
+automatic geolocation enrichment.
+
+**Example content:**
+```json
+{
+  "id": "activities-1",
+  "type": "activities",
+  "variant": "feed",
+  "content": {
+    "items": [
+      {
+        "factRef": "activity:ai-conf-2026",
+        "title": "Spoke at AI Conference 2026",
+        "date": "2026-02-15",
+        "location": {
+          "name": "Palazzo delle Esposizioni",
+          "city": "Rome",
+          "country": "IT",
+          "coords": [41.8992, 12.4892]
+        },
+        "tags": ["conference", "AI", "speaking"]
+      }
+    ]
+  }
+}
+```
+
+**Geolocation enrichment:** When the user mentions a place in conversation
+("yesterday I was at the AI conference at Palazzo delle Esposizioni"), the agent:
+1. Extracts the venue name and context
+2. Resolves coordinates via geocoding (OpenStreetMap Nominatim or similar)
+3. Creates an `activity` fact with structured location data
+4. Updates the activities section on the page
+
+**Potential for connection:** Activity data (events attended, places visited) can be
+used to suggest connections with other OpenSelf users who attended the same events
+or have similar activity patterns. This happens only with explicit opt-in and through
+the federated discovery layer (see Section 6.9).
+
+### 6.9 Discovery & Federation
+
+**The problem:** If everyone hosts their own page independently, how do people find
+each other? On LinkedIn you search a name and find profiles. But with decentralized
+pages hosted in different places, there is no central search.
+
+**The solution: an opt-in federated directory.**
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Page A      │     │  Page B      │     │  Page C      │
+│  (self-host) │     │  (Vercel)    │     │  (cloud)     │
+│              │     │              │     │              │
+│  Registers → │     │  Registers → │     │  Registers → │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       ▼                    ▼                    ▼
+┌──────────────────────────────────────────────────────────┐
+│                  DISCOVERY REGISTRY                       │
+│                                                          │
+│  - Public profile index (name, tagline, tags, location)  │
+│  - Search by name, skill, interest, location             │
+│  - Activity-based suggestions (same events, similar      │
+│    interests) — opt-in only                              │
+│  - No ranking, no algorithm, no engagement metrics       │
+│                                                          │
+│  Protocol: each page maintains a signed registration     │
+│  key that proves ownership and allows updates.           │
+│  Registry stores only public metadata, never full KB.    │
+└──────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+1. When a page is published, the owner can opt-in to register with the discovery
+   directory (hosted at `directory.openself.com` or community-run instances).
+2. The page sends a signed registration payload containing only public metadata:
+   name, tagline, skills, interests, location, page URL.
+3. The directory indexes this metadata for search.
+4. Each page maintains a **registration key** (asymmetric keypair) that proves
+   ownership and allows updates/deregistration.
+5. The directory never stores private facts or full page content — only the
+   public index card.
+
+**Activity-based discovery (opt-in):**
+- Users who attended the same event can discover each other
+- Users with similar skill/interest profiles can be suggested
+- All suggestions are private (shown only to the individual), never public
+- Users can disable discovery entirely
+
+**Federation:** Multiple directory instances can sync with each other, so
+community-run directories can interoperate with the main one.
+
+This is designed in Phase 3 alongside the protocol layer.
+
 ---
 
 ## 7. Connectors
 
 Connectors are modular plugins that pull data from external services into the
-knowledge base. They are optional — SyncPage works perfectly without any
+knowledge base. They are optional — OpenSelf works perfectly without any
 connectors, using conversation alone.
 
 ### 7.1 Architecture
@@ -1065,7 +1362,7 @@ CREATE TABLE facts (
     value JSON NOT NULL,
     source TEXT DEFAULT 'chat',
     confidence REAL DEFAULT 1.0 CHECK (confidence >= 0.0 AND confidence <= 1.0),
-    visibility TEXT DEFAULT 'private' CHECK (visibility IN ('private', 'proposed', 'public')),
+    visibility TEXT DEFAULT 'private' CHECK (visibility IN ('private', 'proposed', 'public', 'archived')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(category, key)
@@ -1174,7 +1471,7 @@ CREATE TABLE media_assets (
     width INTEGER,
     height INTEGER,
     sha256 TEXT NOT NULL,
-    visibility TEXT DEFAULT 'private' CHECK (visibility IN ('private', 'proposed', 'public')),
+    visibility TEXT DEFAULT 'private' CHECK (visibility IN ('private', 'proposed', 'public', 'archived')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(storage_backend, storage_key)
 );
@@ -1275,7 +1572,7 @@ Your data is always exportable:
 | Markdown | Profile as text | Embed in README, docs |
 
 The static HTML export is particularly important — it means you can generate your page
-with SyncPage and then host it anywhere, completely independently. No lock-in.
+with OpenSelf and then host it anywhere, completely independently. No lock-in.
 
 ### 8.4 Consistency & Concurrency
 
@@ -1311,7 +1608,7 @@ MVP guardrails:
 - Allowed MIME: `image/jpeg`, `image/png`, `image/webp`
 - Processing pipeline: strip EXIF, generate normalized WebP sizes (`128x128`, `512x512`)
 - Deduplication by SHA-256 hash
-- Avatar visibility follows the same `private/proposed/public` flow as facts
+- Avatar visibility follows the same `private/proposed/public/archived` lifecycle as facts
 
 Non-avatar visual elements should be text/icons/emoticons from the design system,
 not user-uploaded binaries.
@@ -1355,7 +1652,7 @@ Boot behavior:
 6. **Accessible to everyone.** A 70-year-old and a 20-year-old should both succeed.
 7. **Conversation, not forms.** Never make the user fill out a structured form.
 8. **Radical transparency.** The user can always see why the agent did something.
-9. **Celebrate the person, not the app.** The page showcases YOU, not SyncPage.
+9. **Celebrate the person, not the app.** The page showcases YOU, not OpenSelf.
 10. **If usage time decreases, we are winning.** Less time in the app = more value delivered.
 
 ### 9.2 Conversation Design
@@ -1405,9 +1702,14 @@ creating an account), the user sees their page before committing.
 ### 9.4 Accessibility
 
 - **Voice as primary modality** — not an accessory. If someone can only speak
-  (no typing), they should still get a full page.
+  (no typing), they should still get a full page. The agent listens (Whisper),
+  reasons, and can speak back (TTS). See Section 4.7.
 - **Screen reader support** — full ARIA compliance, WCAG AAA contrast (7:1)
-- **Multilingual** — agent detects language automatically, interface adapts
+- **Language-first onboarding** — the app asks for the user's language before
+  anything else. The agent converses, extracts facts, and generates the page in
+  that language. See Section 2 (How It Works).
+- **Automatic page translation** — visitors who speak a different language can
+  view the page translated. See Section 6.7.
 - **Low-bandwidth** — generated pages are lightweight, fast on any connection
 - **No jargon** — the app never uses technical terms unless the user does first
 
@@ -1427,9 +1729,11 @@ feasibility.
 | **Search** | SQLite FTS5 + sqlite-vec | Full-text + vector search without external dependencies. |
 | **AI SDK** | Vercel AI SDK | BYOM out of the box: OpenAI, Anthropic, Ollama, Google. Streaming. Tool calling. |
 | **Auth** | NextAuth.js (Auth.js) | OAuth (Google, GitHub, email). Only needed for multi-user/cloud. |
-| **Voice** | Web Speech API + Whisper | Browser-native speech input. Whisper for server-side. |
+| **Voice STT** | Web Speech API + Whisper | Browser-native speech input. Whisper (local or API) for server-side transcription. Multi-language. |
+| **Voice TTS** | eSpeak NG / Piper / Provider APIs | Open-source local TTS (eSpeak NG, Piper) for privacy. Cloud TTS APIs for premium quality (opt-in). |
+| **Translation** | LLM + DeepL/Google Translate (fallback) | Page auto-translation for visitors. Pre-cached for common languages. |
 | **Background Jobs** | Dedicated Node.js worker + SQLite `jobs` table | Heartbeat, connector sync, retries outside request lifecycle. |
-| **License** | AGPL-3.0 | Copyleft: anyone can use it, but improvements must be shared. |
+| **License** | AGPL-3.0 (outbound) + CLA/CAA (inbound) | Copyleft on hosted forks + explicit contribution rights for future relicensing/commercial options. |
 
 ### What we DON'T use (and why)
 
@@ -1448,11 +1752,11 @@ feasibility.
 
 ### 11.1 Self-Hosted (Primary)
 
-SyncPage runs on any machine with Node.js:
+OpenSelf runs on any machine with Node.js:
 
 ```bash
-git clone https://github.com/syncpage/syncpage
-cd syncpage
+git clone https://github.com/openself/openself
+cd openself
 cp .env.example .env          # Set your LLM API key
 npm install
 npm run dev                    # Web app → localhost:3000
@@ -1515,14 +1819,14 @@ npm run export -- --username tommaso
 ```
 
 This HTML file can be uploaded to GitHub Pages, Netlify, S3, or any static
-host. The page works completely independently of SyncPage.
+host. The page works completely independently of OpenSelf.
 
 ### 11.4 Future: Managed Cloud
 
 When (and if) the community requests it, a managed service at
-`syncpage.com` will offer:
+`openself.com` will offer:
 
-- Sign up → talk → page live at `syncpage.com/username`
+- Sign up → talk → page live at `openself.com/username`
 - No API keys needed (LLM is included)
 - Automatic backups
 - Custom domain support
@@ -1540,7 +1844,7 @@ the functionality. The cloud version is convenience.
 
 ### 11.5 Runtime Model (Web + Worker)
 
-SyncPage runs with two execution roles:
+OpenSelf runs with two execution roles:
 
 1. **Web app (Next.js)**: chat UI, public pages, APIs
 2. **Worker (Node.js process)**: heartbeat, connector polling, retries, scheduled tasks
@@ -1573,7 +1877,7 @@ Scheduling model:
 ### 12.2 Connector Security
 
 - OAuth tokens stored encrypted in the database
-- Encryption keys are externalized (`TSH_ENCRYPTION_KEY` self-hosted, KMS in cloud)
+- Encryption keys are externalized (`OPENSELF_ENCRYPTION_KEY` self-hosted, KMS in cloud)
 - Key rotation uses key versioning + background re-encryption
 - Connectors have read-only access to external services by default
 - API keys can be rotated without data loss
@@ -1586,6 +1890,7 @@ Every fact has a `visibility` field:
 - `private` — stored in KB, never shown on public page
 - `proposed` — visible only in onboarding/draft preview, not public
 - `public` — appears on the public page
+- `archived` — removed from the page but preserved in KB for history/context
 
 The agent uses private facts to understand you better (e.g., salary expectations,
 personal struggles) without ever putting them on the page.
@@ -1635,7 +1940,7 @@ Visibility is mode-aware and enforced by `VisibilityPolicy`:
    - Examples: compensation, health, personal struggles, private contacts
 4. **Non-sensitive proposal allowlist (default)**
    - `identity` (public profile fields only), `project`, `skill`, `interest`, `achievement`,
-     `social` (public handles/links)
+     `activity`, `social` (public handles/links)
    - `identity` public profile fields (explicit):
      - `name.full`
      - `tagline.text`
@@ -1645,6 +1950,12 @@ Visibility is mode-aware and enforced by `VisibilityPolicy`:
    - `identity` fields never auto-proposed: legal name variants, phone, personal email,
      exact address, date of birth, private contacts
    - Categories outside the allowlist remain `private` unless explicitly approved
+5. **Archived state**
+   - Facts transition from `public` to `archived` when no longer relevant for the page
+     (old job, past event, superseded info)
+   - Archived facts are preserved in the KB for history, context, and potential reactivation
+   - The agent uses archived facts for reasoning (e.g., career evolution analysis)
+     but never renders them on the public page
 
 ---
 
@@ -1654,33 +1965,62 @@ Visibility is mode-aware and enforced by `VisibilityPolicy`:
 
 **Goal:** A working prototype that makes someone say "wow, I want this."
 
+Phase 0 is split into two measurable sub-steps to reduce execution risk and provide
+an early visual checkpoint before wiring the full agent brain.
+
+#### Phase 0.1 — Data & UI Skeleton
+
+**Goal:** Approve the visual foundation and rendering pipeline with static data,
+before any LLM integration.
+
 ```
-Core:
+Data layer:
   [x] Project scaffolding (Next.js 15 + TypeScript + Tailwind + shadcn)
   [ ] Database schema (SQLite + Drizzle ORM)
+  [ ] Taxonomy normalizer + alias registry
+  [ ] Confidence + VisibilityPolicy (`private`/`proposed`/`public`/`archived`)
+  [ ] PageConfig schema + validator (Zod/JSON Schema)
+  [ ] Media storage layer (SQLite blob default + optional fs/s3 backend)
+  [ ] SQLite runtime hardening (`WAL` + `busy_timeout` + retry backoff for lock contention)
+
+UI & rendering:
+  [ ] Page engine: 5 core components (hero, bio, skills, projects, social)
+  [ ] Page renderer: config JSON → HTML page
+  [ ] 2 themes (minimal, warm)
+  [ ] Chat UI (functional shell — sends/receives messages, no agent behind it yet)
+  [ ] Public page at /[username]
+  [ ] Split-view: chat + live preview
+```
+
+**Definition of done (0.1):** You can load a hardcoded PageConfig, see a beautiful
+rendered page at /username with both themes, and interact with a chat shell that
+echoes messages. The visual contract is validated before agent work begins.
+
+#### Phase 0.2 — Agent Brain & Sync
+
+**Goal:** Wire the LLM, make the conversation real, and close the 5-minute loop.
+
+```
+Agent core:
   [ ] LLM adapter (Vercel AI SDK — OpenAI + Ollama)
   [ ] Agent core: system prompt, conversation, tool calling
   [ ] PromptAssembler (block-based system prompt + versioned prompt IDs)
   [ ] Context budget manager (history summary + top-K fact retrieval)
   [ ] Knowledge base: CRUD + autonomous fact extraction
-  [ ] Taxonomy normalizer + alias registry
-  [ ] Confidence + VisibilityPolicy (`private`/`proposed`/`public`)
-  [ ] Page engine: 5 core components (hero, bio, skills, projects, social)
-  [ ] PageConfig schema + validator (Zod/JSON Schema)
-  [ ] Page renderer: config JSON → HTML page
+
+Onboarding flow:
   [ ] Onboarding publish checkpoint (batch approval)
   [ ] Hybrid live preview (optimistic per turn + milestone synthesis)
-  [ ] Media storage layer (SQLite blob default + optional fs/s3 backend)
-  [ ] 2 themes (minimal, warm)
-  [ ] Chat UI
-  [ ] Public page at /[username]
-  [ ] Split-view: chat + live preview
+  [ ] Live preview state machine (`optimistic` immediate + async synthesis statuses)
+  [ ] Low-signal onboarding fallback (`utente muto`) with guided prompts and safe minimal page generation
+  [ ] Language selection at onboarding (before conversation starts)
+
+Reliability:
   [ ] Background worker + jobs queue (scheduler tick + retries)
   [ ] PageConfig schema-repair loop (validation error -> structured retry, max attempts, explicit user fallback)
-  [ ] SQLite runtime hardening (`WAL` + `busy_timeout` + retry backoff for lock contention)
-  [ ] Live preview state machine (`optimistic` immediate + async synthesis statuses)
   [ ] Reliability telemetry baseline (`agent_events` for validation failures/retries/fallbacks)
-  [ ] Low-signal onboarding fallback (`utente muto`) with guided prompts and safe minimal page generation
+  [ ] LLM Evals suite (deterministic offline tests: canned conversations → assert correct fact extraction, no data loss, no hallucinated deletions)
+  [ ] Basic rate limiting (per-IP throttle on chat API, conversation pace cap)
 
 Not in this phase:
   - No auth / multi-user
@@ -1688,11 +2028,30 @@ Not in this phase:
   - No voice
   - No heartbeat
   - No semantic search (simple keyword search is fine)
+  - No page translation (page is in the user's language only)
+  - No discovery / federation
 ```
 
-**Definition of done:** You open the app, chat for 5 minutes, and have a beautiful
+**Definition of done (0.2):** You open the app, chat for 5 minutes, and have a beautiful
 page at /username. You can say "make it darker" and it changes. You can say "I also
 play guitar" and it adds an interests section.
+
+#### Phase 0 Gate: Closed Alpha / Dogfooding
+
+Before Phase 1 begins and before any public GitHub push, the end-to-end flow must
+survive real-world usage outside the development team.
+
+```
+  [ ] Founders create their own pages using the live product
+  [ ] 10+ trusted testers (friends, colleagues) complete the full onboarding flow
+  [ ] Collect structured feedback: UX friction, agent quality, rendering bugs
+  [ ] Stress-test LLM adapter with diverse languages, edge-case inputs, and adversarial prompts
+  [ ] Fix critical issues surfaced during dogfooding
+  [ ] LLM Evals pass rate ≥ 95% on canned test suite
+```
+
+**Definition of done (gate):** At least 10 real profiles exist, critical bugs are
+resolved, and the team has confidence the 5-minute promise holds for non-developers.
 
 ### Phase 1 — Living Agent (Months 2-4)
 
@@ -1705,14 +2064,16 @@ Agent:
   [ ] Semantic search (sqlite-vec embeddings)
   [ ] Heartbeat system (periodic self-reflection)
   [ ] Conversation context assembly (facts + history + page state)
-  [ ] LLM usage metering + budget enforcement
+  [ ] LLM usage metering + budget enforcement (daily token limits, cost caps, warning thresholds)
+  [ ] Anti-abuse hardening (conversation pace throttle, session length caps, stealth captcha on onboarding→chat transition)
   [ ] Fact conflict resolver v1 (source precedence + supersede semantics + deterministic merge policy)
+  [ ] LLM Evals expansion (multi-session coherence: assert KB integrity after 50+ simulated conversations)
 
 Connectors:
   [ ] Connector interface definition
   [ ] GitHub connector (OAuth, repos, languages, contributions)
   [ ] RSS/Atom connector (blog posts from any feed)
-  [ ] Manual import (CSV/JSON upload)
+  [ ] Manual import (CSV/JSON upload — including LinkedIn data export as priority import source)
 
 Page:
   [ ] All components (timeline, achievements, stats, reading, music, contact)
@@ -1726,6 +2087,7 @@ Infrastructure:
   [ ] .env.example with all providers
   [ ] README with screenshots, quick start, demo video
   [ ] Add `LICENSE` (AGPL-3.0) + copyright notices
+  [ ] Add inbound contribution policy (`CLA` or `CAA`) + GitHub signature bot
 ```
 
 **Definition of done:** The agent remembers you across sessions, proactively suggests
@@ -1740,21 +2102,27 @@ updates, pulls data from GitHub, and you can export your page as static HTML.
 | SQLite write contention (`SQLITE_BUSY`) | Web + worker concurrent writes | WAL mode, busy timeout, per-user write serialization, retry with backoff |
 | KB fact conflicts | Chat vs connectors vs heartbeat updates | Source precedence matrix + supersede/tombstone policy + audit trail |
 | Silent failures / weak observability | Any background/runtime path | Structured `agent_events`, error taxonomy, counters and alerts |
+| LLM coherence drift over time | Multi-session fact management | LLM Evals suite with deterministic canned conversations + regression tests |
+| LLM cost abuse (public demo) | Chat API exposed to internet | Per-IP rate limiting, conversation pace throttle, session caps |
+| Untested UX assumptions | First real users | Closed alpha / dogfooding gate with 10+ testers before public launch |
 
 Phase gate:
-- Phase 0 is not done unless first three mitigations are implemented.
-- Phase 1 is not done unless conflict resolver and observability baseline are implemented.
+- Phase 0.1 is not done unless data layer + rendering pipeline produce a valid page from static config.
+- Phase 0.2 is not done unless first three mitigations are implemented + LLM Evals baseline passes.
+- Phase 0 Closed Alpha gate must pass before any public GitHub push (see 13.2.1).
+- Phase 1 is not done unless conflict resolver, observability baseline, and anti-abuse hardening are implemented.
 
 ### Phase 2 — Community & Connectors (Months 4-8)
 
 **Goal:** Ecosystem expansion. More connectors, more customization, more users.
 
 ```
-Connectors:
+Connectors (ordered by identity migration value):
+  [ ] LinkedIn data import (structured CSV/JSON from data export — bridge for professional identity migration)
+  [ ] Google Scholar / ORCID (publications — high value for academic/research users)
   [ ] Strava (sports activities, stats)
-  [ ] Spotify (listening habits)
   [ ] Goodreads (books, reading list)
-  [ ] Google Scholar / ORCID (publications)
+  [ ] Spotify (listening habits)
   [ ] Letterboxd (movies)
   [ ] Duolingo (language learning)
   [ ] Last.fm (music history)
@@ -1762,6 +2130,10 @@ Connectors:
 
 Features:
   [ ] Voice input (Web Speech API + Whisper fallback)
+  [ ] Voice output / TTS (eSpeak NG / Piper for local, provider APIs opt-in)
+  [ ] Automatic page translation for visitors (cached + on-demand)
+  [ ] Activities component with geolocation enrichment
+  [ ] Identity Coach: gap analysis, trend alignment, narrative refinement (Level 2 agent)
   [ ] Contextual profiles (same data, different views: professional, personal, etc.)
   [ ] Time Capsule (yearly review of your evolution)
   [ ] Widget embeds (embed profile sections on other sites)
@@ -1782,12 +2154,12 @@ Community:
 ```
 
 **Definition of done:** 10+ connectors, voice input works, anyone can build a
-connector, theme, or component without breaking the recognizable SyncPage visual DNA,
+connector, theme, or component without breaking the recognizable OpenSelf visual DNA,
 and Docker makes self-hosting trivial.
 
 ### Phase 3 — Protocol & Federation (Months 8-16)
 
-**Goal:** From app to protocol. SyncPage becomes one implementation of an
+**Goal:** From app to protocol. OpenSelf becomes one implementation of an
 open standard.
 
 ```
@@ -1798,10 +2170,21 @@ Protocol:
   [ ] ActivityPub Actor per profile (followable from Mastodon)
   [ ] JSON-LD output (machine-readable profiles)
 
-Sync & Federation:
+Discovery & Federation:
+  [ ] Federated discovery directory (opt-in public index of pages)
+  [ ] Registration key system (asymmetric keypair for ownership proof)
+  [ ] Search by name, skill, interest, location across independent pages
+  [ ] Activity-based discovery (same events, similar profiles — opt-in only)
   [ ] CRDT sync (Automerge) for multi-device
   [ ] P2P sync for offline-first
-  [ ] Federation between TSH instances
+  [ ] Federation between OpenSelf instances
+  [ ] Directory federation (community-run directories interoperate)
+
+Agent Intelligence:
+  [ ] Career/Life Navigator (Level 3): strategic repositioning, trajectory simulation
+  [ ] Personal Knowledge Core (Level 4): evolution tracking, growth cycle suggestions
+  [ ] Multi-model routing (cheap models for simple tasks, powerful for complex reasoning)
+  [ ] Local inference for lightweight functions (cost optimization)
 
 Advanced:
   [ ] WASM plugin system (replace TypeScript connectors)
@@ -1809,11 +2192,15 @@ Advanced:
   [ ] Theme marketplace
   [ ] Encrypted credentials vault
   [ ] Selective disclosure (show different facts to different people)
-  [ ] Managed cloud service (if community demands it)
+
+Sustainability:
+  [ ] Managed cloud service (Cloud Pro): hosted version with managed LLM budget, custom domains, priority support
+  [ ] Monetization strategy definition (freemium tiers, self-host remains free forever, cloud pays for infrastructure)
+  [ ] Usage-based billing for LLM and Voice API consumption on managed instances
 ```
 
-**Definition of done:** TSH profiles are federated, achievements are verifiable,
-and anyone can build a compatible client.
+**Definition of done:** OpenSelf profiles are federated, independently hosted pages
+are discoverable, achievements are verifiable, and anyone can build a compatible client.
 
 ### 13.2 Public Launch & Brand Operations
 
@@ -1822,13 +2209,17 @@ This roadmap also includes external-facing operational gates. The project should
 
 #### 13.2.1 First Public GitHub Push Gate
 
-Recommended timing: end of Phase 0, once the 5-minute end-to-end flow is demoable.
+Recommended timing: after the Phase 0 Closed Alpha gate passes (dogfooding complete,
+critical bugs resolved, evals passing).
 
 Required before first public push:
+- Phase 0 Closed Alpha gate passed (10+ real profiles, structured feedback addressed)
 - Working demo path: chat -> facts -> page config -> rendered page
 - `README` with quick start, architecture summary, and realistic status
 - `.env.example` with safe placeholders only (no secrets in repo history)
 - `LICENSE` (AGPL-3.0), `CONTRIBUTING`, and issue templates
+- Inbound contribution policy selected and published (`CLA` or `CAA`)
+- PR legal gate enabled (GitHub bot check for signed `CLA`/`CAA`)
 - Basic security hygiene: dependency audit baseline + secret scanning enabled
 - Screenshots/GIF of onboarding split view and public page output
 
@@ -1837,7 +2228,7 @@ Required before first public push:
 Recommended timing: same week as first public GitHub push.
 
 Minimum assets:
-- Project landing page (`syncpage.com` or equivalent) with:
+- Project landing page (`openself.com` or equivalent) with:
   - clear value proposition
   - 30-60s demo clip/GIF
   - links to GitHub and docs
@@ -1858,6 +2249,7 @@ Operational checklist:
 - Reserve critical domains and social handles (`X`, LinkedIn page, GitHub org)
 - Prepare privacy policy + terms before managed cloud or waitlist campaigns
 - Keep OSS compliance clear (AGPL notices and attribution where required)
+- Finalize `CLA`/`CAA` legal text before enabling external PR merges
 - Track brand usage rules (name/logo usage in community assets)
 
 Note: legal/trademark items require qualified legal review.
@@ -1975,6 +2367,32 @@ Track monthly:
 - number of active community-maintained connectors/themes/blocks
 - percentage of releases containing community contributions
 
+#### 13.4.5 Inbound Legal Policy (`CLA` vs `CAA`)
+
+OpenSelf remains open-source under AGPL-3.0, but inbound contributions require
+an explicit legal agreement before merge. This is required to preserve long-term
+project control and optional future relicensing/commercial paths.
+
+Rules:
+- Exactly one inbound mode is active at a time: `CLA` or `CAA`.
+- The active mode is documented in `CONTRIBUTING.md` and surfaced in PR templates.
+- A GitHub bot blocks merge until the contributor signs the required agreement.
+
+Mode A: `CLA` (community-friendlier default)
+- Contributor keeps copyright.
+- Contributor grants broad, irrevocable rights to use/modify/distribute/sublicense,
+  including future relicensing and transfer to project successors.
+- Better community acceptance, but weaker central ownership than `CAA`.
+
+Mode B: `CAA` (maximum control)
+- Contributor assigns copyright to the project owner (where legally valid).
+- Strongest position for dual licensing, acquisition due diligence, and centralized IP control.
+- Higher friction for contributors and likely lower PR conversion.
+
+Operational note:
+- Keep terms short, plain-language, and transparent about why this policy exists.
+- Revisit policy fit every 6 months based on contributor growth and legal needs.
+
 ---
 
 ## 14. Design Decisions
@@ -2014,7 +2432,7 @@ but minimum consistency and reliability.
 - Testable: components are tested independently
 - Themeable: themes apply to all components uniformly
 - Accessible: components are built with a11y from the start
-- Recognizable: all TSH pages share a visual DNA
+- Recognizable: all OpenSelf pages share a visual DNA
 
 **Trade-off:** Less creative freedom than raw HTML generation. Mitigated by offering
 many components, variants, themes, and style options.
@@ -2036,21 +2454,28 @@ many components, variants, themes, and style options.
 **Trade-off:** Tighter coupling with Vercel ecosystem. Acceptable because we use it
 purely as an SDK, not as a platform dependency.
 
-### ADR-004: AGPL-3.0 license
+### ADR-004: AGPL-3.0 Outbound + CLA/CAA Inbound
 
-**Decision:** License the project under AGPL-3.0.
+**Decision:**
+- Outbound project license is AGPL-3.0.
+- Inbound external contributions require a signed agreement (`CLA` or `CAA`) before merge.
 
-**Context:** MIT/Apache would be more permissive; GPL would protect the code but
-not network use.
+**Context:**
+- MIT/Apache would be more permissive; GPL would protect code but not network use.
+- AGPL alone does not prohibit third parties from commercial hosting/resale.
+- Future dual-licensing/commercial transactions require explicit rights on contributed code.
 
 **Rationale:**
-- AGPL requires anyone who modifies and hosts TSH to share their changes
-- Prevents a company from taking the code, improving it, and offering a closed service
-- Aligns with the project's values of openness
-- Does not prevent commercial use — just requires sharing modifications
+- AGPL requires anyone who modifies and hosts OpenSelf to share source changes.
+- The project remains open and copyleft-aligned by default.
+- Inbound `CLA`/`CAA` gives maintainers legal clarity for relicensing, sublicensing,
+  and transfer scenarios.
+- Legal policy is explicit at PR time (bot-enforced), reducing ambiguity later.
 
-**Trade-off:** Some companies refuse to use AGPL software. This is intentional —
-if they want a proprietary version, that's a future licensing discussion.
+**Trade-off:**
+- AGPL still allows commercial use by others (with copyleft obligations).
+- `CLA`/`CAA` introduces contributor friction and may reduce community PR volume.
+- `CLA` is usually easier for community adoption; `CAA` gives stronger ownership control.
 
 ### ADR-005: Conversation-first over form-first
 
@@ -2070,7 +2495,7 @@ costs in self-hosted mode) and efficient prompt engineering.
 
 ### ADR-006: No separate .org and .cloud domains
 
-**Decision:** Everything lives under a single domain: `syncpage.com`.
+**Decision:** Everything lives under a single domain: `openself.com`.
 
 **Context:** Many open-source projects split into a .org (community) and a .com/.cloud
 (commercial). This creates confusion about what's free and what's paid.
@@ -2121,6 +2546,69 @@ installation with pinned versions. Runtime remote code loading is out of scope b
 **Future path:** If dynamic execution becomes necessary, use cross-origin sandboxed iframes
 and structured message contracts only.
 
+### ADR-009: Scalability Strategy — Design for 10K, Evolve to 1M
+
+**Decision:** Design for 10,000 users with clean architecture, then evolve to
+hyperscale. Do not prematurely optimize for 1M users.
+
+**Context:** The architecture must support both single-user self-hosting and a
+future managed cloud with many users. Over-engineering for scale now would slow
+down the MVP. Under-engineering would create a dead end.
+
+**Rationale — three key decisions:**
+
+1. **Stateless agent** — The agent must not depend on in-memory state. Everything
+   must be reconstructable from the database. This enables horizontal scaling.
+2. **Async job queue** — Heartbeat, insight analysis, connector sync, and trend
+   analysis must run in background workers, not in request-response handlers.
+   This is already in the architecture (Section 11.5).
+3. **Data access layer abstraction** — All database access goes through a repository
+   layer (Drizzle ORM). No raw SQL scattered in business logic. This makes future
+   database migration (SQLite → PostgreSQL) feasible without rewriting everything.
+
+**Known scaling bottlenecks to address when needed:**
+
+| Bottleneck | When it matters | Migration path |
+|---|---|---|
+| SQLite write concurrency | 100K+ users with concurrent writes | PostgreSQL (via Drizzle, same schema) |
+| Heartbeat LLM cost | 100K+ users with daily heartbeat | Event-driven (skip if nothing changed), batch processing, tiered models |
+| Insight/trend engine | Any user-level daily analysis | Centralized trend cache, shared knowledge graph, RAG |
+| Real-time voice | High concurrent voice sessions | Edge compute, WebRTC, local Whisper |
+
+**LLM cost is the real constraint**, not CPU, RAM, or storage. Sustainability
+requires:
+- Event-driven heartbeat (not blind polling)
+- Multi-model routing (cheap model for simple tasks, expensive for complex)
+- Local inference for lightweight functions (embedding, classification)
+- Possibly fine-tuned small models for frequent operations
+
+**Trade-off:** The current architecture is not hyperscale-ready. But it is
+modular, with separated memory/agent/rendering/connector layers. Each layer
+can be extracted into its own service independently. This is the right balance
+for now.
+
+### ADR-010: Agent as Identity Coach, Not Social Network
+
+**Decision:** The agent evolves into a personal identity coach (gap analysis,
+trend alignment, career navigation) but never becomes a social network.
+
+**Context:** As the agent gains more context about the user, it could naturally
+evolve toward social features (feeds, connections, engagement). This is explicitly
+rejected.
+
+**Rationale:**
+- The agent works for the user, not for an advertiser or engagement algorithm
+- Suggestions are private (only the user sees them), not public
+- Opportunities are filtered by relevance, not engagement potential
+- No vanity metrics, no comparison, no competition
+- No feed, no timeline of others, no "who viewed your profile"
+
+**The boundary:** OpenSelf is an assistant, not a platform. Users opt-in to
+discovery (Section 6.9) but never to engagement mechanics.
+
+**Trade-off:** Less viral growth potential. This is intentional — organic growth
+through genuine value, not addiction mechanics.
+
 ---
 
 ## 15. Execution Spec
@@ -2134,7 +2622,7 @@ This section defines what the runtime must do, independent of prompt quality.
 - All mutations pass through deterministic services:
   - `PromptAssembler` (system prompt block composition)
   - `TaxonomyNormalizer` (category canonicalization)
-  - `VisibilityPolicy` (`private`/`proposed`/`public` enforcement)
+  - `VisibilityPolicy` (`private`/`proposed`/`public`/`archived` enforcement)
   - `BudgetGuard` (token/cost limits)
   - `PageConfigValidator` (schema validation before persist/render)
   - `MutationExecutor` (transaction + conflict policy)
@@ -2176,7 +2664,7 @@ Audit/tool log target:
 - MVP default stores avatar binary in SQLite (`media_assets.blob_data`).
 - Optional backends (`fs`, `s3`) are supported later without schema changes.
 - Schema-level constraint: max one avatar per profile (`uniq_media_avatar_per_profile`).
-- Avatar visibility uses the same `private/proposed/public` state machine.
+- Avatar visibility uses the same `private/proposed/public/archived` state machine.
 - Public rendering uses sanitized, size-bounded derivatives.
 
 ### 15.6 Taxonomy Bootstrap Contract
@@ -2184,7 +2672,7 @@ Audit/tool log target:
 `category_registry` and `category_aliases` are initialized by migration seed data.
 
 Seeded canonical categories (minimum):
-- `identity`, `experience`, `project`, `skill`, `interest`, `achievement`, `social`, `reading`
+- `identity`, `experience`, `project`, `skill`, `interest`, `achievement`, `activity`, `social`, `reading`
 
 Seeded aliases (examples):
 - `job`, `work`, `employment` -> `experience`
@@ -2216,6 +2704,7 @@ INSERT OR IGNORE INTO category_registry (category, status, created_by) VALUES
   ('skill', 'active', 'system'),
   ('interest', 'active', 'system'),
   ('achievement', 'active', 'system'),
+  ('activity', 'active', 'system'),
   ('social', 'active', 'system'),
   ('reading', 'active', 'system');
 
@@ -2230,7 +2719,10 @@ INSERT OR IGNORE INTO category_aliases (alias, category, source) VALUES
   ('hobby', 'interest', 'system'),
   ('hobbies', 'interest', 'system'),
   ('book', 'reading', 'system'),
-  ('books', 'reading', 'system');
+  ('books', 'reading', 'system'),
+  ('event', 'activity', 'system'),
+  ('events', 'activity', 'system'),
+  ('activities', 'activity', 'system');
 ```
 
 ### 15.8 TaxonomyNormalizer (TypeScript Reference)
@@ -2283,10 +2775,23 @@ export async function normalizeCategory(
 
 ### 15.9 Visibility State Machine
 
-Fact visibility transitions are explicit and mode-dependent:
+Fact visibility has four states and transitions are explicit and mode-dependent:
 
+```
+private → proposed → public → archived
+   ↑                    │         │
+   └────────────────────┘         │
+   ↑         (revoke)             │
+   └──────────────────────────────┘
+              (reactivate as private, then re-propose)
+```
+
+Transition rules:
 - `private -> proposed` only via `VisibilityPolicy` in onboarding/draft flows
 - `proposed -> public` only on publish checkpoint approval
+- `public -> archived` when the agent or user decides a fact is no longer relevant
+  for the page (e.g., old job, past event) but should be preserved for history
+- `archived -> private` for reactivation (re-enters the proposal flow)
 - `public -> private` allowed anytime by user request/policy action
 - `private -> public` direct jump is disabled in onboarding; allowed in steady state only
   with explicit approval
@@ -2294,6 +2799,7 @@ Fact visibility transitions are explicit and mode-dependent:
 Renderer mode rules:
 - Draft preview: render `public + proposed`
 - Public page: render `public` only
+- Archived facts are never rendered but remain queryable by the agent for context
 
 ### 15.10 PageConfig Validation Contract
 
