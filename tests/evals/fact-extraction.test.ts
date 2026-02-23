@@ -234,4 +234,42 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(hero!.content.tagline).toBe("Benvenuto nella pagina di Marco Rossi");
     });
   });
+
+  describe("role casing in bio section", () => {
+    it("lowercases role in English bio", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "identity", key: "full-name", value: { full: "Alice Smith" } }),
+        makeFact({ category: "identity", key: "role", value: { role: "Economist" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice", "en");
+
+      const bio = page.sections.find((s) => s.type === "bio");
+      expect((bio!.content as any).text).toContain("economist");
+      expect((bio!.content as any).text).not.toMatch(/is a Economist/);
+    });
+
+    it("lowercases role in Italian bio", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "identity", key: "full-name", value: { full: "Marco Rossi" } }),
+        makeFact({ category: "identity", key: "role", value: { role: "Economista" } }),
+        makeFact({ category: "identity", key: "company", value: { company: "Google" } }),
+      ];
+      const page = composeOptimisticPage(facts, "marco", "it");
+
+      const bio = page.sections.find((s) => s.type === "bio");
+      expect((bio!.content as any).text).toContain("economista");
+      expect((bio!.content as any).text).not.toContain("Economista");
+    });
+
+    it("keeps role capitalized in German bio", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "identity", key: "full-name", value: { full: "Hans Müller" } }),
+        makeFact({ category: "identity", key: "role", value: { role: "Ökonom" } }),
+      ];
+      const page = composeOptimisticPage(facts, "hans", "de");
+
+      const bio = page.sections.find((s) => s.type === "bio");
+      expect((bio!.content as any).text).toContain("Ökonom");
+    });
+  });
 });

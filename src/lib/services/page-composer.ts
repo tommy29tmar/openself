@@ -126,6 +126,16 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
 }
 
+/** Languages where common nouns (job titles, roles) are capitalized. */
+const CAPITALIZE_NOUNS_LANGUAGES = new Set(["de"]);
+
+/** Lowercase the first character of a role/title for use in prose, unless the language capitalizes common nouns. */
+function lowerRole(role: string, language: string): string {
+  if (CAPITALIZE_NOUNS_LANGUAGES.has(language)) return role;
+  if (role.length === 0) return role;
+  return role[0].toLowerCase() + role.slice(1);
+}
+
 function buildHeroSection(identityFacts: FactRow[], language: string): Section | null {
   let name: string | undefined;
   let tagline: string | undefined;
@@ -224,9 +234,9 @@ function buildBioSection(grouped: FactsByCategory, language: string): Section | 
   const parts: string[] = [];
   if (name) {
     if (role && company) {
-      parts.push(l.bioRoleAt(name, role, company));
+      parts.push(l.bioRoleAt(name, lowerRole(role, language), company));
     } else if (role) {
-      parts.push(l.bioRole(name, role));
+      parts.push(l.bioRole(name, lowerRole(role, language)));
     } else {
       parts.push(`${name}.`);
     }

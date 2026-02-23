@@ -33,7 +33,7 @@ export function createAgentTools(sessionLanguage: string = "en") {
       value: z
         .record(z.unknown())
         .describe(
-          "Structured value object. Examples: {name: 'TypeScript', level: 'advanced'} for skills, {full: 'Tommaso Rossi'} for identity name, {role: 'Economist', company: 'Acme', status: 'current'} for experience.",
+          "Structured value object. Examples: {name: 'TypeScript', level: 'advanced'} for skills, {full: 'Tommaso Rossi'} for identity name, {role: 'economist', company: 'Acme', status: 'current'} for experience. Use lowercase for common nouns (job titles, roles, skills) — only capitalize proper nouns (names, companies, brands).",
         ),
       confidence: z
         .number()
