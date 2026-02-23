@@ -283,18 +283,19 @@ export function createAgentTools(sessionLanguage: string = "en") {
         // Preserve user's style customizations (theme, colors, font) from
         // the existing draft. composeOptimisticPage always uses defaults.
         const currentDraft = getDraft();
+        // Always compose in the fact language so values and templates are
+        // in the same language, then translate the coherent result.
+        const targetLang = language ?? sessionLanguage;
+        const factLang = getFactLanguage() ?? targetLang;
         const composed = composeOptimisticPage(
           facts,
           username,
-          language ?? sessionLanguage,
+          factLang,
         );
         const styled = currentDraft
           ? { ...composed, theme: currentDraft.config.theme, style: currentDraft.config.style }
           : composed;
 
-        // Translate fact-derived content if target language differs from original
-        const targetLang = language ?? sessionLanguage;
-        const factLang = getFactLanguage();
         const config = await translatePageContent(styled, targetLang, factLang);
 
         upsertDraft(username, config);

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { sqlite } from "./index";
+import type Database from "better-sqlite3";
 
-export function runMigrations(): void {
+export function runMigrations(sqlite: Database.Database): void {
   // Create migration tracking table
   sqlite.exec(`CREATE TABLE IF NOT EXISTS _migrations (
     filename TEXT PRIMARY KEY,
@@ -24,7 +24,6 @@ export function runMigrations(): void {
 
   for (const file of files) {
     if (applied.has(file)) {
-      console.log(`Skip (already applied): ${file}`);
       continue;
     }
 
@@ -41,8 +40,6 @@ export function runMigrations(): void {
     });
 
     applyMigration();
-    console.log(`Applied: ${file}`);
+    console.log(`[migrate] Applied: ${file}`);
   }
-
-  console.log(`All migrations applied (${files.length} total, ${files.length - applied.size} new).`);
 }

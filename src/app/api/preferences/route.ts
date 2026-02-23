@@ -46,7 +46,10 @@ export async function POST(req: Request) {
       if (facts.length > 0) {
         const currentDraft = getDraft();
         const username = currentDraft?.username ?? "draft";
-        const regeneratedConfig = composeOptimisticPage(facts, username, language);
+        // Always compose in the fact language so values and templates are
+        // in the same language, then translate the coherent result.
+        const factLanguage = getFactLanguage() ?? language;
+        const regeneratedConfig = composeOptimisticPage(facts, username, factLanguage);
         const nextConfig = currentDraft
           ? {
               ...regeneratedConfig,
@@ -55,8 +58,6 @@ export async function POST(req: Request) {
             }
           : regeneratedConfig;
 
-        // Translate fact-derived content if language differs from original
-        const factLanguage = getFactLanguage();
         const translated = await translatePageContent(nextConfig, language, factLanguage);
 
         upsertDraft(username, translated);
