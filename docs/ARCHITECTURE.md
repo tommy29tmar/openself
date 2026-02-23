@@ -90,52 +90,50 @@ The model is: **personal assistant**, not social platform.
 
 ```
 1. Open openself.com (or your self-hosted instance)
-2. Click "Create your page"
-3. Language selection:
+2. Animated landing: "Welcome to OpenSelf" cycles through languages
+3. Click "Start your experience"
 
-   The app asks the user to pick their preferred language BEFORE starting the
-   conversation. This is critical: if the agent cannot understand the user's
-   language, the entire experience breaks.
+4. Quick guided setup (~30 seconds, no AI):
+   a. Language selection (auto-detected + manual override)
+   b. "What's your name?" → first + last name
+   c. Optional: age range, gender (for grammatical agreement in gendered languages)
+   d. "What brings you here?" → work / personal / both / career transition
+   e. Optional: choose agent persona (Phase 1+)
 
-   - UI shows a language picker (auto-detected from browser locale + manual override)
-   - The agent's conversation language, fact extraction, and page generation
-     all adapt to the selected language
-   - Language can be changed later in settings
+5. Chat opens. The agent already knows your name and intent:
 
-4. Chat opens. The agent says (in the selected language):
+   "Ciao Tommaso! You want a professional page.
+    Tell me — what do you do and what are you passionate about?"
 
-   "Hey! I'm going to build your personal page.
-    Tell me — who are you and what are you into?"
-
-5. You talk naturally for 3-5 minutes. The agent guides you:
+6. You talk naturally for 3-5 minutes. The agent guides you:
    - "What are you working on these days?"
    - "Anything you're particularly proud of?"
    - "What do people come to you for?"
 
-6. After ~5 exchanges, the agent says:
+7. After ~5 exchanges, the agent says:
 
    "Got it! Let me build your page — watch this →"
 
-7. Split view: chat on the left, live page preview on the right.
+8. Split view: chat on the left, live page preview on the right.
    The page builds itself in front of your eyes.
 
-8. "Here's your page! Want to change anything?"
+9. "Here's your page! Want to change anything?"
    - "Make it darker"
    - "The bio sounds too formal"
    - "Put my projects before the bio"
    - "Add my Instagram link"
 
-9. The agent adjusts in real time.
+10. The agent adjusts in real time.
 
-10. One publish checkpoint (single confirmation):
+11. One publish checkpoint (single confirmation):
     "I drafted this page with these facts as public. Publish?"
     - Approve all
     - Edit and approve
     - Keep as draft (nothing public)
 
-11. Choose your username → openself.com/yourname
+12. Choose your username → openself.com/yourname
 
-12. Live. Done. Under 5 minutes.
+13. Live. Done. Under 5 minutes.
 ```
 
 ### Returning (~2 minutes)
@@ -547,6 +545,40 @@ This is not a feature. It is a new product category:
 **Anti-social boundary:** At every level, the agent remains a private assistant.
 No public feed, no likes, no ranking, no comparison. Only private suggestions,
 only with consent. Zero engagement mechanics.
+
+### 4.6.1 Discovery Scout (Level 2 Capability)
+
+A heartbeat-driven agent that actively searches the web for opportunities relevant
+to the user's profile. Not a feed — a personal scout.
+
+**How it works:**
+
+1. During heartbeat, the scout builds search queries from the user's KB (skills,
+   interests, role, location, goals).
+2. Searches external sources (event platforms, news APIs, job boards, CFPs,
+   open-source projects) via web search APIs (Serper, Tavily, or similar).
+3. Scores each result against the user's profile for relevance.
+4. Only results above a high confidence threshold are surfaced.
+5. Delivers as a private suggestion in the next conversation or check-in.
+
+**Anti-spam contract:**
+
+- Hard cap on suggestions per week (default: 3). Zero is better than noise.
+- The agent never surfaces a result it cannot explain ("I found this because
+  you work in fintech and this conference covers AI in banking").
+- User controls: category filters, frequency, snooze, disable entirely.
+- No affiliate links, no sponsored content, no engagement incentives.
+
+**Example outcomes:**
+
+- "There's a call for speakers at ReactConf EU — your TypeScript + open-source
+  profile is a strong fit. Interested?"
+- "A new paper on federated identity systems was published this week — relevant
+  to your work on OpenSelf."
+- Nothing found → silence. The scout never fabricates relevance.
+
+**Implementation dependency:** Requires heartbeat (Phase 1a) + web search API
+integration. Scheduled for Phase 2 alongside the Identity Coach capabilities.
 
 ### 4.7 Voice Interaction Architecture
 
@@ -1764,25 +1796,91 @@ coach, not a robot. Like a good journalist who helps you tell your story.
 > "Your page is up to date. Nothing new from your connected services.
 > If you have something new to tell me, I'm here. Otherwise, see you next time!"
 
-### 9.3 Onboarding (The First Minute)
+### 9.3 Landing Page
 
-Based on the Peak-End Rule: the "wow moment" must arrive in under 60 seconds.
+The first screen sets the tone. Before any interaction, the landing page communicates
+internationality and simplicity:
 
 ```
-0:00  App opens. No registration form. One prompt:
-      "Tell me about yourself — who are you and what are you into?"
+1. Full-screen animated headline:
+   "Welcome to OpenSelf" → fades → "Benvenuto in OpenSelf" → fades →
+   "Willkommen bei OpenSelf" → cycles through supported languages
 
-0:15  User responds.
+2. Single CTA button: "Start your experience" (localized)
 
-0:30  Agent generates a draft page in real-time.
+3. Below: one-sentence value prop + link to Pro features (visible, "coming soon")
+```
 
-0:45  WOW MOMENT — the page exists. It already looks great.
+Design principles:
+- Text is the protagonist — minimal visual noise, no stock photos, no feature grids
+- Typography-forward: elegant, distinctive, readable at large sizes
+- The animation conveys "this works in your language" without explanation
 
-1:00  "Like it? Want to change anything?"
+### 9.4 Onboarding (Guided Setup + Conversation)
 
-2:00  Refinements via conversation.
+Onboarding has two layers: a quick structured setup (3-4 screens, ~30 seconds) that
+gives the agent context, followed by the guided conversation interview.
 
-3:00  "Choose your username" → create account.
+#### Layer 1 — Quick Setup (structured, no LLM)
+
+```
+Screen 1: "What's your name?"
+           [First name] [Last name]
+           → Sets identity.name fact, agent knows how to address the user
+
+Screen 2: "What best describes you?" (optional, skippable)
+           [Age range selector: 18-24 / 25-34 / 35-44 / 45-54 / 55+]
+           [Gender: he/she/they — or skip]
+           → Agent adapts language (gendered forms in Italian/French/etc.)
+           → No exact birth date (privacy by design, GDPR minimal collection)
+
+Screen 3: "What brings you here?"
+           [Work & professional presence]
+           [Personal — hobbies, passions, life]
+           [Both — a full picture of who I am]
+           [Career transition — repositioning myself]
+           → Sets the conversation direction and section emphasis
+
+Screen 4: "Choose your agent" (optional, Phase 1+)
+           [Sofia — precise, structured, gets to the point]
+           [Marco — creative, curious, explores connections]
+           [Skip — let the agent adapt to me]
+           → Sets agent personality preset (tone, verbosity, humor)
+           → Personality evolves based on interaction over time
+```
+
+**Design rules:**
+- Each screen is one question, one interaction — no forms with 5 fields
+- Everything except name is optional/skippable
+- Total time: 20-30 seconds
+- No LLM calls yet — all deterministic
+
+**Data note:** Age range (not exact date) and gender are stored as private identity
+facts. Gender is functional (grammatical agreement in gendered languages), not
+demographic. The user can change or remove these at any time.
+
+#### Layer 2 — Guided Conversation Interview
+
+After setup, the conversation opens. The agent already knows the user's name, intent,
+and language. The first message is personalized:
+
+```
+0:00  Agent opens with context-aware greeting:
+      "Ciao Marco! Vuoi creare una pagina professionale.
+       Raccontami — cosa fai di lavoro e cosa ti appassiona?"
+
+0:15  User responds naturally.
+
+0:30  Agent asks follow-up, extracts facts via tools.
+
+1:00  After 2-3 exchanges, agent generates first page preview.
+      WOW MOMENT — the page exists. It already looks great.
+
+1:30  "Here's your page! Want to change anything?"
+
+3:00  Refinements via conversation.
+
+4:00  "Choose your username" → create account.
 
 5:00  Page is live. User shares the URL.
 ```
@@ -1790,7 +1888,18 @@ Based on the Peak-End Rule: the "wow moment" must arrive in under 60 seconds.
 **Key principle:** Value before registration. Like Duolingo (complete a lesson before
 creating an account), the user sees their page before committing.
 
-### 9.4 Accessibility
+#### Returning Users (Phase 1+)
+
+When the user is not new, the agent's opening message adapts based on context:
+
+- Time since last visit: "Hey, long time! What's new?"
+- Recent connector activity: "I noticed 3 new repos on GitHub. Want to update?"
+- Nothing changed: "Everything looks good! Anything new to tell me?"
+- Memory-informed: "Last time you mentioned starting a new project — how's that going?"
+
+This requires Tier 2/3 memory (Phase 1a) to work well.
+
+### 9.5 Accessibility
 
 - **Voice as primary modality** — not an accessory. If someone can only speak
   (no typing), they should still get a full page. The agent listens (Whisper),

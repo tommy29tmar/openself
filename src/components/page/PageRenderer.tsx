@@ -10,7 +10,7 @@ import { SocialSection } from "./SocialSection";
 import { InterestsSection } from "./InterestsSection";
 import { FooterSection } from "./FooterSection";
 
-import type { HeroContent } from "@/lib/page-config/content-types";
+import type { HeroContent, SocialLink } from "@/lib/page-config/content-types";
 import type { BioContent } from "@/lib/page-config/content-types";
 import type { SkillsContent } from "@/lib/page-config/content-types";
 import type { ProjectsContent } from "@/lib/page-config/content-types";
@@ -50,6 +50,12 @@ type PageRendererProps = {
 };
 
 export function PageRenderer({ config, previewMode = false }: PageRendererProps) {
+  // Extract social links to inject into the hero section
+  const socialSection = config.sections.find((s) => s.type === "social");
+  const socialLinks: SocialLink[] = socialSection
+    ? ((socialSection.content as SocialContent)?.links ?? [])
+    : [];
+
   return (
     <ThemeProvider theme={config.theme} style={config.style}>
       <main
@@ -67,10 +73,16 @@ export function PageRenderer({ config, previewMode = false }: PageRendererProps)
             return null;
           }
 
+          // Inject social links into the hero section content
+          const content =
+            section.type === "hero" && socialLinks.length > 0
+              ? { ...section.content, socialLinks }
+              : section.content;
+
           return (
             <Component
               key={section.id}
-              content={section.content}
+              content={content}
               variant={section.variant}
             />
           );

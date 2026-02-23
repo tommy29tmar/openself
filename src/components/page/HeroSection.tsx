@@ -1,4 +1,5 @@
-import type { HeroContent } from "@/lib/page-config/content-types";
+import type { HeroContent, SocialLink } from "@/lib/page-config/content-types";
+import { getSocialIcon } from "@/components/icons/social-icons";
 
 type HeroSectionProps = {
   content: HeroContent;
@@ -15,8 +16,32 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+function HeroSocialLinks({ links }: { links: SocialLink[] }) {
+  if (links.length === 0) return null;
+  return (
+    <div className="mt-[var(--space-4)] flex flex-wrap justify-center gap-[var(--space-1)]">
+      {links.map((link) => {
+        const Icon = getSocialIcon(link.platform);
+        return (
+          <a
+            key={link.platform}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={link.label ?? link.platform}
+            className="inline-flex items-center justify-center rounded-[var(--page-radius-base)] p-[var(--space-2)] text-[var(--page-fg-secondary)] transition-colors hover:text-[var(--page-accent)]"
+            style={{ transitionDuration: "var(--transition-fast)" }}
+          >
+            <Icon className="h-[1.125rem] w-[1.125rem]" />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
-  const { name, tagline, avatarUrl } = content;
+  const { name, tagline, avatarUrl, socialLinks = [] } = content;
   const initials = getInitials(name);
 
   if (variant === "minimal") {
@@ -32,6 +57,26 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
           <p className="mt-[var(--space-2)] text-[var(--text-lg)] text-[var(--page-fg-secondary)]">
             {tagline}
           </p>
+          {socialLinks.length > 0 && (
+            <div className="mt-[var(--space-3)] flex flex-wrap gap-[var(--space-1)]">
+              {socialLinks.map((link) => {
+                const Icon = getSocialIcon(link.platform);
+                return (
+                  <a
+                    key={link.platform}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={link.label ?? link.platform}
+                    className="inline-flex items-center justify-center rounded-[var(--page-radius-base)] p-[var(--space-2)] text-[var(--page-fg-secondary)] transition-colors hover:text-[var(--page-accent)]"
+                    style={{ transitionDuration: "var(--transition-fast)" }}
+                  >
+                    <Icon className="h-[1.125rem] w-[1.125rem]" />
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
     );
@@ -60,6 +105,26 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
             <p className="mt-[var(--space-1)] text-[var(--text-base)] text-[var(--page-fg-secondary)]">
               {tagline}
             </p>
+            {socialLinks.length > 0 && (
+              <div className="mt-[var(--space-2)] flex flex-wrap gap-[var(--space-1)]">
+                {socialLinks.map((link) => {
+                  const Icon = getSocialIcon(link.platform);
+                  return (
+                    <a
+                      key={link.platform}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={link.label ?? link.platform}
+                      className="inline-flex items-center justify-center rounded-[var(--page-radius-base)] p-[var(--space-1)] text-[var(--page-fg-secondary)] transition-colors hover:text-[var(--page-accent)]"
+                      style={{ transitionDuration: "var(--transition-fast)" }}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -88,6 +153,7 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
         <p className="mt-[var(--space-3)] max-w-lg text-[var(--text-xl)] text-[var(--page-fg-secondary)]">
           {tagline}
         </p>
+        <HeroSocialLinks links={socialLinks} />
       </div>
     </section>
   );

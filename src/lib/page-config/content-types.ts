@@ -2,6 +2,7 @@ export type HeroContent = {
   name: string;
   tagline: string;
   avatarUrl?: string;
+  socialLinks?: SocialLink[];
 };
 
 export type BioContent = {
