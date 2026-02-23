@@ -60,19 +60,40 @@ export async function translatePageContent(
     return config;
   }
 
-  const langName =
+  const targetName =
     LANGUAGE_NAMES[targetLanguage as LanguageCode] ?? targetLanguage;
+  const sourceName = sourceLanguage
+    ? (LANGUAGE_NAMES[sourceLanguage as LanguageCode] ?? sourceLanguage)
+    : null;
+  const sourceHint = sourceName ? ` The source language is ${sourceName}.` : "";
 
-  const prompt = `You are a professional translator. Translate the following personal page content to ${langName}.
+  const prompt = `You are a professional localization engine for a personal portfolio website. Your task is to translate the JSON content below into natural, fluent ${targetName}.${sourceHint}
 
-Rules:
-1. TRANSLATE: job titles, skill names, interest names, taglines, bio text, project descriptions, section labels, and all other human-readable text.
-2. DO NOT TRANSLATE: person names (first, last, full), company/organization names, brand names, URLs, email addresses.
-3. Produce natural, fluent ${langName} — not word-for-word translation.
-4. Keep the exact same JSON structure and keys.
-5. Return ONLY the JSON array, no markdown formatting, no explanation.
+## What to translate
+- Section labels and titles (e.g. "Competenze" → "Skills", "Interessi" → "Interests")
+- Job titles and professional roles (e.g. "Economista" → "Economist")
+- Skill names (e.g. "Economia" → "Economics", "Gestione progetti" → "Project management")
+- Interest and hobby names (e.g. "Pianoforte" → "Piano", "Escursionismo" → "Hiking")
+- Taglines, bios, and all other descriptive text
+- Project descriptions and tags
 
-Input JSON:
+## What to keep unchanged
+- Person names: first, last, and full names (e.g. "Marco Rossi" stays "Marco Rossi")
+- Organization and company names (e.g. "Cassa Depositi e Prestiti", "Google")
+- Brand names, product names, and proper nouns
+- URLs, email addresses, and usernames
+- Globally adopted English acronyms and terms used in tech: AI, API, IT, SaaS, UX, UI, ML, DevOps, CSS, HTML, JavaScript, TypeScript, Python, React, etc. Keep these in English even when a local equivalent exists.
+
+## Quality standards
+- Produce publication-ready text, not machine-translation output.
+- Adapt grammar, gender, and phrasing to sound native in ${targetName} — never translate word-for-word.
+- Every single text value in the output must be in ${targetName}. Do not leave any value in the source language.
+- When in doubt whether a term is a proper noun, keep it unchanged.
+
+## Output format
+- Return ONLY the JSON array — no markdown fences, no commentary, no explanation.
+- Preserve the exact JSON structure: same keys, same nesting, same array order.
+
 ${JSON.stringify(toTranslate, null, 2)}`;
 
   try {

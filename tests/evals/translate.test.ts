@@ -242,7 +242,7 @@ describe("translatePageContent", () => {
     expect(result.style.fontFamily).toBe("serif");
   });
 
-  it("includes target language name in the prompt", async () => {
+  it("includes target and source language names in the prompt", async () => {
     mockGenerateText.mockResolvedValue({ text: "[]" } as any);
 
     const config = makeConfig();
@@ -250,5 +250,16 @@ describe("translatePageContent", () => {
 
     const prompt = mockGenerateText.mock.calls[0][0].prompt as string;
     expect(prompt).toContain("German");
+    expect(prompt).toContain("Italian");
+  });
+
+  it("instructs to keep tech acronyms in English", async () => {
+    mockGenerateText.mockResolvedValue({ text: "[]" } as any);
+
+    const config = makeConfig();
+    await translatePageContent(config, "de", "it");
+
+    const prompt = mockGenerateText.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("AI, API, IT");
   });
 });
