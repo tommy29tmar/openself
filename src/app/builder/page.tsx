@@ -25,11 +25,18 @@ function storeLanguage(language: LanguageCode): void {
 }
 
 async function persistLanguage(language: LanguageCode, regenerateDraft: boolean): Promise<void> {
-  await fetch("/api/preferences", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ language, regenerateDraft }),
-  });
+  try {
+    const res = await fetch("/api/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ language, regenerateDraft }),
+    });
+    if (!res.ok) {
+      console.warn("[preferences] Failed to persist language:", res.status);
+    }
+  } catch (err) {
+    console.warn("[preferences] Failed to persist language:", err);
+  }
 }
 
 export default function BuilderPage() {

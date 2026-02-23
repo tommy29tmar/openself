@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
 import type { LanguageCode } from "@/lib/i18n/languages";
 import type { AvailableFont } from "@/lib/page-config/fonts";
@@ -121,9 +121,15 @@ function persistStyle(patch: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
-  }).catch(() => {
-    // fire-and-forget — errors are non-critical
-  });
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.warn("[settings] Failed to persist style:", res.status);
+      }
+    })
+    .catch((err) => {
+      console.warn("[settings] Failed to persist style:", err);
+    });
 }
 
 function GearButton({ onClick }: { onClick: () => void }) {
@@ -164,19 +170,27 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     config?.style?.fontFamily ?? "inter",
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Tracks the last user-initiated style edit. Polls that arrive within
+  // one POLL_INTERVAL after a user edit are suppressed to avoid overwriting
+  // in-flight changes. Polls after that window sync from server, picking up
+  // both the user's persisted changes and any agent-driven updates.
+  const lastUserEdit = useRef(0);
 
   const handleThemeChange = useCallback((t: string) => {
     setTheme(t);
+    lastUserEdit.current = Date.now();
     persistStyle({ theme: t });
   }, []);
 
   const handleColorSchemeChange = useCallback((cs: "light" | "dark") => {
     setColorScheme(cs);
+    lastUserEdit.current = Date.now();
     persistStyle({ style: { colorScheme: cs } });
   }, []);
 
   const handleFontFamilyChange = useCallback((f: AvailableFont) => {
     setFontFamily(f);
+    lastUserEdit.current = Date.now();
     persistStyle({ style: { fontFamily: f } });
   }, []);
 
@@ -187,6 +201,16 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
       const data = await res.json();
       if (data.config) {
         setConfig(data.config);
+
+        // Sync style from server unless user just edited locally.
+        // The suppression window prevents a stale poll from overwriting
+        // a change the user made before the POST completed.
+        const userEditAge = Date.now() - lastUserEdit.current;
+        if (userEditAge > POLL_INTERVAL) {
+          if (data.config.theme) setTheme(data.config.theme);
+          if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
+          if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+        }
       }
       if (data.publishStatus) {
         setPublishStatus(data.publishStatus);
@@ -245,7 +269,22 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     <div className="relative h-full overflow-y-auto">
       <EmptyPreview />
       <GearButton onClick={() => setSettingsOpen(true)} />
-      {settingsPanel}
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        language={language}
+        onLanguageChange={(lang) => {
+          onLanguageChange?.(lang);
+          setSettingsOpen(false);
+        }}
+        languageOnly
+        theme={theme}
+        onThemeChange={handleThemeChange}
+        colorScheme={colorScheme}
+        onColorSchemeChange={handleColorSchemeChange}
+        fontFamily={fontFamily}
+        onFontFamilyChange={handleFontFamilyChange}
+      />
     </div>
   );
 

@@ -16,6 +16,8 @@ type SettingsPanelProps = {
   onClose: () => void;
   language: string;
   onLanguageChange: (lang: LanguageCode) => void;
+  /** When true, only the Language section is shown (no draft to style yet). */
+  languageOnly?: boolean;
   theme: string;
   onThemeChange: (theme: string) => void;
   colorScheme: "light" | "dark";
@@ -70,6 +72,7 @@ export function SettingsPanel({
   onClose,
   language,
   onLanguageChange,
+  languageOnly = false,
   theme,
   onThemeChange,
   colorScheme,
@@ -144,74 +147,78 @@ export function SettingsPanel({
               </div>
             </div>
 
-            {/* Theme */}
-            <div className="flex flex-col gap-2.5">
-              <SectionLabel>Theme</SectionLabel>
-              <OptionGroup>
-                {AVAILABLE_THEMES.map((t) => (
-                  <OptionButton
-                    key={t}
-                    selected={theme === t}
-                    onClick={() => onThemeChange(t)}
-                  >
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </OptionButton>
-                ))}
-              </OptionGroup>
-            </div>
+            {!languageOnly && (
+              <>
+                {/* Theme */}
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Theme</SectionLabel>
+                  <OptionGroup>
+                    {AVAILABLE_THEMES.map((t) => (
+                      <OptionButton
+                        key={t}
+                        selected={theme === t}
+                        onClick={() => onThemeChange(t)}
+                      >
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                      </OptionButton>
+                    ))}
+                  </OptionGroup>
+                </div>
 
-            {/* Color */}
-            <div className="flex flex-col gap-2.5">
-              <SectionLabel>Color</SectionLabel>
-              <OptionGroup>
-                <OptionButton
-                  selected={colorScheme === "light"}
-                  onClick={() => onColorSchemeChange("light")}
-                >
-                  Light
-                </OptionButton>
-                <OptionButton
-                  selected={colorScheme === "dark"}
-                  onClick={() => onColorSchemeChange("dark")}
-                >
-                  Dark
-                </OptionButton>
-              </OptionGroup>
-            </div>
+                {/* Color */}
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Color</SectionLabel>
+                  <OptionGroup>
+                    <OptionButton
+                      selected={colorScheme === "light"}
+                      onClick={() => onColorSchemeChange("light")}
+                    >
+                      Light
+                    </OptionButton>
+                    <OptionButton
+                      selected={colorScheme === "dark"}
+                      onClick={() => onColorSchemeChange("dark")}
+                    >
+                      Dark
+                    </OptionButton>
+                  </OptionGroup>
+                </div>
 
-            {/* Font */}
-            <div className="flex flex-col gap-2.5">
-              <SectionLabel>Font</SectionLabel>
-              <OptionGroup>
-                {AVAILABLE_FONTS.map((f) => (
-                  <OptionButton
-                    key={f}
-                    selected={fontFamily === f}
-                    onClick={() => onFontFamilyChange(f)}
-                  >
-                    {FONT_LABELS[f]}
-                  </OptionButton>
-                ))}
-              </OptionGroup>
-            </div>
+                {/* Font */}
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Font</SectionLabel>
+                  <OptionGroup>
+                    {AVAILABLE_FONTS.map((f) => (
+                      <OptionButton
+                        key={f}
+                        selected={fontFamily === f}
+                        onClick={() => onFontFamilyChange(f)}
+                      >
+                        {FONT_LABELS[f]}
+                      </OptionButton>
+                    ))}
+                  </OptionGroup>
+                </div>
 
-            {/* Layout */}
-            <div className="flex flex-col gap-2.5">
-              <SectionLabel>Layout</SectionLabel>
-              <OptionGroup>
-                <OptionButton selected onClick={() => {}}>
-                  Centered
-                </OptionButton>
-                <OptionButton selected={false} disabled onClick={() => {}}>
-                  Split
-                  <span className="ml-1 text-[9px] opacity-60">Soon</span>
-                </OptionButton>
-                <OptionButton selected={false} disabled onClick={() => {}}>
-                  Stack
-                  <span className="ml-1 text-[9px] opacity-60">Soon</span>
-                </OptionButton>
-              </OptionGroup>
-            </div>
+                {/* Layout */}
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Layout</SectionLabel>
+                  <OptionGroup>
+                    <OptionButton selected onClick={() => {}}>
+                      Centered
+                    </OptionButton>
+                    <OptionButton selected={false} disabled onClick={() => {}}>
+                      Split
+                      <span className="ml-1 text-[9px] opacity-60">Soon</span>
+                    </OptionButton>
+                    <OptionButton selected={false} disabled onClick={() => {}}>
+                      Stack
+                      <span className="ml-1 text-[9px] opacity-60">Soon</span>
+                    </OptionButton>
+                  </OptionGroup>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

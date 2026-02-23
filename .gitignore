@@ -29,6 +29,7 @@ Thumbs.db
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 
 # Debug
 npm-debug.log*
