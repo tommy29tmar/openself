@@ -81,4 +81,40 @@ setInterval(() => {
       store.delete(ip);
     }
   }
+  for (const [ip, ts] of inviteStore) {
+    const filtered = ts.filter((t) => now - t < INVITE_WINDOW_MS);
+    if (filtered.length === 0) inviteStore.delete(ip);
+    else inviteStore.set(ip, filtered);
+  }
 }, CLEANUP_INTERVAL_MS);
+
+/**
+ * Rate limiter for /api/invite — max 5 attempts per 60 seconds per IP.
+ * Prevents brute-force of invite codes.
+ */
+const inviteStore = new Map<string, number[]>();
+const INVITE_WINDOW_MS = 60_000;
+const INVITE_MAX_ATTEMPTS = 5;
+
+export function checkInviteRateLimit(req: Request): RateLimitResult {
+  const ip = getClientIp(req);
+  const now = Date.now();
+
+  let timestamps = inviteStore.get(ip) ?? [];
+  timestamps = timestamps.filter((t) => now - t < INVITE_WINDOW_MS);
+
+  if (timestamps.length >= INVITE_MAX_ATTEMPTS) {
+    const oldest = timestamps[0];
+    const retryAfter = Math.ceil((oldest + INVITE_WINDOW_MS - now) / 1000);
+    return {
+      allowed: false,
+      retryAfter,
+      reason: "Too many attempts. Please try again in a minute.",
+    };
+  }
+
+  timestamps.push(now);
+  inviteStore.set(ip, timestamps);
+
+  return { allowed: true };
+}

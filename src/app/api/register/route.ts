@@ -53,17 +53,23 @@ export async function POST(req: Request) {
       );
     }
 
+    // Require a draft to exist before allowing registration
+    const draft = getDraft(sessionId);
+    if (!draft) {
+      return NextResponse.json(
+        { success: false, error: "No page built yet. Chat first to create your page." },
+        { status: 400 },
+      );
+    }
+
     // Register the username on the session
     registerUsername(sessionId, username);
 
     // Auto-publish: set draft to approval_pending then confirm
-    const draft = getDraft(sessionId);
-    if (draft) {
-      if (draft.status !== "approval_pending") {
-        requestPublish(username, sessionId);
-      }
-      confirmPublish(username, sessionId);
+    if (draft.status !== "approval_pending") {
+      requestPublish(username, sessionId);
     }
+    confirmPublish(username, sessionId);
 
     logEvent({
       eventType: "user_registered",

@@ -9,6 +9,11 @@ export function getDefaultSessionId(): string {
   return DEFAULT_SESSION_ID;
 }
 
+/**
+ * INVITE_CODES enables the full multi-user mode: invite gate, per-session
+ * isolation, chat message limit, and registration. This coupling is intentional —
+ * invite codes require sessions, and sessions require limits to prevent abuse.
+ */
 export function isMultiUserEnabled(): boolean {
   return !!process.env.INVITE_CODES;
 }

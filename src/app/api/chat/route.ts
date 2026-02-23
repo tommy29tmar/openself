@@ -72,28 +72,32 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check message limit (only count user messages)
+    // Gate: always reject if message limit reached, regardless of message role.
+    // This prevents clients from bypassing the limit by crafting non-user payloads.
+    const limit = getMessageLimit();
+    const currentCount = getMessageCount(sessionId);
+    if (currentCount >= limit) {
+      return new Response(
+        JSON.stringify({
+          error: "Message limit reached. Register to continue.",
+          messageCount: currentCount,
+          messageLimit: limit,
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Message-Count": String(currentCount),
+            "X-Message-Limit": String(limit),
+          },
+        },
+      );
+    }
+
+    // Increment counter only for actual user messages
     const lastMessage = messages[messages.length - 1];
     if (lastMessage?.role === "user") {
-      const limit = getMessageLimit();
-      if (!tryIncrementMessageCount(sessionId, limit)) {
-        const count = getMessageCount(sessionId);
-        return new Response(
-          JSON.stringify({
-            error: "Message limit reached. Register to continue.",
-            messageCount: count,
-            messageLimit: limit,
-          }),
-          {
-            status: 429,
-            headers: {
-              "Content-Type": "application/json",
-              "X-Message-Count": String(count),
-              "X-Message-Limit": String(limit),
-            },
-          },
-        );
-      }
+      tryIncrementMessageCount(sessionId, limit);
     }
   } else {
     // Single-user: use body sessionId for backward compat

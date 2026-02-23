@@ -140,6 +140,15 @@ export function confirmPublish(username: string, sessionId: string = "__default_
       throw new Error("No page pending approval");
     }
 
+    // Guard 3: ownership — reject if username is already published by another session
+    const existingPublished = sqlite
+      .prepare("SELECT session_id FROM page WHERE id = ? AND status = 'published'")
+      .get(username) as { session_id: string } | undefined;
+
+    if (existingPublished && existingPublished.session_id !== sessionId) {
+      throw new Error("Username already claimed by another user");
+    }
+
     // Step 1: de-publish any previously published page with a different username,
     // scoped to this session only.
     sqlite
