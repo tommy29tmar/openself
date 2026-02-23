@@ -8,6 +8,7 @@ node_modules/
 out/
 dist/
 build/
+tsconfig.tsbuildinfo
 
 # Environment
 .env
