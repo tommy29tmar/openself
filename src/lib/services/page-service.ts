@@ -44,6 +44,14 @@ export function getPublishedPage(username: string): PageConfig | null {
 }
 
 /**
+ * True when at least one page row exists (draft or published).
+ */
+export function hasAnyPage(): boolean {
+  const row = db.select({ id: page.id }).from(page).limit(1).get();
+  return Boolean(row);
+}
+
+/**
  * Write/update the draft row. Used by generate_page, set_theme, reorder, update_page_config.
  */
 export function upsertDraft(username: string, config: PageConfig): void {

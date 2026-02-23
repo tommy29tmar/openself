@@ -12,7 +12,8 @@ import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
 
-export const agentTools = {
+export function createAgentTools(sessionLanguage: string = "en") {
+  return {
   create_fact: tool({
     description:
       "Store a new fact about the user in the knowledge base. Use this whenever the user shares information about themselves (name, job, skills, interests, projects, etc). Break complex info into separate atomic facts.",
@@ -269,7 +270,11 @@ export const agentTools = {
         if (facts.length === 0) {
           return { success: false, error: "No facts in knowledge base yet" };
         }
-        const config = composeOptimisticPage(facts, username, language ?? "en");
+        const config = composeOptimisticPage(
+          facts,
+          username,
+          language ?? sessionLanguage,
+        );
         upsertDraft(username, config);
         logEvent({
           eventType: "page_generated",
@@ -342,4 +347,8 @@ export const agentTools = {
       }
     },
   }),
-};
+  };
+}
+
+// Backward compatibility for tests/imports that expect a static object.
+export const agentTools = createAgentTools("en");

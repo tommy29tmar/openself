@@ -2,30 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  LANGUAGE_OPTIONS,
+  type LanguageCode,
+  detectBrowserLanguage,
+} from "@/lib/i18n/languages";
 
-const LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "it", label: "Italiano" },
-  { code: "de", label: "Deutsch" },
-  { code: "fr", label: "Français" },
-  { code: "es", label: "Español" },
-  { code: "pt", label: "Português" },
-  { code: "ja", label: "日本語" },
-  { code: "zh", label: "中文" },
-] as const;
-
-export type LanguageCode = (typeof LANGUAGES)[number]["code"];
+export type { LanguageCode } from "@/lib/i18n/languages";
 
 type LanguagePickerProps = {
   onSelect: (language: LanguageCode) => void;
 };
-
-function detectBrowserLanguage(): LanguageCode {
-  if (typeof navigator === "undefined") return "en";
-  const browserLang = navigator.language.split("-")[0];
-  const match = LANGUAGES.find((l) => l.code === browserLang);
-  return match ? match.code : "en";
-}
 
 export function LanguagePicker({ onSelect }: LanguagePickerProps) {
   const [selected, setSelected] = useState<LanguageCode>("en");
@@ -45,7 +32,7 @@ export function LanguagePicker({ onSelect }: LanguagePickerProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {LANGUAGES.map((lang) => (
+          {LANGUAGE_OPTIONS.map((lang) => (
             <Button
               key={lang.code}
               variant={selected === lang.code ? "default" : "outline"}

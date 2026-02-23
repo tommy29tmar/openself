@@ -1,7 +1,7 @@
 import { streamText } from "ai";
 import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
 import { getSystemPromptText } from "@/lib/agent/prompts";
-import { agentTools } from "@/lib/agent/tools";
+import { createAgentTools } from "@/lib/agent/tools";
 import { getAllFacts } from "@/lib/services/kb-service";
 import { db } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
@@ -57,8 +57,10 @@ export async function POST(req: Request) {
           .join("\n")}`
       : "";
 
+  const sessionLanguage = language || "en";
+
   const systemPrompt =
-    getSystemPromptText("onboarding", language || "en") + factsContext;
+    getSystemPromptText("onboarding", sessionLanguage) + factsContext;
 
   // Persist the latest user message
   const lastMessage = messages[messages.length - 1];
@@ -82,7 +84,7 @@ export async function POST(req: Request) {
       model,
       system: systemPrompt,
       messages,
-      tools: agentTools,
+      tools: createAgentTools(sessionLanguage),
       maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
       onFinish: async ({ text, usage }) => {
         if (text) {
