@@ -2058,6 +2058,28 @@ Scheduling model:
 - Worker dequeues due jobs and processes them transactionally
 - Serverless deployments use cron-triggered scheduler ticks to enqueue due work
 
+### 11.6 Runtime Access Profiles (Single-User First)
+
+OpenSelf ships as one codebase with environment-driven runtime profiles:
+
+1. **Default (`APP_MODE=single`)**:
+   - Baseline for community/self-host installs
+   - Single-user data model and behavior
+   - No mandatory invite gate
+2. **Hosted invite gate (early public hardening)**:
+   - Optional on managed deployments (for example `openself.dev`)
+   - Protects builder and write APIs behind invite code checks
+   - Does **not** introduce multi-user data isolation yet
+3. **Deferred multi-user (`APP_MODE=multi`)**:
+   - Planned only after Phase 1 milestones complete
+   - Includes session isolation, per-user draft/facts/preferences, registration flow
+
+Operational guard:
+- Managed deployments may require an additional unlock env (for example
+  `MULTI_USER_UNLOCK_TOKEN`) before enabling `APP_MODE=multi` in early stages.
+- This is an operational safeguard, not copy protection. Self-hosted forks can still
+  modify code by design (AGPL/open-source model).
+
 ---
 
 ## 12. Security & Privacy
@@ -2161,6 +2183,18 @@ Visibility is mode-aware and enforced by `VisibilityPolicy`:
 
 ## 13. Roadmap
 
+### 13.0 Access Control Sequencing (Linear Delivery)
+
+To keep execution linear and avoid premature schema churn:
+
+1. **Now (Phase 0 gate hardening):**
+   - Add invite-code gate for hosted builder access
+   - Keep the runtime and data model single-user
+2. **Phase 1 (agent quality first):**
+   - Keep single-user internals while shipping memory/heartbeat/page quality goals
+3. **After Phase 1 gate (start of Phase 2 infrastructure work):**
+   - Introduce full multi-user model (sessions, scoped data, registration, limits)
+
 ### Phase 0 — Foundation (Months 1-2)
 
 **Goal:** A working prototype that makes someone say "wow, I want this."
@@ -2223,7 +2257,8 @@ Reliability:
   [ ] Basic rate limiting (per-IP throttle on chat API, conversation pace cap)
 
 Not in this phase:
-  - No auth / multi-user
+  - No account auth / multi-user data model
+  - Hosted invite gate may be enabled as an operational access control (no schema change)
   - No connectors
   - No voice
   - No heartbeat
@@ -2244,6 +2279,7 @@ survive real-world usage outside the development team.
 ```
   [ ] Founders create their own pages using the live product
   [ ] 10+ trusted testers (friends, colleagues) complete the full onboarding flow
+  [ ] Hosted deployment can enforce invite-only builder access without changing single-user internals
   [ ] Collect structured feedback: UX friction, agent quality, rendering bugs
   [ ] Stress-test LLM adapter with diverse languages, edge-case inputs, and adversarial prompts
   [ ] Fix critical issues surfaced during dogfooding
@@ -2358,7 +2394,7 @@ Features:
   [ ] Contextual profiles (same data, different views: professional, personal, etc.)
   [ ] Time Capsule (yearly review of your evolution)
   [ ] Widget embeds (embed profile sections on other sites)
-  [ ] Auth / multi-user (NextAuth — for managed hosting)
+  [ ] Auth / multi-user sessions + registration (first infrastructure milestone after Phase 1 gate)
   [ ] Docker packaging (for self-hosting)
 
 Community:
@@ -2829,6 +2865,31 @@ discovery (Section 6.9) but never to engagement mechanics.
 
 **Trade-off:** Less viral growth potential. This is intentional — organic growth
 through genuine value, not addiction mechanics.
+
+### ADR-011: Single-User Default, Invite Gate First, Multi-User Later
+
+**Decision:**
+- Keep default runtime mode single-user (`APP_MODE=single`).
+- Use invite-code builder access as the first hosted hardening step.
+- Defer full multi-user model to post-Phase 1.
+
+**Context:**
+- The project is still in early validation and dogfooding.
+- Core risk today is product quality and LLM cost exposure, not missing account systems.
+- Implementing multi-user now would force broad schema/service/API rewrites while core
+  agent behavior is still being stabilized.
+
+**Rationale:**
+- Preserves linear execution: quality and reliability first, account complexity second.
+- Reduces migration/regression surface in the most volatile product phase.
+- Protects hosted LLM budget immediately with minimal architecture impact.
+- Keeps community setup simple and predictable (single-user local-first default).
+
+**Trade-off:**
+- Invite management is manual.
+- No per-user isolation until the dedicated multi-user phase.
+- Optional unlock tokens for managed deployments are operational safeguards only and do
+  not prevent forks from changing behavior.
 
 ---
 
