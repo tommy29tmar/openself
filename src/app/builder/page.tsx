@@ -98,5 +98,5 @@ export default function BuilderPage() {
     return <LanguagePicker onSelect={handleSelectLanguage} />;
   }
 
-  return <SplitView language={language} />;
+  return <SplitView language={language} onLanguageChange={handleSelectLanguage} />;
 }

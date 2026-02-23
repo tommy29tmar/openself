@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
+import type { LanguageCode } from "@/lib/i18n/languages";
+import type { AvailableFont } from "@/lib/page-config/fonts";
 import { ChatPanel } from "@/components/chat/ChatPanel";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { PageRenderer } from "@/components/page";
 import {
   Tabs,
@@ -14,6 +16,7 @@ import {
 
 type SplitViewProps = {
   language: string;
+  onLanguageChange?: (lang: LanguageCode) => void;
   initialConfig?: PageConfig | null;
 };
 
@@ -110,7 +113,46 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
   );
 }
 
-export function SplitView({ language, initialConfig }: SplitViewProps) {
+function persistStyle(patch: {
+  theme?: string;
+  style?: Partial<StyleConfig>;
+}) {
+  fetch("/api/draft/style", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  }).catch(() => {
+    // fire-and-forget — errors are non-critical
+  });
+}
+
+function GearButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="absolute bottom-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-background/80 shadow-sm backdrop-blur-sm transition-colors hover:bg-accent"
+      aria-label="Open settings"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        className="text-muted-foreground"
+      >
+        <path
+          d="M6.5 1.5h3l.4 1.8.7.3 1.6-.9 2.1 2.1-.9 1.6.3.7 1.8.4v3l-1.8.4-.3.7.9 1.6-2.1 2.1-1.6-.9-.7.3-.4 1.8h-3l-.4-1.8-.7-.3-1.6.9-2.1-2.1.9-1.6-.3-.7L.5 9.5v-3l1.8-.4.3-.7-.9-1.6 2.1-2.1 1.6.9.7-.3.4-1.8Z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    </button>
+  );
+}
+
+export function SplitView({ language, onLanguageChange, initialConfig }: SplitViewProps) {
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
   const [publishUsername, setPublishUsername] = useState<string>("");
@@ -118,6 +160,25 @@ export function SplitView({ language, initialConfig }: SplitViewProps) {
   const [colorScheme, setColorScheme] = useState<StyleConfig["colorScheme"]>(
     config?.style?.colorScheme ?? "light",
   );
+  const [fontFamily, setFontFamily] = useState<string>(
+    config?.style?.fontFamily ?? "inter",
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const handleThemeChange = useCallback((t: string) => {
+    setTheme(t);
+    persistStyle({ theme: t });
+  }, []);
+
+  const handleColorSchemeChange = useCallback((cs: "light" | "dark") => {
+    setColorScheme(cs);
+    persistStyle({ style: { colorScheme: cs } });
+  }, []);
+
+  const handleFontFamilyChange = useCallback((f: AvailableFont) => {
+    setFontFamily(f);
+    persistStyle({ style: { fontFamily: f } });
+  }, []);
 
   const fetchPreview = useCallback(async () => {
     try {
@@ -149,9 +210,27 @@ export function SplitView({ language, initialConfig }: SplitViewProps) {
     ? {
         ...config,
         theme,
-        style: { ...config.style, colorScheme },
+        style: { ...config.style, colorScheme, fontFamily },
       }
     : null;
+
+  const settingsPanel = (
+    <SettingsPanel
+      open={settingsOpen}
+      onClose={() => setSettingsOpen(false)}
+      language={language}
+      onLanguageChange={(lang) => {
+        onLanguageChange?.(lang);
+        setSettingsOpen(false);
+      }}
+      theme={theme}
+      onThemeChange={handleThemeChange}
+      colorScheme={colorScheme}
+      onColorSchemeChange={handleColorSchemeChange}
+      fontFamily={fontFamily}
+      onFontFamilyChange={handleFontFamilyChange}
+    />
+  );
 
   const previewPane = displayConfig ? (
     <div className="relative h-full overflow-y-auto">
@@ -159,16 +238,14 @@ export function SplitView({ language, initialConfig }: SplitViewProps) {
         <PublishBar username={publishUsername !== "draft" ? publishUsername : ""} />
       )}
       <PageRenderer config={displayConfig} />
-      <ThemeToggle
-        theme={theme}
-        colorScheme={colorScheme}
-        onThemeChange={setTheme}
-        onColorSchemeChange={setColorScheme}
-      />
+      <GearButton onClick={() => setSettingsOpen(true)} />
+      {settingsPanel}
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
       <EmptyPreview />
+      <GearButton onClick={() => setSettingsOpen(true)} />
+      {settingsPanel}
     </div>
   );
 
