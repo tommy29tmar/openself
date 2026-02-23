@@ -4,7 +4,6 @@ import {
   isValidInviteCode,
   createSession,
 } from "@/lib/services/session-service";
-import { createSessionCookie } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
   if (!isMultiUserEnabled()) {
@@ -33,14 +32,13 @@ export async function POST(req: Request) {
 
   const sessionId = createSession(code.trim());
 
-  return new Response(
-    JSON.stringify({ success: true }),
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Set-Cookie": createSessionCookie(sessionId),
-      },
-    },
-  );
+  const response = NextResponse.json({ success: true });
+  response.cookies.set("os_session", sessionId, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
 }

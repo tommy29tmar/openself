@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function InvitePage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +23,8 @@ export default function InvitePage() {
       const data = await res.json();
 
       if (data.success) {
-        router.push("/builder");
+        // Hard navigation ensures browser sends the fresh cookie
+        window.location.href = "/builder";
       } else {
         setError(data.error || "Invalid invite code");
       }
