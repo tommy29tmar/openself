@@ -1121,27 +1121,52 @@ This means:
 
 ### 6.7 Automatic Page Translation
 
-The page is written in the owner's language. But visitors may speak a different language.
+The page is written in the owner's language (`factLanguage` tracked in user preferences).
+When the owner switches the display language in the Settings panel, content is translated
+via LLM and served from a hash-based cache.
 
-**How it works:**
+**Current implementation (owner-side):**
+1. Owner changes language in Settings → triggers `translatePageContent()`.
+2. The function collects translatable sections (skips `footer`, `social`), computes
+   `SHA-256(JSON of sections)`, and queries the `translation_cache` table.
+3. **Cache hit** → returns cached translated sections immediately. No LLM call.
+4. **Cache miss** → calls `generateText` (same model provider as chat) with a
+   professional localization prompt → stores result in `translation_cache` → returns.
+5. On any error (LLM failure, JSON parse, cache I/O), returns the original config
+   unchanged — graceful degradation over hard failure.
+
+**Cache design:**
+- Table: `translation_cache` with composite PK `(content_hash, target_language)`.
+- Hash-based, zero explicit invalidation: when facts change → sections change →
+  hash changes → old cache entries are never hit again.
+- Each entry is ~1-2 KB. A page with 8 languages generates at most 7 entries.
+- No TTL or cleanup needed at current scale. Future: prune entries > 90 days if needed.
+
+**What gets translated:** section content (bio text, descriptions, taglines, skill
+labels, interest names, section titles). What does **not** get translated: person
+names, company names, proper nouns, URLs, tech acronyms (AI, API, TypeScript, etc.),
+`footer` and `social` section types.
+
+The source language is stored in user preferences (`factLanguage`). The agent sets
+it based on the user's onboarding language selection.
+
+**Future: public page visitor translation (not yet implemented):**
 1. The public page detects the visitor's browser language (`Accept-Language` header).
 2. If it differs from the page's source language, a translation banner appears:
    "This page is originally in Italian. [View in English]"
-3. On request, the page content is translated and cached.
+3. On request, the page content is translated on-demand and served from the same
+   `translation_cache` (same hash = instant on repeat visits).
 
-**Translation strategy:**
-- **Preferred (cost-effective):** pre-translate the page into major languages during
-  page generation or heartbeat. Cache translated versions as static variants.
-- **On-demand fallback:** translate via LLM or translation API (DeepL, Google Translate)
-  when a visitor requests an uncached language.
-- **Static export:** exported HTML can include pre-translated variants as alternate
-  `<link hreflang>` pages for SEO.
+#### 6.7.1 Translation Cost Model
 
-**What gets translated:** section content (bio text, descriptions, taglines). What
-does **not** get translated: proper nouns, project names, skill labels, URLs.
-
-The source language is stored in the page config. The agent sets it based on the
-user's onboarding language selection.
+- 8 supported languages × N pages = up to 7N cached translations.
+- Each translation: ~500 tokens input + ~400 output ≈ $0.001 (Haiku).
+- 1,000 pages fully translated: ~$7 one-time, then free from cache.
+- **Risk**: if languages grow beyond 8, or if pages grow very long (50+ sections),
+  cost per translation rises. Long pages with complex content could reach $0.01-0.05
+  per translation.
+- **Mitigation**: budget guardrails (`llm_limits` table), cache eliminates repeated
+  costs, hard cap on supported languages.
 
 ### 6.8 Activities Component
 

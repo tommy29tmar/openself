@@ -1,5 +1,9 @@
+import { createHash } from "node:crypto";
 import { generateText } from "ai";
-import { getModel } from "@/lib/ai/provider";
+import { eq, and } from "drizzle-orm";
+import { getModel, getModelId } from "@/lib/ai/provider";
+import { db } from "@/lib/db";
+import { translationCache } from "@/lib/db/schema";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { LANGUAGE_NAMES } from "@/lib/i18n/language-names";
 import type { LanguageCode } from "@/lib/i18n/languages";
@@ -30,10 +34,40 @@ function stripCodeFences(text: string): string {
   return trimmed;
 }
 
+/** Compute SHA-256 hex digest of the translatable sections JSON. */
+function computeContentHash(sections: SectionPayload[]): string {
+  return createHash("sha256")
+    .update(JSON.stringify(sections))
+    .digest("hex");
+}
+
+/**
+ * Merge translated section payloads back into the original config.
+ */
+function mergeSections(
+  config: PageConfig,
+  translated: SectionPayload[],
+): PageConfig {
+  const translatedMap = new Map<string, Record<string, unknown>>();
+  for (const item of translated) {
+    if (item.sectionId && item.content) {
+      translatedMap.set(item.sectionId, item.content);
+    }
+  }
+
+  const newSections = config.sections.map((s) => {
+    const tc = translatedMap.get(s.id);
+    return tc ? { ...s, content: tc } : s;
+  });
+
+  return { ...config, sections: newSections };
+}
+
 /**
  * Translate the human-readable content of a PageConfig to a target language.
  *
  * - Skips the LLM call entirely when sourceLanguage === targetLanguage.
+ * - Uses a hash-based translation cache to avoid repeated LLM calls.
  * - On any error (LLM failure, JSON parse error) returns the original config
  *   unchanged — graceful degradation over hard failure.
  */
@@ -59,6 +93,40 @@ export async function translatePageContent(
   if (toTranslate.length === 0) {
     return config;
   }
+
+  // Check translation cache
+  const contentHash = computeContentHash(toTranslate);
+
+  try {
+    const cached = db
+      .select()
+      .from(translationCache)
+      .where(
+        and(
+          eq(translationCache.contentHash, contentHash),
+          eq(translationCache.targetLanguage, targetLanguage),
+        ),
+      )
+      .get();
+
+    if (cached) {
+      logEvent({
+        eventType: "translation_cache_hit",
+        actor: "system",
+        payload: { targetLanguage, contentHash },
+      });
+      const cachedSections = cached.translatedSections as SectionPayload[];
+      return mergeSections(config, cachedSections);
+    }
+  } catch {
+    // Cache lookup failed — proceed with LLM call
+  }
+
+  logEvent({
+    eventType: "translation_cache_miss",
+    actor: "system",
+    payload: { targetLanguage, contentHash },
+  });
 
   const targetName =
     LANGUAGE_NAMES[targetLanguage as LanguageCode] ?? targetLanguage;
@@ -105,21 +173,28 @@ ${JSON.stringify(toTranslate, null, 2)}`;
     const cleaned = stripCodeFences(result.text);
     const translated: SectionPayload[] = JSON.parse(cleaned);
 
-    // Build a lookup map: sectionId → translated content
-    const translatedMap = new Map<string, Record<string, unknown>>();
-    for (const item of translated) {
-      if (item.sectionId && item.content) {
-        translatedMap.set(item.sectionId, item.content);
-      }
+    // Store in cache (best-effort, don't fail translation on cache write error)
+    try {
+      db.insert(translationCache)
+        .values({
+          contentHash,
+          targetLanguage,
+          translatedSections: translated as any,
+          model: getModelId(),
+        })
+        .onConflictDoUpdate({
+          target: [translationCache.contentHash, translationCache.targetLanguage],
+          set: {
+            translatedSections: translated as any,
+            model: getModelId(),
+          },
+        })
+        .run();
+    } catch {
+      // Cache write failed — translation still succeeds
     }
 
-    // Merge translated content back into the original config
-    const newSections = config.sections.map((s) => {
-      const tc = translatedMap.get(s.id);
-      return tc ? { ...s, content: tc } : s;
-    });
-
-    return { ...config, sections: newSections };
+    return mergeSections(config, translated);
   } catch (error) {
     // Graceful fallback: return untranslated config
     logEvent({

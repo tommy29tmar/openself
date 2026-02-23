@@ -11,7 +11,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Server-side publish gate: agent proposes, user confirms via explicit action
 - Centralized theme validation: 2 themes (minimal, warm), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
-- 77 automated tests passing
+- 112 automated tests passing
 
 Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
@@ -35,6 +35,8 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 | Tool-calling agent | Done | Fact CRUD, page generation, request_publish, reorder, theme |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) |
+| LLM-powered content translation | Done | Translates via generateText on language change, cached in translation_cache |
+| Translation cache | Done | Hash-based, no explicit invalidation, eliminates repeated LLM calls |
 | Steady-state mode switching | Missing | Route always uses onboarding prompt mode |
 
 ### Data and Persistence
@@ -82,6 +84,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 4. SSE preview (replace polling)
 5. History summarization in context budget
 6. Additional section types: timeline, achievements, stats, reading, music, contact
+7. Public page auto-translation for visitors (on-demand + cached)
 
 ### Later
 1. Auth + CSRF on publish endpoint (currently trusted local env only)
@@ -104,7 +107,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 77 passed / 77 total (Vitest)
+- Automated tests: 112 passed / 112 total (Vitest)
 - Covered areas:
   1. Fact-to-section composition behavior (15 tests)
   2. PageConfig validation behavior (15 tests)
@@ -112,6 +115,7 @@ Builder interface layouts (chat experience):
   4. Layout and theme validation (8 tests)
   5. Publish flow — tool level, service level, edge cases (15 tests, mocked)
   6. Page service integration — real SQLite in-memory DB (18 tests)
+  7. Translation — LLM translation + cache behavior (18 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Renderer behavior for visual layout modes

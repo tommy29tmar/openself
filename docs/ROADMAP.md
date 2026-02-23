@@ -30,7 +30,7 @@ When choosing work, apply this order:
 - Migration tracking with `_migrations` table and transactional application
 - Two-row page model with DB CHECK constraints
 - Reserved username protection
-- 77 automated tests
+- 112 automated tests
 
 ## 4) Now (High Priority)
 
@@ -112,6 +112,22 @@ Deliverables:
 Deliverables:
 1. Wire background job processor into app lifecycle
 2. Schedule periodic jobs (e.g., page re-composition on fact changes)
+
+### NEXT-9: Public page translation for visitors
+
+Deliverables:
+1. Detect visitor language from `Accept-Language` header on `/{username}` route
+2. If page language != visitor language, translate on-demand (same LLM pipeline)
+3. Serve from `translation_cache` on repeat visits (same hash = instant)
+4. Optional: translation banner "This page is originally in {language}. [View original]"
+5. Optional: pre-translate top N languages on publish (background job)
+
+Cost risk:
+- Each unique (page content x language) pair costs one LLM call (~$0.001)
+- 1,000 pages x 7 languages = ~$7.00 one-time (cached after first visit)
+- Risk grows if supported languages expand or pages become very long
+- Mitigated by: translation_cache (no repeated costs), llm_limits budget guardrails,
+  hard cap on supported languages
 
 ## 6) Later (Lower Priority)
 

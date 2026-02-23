@@ -191,6 +191,17 @@ export const llmLimits = sqliteTable("llm_limits", {
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
+// -- Translation Cache
+export const translationCache = sqliteTable("translation_cache", {
+  contentHash: text("content_hash").notNull(),
+  targetLanguage: text("target_language").notNull(),
+  translatedSections: text("translated_sections", { mode: "json" }).notNull(),
+  model: text("model"),
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.contentHash, table.targetLanguage] }),
+]);
+
 // -- Component Registry
 export const componentRegistry = sqliteTable(
   "component_registry",
