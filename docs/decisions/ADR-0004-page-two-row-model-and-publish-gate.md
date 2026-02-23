@@ -37,9 +37,10 @@ user consent.
      must not be reserved, and any previously published page with a different username
      is de-published in the same transaction (single-identity model).
 
-4. Reserved usernames (`draft`, `api`, `builder`, `admin`, `_next`) are enforced both
-   in the service layer (`RESERVED_USERNAMES` set) and at the DB level via CHECK
-   constraints.
+4. Reserved usernames (`draft`, `api`, `builder`, `admin`, `_next`) are enforced in
+   the service layer (`RESERVED_USERNAMES` set in `requestPublish()` and
+   `confirmPublish()`). The DB CHECK constraint specifically blocks `username="draft"`
+   on published rows; the remaining reserved names are service-layer only.
 
 5. DB CHECK constraints enforce state invariants:
    - Draft row (`id="draft"`) cannot have `status="published"`
