@@ -11,18 +11,34 @@ import {
 } from "@/lib/services/preferences-service";
 import { isLanguageCode } from "@/lib/i18n/languages";
 import { translatePageContent } from "@/lib/ai/translate";
+import { getSessionIdFromRequest } from "@/lib/auth/session";
+import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const prefs = getPreferences();
+export async function GET(req: Request) {
+  const sessionId = getSessionIdFromRequest(req);
+  if (isMultiUserEnabled()) {
+    if (!sessionId || !getSession(sessionId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  const prefs = getPreferences(sessionId);
   return NextResponse.json({
     language: prefs.language,
-    hasPage: hasAnyPage(),
+    hasPage: hasAnyPage(sessionId),
   });
 }
 
 export async function POST(req: Request) {
+  const sessionId = getSessionIdFromRequest(req);
+  if (isMultiUserEnabled()) {
+    if (!sessionId || !getSession(sessionId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     const body = await req.json();
     const language = body?.language;
@@ -36,19 +52,19 @@ export async function POST(req: Request) {
     }
 
     // Record the fact language on first call (before changing preference)
-    setFactLanguageIfUnset(language);
+    setFactLanguageIfUnset(language, sessionId);
 
-    setPreferredLanguage(language);
+    setPreferredLanguage(language, sessionId);
 
     let regenerated = false;
     if (regenerateDraft) {
-      const facts = getAllFacts();
+      const facts = getAllFacts(sessionId);
       if (facts.length > 0) {
-        const currentDraft = getDraft();
+        const currentDraft = getDraft(sessionId);
         const username = currentDraft?.username ?? "draft";
         // Always compose in the fact language so values and templates are
         // in the same language, then translate the coherent result.
-        const factLanguage = getFactLanguage() ?? language;
+        const factLanguage = getFactLanguage(sessionId) ?? language;
         const regeneratedConfig = composeOptimisticPage(facts, username, factLanguage);
         const nextConfig = currentDraft
           ? {
@@ -60,7 +76,7 @@ export async function POST(req: Request) {
 
         const translated = await translatePageContent(nextConfig, language, factLanguage);
 
-        upsertDraft(username, translated);
+        upsertDraft(username, translated, sessionId);
         regenerated = true;
       }
     }

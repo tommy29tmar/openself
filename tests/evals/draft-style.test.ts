@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import * as schema from "@/lib/db/schema";
 import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
 import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
@@ -12,22 +12,36 @@ import { isAvailableFont } from "@/lib/page-config/fonts";
  * Uses an in-memory DB to avoid touching the real DB file.
  */
 
+const SESSION_ID = "__default__";
+
 const testSqlite = new Database(":memory:");
 testSqlite.pragma("journal_mode = WAL");
 
 const testDb = drizzle(testSqlite, { schema });
 
 testSqlite.exec(`
+  CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    invite_code TEXT NOT NULL,
+    username TEXT,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  INSERT INTO sessions (id, invite_code, status) VALUES ('__default__', '__legacy__', 'active');
+`);
+
+testSqlite.exec(`
   CREATE TABLE page (
     id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
     username TEXT NOT NULL,
     config JSON NOT NULL,
     status TEXT NOT NULL DEFAULT 'draft'
       CHECK (status IN ('draft', 'approval_pending', 'published')),
     generated_at DATETIME,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CHECK (id != 'draft' OR status != 'published'),
-    CHECK (id = 'draft' OR status = 'published'),
     CHECK (status != 'published' OR username != 'draft')
   );
 `);
@@ -56,16 +70,25 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   };
 }
 
-function getDraft() {
-  const row = testDb.select().from(schema.page).where(eq(schema.page.id, "draft")).get();
+function getDraft(sessionId: string = SESSION_ID) {
+  const row = testDb
+    .select()
+    .from(schema.page)
+    .where(
+      and(
+        eq(schema.page.id, sessionId),
+        inArray(schema.page.status, ["draft", "approval_pending"]),
+      ),
+    )
+    .get();
   if (!row) return null;
   return { config: row.config as PageConfig, username: row.username, status: row.status };
 }
 
-function upsertDraft(username: string, config: PageConfig) {
+function upsertDraft(username: string, config: PageConfig, sessionId: string = SESSION_ID) {
   testDb
     .insert(schema.page)
-    .values({ id: "draft", username, config, status: "draft" })
+    .values({ id: sessionId, sessionId, username, config, status: "draft" })
     .onConflictDoUpdate({
       target: schema.page.id,
       set: { username, config, status: "draft", updatedAt: new Date().toISOString() },
@@ -228,12 +251,12 @@ describe("font constants", () => {
 
 // Storage for the mock — shared between mock and tests
 let mockDraft: { config: PageConfig; username: string; status: string } | null = null;
-let lastUpserted: { username: string; config: PageConfig } | null = null;
+let lastUpserted: { username: string; config: PageConfig; sessionId: string } | null = null;
 
 vi.mock("@/lib/services/page-service", () => ({
-  getDraft: () => mockDraft,
-  upsertDraft: (username: string, config: PageConfig) => {
-    lastUpserted = { username, config };
+  getDraft: (_sessionId?: string) => mockDraft,
+  upsertDraft: (username: string, config: PageConfig, sessionId?: string) => {
+    lastUpserted = { username, config, sessionId: sessionId ?? "__default__" };
     // Also update mockDraft so subsequent reads see the change
     mockDraft = { config, username, status: "draft" };
   },
@@ -241,6 +264,17 @@ vi.mock("@/lib/services/page-service", () => ({
   hasAnyPage: () => mockDraft !== null,
   requestPublish: () => {},
   confirmPublish: () => {},
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  getSessionIdFromRequest: () => "__default__",
+  createSessionCookie: () => "",
+}));
+
+vi.mock("@/lib/services/session-service", () => ({
+  isMultiUserEnabled: () => false,
+  getSession: () => null,
+  getDefaultSessionId: () => "__default__",
 }));
 
 // Must import AFTER vi.mock so the mock is in place

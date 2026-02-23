@@ -111,7 +111,7 @@ describe("Tool level — request_publish", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(requestPublish).toHaveBeenCalledWith("alice");
+    expect(requestPublish).toHaveBeenCalledWith("alice", "__default__");
   });
 
   it("does NOT call confirmPublish", async () => {

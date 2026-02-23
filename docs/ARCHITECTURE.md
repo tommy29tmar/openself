@@ -1477,9 +1477,23 @@ The agent then:
 ### 8.1 Database Schema
 
 ```sql
+-- Sessions: one per invite-code redemption (multi-user mode)
+-- In single-user mode, a sentinel row with id='__default__' is used.
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    invite_code TEXT NOT NULL,
+    username TEXT,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'registered')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX uniq_sessions_username ON sessions(username) WHERE username IS NOT NULL;
+
 -- Facts: everything the agent knows about you
 CREATE TABLE facts (
     id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
     category TEXT NOT NULL,
     key TEXT NOT NULL,
     value JSON NOT NULL,
@@ -1488,7 +1502,7 @@ CREATE TABLE facts (
     visibility TEXT DEFAULT 'private' CHECK (visibility IN ('private', 'proposed', 'public', 'archived')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(category, key)
+    UNIQUE(session_id, category, key)
 );
 
 -- Canonical taxonomy registry (extensible, but controlled)
@@ -1548,17 +1562,24 @@ CREATE INDEX idx_agent_events_type_created ON agent_events(event_type, created_a
 CREATE INDEX idx_agent_events_corr ON agent_events(correlation_id);
 
 -- Page configuration (the generated page)
+-- Draft row id = session_id ('__default__' or UUID). Published row id = username.
 CREATE TABLE page (
-    id TEXT PRIMARY KEY DEFAULT 'main',
-    username TEXT UNIQUE NOT NULL,
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
+    username TEXT NOT NULL,
     config JSON NOT NULL,        -- The full page config (see Section 6.2)
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approval_pending', 'published')),
     generated_at DATETIME,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CHECK (status != 'published' OR username != 'draft')
 );
+CREATE UNIQUE INDEX uniq_page_published ON page(username) WHERE status = 'published';
 
 -- Agent configuration
+-- Row id = session_id ('__default__' or UUID).
 CREATE TABLE agent_config (
-    id TEXT PRIMARY KEY DEFAULT 'main',
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
     config JSON NOT NULL,        -- The agent identity config (see Section 4.1)
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -2058,27 +2079,30 @@ Scheduling model:
 - Worker dequeues due jobs and processes them transactionally
 - Serverless deployments use cron-triggered scheduler ticks to enqueue due work
 
-### 11.6 Runtime Access Profiles (Single-User First)
+### 11.6 Runtime Access Profiles
 
 OpenSelf ships as one codebase with environment-driven runtime profiles:
 
-1. **Default (`APP_MODE=single`)**:
+1. **Default (no `INVITE_CODES` env var)**:
    - Baseline for community/self-host installs
-   - Single-user data model and behavior
-   - No mandatory invite gate
-2. **Hosted invite gate (early public hardening)**:
-   - Optional on managed deployments (for example `openself.dev`)
-   - Protects builder and write APIs behind invite code checks
-   - Does **not** introduce multi-user data isolation yet
-3. **Deferred multi-user (`APP_MODE=multi`)**:
-   - Planned only after Phase 1 milestones complete
-   - Includes session isolation, per-user draft/facts/preferences, registration flow
+   - Single-user data model and behavior (all data uses sentinel `session_id = '__default__'`)
+   - No invite gate, no message limits, no registration flow
+   - Zero behavior change from pre-session architecture
+2. **Multi-user (`INVITE_CODES` env var set)**:
+   - Active on managed deployments (e.g. `openself.dev`)
+   - Middleware redirects unauthenticated visitors to `/invite`
+   - Each invite code creates an isolated session (UUID) with its own facts, draft, preferences
+   - Chat is capped at `CHAT_MESSAGE_LIMIT` messages (default 10), after which a registration prompt appears
+   - Registration claims a username, auto-publishes the page at `/<username>`
+   - Session stored in `os_session` HttpOnly cookie (30 days)
+   - Atomic message count increment prevents race conditions at the limit boundary
 
-Operational guard:
-- Managed deployments may require an additional unlock env (for example
-  `MULTI_USER_UNLOCK_TOKEN`) before enabling `APP_MODE=multi` in early stages.
-- This is an operational safeguard, not copy protection. Self-hosted forks can still
-  modify code by design (AGPL/open-source model).
+**Implementation notes:**
+- The `sessions` table tracks invite code, message count, username, and status per session.
+- All service functions accept a `sessionId` parameter (defaulting to `'__default__'`).
+- The `facts`, `page`, and `agent_config` tables include a `session_id` column with `NOT NULL DEFAULT '__default__'`.
+- NULL values are never used — the sentinel `'__default__'` preserves UNIQUE constraint behavior in SQLite.
+- Edge middleware only checks cookie presence; DB validation happens in API route handlers (Edge runtime cannot use SQLite).
 
 ---
 
@@ -2185,15 +2209,18 @@ Visibility is mode-aware and enforced by `VisibilityPolicy`:
 
 ### 13.0 Access Control Sequencing (Linear Delivery)
 
-To keep execution linear and avoid premature schema churn:
+> **Update (2026-02-24):** Multi-user sessions were pulled forward from Phase 2 to
+> Phase 0 gate. The invite gate alone (without data isolation) was insufficient — every
+> user shared the same draft/facts, and the LLM was exposed without message limits.
+> The full multi-user model (sessions, scoped data, registration, chat limits) is now
+> implemented and deployed. See Section 11.6 and ADR-011 amendment.
 
-1. **Now (Phase 0 gate hardening):**
-   - Add invite-code gate for hosted builder access
-   - Keep the runtime and data model single-user
-2. **Phase 1 (agent quality first):**
-   - Keep single-user internals while shipping memory/heartbeat/page quality goals
-3. **After Phase 1 gate (start of Phase 2 infrastructure work):**
-   - Introduce full multi-user model (sessions, scoped data, registration, limits)
+Execution as delivered:
+
+1. **Phase 0 gate (done):** Invite-code gate + full multi-user session isolation +
+   message limits + registration flow. Backward-compatible: without `INVITE_CODES`
+   env var, the app runs in single-user mode with zero behavior change.
+2. **Phase 1 (current):** Agent quality (memory, heartbeat, extended sections, hybrid compiler).
 
 ### Phase 0 — Foundation (Months 1-2)
 
@@ -2256,9 +2283,9 @@ Reliability:
   [ ] LLM Evals suite (deterministic offline tests: canned conversations → assert correct fact extraction, no data loss, no hallucinated deletions)
   [ ] Basic rate limiting (per-IP throttle on chat API, conversation pace cap)
 
-Not in this phase:
-  - No account auth / multi-user data model
-  - Hosted invite gate may be enabled as an operational access control (no schema change)
+Not in this phase (updated — multi-user was pulled forward, see 13.0):
+  - ~~No account auth / multi-user data model~~ → Implemented at Phase 0 gate (invite codes + sessions + registration)
+  - ~~Hosted invite gate may be enabled as an operational access control (no schema change)~~ → Implemented with full schema change (session_id on facts/page/agent_config)
   - No connectors
   - No voice
   - No heartbeat
@@ -2279,7 +2306,7 @@ survive real-world usage outside the development team.
 ```
   [ ] Founders create their own pages using the live product
   [ ] 10+ trusted testers (friends, colleagues) complete the full onboarding flow
-  [ ] Hosted deployment can enforce invite-only builder access without changing single-user internals
+  [x] Hosted deployment enforces invite-only builder access with full multi-user session isolation
   [ ] Collect structured feedback: UX friction, agent quality, rendering bugs
   [ ] Stress-test LLM adapter with diverse languages, edge-case inputs, and adversarial prompts
   [ ] Fix critical issues surfaced during dogfooding
@@ -2394,7 +2421,7 @@ Features:
   [ ] Contextual profiles (same data, different views: professional, personal, etc.)
   [ ] Time Capsule (yearly review of your evolution)
   [ ] Widget embeds (embed profile sections on other sites)
-  [ ] Auth / multi-user sessions + registration (first infrastructure milestone after Phase 1 gate)
+  [x] Auth / multi-user sessions + registration (pulled forward to Phase 0 gate — implemented 2026-02-24)
   [ ] Docker packaging (for self-hosting)
 
 Community:
@@ -2866,30 +2893,42 @@ discovery (Section 6.9) but never to engagement mechanics.
 **Trade-off:** Less viral growth potential. This is intentional — organic growth
 through genuine value, not addiction mechanics.
 
-### ADR-011: Single-User Default, Invite Gate First, Multi-User Later
+### ADR-011: Single-User Default, Multi-User via Environment Variable
 
-**Decision:**
-- Keep default runtime mode single-user (`APP_MODE=single`).
+**Original decision (superseded):**
+- Keep default runtime mode single-user.
 - Use invite-code builder access as the first hosted hardening step.
 - Defer full multi-user model to post-Phase 1.
 
-**Context:**
-- The project is still in early validation and dogfooding.
-- Core risk today is product quality and LLM cost exposure, not missing account systems.
-- Implementing multi-user now would force broad schema/service/API rewrites while core
-  agent behavior is still being stabilized.
+**Amendment (2026-02-24):** Multi-user was pulled forward to Phase 0 gate. The
+invite-only gate without data isolation was insufficient: all users shared the same
+draft, facts, and preferences. LLM cost exposure required message limits per session.
+
+**Current decision:**
+- Default mode remains single-user (no `INVITE_CODES` env var). All data uses
+  sentinel `session_id = '__default__'`. Zero behavior change for self-hosted installs.
+- When `INVITE_CODES` is set, the app runs in multi-user mode: invite gate, session
+  isolation, per-session facts/draft/preferences, chat message limits, and username
+  registration.
+- No `APP_MODE` env var needed — the presence of `INVITE_CODES` is the toggle.
+
+**Key implementation details:**
+- `sessions` table tracks invite code, message count, username, and status.
+- `session_id NOT NULL DEFAULT '__default__'` added to `facts`, `page`, `agent_config`.
+- NULL never used (SQLite treats NULL as distinct in UNIQUE — would break upserts).
+- Draft row `id` changed from `'draft'` to session_id (`'__default__'` or UUID).
+- `confirmPublish` DELETE scoped to session: prevents one user from deleting another's published pages.
+- Atomic message limit: `UPDATE ... SET message_count = message_count + 1 WHERE id = ? AND message_count < ?`.
+- Edge middleware checks cookie presence only; DB validation in route handlers.
 
 **Rationale:**
-- Preserves linear execution: quality and reliability first, account complexity second.
-- Reduces migration/regression surface in the most volatile product phase.
-- Protects hosted LLM budget immediately with minimal architecture impact.
-- Keeps community setup simple and predictable (single-user local-first default).
+- Single env var toggle keeps ops simple.
+- Backward-compatible migration (sentinel value, no NULL).
+- Community self-hosted installs remain unaffected.
 
 **Trade-off:**
-- Invite management is manual.
-- No per-user isolation until the dedicated multi-user phase.
-- Optional unlock tokens for managed deployments are operational safeguards only and do
-  not prevent forks from changing behavior.
+- Schema is slightly more complex (session_id on 3 tables, sessions table).
+- Invite codes are static (env var), not managed via UI.
 
 ---
 

@@ -1,4 +1,4 @@
-import { eq, like, or, sql } from "drizzle-orm";
+import { eq, and, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   facts,
@@ -71,7 +71,7 @@ export type FactRow = {
 
 // -- CRUD Operations
 
-export async function createFact(input: CreateFactInput): Promise<FactRow> {
+export async function createFact(input: CreateFactInput, sessionId: string = "__default__"): Promise<FactRow> {
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
 
@@ -87,6 +87,7 @@ export async function createFact(input: CreateFactInput): Promise<FactRow> {
   db.insert(facts)
     .values({
       id,
+      sessionId,
       category: normalized.canonical,
       key: input.key,
       value: input.value,
@@ -97,7 +98,7 @@ export async function createFact(input: CreateFactInput): Promise<FactRow> {
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: [facts.category, facts.key],
+      target: [facts.sessionId, facts.category, facts.key],
       set: {
         value: input.value,
         source: input.source ?? "chat",
@@ -125,7 +126,7 @@ export async function createFact(input: CreateFactInput): Promise<FactRow> {
     .select()
     .from(facts)
     .where(
-      sql`${facts.category} = ${normalized.canonical} AND ${facts.key} = ${input.key}`,
+      sql`${facts.sessionId} = ${sessionId} AND ${facts.category} = ${normalized.canonical} AND ${facts.key} = ${input.key}`,
     )
     .get();
 
@@ -184,16 +185,19 @@ export function deleteFact(factId: string): boolean {
   return true;
 }
 
-export function searchFacts(query: string): FactRow[] {
+export function searchFacts(query: string, sessionId: string = "__default__"): FactRow[] {
   const pattern = `%${query}%`;
   const rows = db
     .select()
     .from(facts)
     .where(
-      or(
-        like(facts.category, pattern),
-        like(facts.key, pattern),
-        sql`json_extract(${facts.value}, '$') LIKE ${pattern}`,
+      and(
+        eq(facts.sessionId, sessionId),
+        or(
+          like(facts.category, pattern),
+          like(facts.key, pattern),
+          sql`json_extract(${facts.value}, '$') LIKE ${pattern}`,
+        ),
       ),
     )
     .all();
@@ -201,14 +205,14 @@ export function searchFacts(query: string): FactRow[] {
   return rows as FactRow[];
 }
 
-export function getAllFacts(): FactRow[] {
-  return db.select().from(facts).all() as FactRow[];
+export function getAllFacts(sessionId: string = "__default__"): FactRow[] {
+  return db.select().from(facts).where(eq(facts.sessionId, sessionId)).all() as FactRow[];
 }
 
-export function getFactsByCategory(category: string): FactRow[] {
+export function getFactsByCategory(category: string, sessionId: string = "__default__"): FactRow[] {
   return db
     .select()
     .from(facts)
-    .where(eq(facts.category, category))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
     .all() as FactRow[];
 }

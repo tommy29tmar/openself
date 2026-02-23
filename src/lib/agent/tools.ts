@@ -14,7 +14,7 @@ import { logEvent } from "@/lib/services/event-service";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
 
-export function createAgentTools(sessionLanguage: string = "en") {
+export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__") {
   return {
   create_fact: tool({
     description:
@@ -51,7 +51,7 @@ export function createAgentTools(sessionLanguage: string = "en") {
           key,
           value,
           confidence,
-        });
+        }, sessionId);
         return {
           success: true,
           factId: fact.id,
@@ -127,7 +127,7 @@ export function createAgentTools(sessionLanguage: string = "en") {
     }),
     execute: async ({ query }) => {
       try {
-        const results = searchFacts(query);
+        const results = searchFacts(query, sessionId);
         return {
           success: true,
           count: results.length,
@@ -159,12 +159,12 @@ export function createAgentTools(sessionLanguage: string = "en") {
         // Preserve user's style customizations (theme, colors, font) from
         // the existing draft so agent-driven structural changes don't reset
         // manually chosen style settings.
-        const currentDraft = getDraft();
+        const currentDraft = getDraft(sessionId);
         const incoming = config as PageConfig;
         const merged: PageConfig = currentDraft
           ? { ...incoming, theme: currentDraft.config.theme, style: currentDraft.config.style }
           : incoming;
-        upsertDraft(username, merged);
+        upsertDraft(username, merged, sessionId);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
@@ -200,12 +200,12 @@ export function createAgentTools(sessionLanguage: string = "en") {
         if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
           return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
         }
-        const draft = getDraft();
+        const draft = getDraft(sessionId);
         if (!draft) {
           return { success: false, error: "Page not found" };
         }
         const updated: PageConfig = { ...draft.config, theme };
-        upsertDraft(username, updated);
+        upsertDraft(username, updated, sessionId);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
@@ -229,7 +229,7 @@ export function createAgentTools(sessionLanguage: string = "en") {
     }),
     execute: async ({ username, sectionOrder }) => {
       try {
-        const draft = getDraft();
+        const draft = getDraft(sessionId);
         if (!draft) {
           return { success: false, error: "Page not found" };
         }
@@ -250,7 +250,7 @@ export function createAgentTools(sessionLanguage: string = "en") {
           ...existing,
           sections: reordered as PageConfig["sections"],
         };
-        upsertDraft(username, updated);
+        upsertDraft(username, updated, sessionId);
         return { success: true };
       } catch (error) {
         return { success: false, error: String(error) };
@@ -276,17 +276,17 @@ export function createAgentTools(sessionLanguage: string = "en") {
     }),
     execute: async ({ username, language }) => {
       try {
-        const facts = getAllFacts();
+        const facts = getAllFacts(sessionId);
         if (facts.length === 0) {
           return { success: false, error: "No facts in knowledge base yet" };
         }
         // Preserve user's style customizations (theme, colors, font) from
         // the existing draft. composeOptimisticPage always uses defaults.
-        const currentDraft = getDraft();
+        const currentDraft = getDraft(sessionId);
         // Always compose in the fact language so values and templates are
         // in the same language, then translate the coherent result.
         const targetLang = language ?? sessionLanguage;
-        const factLang = getFactLanguage() ?? targetLang;
+        const factLang = getFactLanguage(sessionId) ?? targetLang;
         const composed = composeOptimisticPage(
           facts,
           username,
@@ -298,7 +298,7 @@ export function createAgentTools(sessionLanguage: string = "en") {
 
         const config = await translatePageContent(styled, targetLang, factLang);
 
-        upsertDraft(username, config);
+        upsertDraft(username, config, sessionId);
         logEvent({
           eventType: "page_generated",
           actor: "assistant",
@@ -337,14 +337,14 @@ export function createAgentTools(sessionLanguage: string = "en") {
     }),
     execute: async ({ username }) => {
       try {
-        const draft = getDraft();
+        const draft = getDraft(sessionId);
         if (!draft) {
           return { success: false, error: "No draft page to publish. Generate a page first." };
         }
 
         // Mark the existing draft as pending approval — no recomposition,
         // so manual changes (theme, section order, content edits) are preserved.
-        requestPublish(username);
+        requestPublish(username, sessionId);
 
         logEvent({
           eventType: "page_publish_requested",
@@ -374,4 +374,4 @@ export function createAgentTools(sessionLanguage: string = "en") {
 }
 
 // Backward compatibility for tests/imports that expect a static object.
-export const agentTools = createAgentTools("en");
+export const agentTools = createAgentTools("en", "__default__");

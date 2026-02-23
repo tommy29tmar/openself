@@ -3,13 +3,23 @@ import { getDraft, upsertDraft } from "@/lib/services/page-service";
 import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { isAvailableFont } from "@/lib/page-config/fonts";
 import type { PageConfig } from "@/lib/page-config/schema";
+import { getSessionIdFromRequest } from "@/lib/auth/session";
+import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  // Resolve session
+  const sessionId = getSessionIdFromRequest(req);
+  if (isMultiUserEnabled()) {
+    if (!sessionId || !getSession(sessionId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     const body = await req.json();
-    const draft = getDraft();
+    const draft = getDraft(sessionId);
 
     if (!draft) {
       return NextResponse.json(
@@ -51,7 +61,7 @@ export async function POST(req: Request) {
       config.style = style;
     }
 
-    upsertDraft(draft.username, config as PageConfig);
+    upsertDraft(draft.username, config as PageConfig, sessionId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

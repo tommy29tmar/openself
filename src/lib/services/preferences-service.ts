@@ -16,11 +16,11 @@ function toObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export function getPreferences(): PreferencesShape {
+export function getPreferences(sessionId: string = "__default__"): PreferencesShape {
   const row = db
     .select()
     .from(agentConfig)
-    .where(eq(agentConfig.id, "main"))
+    .where(eq(agentConfig.id, sessionId))
     .get();
 
   const config = toObject(row?.config);
@@ -30,22 +30,22 @@ export function getPreferences(): PreferencesShape {
   return { language, factLanguage };
 }
 
-export function getFactLanguage(): LanguageCode | null {
-  return getPreferences().factLanguage;
+export function getFactLanguage(sessionId: string = "__default__"): LanguageCode | null {
+  return getPreferences(sessionId).factLanguage;
 }
 
 /**
  * Record the language in which facts are originally created.
  * Only writes once — subsequent calls are no-ops.
  */
-export function setFactLanguageIfUnset(language: LanguageCode): void {
-  const current = getPreferences();
+export function setFactLanguageIfUnset(language: LanguageCode, sessionId: string = "__default__"): void {
+  const current = getPreferences(sessionId);
   if (current.factLanguage) return; // already set
 
   const row = db
     .select()
     .from(agentConfig)
-    .where(eq(agentConfig.id, "main"))
+    .where(eq(agentConfig.id, sessionId))
     .get();
 
   const currentConfig = toObject(row?.config);
@@ -53,7 +53,8 @@ export function setFactLanguageIfUnset(language: LanguageCode): void {
 
   db.insert(agentConfig)
     .values({
-      id: "main",
+      id: sessionId,
+      sessionId,
       config: nextConfig,
     })
     .onConflictDoUpdate({
@@ -66,11 +67,11 @@ export function setFactLanguageIfUnset(language: LanguageCode): void {
     .run();
 }
 
-export function setPreferredLanguage(language: LanguageCode): void {
+export function setPreferredLanguage(language: LanguageCode, sessionId: string = "__default__"): void {
   const row = db
     .select()
     .from(agentConfig)
-    .where(eq(agentConfig.id, "main"))
+    .where(eq(agentConfig.id, sessionId))
     .get();
 
   const currentConfig = toObject(row?.config);
@@ -78,7 +79,8 @@ export function setPreferredLanguage(language: LanguageCode): void {
 
   db.insert(agentConfig)
     .values({
-      id: "main",
+      id: sessionId,
+      sessionId,
       config: nextConfig,
     })
     .onConflictDoUpdate({

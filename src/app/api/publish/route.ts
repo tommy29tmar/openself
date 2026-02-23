@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { confirmPublish } from "@/lib/services/page-service";
 import { logEvent } from "@/lib/services/event-service";
+import { getSessionIdFromRequest } from "@/lib/auth/session";
+import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
 
 /**
  * POST /api/publish
@@ -8,12 +10,16 @@ import { logEvent } from "@/lib/services/event-service";
  * Server-side publish gate: only an explicit user action can publish a page.
  * The agent can only request_publish (mark draft as approval_pending).
  * This endpoint promotes draft → published.
- *
- * SECURITY NOTE: This endpoint has no auth or CSRF protection.
- * Acceptable only in trusted local environment (dogfooding Phase 0).
- * Before exposing online, add auth + CSRF token.
  */
 export async function POST(req: Request) {
+  // Resolve session
+  const sessionId = getSessionIdFromRequest(req);
+  if (isMultiUserEnabled()) {
+    if (!sessionId || !getSession(sessionId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     const body = await req.json();
     const username = body?.username;
@@ -33,7 +39,7 @@ export async function POST(req: Request) {
       );
     }
 
-    confirmPublish(username);
+    confirmPublish(username, sessionId);
 
     logEvent({
       eventType: "page_published",

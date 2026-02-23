@@ -10,11 +10,23 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
+// -- Sessions
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  inviteCode: text("invite_code").notNull(),
+  username: text("username"),
+  messageCount: integer("message_count").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
 // -- Facts
 export const facts = sqliteTable(
   "facts",
   {
     id: text("id").primaryKey(),
+    sessionId: text("session_id").notNull().default("__default__"),
     category: text("category").notNull(),
     key: text("key").notNull(),
     value: text("value", { mode: "json" }).notNull(),
@@ -24,7 +36,7 @@ export const facts = sqliteTable(
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [uniqueIndex("uniq_facts_category_key").on(table.category, table.key)],
+  (table) => [uniqueIndex("uniq_facts_session_category_key").on(table.sessionId, table.category, table.key)],
 );
 
 // -- Taxonomy
@@ -75,8 +87,10 @@ export const agentEvents = sqliteTable(
 );
 
 // -- Page (two-row model: draft + published coexist)
+// Draft id = session_id (e.g. '__default__' or a UUID). Published id = username.
 export const page = sqliteTable("page", {
-  id: text("id").primaryKey(),                        // "draft" | <username>
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().default("__default__"),
   username: text("username").notNull(),
   config: text("config", { mode: "json" }).notNull(),
   status: text("status").notNull().default("draft"),   // draft | approval_pending | published
@@ -85,8 +99,10 @@ export const page = sqliteTable("page", {
 });
 
 // -- Agent Config
+// Row id = session_id (e.g. '__default__' or a UUID).
 export const agentConfig = sqliteTable("agent_config", {
-  id: text("id").primaryKey().default("main"),
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().default("__default__"),
   config: text("config", { mode: "json" }).notNull(),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });

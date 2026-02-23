@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import * as schema from "@/lib/db/schema";
 import type { PageConfig } from "@/lib/page-config/schema";
 
@@ -10,24 +10,39 @@ import type { PageConfig } from "@/lib/page-config/schema";
  * Uses an in-memory DB to avoid touching the real DB file.
  */
 
+const SESSION_ID = "__default__";
+
 const testSqlite = new Database(":memory:");
 testSqlite.pragma("journal_mode = WAL");
 testSqlite.pragma("foreign_keys = ON");
 
 const testDb = drizzle(testSqlite, { schema });
 
-// Create the page table with the two-row model schema
+// Create sessions table first (FK target)
+testSqlite.exec(`
+  CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    invite_code TEXT NOT NULL,
+    username TEXT,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'registered')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  INSERT INTO sessions (id, invite_code, status) VALUES ('__default__', '__legacy__', 'active');
+`);
+
+// Create the page table with session_id and updated constraints
 testSqlite.exec(`
   CREATE TABLE page (
     id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
     username TEXT NOT NULL,
     config JSON NOT NULL,
     status TEXT NOT NULL DEFAULT 'draft'
       CHECK (status IN ('draft', 'approval_pending', 'published')),
     generated_at DATETIME,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CHECK (id != 'draft' OR status != 'published'),
-    CHECK (id = 'draft' OR status = 'published'),
     CHECK (status != 'published' OR username != 'draft')
   );
   CREATE UNIQUE INDEX uniq_page_published ON page(username) WHERE status = 'published';
@@ -60,10 +75,19 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
 // -- Inline service functions that operate on testDb/testSqlite --
 // (We can't import from page-service because it binds to the real DB singleton)
 
-const RESERVED_USERNAMES = new Set(["draft", "api", "builder", "admin", "_next"]);
+const RESERVED_USERNAMES = new Set(["draft", "api", "builder", "admin", "invite", "_next"]);
 
-function getDraft() {
-  const row = testDb.select().from(schema.page).where(eq(schema.page.id, "draft")).get();
+function getDraft(sessionId: string = SESSION_ID) {
+  const row = testDb
+    .select()
+    .from(schema.page)
+    .where(
+      and(
+        eq(schema.page.id, sessionId),
+        inArray(schema.page.status, ["draft", "approval_pending"]),
+      ),
+    )
+    .get();
   if (!row) return null;
   return { config: row.config as PageConfig, username: row.username, status: row.status };
 }
@@ -78,10 +102,10 @@ function getPublishedPage(username: string) {
   return row.config as PageConfig;
 }
 
-function upsertDraft(username: string, config: PageConfig) {
+function upsertDraft(username: string, config: PageConfig, sessionId: string = SESSION_ID) {
   testDb
     .insert(schema.page)
-    .values({ id: "draft", username, config, status: "draft" })
+    .values({ id: sessionId, sessionId, username, config, status: "draft" })
     .onConflictDoUpdate({
       target: schema.page.id,
       set: { username, config, status: "draft", updatedAt: new Date().toISOString() },
@@ -89,37 +113,39 @@ function upsertDraft(username: string, config: PageConfig) {
     .run();
 }
 
-function requestPublish(username: string) {
+function requestPublish(username: string, sessionId: string = SESSION_ID) {
   if (RESERVED_USERNAMES.has(username)) throw new Error(`Username "${username}" is reserved`);
-  const draft = testDb.select().from(schema.page).where(eq(schema.page.id, "draft")).get();
+  const draft = testDb.select().from(schema.page).where(eq(schema.page.id, sessionId)).get();
   if (!draft) throw new Error("No draft page exists");
   testDb
     .update(schema.page)
     .set({ username, status: "approval_pending", updatedAt: new Date().toISOString() })
-    .where(eq(schema.page.id, "draft"))
+    .where(eq(schema.page.id, sessionId))
     .run();
 }
 
-function confirmPublish(username: string) {
+function confirmPublish(username: string, sessionId: string = SESSION_ID) {
   if (RESERVED_USERNAMES.has(username)) throw new Error(`Username "${username}" is reserved`);
   const txn = testSqlite.transaction(() => {
-    const draftRow = testSqlite.prepare("SELECT * FROM page WHERE id = 'draft'").get() as any;
+    const draftRow = testSqlite.prepare("SELECT * FROM page WHERE id = ?").get(sessionId) as any;
     if (!draftRow || draftRow.status !== "approval_pending") {
       throw new Error("No page pending approval");
     }
-    testSqlite.prepare("DELETE FROM page WHERE status = 'published' AND username != ?").run(username);
+    testSqlite
+      .prepare("DELETE FROM page WHERE status = 'published' AND session_id = ? AND username != ?")
+      .run(sessionId, username);
     const now = new Date().toISOString();
     testSqlite
       .prepare(
-        `INSERT INTO page (id, username, config, status, generated_at, updated_at)
-         VALUES (?, ?, ?, 'published', ?, ?)
+        `INSERT INTO page (id, session_id, username, config, status, generated_at, updated_at)
+         VALUES (?, ?, ?, ?, 'published', ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            username = excluded.username, config = excluded.config,
            status = 'published', generated_at = excluded.generated_at,
            updated_at = excluded.updated_at`,
       )
-      .run(username, username, draftRow.config, draftRow.generated_at, now);
-    testSqlite.prepare("UPDATE page SET status = 'draft', updated_at = ? WHERE id = 'draft'").run(now);
+      .run(username, sessionId, username, draftRow.config, draftRow.generated_at, now);
+    testSqlite.prepare("UPDATE page SET status = 'draft', updated_at = ? WHERE id = ?").run(now, sessionId);
   });
   txn();
 }
@@ -274,31 +300,11 @@ describe("page-service integration (real SQLite)", () => {
   });
 
   describe("DB CHECK constraints", () => {
-    it("rejects inserting a published row with id='draft'", () => {
-      expect(() => {
-        testSqlite
-          .prepare(
-            "INSERT INTO page (id, username, config, status) VALUES ('draft', 'alice', '{}', 'published')",
-          )
-          .run();
-      }).toThrow();
-    });
-
-    it("rejects inserting a draft status on a non-draft id", () => {
-      expect(() => {
-        testSqlite
-          .prepare(
-            "INSERT INTO page (id, username, config, status) VALUES ('alice', 'alice', '{}', 'draft')",
-          )
-          .run();
-      }).toThrow();
-    });
-
     it("rejects publishing with username 'draft'", () => {
       expect(() => {
         testSqlite
           .prepare(
-            "INSERT INTO page (id, username, config, status) VALUES ('draft-user', 'draft', '{}', 'published')",
+            "INSERT INTO page (id, session_id, username, config, status) VALUES ('draft-user', '__default__', 'draft', '{}', 'published')",
           )
           .run();
       }).toThrow();

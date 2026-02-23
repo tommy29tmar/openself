@@ -1,0 +1,414 @@
+# OpenSelf — Deploy Guide (Hetzner + Coolify)
+
+Last updated: 2026-02-24
+
+---
+
+## Overview
+
+OpenSelf runs on a Hetzner Cloud VPS with Coolify as the deployment platform.
+Coolify provides GitHub-based auto-deploys, SSL certificates, and a web management UI.
+SQLite persists on a mounted volume — no external database needed.
+
+| Component | Details |
+|---|---|
+| **Server** | Hetzner CX23 (2 vCPU, 4GB RAM, 40GB SSD) |
+| **Location** | Helsinki (HEL1), datacenter hel1-dc2 |
+| **OS** | Ubuntu 24.04 |
+| **IP** | `89.167.111.236` |
+| **Platform** | Coolify 4.0.0-beta.463 (self-hosted PaaS) |
+| **Domain** | openself.dev (registered on Porkbun) |
+| **Build** | Multi-stage Dockerfile (Node 20 Alpine) |
+| **Cost** | ~€3.65/month (server only) |
+
+---
+
+## 1. Server Setup (Hetzner)
+
+### 1.1 Create an account
+
+1. Go to [hetzner.com/cloud](https://www.hetzner.com/cloud)
+2. Click **"Register"** (top right)
+3. Sign up with email and password
+4. Confirm the email
+5. Add a payment method (credit card or PayPal — nothing is charged until you create a server)
+
+### 1.2 Check your SSH key
+
+Before creating the server, you need an SSH key. On your local machine, run:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+- If it prints a string starting with `ssh-ed25519`, you have a key. Copy the whole line.
+- If it says "file not found", generate one:
+  ```bash
+  ssh-keygen -t ed25519 -C "your-email@example.com"
+  ```
+  Then run the `cat` command again and copy the output.
+
+### 1.3 Create the server
+
+1. In the Hetzner Cloud Console, click **"Add Server"**
+2. Configure:
+   - **Location**: Helsinki (HEL1) — or Falkenstein (FSN1) if available
+   - **Image**: Ubuntu 24.04
+   - **Type**: Shared vCPU → x86 (Intel/AMD) → **CX23** (2 vCPU, 4GB RAM, 40GB SSD — €3.65/mo)
+   - **Networking**: leave defaults (Public IPv4 + IPv6)
+   - **SSH Key**: click "Add SSH key", paste your public key from step 1.2, give it a name (e.g., "my-laptop")
+   - **Name**: `openself` (or any name you like)
+   - **Everything else**: leave defaults (no Volumes, no Firewalls, no Backups)
+3. Click **"Create & Buy Now"**
+4. Wait ~30 seconds. Hetzner shows you the **public IP address** (e.g., `89.167.111.236`). Save this — you'll need it everywhere.
+
+### 1.4 Connect via SSH
+
+Open a terminal on your local machine:
+
+```bash
+ssh root@89.167.111.236
+```
+
+First time it asks to confirm the connection — type `yes` and press Enter.
+You should see the Ubuntu welcome screen. You're inside the server.
+
+---
+
+## 2. Coolify Installation
+
+### 2.1 Install Coolify
+
+While connected via SSH to the server, run this single command:
+
+```bash
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+```
+
+This installs Docker, Coolify, and all dependencies. Takes 2-3 minutes.
+When done, you see a message like:
+
+```
+Your instance is ready to use!
+You can access Coolify through your Public IPV4: http://89.167.111.236:8000
+```
+
+### 2.2 Important: backup the Coolify environment file
+
+The installer warns about this. Save this file somewhere safe (password manager, etc.):
+
+```bash
+cat /data/coolify/source/.env
+```
+
+### 2.3 Initial setup in browser
+
+1. Open `http://89.167.111.236:8000` in your browser
+2. Coolify asks you to **create an admin account** — pick an email and password. This is only for Coolify, not related to Hetzner.
+3. Setup wizard step 1 — **"Choose Server Type"**: select **"This Machine"** (Coolify is already on this server, so we deploy here)
+4. Setup wizard step 2 — **"Project Setup"**: click **"Create My First Project"**
+5. You're now in the Coolify dashboard.
+
+---
+
+## 3. Deploy OpenSelf
+
+### 3.1 Add the application
+
+1. In the Coolify dashboard, click **"+ Add Resource"** (or "New Resource")
+2. Under **Applications → Git Based**, choose **"Public Repository"**
+3. Fill in:
+   - **Repository URL**: `https://github.com/tommy29tmar/openself`
+   - **Branch**: `main`
+   - **Build Pack**: change from "Nixpacks" to **"Dockerfile"** (important!)
+   - **Base Directory**: `/`
+   - **Port**: `3000`
+   - **Is it a static site?**: No
+4. Click **"Continue"**
+
+You're now on the application Configuration page.
+
+### 3.2 Clean up defaults
+
+Coolify sets some defaults for Laravel/PHP apps. Remove them:
+
+- Scroll down to **Pre/Post Deployment Commands**
+- **Pre-deployment**: delete `php artisan migrate` (leave empty)
+- **Post-deployment**: delete `php artisan migrate` (leave empty)
+
+### 3.3 Add environment variables
+
+In the left sidebar, click **"Environment Variables"**.
+
+Add these two (click "New Environment Variable" for each):
+
+**Variable 1:**
+- **Name**: `AI_PROVIDER`
+- **Value**: `anthropic`
+- **Available at Runtime**: must be checked
+- Click **Save**
+
+**Variable 2:**
+- **Name**: `ANTHROPIC_API_KEY`
+- **Value**: your Anthropic API key (starts with `sk-ant-...`)
+  - To find it on your local machine: `cat /home/tommaso/dev/repos/openself/.env | grep ANTHROPIC`
+  - Copy only the part after the `=` sign
+- **Available at Runtime**: must be checked
+- Click **Save**
+
+**Multi-user access control (recommended for hosted deployments):**
+
+| Name | Value | Notes |
+|---|---|---|
+| `INVITE_CODES` | `alpha1,alpha2,alpha3` | Comma-separated list of valid invite codes. When set, visitors must enter a code at `/invite` to access `/builder`. When **not** set, the app runs in single-user mode with no gate (backward-compatible). |
+| `CHAT_MESSAGE_LIMIT` | `10` | Max user messages per session before the registration prompt appears. Default: `10`. Only applies when `INVITE_CODES` is set. |
+
+Optional cost guardrails (recommended):
+
+| Name | Value |
+|---|---|
+| `LLM_DAILY_TOKEN_LIMIT` | `150000` |
+| `LLM_MONTHLY_COST_LIMIT_USD` | `25` |
+| `LLM_DAILY_COST_WARNING_USD` | `1` |
+| `LLM_DAILY_COST_HARD_LIMIT_USD` | `2` |
+| `LLM_HARD_STOP` | `true` |
+
+### 3.4 Add persistent storage (SQLite volume)
+
+In the left sidebar, click **"Persistent Storage"**.
+
+Add a new volume:
+- **Source Path**: `/data/openself/db`
+- **Destination Path**: `/app/db`
+
+This maps a folder on the server's real disk to the container's database folder.
+Without this, the database would be wiped every time you redeploy.
+
+### 3.5 First deploy
+
+Click the **"Deploy"** button (top of the page).
+
+Coolify will:
+1. Clone the repository from GitHub
+2. Build the Docker image using the Dockerfile (takes ~2 min)
+3. Start the container
+
+You can watch progress in the **"Deployments"** tab.
+
+### 3.6 Verify
+
+When the deployment finishes, Coolify gives you a temporary URL like:
+```
+http://cokksgw48goscs8okgk48okw.89.167.111.236.sslip.io
+```
+
+Open it in the browser. You should see the OpenSelf homepage with "Create your page" button.
+
+---
+
+## 4. Custom Domain (Porkbun → openself.dev)
+
+### 4.1 DNS configuration on Porkbun
+
+1. Go to [porkbun.com](https://porkbun.com) and log in
+2. Click **"Domain Management"**
+3. Find `openself.dev` and click **"DNS"** (or "Details" → "DNS")
+4. You'll see the **"MANAGE DNS RECORDS"** popup
+
+**First: delete existing parking records.**
+
+Porkbun adds default records that point to their parking page. In the "Current Records" list at the bottom, find and **delete**:
+- `ALIAS openself.dev → pixie.porkbun.com`
+- `CNAME *.openself.dev → pixie.porkbun.com`
+
+Click the delete icon next to each one.
+
+**Then: add two new A records.**
+
+**Record 1 (root domain — openself.dev):**
+- **Type**: `A - Address record`
+- **Host**: leave **completely empty** (this means the root domain)
+- **Answer / Value**: `89.167.111.236`
+- **TTL**: `600`
+- Click **Add**
+
+**Record 2 (www subdomain — www.openself.dev):**
+- **Type**: `A - Address record`
+- **Host**: `www`
+- **Answer / Value**: `89.167.111.236`
+- **TTL**: `600`
+- Click **Add**
+
+After adding both, the "Current Records" list should show:
+
+| Type | Host | Answer |
+|---|---|---|
+| A | openself.dev | 89.167.111.236 |
+| A | www.openself.dev | 89.167.111.236 |
+
+### 4.2 Configure domain in Coolify
+
+1. Go to Coolify (`http://89.167.111.236:8000`)
+2. Open your application → **Configuration** → **General**
+3. Find the **Domains** field
+4. Replace the existing sslip.io URL with:
+   ```
+   https://openself.dev,https://www.openself.dev
+   ```
+5. Click **Save** (or **Redeploy** if Save is not visible)
+
+Coolify automatically provisions SSL certificates via Let's Encrypt.
+
+### 4.3 Wait for DNS propagation + SSL
+
+- DNS propagation takes **5-30 minutes** (sometimes up to 1 hour)
+- SSL certificate generation takes **2-5 minutes** after DNS is propagated
+- During this time you may see "connection not private" errors — this is normal
+- After everything propagates, `https://openself.dev` will show a green padlock and load the app
+
+### 4.4 Verify
+
+Open **https://openself.dev** in your browser. You should see:
+- Green padlock (HTTPS working)
+- OpenSelf homepage
+
+If you still see certificate errors after 30 minutes, try:
+1. In Coolify, go to your app → Deployments → click **Redeploy**
+2. Check Coolify logs for certificate-related errors
+3. Verify DNS with: `dig openself.dev` (should show `89.167.111.236`)
+
+---
+
+## 5. Ongoing Operations
+
+### 5.1 Deploying updates
+
+Every time you push code to GitHub (`git push origin main`), you need to deploy:
+
+**Option A — Manual deploy (current setup):**
+1. Go to Coolify → your app
+2. Click **"Deploy"** or **"Redeploy"**
+3. Coolify pulls the latest code from GitHub and rebuilds
+
+**Option B — Auto-deploy via webhook:**
+1. In Coolify, go to your app → **Webhooks** (left sidebar)
+2. Copy the webhook URL
+3. In GitHub, go to your repo → Settings → Webhooks → Add webhook
+4. Paste the Coolify webhook URL
+5. Now every `git push` triggers an automatic deploy
+
+### 5.2 Checking logs
+
+**In Coolify:**
+Application → **Logs** tab → shows container output in real-time.
+
+**Via SSH:**
+```bash
+ssh root@89.167.111.236
+docker ps                              # find the container name
+docker logs <container_name> --tail 100 -f   # follow logs
+```
+
+### 5.3 Database backup
+
+The SQLite database lives on the server at:
+```
+/data/openself/db/openself.db
+```
+
+To create a manual backup:
+```bash
+ssh root@89.167.111.236
+mkdir -p /root/backups
+cp /data/openself/db/openself.db /root/backups/openself-$(date +%Y%m%d).db
+```
+
+To download a backup to your local machine:
+```bash
+scp root@89.167.111.236:/data/openself/db/openself.db ./openself-backup.db
+```
+
+### 5.4 Quick access reference
+
+| What | Where |
+|---|---|
+| Live site | https://openself.dev |
+| Coolify admin panel | http://89.167.111.236:8000 |
+| SSH into server | `ssh root@89.167.111.236` |
+| Server provider | [Hetzner Cloud Console](https://console.hetzner.cloud) |
+| Domain DNS | [Porkbun DNS](https://porkbun.com/account/domainsSpeedy) |
+| GitHub repo | https://github.com/tommy29tmar/openself |
+| Anthropic API keys | https://console.anthropic.com |
+
+---
+
+## 6. Architecture Diagram
+
+```
+User browser
+     │
+     ▼
+openself.dev (DNS → 89.167.111.236)
+     │
+     ▼
+Hetzner CX23 server (Helsinki, €3.65/mo)
+├── Coolify (port 8000)
+│   ├── Reverse proxy (Traefik) → routes traffic to containers
+│   ├── SSL certificates (Let's Encrypt, auto-renewed)
+│   └── Management UI (deploys, logs, env vars)
+│
+└── OpenSelf container (port 3000)
+    ├── Next.js standalone server (server.js)
+    ├── SQLite database at /app/db/openself.db
+    │   └── Volume-mounted to /data/openself/db/ on host (persists across deploys)
+    ├── Migrations auto-run on startup from /app/db/migrations/
+    └── Anthropic API key loaded from environment variables
+```
+
+### Docker build stages (what happens during deploy)
+
+1. **deps** stage: Installs node_modules + compiles better-sqlite3 (native C++ module, needs python3/g++/make)
+2. **build** stage: Copies source code, runs `next build` with `output: "standalone"` → creates minimal server
+3. **runtime** stage: Clean Alpine image (~200MB), copies only server.js, static assets, and migration SQL files
+
+---
+
+## 7. Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Build fails on better-sqlite3 | The Dockerfile already handles this (`apk add python3 make g++`). If it still fails, check Docker build logs in Coolify. |
+| Database empty after deploy | Check Persistent Storage in Coolify: Source `/data/openself/db` → Destination `/app/db`. If missing, data resets on each deploy. |
+| SSL "connection not private" error | Wait 5-30 minutes for DNS propagation and SSL generation. If it persists, redeploy in Coolify. Check DNS with `dig openself.dev`. |
+| Container keeps restarting | Go to Coolify → Logs tab. Look for errors. Common cause: missing environment variables (AI_PROVIDER, ANTHROPIC_API_KEY). |
+| Coolify panel unreachable | SSH into server (`ssh root@89.167.111.236`), run `docker ps` to check if Coolify containers are running. Restart with `docker restart coolify`. |
+| "Cannot find module" during build | Clear the build cache in Coolify (Danger Zone → Clean Build Cache) and redeploy. |
+| Forgot Coolify admin password | SSH into server, check `/data/coolify/source/.env` for reset options. |
+| Need to change API key | Coolify → Environment Variables → edit ANTHROPIC_API_KEY → Save → Redeploy. |
+
+---
+
+## 8. Key Files in the Repository
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Multi-stage production build (3 stages: deps → build → runtime) |
+| `.dockerignore` | Excludes node_modules, .next, .env, tests, docs from Docker build context |
+| `docker-compose.yml` | For local testing with `docker compose up` (maps ./data to /app/db) |
+| `next.config.ts` | `output: "standalone"` enables minimal Docker-optimized server |
+| `db/migrations/*.sql` | SQL migration files, auto-applied when the app starts |
+| `src/lib/db/index.ts` | Database initialization + auto-migration on import |
+| `src/lib/db/migrate.ts` | Migration runner (reads SQL files from db/migrations/) |
+
+---
+
+## 9. Cost Summary
+
+| Item | Cost | Notes |
+|---|---|---|
+| Hetzner CX23 | €3.65/month | Server (2 vCPU, 4GB RAM, 40GB SSD) |
+| Coolify | €0 | Open-source, self-hosted |
+| Let's Encrypt SSL | €0 | Auto-renewed by Coolify |
+| Porkbun domain | ~€12/year | openself.dev renewal |
+| Anthropic API | Pay-per-use | ~$0.25/1M input tokens (Haiku) |
+| **Total fixed** | **~€4.65/month** | Server + domain |
