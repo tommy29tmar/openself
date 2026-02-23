@@ -17,7 +17,7 @@ export const FONT_CSS_MAP: Record<
   },
   serif: {
     heading: "var(--font-serif, Georgia, serif)",
-    body: "var(--font-sans, sans-serif)",
+    body: "var(--font-serif, Georgia, serif)",
   },
   mono: {
     heading: "var(--font-mono, monospace)",

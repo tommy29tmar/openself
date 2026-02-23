@@ -5,6 +5,8 @@ import { type LanguageCode, isLanguageCode } from "@/lib/i18n/languages";
 
 type PreferencesShape = {
   language: LanguageCode | null;
+  /** The language in which facts were originally created. Set once on first selection. */
+  factLanguage: LanguageCode | null;
 };
 
 function toObject(value: unknown): Record<string, unknown> {
@@ -23,8 +25,45 @@ export function getPreferences(): PreferencesShape {
 
   const config = toObject(row?.config);
   const language = isLanguageCode(config.language) ? config.language : null;
+  const factLanguage = isLanguageCode(config.factLanguage) ? config.factLanguage : null;
 
-  return { language };
+  return { language, factLanguage };
+}
+
+export function getFactLanguage(): LanguageCode | null {
+  return getPreferences().factLanguage;
+}
+
+/**
+ * Record the language in which facts are originally created.
+ * Only writes once — subsequent calls are no-ops.
+ */
+export function setFactLanguageIfUnset(language: LanguageCode): void {
+  const current = getPreferences();
+  if (current.factLanguage) return; // already set
+
+  const row = db
+    .select()
+    .from(agentConfig)
+    .where(eq(agentConfig.id, "main"))
+    .get();
+
+  const currentConfig = toObject(row?.config);
+  const nextConfig = { ...currentConfig, factLanguage: language };
+
+  db.insert(agentConfig)
+    .values({
+      id: "main",
+      config: nextConfig,
+    })
+    .onConflictDoUpdate({
+      target: agentConfig.id,
+      set: {
+        config: nextConfig,
+        updatedAt: new Date().toISOString(),
+      },
+    })
+    .run();
 }
 
 export function setPreferredLanguage(language: LanguageCode): void {

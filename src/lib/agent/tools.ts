@@ -11,6 +11,8 @@ import { getDraft, upsertDraft, requestPublish } from "@/lib/services/page-servi
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
+import { getFactLanguage } from "@/lib/services/preferences-service";
+import { translatePageContent } from "@/lib/ai/translate";
 
 export function createAgentTools(sessionLanguage: string = "en") {
   return {
@@ -154,11 +156,19 @@ export function createAgentTools(sessionLanguage: string = "en") {
     }),
     execute: async ({ username, config }) => {
       try {
-        upsertDraft(username, config as PageConfig);
+        // Preserve user's style customizations (theme, colors, font) from
+        // the existing draft so agent-driven structural changes don't reset
+        // manually chosen style settings.
+        const currentDraft = getDraft();
+        const incoming = config as PageConfig;
+        const merged: PageConfig = currentDraft
+          ? { ...incoming, theme: currentDraft.config.theme, style: currentDraft.config.style }
+          : incoming;
+        upsertDraft(username, merged);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
-          payload: { username, sections: (config as PageConfig).sections?.length ?? 0 },
+          payload: { username, sections: merged.sections?.length ?? 0 },
         });
         return { success: true };
       } catch (error) {
@@ -270,11 +280,23 @@ export function createAgentTools(sessionLanguage: string = "en") {
         if (facts.length === 0) {
           return { success: false, error: "No facts in knowledge base yet" };
         }
-        const config = composeOptimisticPage(
+        // Preserve user's style customizations (theme, colors, font) from
+        // the existing draft. composeOptimisticPage always uses defaults.
+        const currentDraft = getDraft();
+        const composed = composeOptimisticPage(
           facts,
           username,
           language ?? sessionLanguage,
         );
+        const styled = currentDraft
+          ? { ...composed, theme: currentDraft.config.theme, style: currentDraft.config.style }
+          : composed;
+
+        // Translate fact-derived content if target language differs from original
+        const targetLang = language ?? sessionLanguage;
+        const factLang = getFactLanguage();
+        const config = await translatePageContent(styled, targetLang, factLang);
+
         upsertDraft(username, config);
         logEvent({
           eventType: "page_generated",

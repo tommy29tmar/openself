@@ -19,6 +19,9 @@ export function ThemeProvider({ theme, style, children }: ThemeProviderProps) {
   if (fontMapping) {
     cssVars["--page-font-heading"] = fontMapping.heading;
     cssVars["--page-font-body"] = fontMapping.body;
+    // Set font-family on the wrapper so all children inherit the body font
+    // by default. Elements that use --page-font-heading get the heading font.
+    cssVars["fontFamily"] = fontMapping.body;
   }
 
   return (

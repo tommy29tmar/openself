@@ -6,8 +6,11 @@ import { logEvent } from "@/lib/services/event-service";
 import {
   getPreferences,
   setPreferredLanguage,
+  getFactLanguage,
+  setFactLanguageIfUnset,
 } from "@/lib/services/preferences-service";
 import { isLanguageCode } from "@/lib/i18n/languages";
+import { translatePageContent } from "@/lib/ai/translate";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +35,9 @@ export async function POST(req: Request) {
       );
     }
 
+    // Record the fact language on first call (before changing preference)
+    setFactLanguageIfUnset(language);
+
     setPreferredLanguage(language);
 
     let regenerated = false;
@@ -49,7 +55,11 @@ export async function POST(req: Request) {
             }
           : regeneratedConfig;
 
-        upsertDraft(username, nextConfig);
+        // Translate fact-derived content if language differs from original
+        const factLanguage = getFactLanguage();
+        const translated = await translatePageContent(nextConfig, language, factLanguage);
+
+        upsertDraft(username, translated);
         regenerated = true;
       }
     }
