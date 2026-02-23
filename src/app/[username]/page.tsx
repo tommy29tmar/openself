@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPageByUsername } from "@/lib/services/page-service";
+import { getPublishedPage } from "@/lib/services/page-service";
 import { PageRenderer } from "@/components/page";
 
 type Props = {
@@ -9,7 +9,7 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username } = await params;
-  const config = await getPageByUsername(username);
+  const config = getPublishedPage(username);
 
   if (!config) {
     return { title: "Not Found" };
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function UsernamePage({ params }: Props) {
   const { username } = await params;
-  const config = await getPageByUsername(username);
+  const config = getPublishedPage(username);
 
   if (!config) {
     notFound();

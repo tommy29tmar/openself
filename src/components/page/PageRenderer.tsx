@@ -53,7 +53,7 @@ export function PageRenderer({ config, previewMode = false }: PageRendererProps)
   return (
     <ThemeProvider theme={config.theme} style={config.style}>
       <main
-        className={previewMode ? "pointer-events-none select-none" : undefined}
+        className={`page-layout${previewMode ? " pointer-events-none select-none" : ""}`}
       >
         {config.sections.map((section) => {
           const Component = COMPONENT_MAP[section.type as ComponentType];

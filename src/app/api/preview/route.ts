@@ -1,33 +1,33 @@
 import { NextResponse } from "next/server";
 import { getAllFacts } from "@/lib/services/kb-service";
-import { getPageByUsername } from "@/lib/services/page-service";
+import { getDraft } from "@/lib/services/page-service";
 
 /**
  * GET /api/preview?username=...
  *
- * Returns the current page config for the preview pane.
- * During onboarding (before publish), it composes an optimistic
- * page from KB facts. After publish, it returns the persisted config.
+ * Returns the current draft page config for the preview pane.
+ * Always reads from the draft row — never from published.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const username = searchParams.get("username") || "draft";
   const language = searchParams.get("language") || "en";
 
-  // Check if a published page exists
-  const existing = getPageByUsername(username);
-  if (existing) {
+  // Always read the draft
+  const draft = getDraft();
+  if (draft) {
     return NextResponse.json({
-      status: "published",
-      config: existing,
+      status: "optimistic_ready",
+      publishStatus: draft.status, // "draft" | "approval_pending"
+      config: draft.config,
     });
   }
 
-  // Otherwise compose optimistic page from facts
+  // No draft yet — compose optimistic page from facts
   const facts = getAllFacts();
   if (facts.length === 0) {
     return NextResponse.json({
       status: "idle",
+      publishStatus: "draft",
       config: null,
     });
   }
@@ -36,10 +36,11 @@ export async function GET(req: Request) {
   const { composeOptimisticPage } = await import(
     "@/lib/services/page-composer"
   );
-  const config = composeOptimisticPage(facts, username, language);
+  const config = composeOptimisticPage(facts, "draft", language);
 
   return NextResponse.json({
     status: "optimistic_ready",
+    publishStatus: "draft",
     config,
     factCount: facts.length,
   });

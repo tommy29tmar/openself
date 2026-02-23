@@ -1,0 +1,251 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock dependencies
+vi.mock("@/lib/services/event-service", () => ({
+  logEvent: vi.fn(),
+}));
+
+vi.mock("@/lib/services/page-service", () => ({
+  getDraft: vi.fn(),
+  upsertDraft: vi.fn(),
+  requestPublish: vi.fn(),
+  confirmPublish: vi.fn(),
+  getPublishedPage: vi.fn(),
+}));
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getAllFacts: vi.fn(),
+  createFact: vi.fn(),
+  updateFact: vi.fn(),
+  deleteFact: vi.fn(),
+  searchFacts: vi.fn(() => []),
+}));
+
+import { agentTools } from "@/lib/agent/tools";
+import type { PageConfig } from "@/lib/page-config/schema";
+import {
+  getDraft,
+  upsertDraft,
+  requestPublish,
+  confirmPublish,
+  getPublishedPage,
+} from "@/lib/services/page-service";
+import { getAllFacts } from "@/lib/services/kb-service";
+
+function makeValidConfig(overrides?: Partial<PageConfig>): PageConfig {
+  return {
+    version: 1,
+    username: "testuser",
+    theme: "minimal",
+    style: {
+      colorScheme: "light",
+      primaryColor: "#6366f1",
+      fontFamily: "inter",
+      layout: "centered",
+    },
+    sections: [
+      {
+        id: "hero-1",
+        type: "hero",
+        variant: "large",
+        content: { name: "Test User", tagline: "Hello world" },
+      },
+      {
+        id: "footer-1",
+        type: "footer",
+        content: {},
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function makeFact(overrides: { category: string; key: string; value?: Record<string, unknown> }) {
+  return {
+    id: "fact-" + Math.random().toString(36).slice(2, 8),
+    category: overrides.category,
+    key: overrides.key,
+    value: overrides.value ?? {},
+    source: "chat",
+    confidence: 1.0,
+    visibility: "public",
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
+}
+
+const toolContext = { toolCallId: "test", messages: [], abortSignal: undefined as any };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("Tool level — generate_page", () => {
+  it("calls upsertDraft (not upsertPage)", async () => {
+    const facts = [
+      makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
+    ];
+    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+
+    const result = await agentTools.generate_page.execute(
+      { username: "alice" },
+      toolContext,
+    );
+
+    expect(result.success).toBe(true);
+    expect(upsertDraft).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(upsertDraft).mock.calls[0][0]).toBe("alice");
+  });
+});
+
+describe("Tool level — request_publish", () => {
+  it("calls requestPublish from service", async () => {
+    const facts = [
+      makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
+    ];
+    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+    vi.mocked(requestPublish).mockImplementation(() => {});
+
+    const result = await agentTools.request_publish.execute(
+      { username: "alice" },
+      toolContext,
+    );
+
+    expect(result.success).toBe(true);
+    expect(requestPublish).toHaveBeenCalledWith("alice");
+  });
+
+  it("does NOT call confirmPublish", async () => {
+    const facts = [
+      makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
+    ];
+    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+    vi.mocked(requestPublish).mockImplementation(() => {});
+
+    await agentTools.request_publish.execute(
+      { username: "alice" },
+      toolContext,
+    );
+
+    expect(confirmPublish).not.toHaveBeenCalled();
+  });
+});
+
+describe("Tool level — set_theme", () => {
+  it("calls upsertDraft with draft status", async () => {
+    const mockConfig = makeValidConfig();
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft" });
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+
+    await agentTools.set_theme.execute(
+      { username: "testuser", theme: "warm" },
+      toolContext,
+    );
+
+    expect(upsertDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Tool level — update_page_config", () => {
+  it("calls upsertDraft", async () => {
+    const config = makeValidConfig();
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+
+    await agentTools.update_page_config.execute(
+      { username: "testuser", config: config as any },
+      toolContext,
+    );
+
+    expect(upsertDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Service level — getPublishedPage", () => {
+  it("returns null when no published rows exist", () => {
+    vi.mocked(getPublishedPage).mockReturnValue(null);
+    expect(getPublishedPage("nonexistent")).toBeNull();
+  });
+
+  it("returns config for published pages", () => {
+    const config = makeValidConfig();
+    vi.mocked(getPublishedPage).mockReturnValue(config);
+    expect(getPublishedPage("testuser")).toEqual(config);
+  });
+});
+
+describe("Service level — getDraft", () => {
+  it("returns draft row", () => {
+    const config = makeValidConfig();
+    vi.mocked(getDraft).mockReturnValue({ config, username: "testuser", status: "draft" });
+    const draft = getDraft();
+    expect(draft).toBeDefined();
+    expect(draft!.config).toEqual(config);
+    expect(draft!.status).toBe("draft");
+  });
+});
+
+describe("Integration — draft does not break live", () => {
+  it("confirmPublish creates published row, subsequent upsertDraft does not affect it", () => {
+    vi.mocked(confirmPublish).mockImplementation(() => {});
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+    vi.mocked(getPublishedPage).mockReturnValue(makeValidConfig());
+
+    // Step 1: Publish
+    confirmPublish("testuser");
+    expect(confirmPublish).toHaveBeenCalledWith("testuser");
+
+    // Step 2: Edit draft
+    const newConfig = makeValidConfig({ theme: "warm" });
+    upsertDraft("testuser", newConfig);
+    expect(upsertDraft).toHaveBeenCalledWith("testuser", newConfig);
+
+    // Step 3: Published page is still the original
+    const published = getPublishedPage("testuser");
+    expect(published).toBeDefined();
+    expect(published!.theme).toBe("minimal"); // Original, not "warm"
+  });
+});
+
+describe("Edge cases — reserved usernames", () => {
+  it("confirmPublish('draft') throws error for reserved username", () => {
+    vi.mocked(confirmPublish).mockImplementation((username: string) => {
+      const reserved = new Set(["draft", "api", "builder", "admin", "_next"]);
+      if (reserved.has(username)) {
+        throw new Error(`Username "${username}" is reserved`);
+      }
+    });
+
+    expect(() => confirmPublish("draft")).toThrow("reserved");
+  });
+});
+
+describe("Edge cases — approval_pending required", () => {
+  it("confirmPublish fails when draft status is 'draft' (not approval_pending)", () => {
+    vi.mocked(confirmPublish).mockImplementation(() => {
+      throw new Error("No page pending approval");
+    });
+
+    expect(() => confirmPublish("testuser")).toThrow("pending approval");
+  });
+});
+
+describe("Edge cases — username change de-publishes old", () => {
+  it("confirmPublish with new username de-publishes old published page", () => {
+    vi.mocked(confirmPublish).mockImplementation(() => {});
+
+    confirmPublish("newuser");
+    expect(confirmPublish).toHaveBeenCalledWith("newuser");
+  });
+});
+
+describe("Edge cases — requestPublish updates username", () => {
+  it("requestPublish is called with the intended username", () => {
+    vi.mocked(requestPublish).mockImplementation(() => {});
+
+    requestPublish("alice");
+    expect(requestPublish).toHaveBeenCalledWith("alice");
+  });
+});

@@ -74,11 +74,12 @@ export const agentEvents = sqliteTable(
   ],
 );
 
-// -- Page
+// -- Page (two-row model: draft + published coexist)
 export const page = sqliteTable("page", {
-  id: text("id").primaryKey().default("main"),
-  username: text("username").unique().notNull(),
+  id: text("id").primaryKey(),                        // "draft" | <username>
+  username: text("username").notNull(),
   config: text("config", { mode: "json" }).notNull(),
+  status: text("status").notNull().default("draft"),   // draft | approval_pending | published
   generatedAt: text("generated_at"),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });

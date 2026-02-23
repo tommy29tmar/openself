@@ -1,9 +1,4 @@
-export type PreviewStatus =
-  | "idle"
-  | "optimistic_ready"
-  | "synthesizing"
-  | "synthesis_ready"
-  | "synthesis_failed";
+export type PreviewStatus = "idle" | "optimistic_ready";
 
 export type PreviewState = {
   status: PreviewStatus;
@@ -19,9 +14,3 @@ export const INITIAL_PREVIEW_STATE: PreviewState = {
   turnCount: 0,
   lastUpdated: null,
 };
-
-/**
- * Synthesis triggers every SYNTHESIS_INTERVAL turns.
- * Between synthesis rounds, the preview uses optimistic config.
- */
-export const SYNTHESIS_INTERVAL = 2;

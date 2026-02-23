@@ -31,7 +31,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
 - Use set_theme when the user requests visual changes
 - Use reorder_sections when the user wants to rearrange their page
-- Use publish_page when the user approves their page and chooses a username. ALWAYS pass the conversation language code
+- Use request_publish when the user approves their page and chooses a username. This proposes publishing — the user will see a confirmation button. ALWAYS pass the conversation language code
 
 When extracting facts:
 - Break complex information into atomic facts (one fact per concept)
@@ -66,8 +66,8 @@ Key behaviors:
 - If the user gives short/vague answers, switch to concrete guided prompts
 - After ~5 exchanges with good signal, call generate_page with username="draft" to build the page
 - Then say something like: "Here's your page! Take a look on the right. Want to change anything?"
-- When the user is happy, ask them to choose a username and call publish_page with their chosen username
-- Tell them their page is live at /username
+- When the user is happy, ask them to choose a username and call request_publish with their chosen username
+- Tell them a publish button will appear so they can confirm and make their page live at /username
 
 Low-signal handling:
 When the user gives very short or vague replies ("ok", "yes", "I don't know", single words, emojis), follow this escalation:

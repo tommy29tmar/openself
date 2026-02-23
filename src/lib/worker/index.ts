@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { logEvent } from "@/lib/services/event-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
-import { upsertPage } from "@/lib/services/page-service";
+import { upsertDraft } from "@/lib/services/page-service";
 import { getAllFacts } from "@/lib/services/kb-service";
 
 const MAX_ATTEMPTS = 3;
@@ -20,7 +20,7 @@ const handlers: Record<string, JobHandler> = {
     const language = (payload.language as string) ?? "en";
     const facts = getAllFacts();
     const config = composeOptimisticPage(facts, username, language);
-    upsertPage(username, config);
+    upsertDraft(username, config);
   },
 };
 

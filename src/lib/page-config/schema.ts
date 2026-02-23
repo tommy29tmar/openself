@@ -297,6 +297,9 @@ function validateSection(
   }
 }
 
+export const AVAILABLE_THEMES = ["minimal", "warm"] as const;
+export type AvailableTheme = (typeof AVAILABLE_THEMES)[number];
+
 export function validatePageConfig(
   input: unknown,
   options: ValidatePageConfigOptions = {},
@@ -315,6 +318,10 @@ export function validatePageConfig(
   }
   if (!isString(input.theme)) {
     errors.push("theme must be a non-empty string");
+  } else if (!(AVAILABLE_THEMES as readonly string[]).includes(input.theme)) {
+    errors.push(
+      `theme must be one of: ${AVAILABLE_THEMES.join(", ")}`,
+    );
   }
 
   validateStyleConfig(input.style, errors);

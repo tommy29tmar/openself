@@ -2,8 +2,13 @@
 
 > Talk for 5 minutes. Get a living personal page.
 
-This document is the **single source of truth** for what OpenSelf is, how it works,
-and how it will be built. Everything else in this repo is background research.
+This document is the **source of truth for target architecture**: what OpenSelf is,
+how it works, and how it should be built.
+
+Operational tracking lives in:
+- `docs/STATUS.md` for current implementation reality
+- `docs/ROADMAP.md` for execution priorities
+- `docs/decisions/` for ADRs (durable decision rationale)
 
 ---
 

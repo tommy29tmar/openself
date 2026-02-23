@@ -34,8 +34,86 @@ function EmptyPreview() {
   );
 }
 
+type PublishBarProps = {
+  username: string;
+};
+
+function PublishBar({ username: initialUsername }: PublishBarProps) {
+  const [username, setUsername] = useState(initialUsername);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPublished(true);
+      } else {
+        setError(data.error || "Publish failed");
+      }
+    } catch {
+      setError("Network error");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  if (published) {
+    return (
+      <div className="flex items-center gap-3 border-b bg-green-50 px-4 py-3 text-sm dark:bg-green-950">
+        <span className="font-medium text-green-800 dark:text-green-200">
+          Published!
+        </span>
+        <a
+          href={`/${username}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-green-700 underline dark:text-green-300"
+        >
+          View at /{username}
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
+      <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
+        Ready to publish
+      </span>
+      <input
+        type="text"
+        value={username}
+        onChange={(e) => setUsername(e.target.value.toLowerCase())}
+        className="w-32 rounded border px-2 py-1 text-sm"
+        placeholder="username"
+      />
+      <button
+        onClick={handlePublish}
+        disabled={publishing || !username}
+        className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+      >
+        {publishing ? "Publishing..." : "Publish"}
+      </button>
+      {error && (
+        <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
+      )}
+    </div>
+  );
+}
+
 export function SplitView({ language, initialConfig }: SplitViewProps) {
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
+  const [publishStatus, setPublishStatus] = useState<string>("draft");
+  const [publishUsername, setPublishUsername] = useState<string>("");
   const [theme, setTheme] = useState(config?.theme ?? "minimal");
   const [colorScheme, setColorScheme] = useState<StyleConfig["colorScheme"]>(
     config?.style?.colorScheme ?? "light",
@@ -48,7 +126,12 @@ export function SplitView({ language, initialConfig }: SplitViewProps) {
       const data = await res.json();
       if (data.config) {
         setConfig(data.config);
-        // Preserve user's theme/colorScheme overrides
+      }
+      if (data.publishStatus) {
+        setPublishStatus(data.publishStatus);
+      }
+      if (data.config?.username) {
+        setPublishUsername(data.config.username);
       }
     } catch {
       // Silently ignore polling errors
@@ -72,6 +155,9 @@ export function SplitView({ language, initialConfig }: SplitViewProps) {
 
   const previewPane = displayConfig ? (
     <div className="relative h-full overflow-y-auto">
+      {publishStatus === "approval_pending" && (
+        <PublishBar username={publishUsername !== "draft" ? publishUsername : ""} />
+      )}
       <PageRenderer config={displayConfig} />
       <ThemeToggle
         theme={theme}

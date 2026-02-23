@@ -7,9 +7,9 @@ import {
   searchFacts,
   getAllFacts,
 } from "@/lib/services/kb-service";
-import { upsertPage, getPageByUsername } from "@/lib/services/page-service";
+import { getDraft, upsertDraft, requestPublish } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
-import type { PageConfig } from "@/lib/page-config/schema";
+import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
 
 export const agentTools = {
@@ -153,7 +153,7 @@ export const agentTools = {
     }),
     execute: async ({ username, config }) => {
       try {
-        upsertPage(username, config as PageConfig);
+        upsertDraft(username, config as PageConfig);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
@@ -177,21 +177,24 @@ export const agentTools = {
 
   set_theme: tool({
     description:
-      "Change the page theme. Available themes: minimal, warm, bold, elegant, hacker.",
+      "Change the page theme. Available themes: minimal, warm.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       theme: z
         .string()
-        .describe("Theme name: minimal, warm, bold, elegant, or hacker"),
+        .describe("Theme name: minimal or warm"),
     }),
     execute: async ({ username, theme }) => {
       try {
-        const existing = getPageByUsername(username);
-        if (!existing) {
+        if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
+          return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
+        }
+        const draft = getDraft();
+        if (!draft) {
           return { success: false, error: "Page not found" };
         }
-        const updated: PageConfig = { ...existing, theme };
-        upsertPage(username, updated);
+        const updated: PageConfig = { ...draft.config, theme };
+        upsertDraft(username, updated);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
@@ -215,10 +218,11 @@ export const agentTools = {
     }),
     execute: async ({ username, sectionOrder }) => {
       try {
-        const existing = getPageByUsername(username);
-        if (!existing) {
+        const draft = getDraft();
+        if (!draft) {
           return { success: false, error: "Page not found" };
         }
+        const existing = draft.config;
         const sectionMap = new Map(
           existing.sections.map((s) => [s.id, s]),
         );
@@ -235,7 +239,7 @@ export const agentTools = {
           ...existing,
           sections: reordered as PageConfig["sections"],
         };
-        upsertPage(username, updated);
+        upsertDraft(username, updated);
         return { success: true };
       } catch (error) {
         return { success: false, error: String(error) };
@@ -266,7 +270,7 @@ export const agentTools = {
           return { success: false, error: "No facts in knowledge base yet" };
         }
         const config = composeOptimisticPage(facts, username, language ?? "en");
-        upsertPage(username, config);
+        upsertDraft(username, config);
         logEvent({
           eventType: "page_generated",
           actor: "assistant",
@@ -293,9 +297,9 @@ export const agentTools = {
     },
   }),
 
-  publish_page: tool({
+  request_publish: tool({
     description:
-      "Publish the user's page with their chosen username. Call this when the user approves the page and picks a username. The page will be accessible at /username.",
+      "Signal that the page is ready for publishing. The user will see a confirmation button. Do NOT use this to publish directly — it only proposes publishing.",
     parameters: z.object({
       username: z
         .string()
@@ -311,14 +315,19 @@ export const agentTools = {
     }),
     execute: async ({ username, language }) => {
       try {
+        // Ensure the draft has the latest content
         const facts = getAllFacts();
         if (facts.length === 0) {
           return { success: false, error: "No facts to publish" };
         }
         const config = composeOptimisticPage(facts, username, language ?? "en");
-        upsertPage(username, config);
+        upsertDraft(username, config);
+
+        // Mark draft as pending approval
+        requestPublish(username);
+
         logEvent({
-          eventType: "page_published",
+          eventType: "page_publish_requested",
           actor: "assistant",
           payload: {
             username,
@@ -328,14 +337,15 @@ export const agentTools = {
         });
         return {
           success: true,
-          url: `/${username}`,
+          message: "Page is ready for review. The user will see a publish button.",
+          username,
           sections: config.sections.map((s) => s.type),
         };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "publish_page", error: String(error) },
+          payload: { tool: "request_publish", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
