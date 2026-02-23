@@ -11,7 +11,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Server-side publish gate: agent proposes, user confirms via explicit action
 - Centralized theme validation: 2 themes (minimal, warm), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
-- 57 automated tests passing
+- 77 automated tests passing
 
 Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
@@ -104,13 +104,14 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 57 passed / 57 total (Vitest)
+- Automated tests: 77 passed / 77 total (Vitest)
 - Covered areas:
   1. Fact-to-section composition behavior (15 tests)
   2. PageConfig validation behavior (15 tests)
   3. Rate-limit behavior (6 tests)
   4. Layout and theme validation (8 tests)
-  5. Publish flow (tool level, service level, integration, edge cases) (13 tests)
+  5. Publish flow — tool level, service level, edge cases (15 tests, mocked)
+  6. Page service integration — real SQLite in-memory DB (18 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Renderer behavior for visual layout modes

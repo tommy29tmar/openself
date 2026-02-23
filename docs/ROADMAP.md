@@ -30,7 +30,7 @@ When choosing work, apply this order:
 - Migration tracking with `_migrations` table and transactional application
 - Two-row page model with DB CHECK constraints
 - Reserved username protection
-- 57 automated tests
+- 77 automated tests
 
 ## 4) Now (High Priority)
 
@@ -46,11 +46,10 @@ Criteria (from ARCHITECTURE.md):
 5. Generated pages are visually acceptable on desktop and mobile
 
 Deliverables:
-1. Fix `next build` static generation issue for `/builder`
-2. Manual QA pass on the full onboarding flow
-3. Deploy to test environment
-4. Collect feedback from initial testers
-5. Address critical issues found during dogfooding
+1. Manual QA pass on the full onboarding flow
+2. Deploy to test environment
+3. Collect feedback from initial testers
+4. Address critical issues found during dogfooding
 
 ## 5) Next (Medium Priority)
 
@@ -131,7 +130,7 @@ Deliverables:
 
 Required:
 1. Phase 0.2.1 complete ✅
-2. Build issue fixed
+2. `next build` passes ✅
 3. 10+ testers complete onboarding
 4. Critical bugs resolved
 

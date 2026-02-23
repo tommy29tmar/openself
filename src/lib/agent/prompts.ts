@@ -31,7 +31,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
 - Use set_theme when the user requests visual changes
 - Use reorder_sections when the user wants to rearrange their page
-- Use request_publish when the user approves their page and chooses a username. This proposes publishing — the user will see a confirmation button. ALWAYS pass the conversation language code
+- Use request_publish when the user approves their page and chooses a username. This proposes publishing — the user will see a confirmation button
 
 When extracting facts:
 - Break complex information into atomic facts (one fact per concept)
