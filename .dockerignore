@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.gitignore
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+.env
+.env.*
+tests
+scripts
+docs
+*.md
+.claude

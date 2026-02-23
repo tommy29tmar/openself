@@ -1,0 +1,10 @@
+services:
+  openself:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/db
+    env_file:
+      - .env
+    restart: unless-stopped
