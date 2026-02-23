@@ -101,11 +101,8 @@ describe("Tool level — generate_page", () => {
 
 describe("Tool level — request_publish", () => {
   it("calls requestPublish from service", async () => {
-    const facts = [
-      makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
-    ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
-    vi.mocked(upsertDraft).mockImplementation(() => {});
+    const mockConfig = makeValidConfig();
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "alice", status: "draft" });
     vi.mocked(requestPublish).mockImplementation(() => {});
 
     const result = await agentTools.request_publish.execute(
@@ -118,11 +115,8 @@ describe("Tool level — request_publish", () => {
   });
 
   it("does NOT call confirmPublish", async () => {
-    const facts = [
-      makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
-    ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
-    vi.mocked(upsertDraft).mockImplementation(() => {});
+    const mockConfig = makeValidConfig();
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "alice", status: "draft" });
     vi.mocked(requestPublish).mockImplementation(() => {});
 
     await agentTools.request_publish.execute(
@@ -131,6 +125,34 @@ describe("Tool level — request_publish", () => {
     );
 
     expect(confirmPublish).not.toHaveBeenCalled();
+  });
+
+  it("does NOT recompose from facts (preserves manual changes)", async () => {
+    const customConfig = makeValidConfig({ theme: "warm" });
+    vi.mocked(getDraft).mockReturnValue({ config: customConfig, username: "alice", status: "draft" });
+    vi.mocked(requestPublish).mockImplementation(() => {});
+
+    await agentTools.request_publish.execute(
+      { username: "alice" },
+      toolContext,
+    );
+
+    // Should NOT call upsertDraft (no recomposition)
+    expect(upsertDraft).not.toHaveBeenCalled();
+    // Should NOT call getAllFacts (no fact reading needed)
+    expect(getAllFacts).not.toHaveBeenCalled();
+  });
+
+  it("fails when no draft exists", async () => {
+    vi.mocked(getDraft).mockReturnValue(null);
+
+    const result = await agentTools.request_publish.execute(
+      { username: "alice" },
+      toolContext,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No draft page");
   });
 });
 

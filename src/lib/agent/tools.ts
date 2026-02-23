@@ -299,31 +299,23 @@ export const agentTools = {
 
   request_publish: tool({
     description:
-      "Signal that the page is ready for publishing. The user will see a confirmation button. Do NOT use this to publish directly — it only proposes publishing.",
+      "Signal that the page is ready for publishing. The user will see a confirmation button. Do NOT use this to publish directly — it only proposes publishing. The current draft (including any theme/order/section changes) is preserved as-is.",
     parameters: z.object({
       username: z
         .string()
         .describe(
           "The username chosen by the user for their public page URL",
         ),
-      language: z
-        .string()
-        .optional()
-        .describe(
-          "Language code for page content (e.g., 'it', 'en', 'de'). Use the conversation language.",
-        ),
     }),
-    execute: async ({ username, language }) => {
+    execute: async ({ username }) => {
       try {
-        // Ensure the draft has the latest content
-        const facts = getAllFacts();
-        if (facts.length === 0) {
-          return { success: false, error: "No facts to publish" };
+        const draft = getDraft();
+        if (!draft) {
+          return { success: false, error: "No draft page to publish. Generate a page first." };
         }
-        const config = composeOptimisticPage(facts, username, language ?? "en");
-        upsertDraft(username, config);
 
-        // Mark draft as pending approval
+        // Mark the existing draft as pending approval — no recomposition,
+        // so manual changes (theme, section order, content edits) are preserved.
         requestPublish(username);
 
         logEvent({
@@ -331,15 +323,14 @@ export const agentTools = {
           actor: "assistant",
           payload: {
             username,
-            factCount: facts.length,
-            sectionCount: config.sections.length,
+            sectionCount: draft.config.sections.length,
           },
         });
         return {
           success: true,
           message: "Page is ready for review. The user will see a publish button.",
           username,
-          sections: config.sections.map((s) => s.type),
+          sections: draft.config.sections.map((s) => s.type),
         };
       } catch (error) {
         logEvent({

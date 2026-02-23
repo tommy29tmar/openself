@@ -119,8 +119,10 @@ export function confirmPublish(username: string): void {
       throw new Error("No page pending approval");
     }
 
-    // Step 1: de-publish any previously published page with a different username
-    // (prevents orphan pages when user changes username)
+    // Step 1: de-publish any previously published page with a different username.
+    // Prevents orphan pages when user changes username.
+    // NOTE: This assumes single-identity model (one user = one DB file).
+    // In a future multi-user model, this DELETE must be scoped to the current user's rows.
     sqlite
       .prepare("DELETE FROM page WHERE status = 'published' AND username != ?")
       .run(username);
