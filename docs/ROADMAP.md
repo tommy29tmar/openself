@@ -53,42 +53,80 @@ Deliverables:
 3. Collect feedback from initial testers
 4. Address critical issues found during dogfooding
 
-## 5) Next (Medium Priority)
+## 5) Next — Phase 1: Living Agent
 
-### NEXT-1: Expand section types in renderer
+Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
+then hybrid page personalization. Each sub-phase builds on the previous.
+
+### Phase 1a: Agent Memory & Heartbeat
+
+The agent comes alive — it remembers, reflects, and evolves its understanding.
+
+#### NEXT-1: Agent memory (Tier 2 + Tier 3)
+
+Deliverables:
+1. Conversation history summarization (Tier 2 rolling summaries)
+2. Agent meta-memory (behavioral observations, user preferences — Tier 3)
+3. Agent config persistence (personality, tone, page_voice)
+4. Memory-aware context assembly (facts + summaries + memory in prompt)
+
+#### NEXT-2: History summarization in context budget
+
+Deliverables:
+1. Summarize old conversation turns to fit context window
+2. Maintain fact references across summarization
+3. Progressive enrichment: new conversations refine existing summaries
+
+#### NEXT-3: Worker scheduler wiring + Heartbeat
+
+Deliverables:
+1. Wire background job processor into app lifecycle
+2. Schedule periodic jobs (heartbeat, page re-composition on fact changes)
+3. Heartbeat system: KB review, page freshness check, connector polling
+4. Event-driven: skip LLM calls if nothing changed
+
+#### NEXT-4: SSE preview (replace polling)
+
+Deliverables:
+1. Server-sent events endpoint for preview updates
+2. Client-side EventSource connection
+3. Remove polling interval
+
+### Phase 1b: Extended Sections
+
+New section types with typed content schemas, validators, and renderers.
+
+#### NEXT-5: Education + Experience sections
+
+Deliverables:
+1. `education` section type with timeline/cards variants (multi-item: degree, institution, period, description)
+2. `experience` section type with timeline variant (multi-item: role, company, period, description)
+3. Content type schemas + validators
+4. Renderer components
+5. Composer mappings from facts to sections
+
+#### NEXT-6: Additional section types
 
 Candidate scope:
-- timeline
-- achievements
-- stats
-- reading
-- music
-- contact
+- achievements (badges/cards/timeline)
+- stats (counters/cards/inline)
+- reading (shelf/list/featured)
+- music (player-style/list/grid)
+- contact (form/links/card)
 
 Definition of done:
 1. Schema type → renderer mapping exists
 2. Basic variants implemented per section
-3. Composer or user tools can produce these sections safely
+3. Composer can produce these sections from facts
 
-### NEXT-2: Media upload API and avatar end-to-end support
-
-Deliverables:
-1. Upload endpoint with MIME/size validation
-2. Store media via existing service
-3. Render avatar URL in hero section from stored media id
-
-### NEXT-3: Connector MVP (start with one connector)
-
-Suggested first connector: GitHub (projects activity into facts)
-
-### NEXT-4: Additional themes — bold, elegant, hacker
+#### NEXT-7: Additional themes — bold, elegant, hacker
 
 Deliverables:
 1. CSS design tokens for each theme (light + dark)
 2. Add to `AVAILABLE_THEMES` constant
 3. Visual QA for all theme × colorScheme combinations
 
-### NEXT-5: Distinct layout implementations — split, stack
+#### NEXT-8: Distinct layout implementations — split, stack
 
 Deliverables:
 1. Split layout: two-column with sidebar
@@ -96,26 +134,59 @@ Deliverables:
 3. CSS rules replace fallback-to-centered behavior
 4. Layout-aware component variants
 
-### NEXT-6: SSE preview (replace polling)
+### Phase 1c: Hybrid Page Compiler
+
+Per-section LLM personalization, powered by the agent's accumulated memory.
+This phase requires Phase 1a (memory) and Phase 1b (extended sections) to be complete.
+
+#### NEXT-9: Per-section LLM personalizer
 
 Deliverables:
-1. Server-sent events endpoint for preview updates
-2. Client-side EventSource connection
-3. Remove polling interval
+1. LLM personalizer that rewrites section content using facts + agent memory
+2. Per-section dispatch: only regenerate sections impacted by recent fact changes
+3. Output validated against section content schema before merge
+4. Fallback: keep deterministic skeleton content on personalizer failure
+5. Personalizer budget tracking (extend `llm_usage_daily` accounting)
 
-### NEXT-7: History summarization in context budget
-
-Deliverables:
-1. Summarize old conversation turns to fit context window
-2. Maintain fact references across summarization
-
-### NEXT-8: Worker scheduler wiring
+#### NEXT-10: Drill-down conversation pattern
 
 Deliverables:
-1. Wire background job processor into app lifecycle
-2. Schedule periodic jobs (e.g., page re-composition on fact changes)
+1. Agent detects when a topic has insufficient depth for a rich section
+2. Agent asks follow-up questions before updating (e.g., "Tell me more about your
+   master's — what was the focus? Any highlights?")
+3. All additional facts stored in KB/memory regardless (useful for future context)
+4. Section update triggers only after sufficient fact density
 
-### NEXT-9: Public page translation for visitors
+#### NEXT-11: Section copy cache
+
+Deliverables:
+1. Hash-based cache for personalized section content (same pattern as `translation_cache`)
+2. Cache key: `SHA-256(section facts + agent memory snapshot) + section_type`
+3. Cache hit → skip LLM call. Cache miss → personalize + store.
+4. No explicit invalidation: fact changes → hash changes → old entries unused
+
+#### NEXT-12: Periodic conformity check
+
+Deliverables:
+1. Heartbeat job reviews full page for cross-section style consistency
+2. Checks: tone alignment, narrative coherence, no contradictions between sections
+3. If drift detected: queue targeted section regenerations
+4. Runs via heartbeat system, not on every page update
+
+### Phase 1d: Other Phase 1 Items
+
+#### NEXT-13: Media upload API and avatar end-to-end support
+
+Deliverables:
+1. Upload endpoint with MIME/size validation
+2. Store media via existing service
+3. Render avatar URL in hero section from stored media id
+
+#### NEXT-14: Connector MVP (start with one connector)
+
+Suggested first connector: GitHub (projects activity into facts)
+
+#### NEXT-15: Public page translation for visitors
 
 Deliverables:
 1. Detect visitor language from `Accept-Language` header on `/{username}` route
@@ -136,11 +207,10 @@ Cost risk:
 1. Auth + CSRF on publish endpoint (required before public deployment)
 2. Session persistence across browser reloads
 3. Steady-state agent mode switching
-4. Synthesis state machine (full async page generation)
-5. Community component registry enforcement with certified workflow
-6. Additional connector ecosystem
-7. Advanced theming and design packs
-8. Multi-profile / multi-tenant model if product direction requires it
+4. Community component registry enforcement with certified workflow
+5. Additional connector ecosystem
+6. Advanced theming and design packs
+7. Multi-profile / multi-tenant model if product direction requires it
 
 ## 7) Milestones
 
@@ -155,16 +225,18 @@ Required:
 Outcome:
 - OpenSelf is usable by real people for its core purpose
 
-### Milestone B — MVP Completeness
+### Milestone B — Living Agent (Phase 1)
 
 Required:
-1. NEXT-1 complete (at least first 2 additional section families)
-2. NEXT-2 complete (avatar support)
-3. NEXT-3 complete (single connector)
-4. NEXT-4 complete (additional themes)
+1. Phase 1a complete (memory, heartbeat, context assembly)
+2. Phase 1b complete (education + experience + at least 2 more section types)
+3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks)
+4. Phase 1d: at least avatar support + one connector
 
 Outcome:
-- OpenSelf is credible as a living-page MVP, not just onboarding demo
+- The agent remembers users across sessions and writes personalized page copy
+- Pages from different users are noticeably distinct in tone and narrative
+- OpenSelf is credible as a living-page product, not just onboarding demo
 
 ## 8) Tracking Process
 

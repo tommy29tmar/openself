@@ -53,7 +53,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
 | Capability | Status | Notes |
 |---|---|---|
-| Optimistic page composition from facts | Done | Hero/Bio/Skills/Projects/Interests/Social/Footer |
+| Optimistic page composition from facts | Done | Deterministic skeleton: Hero/Bio/Skills/Projects/Interests/Social/Footer. Hybrid LLM personalizer planned for Phase 1c. |
 | Preview API polling | Done | Builder polls every 3s, exposes `publishStatus` |
 | Theme switch in preview | Done | `minimal` and `warm` + light/dark, centralized validation |
 | Layout engine | Done | Centered MVP; split/stack fallback to centered (Phase 1 for distinct layouts) |
@@ -77,23 +77,39 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
 ## 3) What Is Not Done Yet
 
-### Phase 1 (Next)
-1. Split/stack layout implementations (distinct from centered)
-2. Bold/elegant/hacker themes
-3. Worker scheduler wiring into app lifecycle
-4. SSE preview (replace polling)
-5. History summarization in context budget
-6. Additional section types: timeline, achievements, stats, reading, music, contact
-7. Public page auto-translation for visitors (on-demand + cached)
+### Phase 1a — Agent Memory & Heartbeat
+1. Agent memory (Tier 2 summaries + Tier 3 meta-observations)
+2. Agent config persistence (personality, tone, page_voice)
+3. History summarization in context budget
+4. Worker scheduler wiring + heartbeat system
+5. SSE preview (replace polling)
+
+### Phase 1b — Extended Sections
+1. Education section (timeline/cards, multi-item)
+2. Experience section (timeline, multi-item)
+3. Additional section types: achievements, stats, reading, music, contact
+4. Split/stack layout implementations (distinct from centered)
+5. Bold/elegant/hacker themes
+
+### Phase 1c — Hybrid Page Compiler
+1. Per-section LLM personalizer (rewrites content using facts + agent memory)
+2. Drill-down conversation pattern (agent deepens topic before section update)
+3. Section copy cache (hash-based, per-section)
+4. Periodic conformity check (heartbeat job: cross-section style alignment)
+5. Personalizer budget tracking
+
+### Phase 1d — Other Phase 1
+1. Media upload API and avatar end-to-end support
+2. Connector MVP (GitHub)
+3. Public page auto-translation for visitors (on-demand + cached)
 
 ### Later
 1. Auth + CSRF on publish endpoint (currently trusted local env only)
-2. Synthesis state machine (full async page generation)
-3. Session persistence across browser reloads
-4. Steady-state agent mode switching
-5. Connectors (GitHub, etc.)
+2. Session persistence across browser reloads
+3. Steady-state agent mode switching
+4. Community component registry enforcement
+5. Additional connector ecosystem
 6. Multi-profile / multi-tenant model
-7. Community component registry enforcement
 
 ## 4) Layout Count (Requested Snapshot)
 

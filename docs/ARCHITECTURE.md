@@ -1003,7 +1003,13 @@ time; it renders inline `content` from `PageConfig` only.
 
 ### 6.3 How the Agent Composes the Page
 
-When the agent generates or updates the page, it follows this flow:
+Page composition evolves in two stages, matching the project's phase progression:
+
+#### Stage 1 — Deterministic Skeleton (Phase 0, current)
+
+The skeleton composer (`composeOptimisticPage`) maps facts directly to sections using
+localized templates. No LLM call is needed for page structure or content — the
+composer is purely deterministic.
 
 ```
 1. Load facts from KB eligible for the current mode
@@ -1014,24 +1020,79 @@ When the agent generates or updates the page, it follows this flow:
    (user has achievements? add achievements section)
 3. For each component:
    a. Select relevant facts
-   b. Synthesize content text (bio, descriptions) using the LLM
-   c. Choose variant based on amount of data and user preferences
+   b. Fill localized template strings (deterministic, no LLM)
+   c. Choose variant based on amount of data
 4. Assemble the page config JSON
-5. Save to database
-6. Renderer produces the HTML page
+5. Validate against schema
+6. Save to database
+7. Renderer produces the HTML page
 ```
+
+Translation to other languages is handled separately via the LLM translation pipeline
+(see Section 6.7). This keeps composition fast and predictable.
+
+#### Stage 2 — Hybrid Live Compiler (Phase 1, after memory/heartbeat)
+
+Once the agent has memory layers operational (Tier 1-3, see Section 4.5) and has built
+a rich understanding of the user through conversation, page composition evolves to a
+hybrid model where:
+
+1. **Structure** remains governed by schema and layout contracts (safety/maintainability)
+2. **Content** (copy, descriptions, tone) is generated per-section by the LLM, grounded
+   in facts and informed by the agent's accumulated understanding of the user
+3. **The result** is more personalized — pages differ person-to-person in narrative,
+   emphasis, and voice, not just in data
+
+**Pipeline:**
+```
+1. Skeleton composer produces valid page structure (deterministic)
+2. Agent selects sections impacted by recent fact changes
+3. For each impacted section:
+   a. LLM personalizer rewrites content using facts + agent memory context
+   b. Output is parsed, validated against section content schema
+   c. On failure: keep previous section content (graceful fallback)
+4. Merge personalized sections into page config
+5. Validate full config, save draft
+```
+
+**Key design decisions:**
+
+- **Per-section LLM calls, not whole-page**: By Phase 1 the agent has memory layers
+  that carry user tone, preferences, and behavioral observations across sessions.
+  This context is injected into each per-section call, ensuring consistent voice
+  without needing to regenerate every section at once.
+
+- **Drill-down before update**: The agent should deepen a topic before rewriting a
+  section. If the user mentions "I did a master's in policy", the agent asks follow-up
+  questions (institution, period, focus area, highlights) before updating the education
+  section. This produces richer content and avoids thin, generic descriptions. All
+  additional facts go into the KB/memory regardless — useful for future context.
+
+- **Periodic conformity checks**: A background job periodically reviews the full page
+  for cross-section style consistency (tone alignment, narrative coherence, no
+  contradictions). If drift is detected, it queues targeted section regenerations.
+  This runs via the heartbeat system, not on every page update.
+
+- **Cost control**: Only impacted sections are regenerated per turn. Cache per-section
+  output (same facts hash + same memory state = cache hit). Budget guardrails from
+  `llm_limits` apply to personalizer calls as well.
+
+- **Voice integration**: Per-user voice preferences (tone, formality, perspective) are
+  part of the agent's memory/config system (Section 4.1 `page_voice`), not a separate
+  service. The personalizer reads them from agent config when generating section copy.
 
 ### 6.3.1 Live Preview Strategy (Onboarding)
 
 To keep the "builds in front of your eyes" experience without runaway LLM cost, onboarding
-uses a hybrid preview strategy:
+uses the deterministic skeleton composer:
 
 1. **Optimistic preview per turn (no extra LLM call)**
    - After each user turn, renderer updates from extracted facts + deterministic templates
-2. **Milestone synthesis (LLM)**
-   - Full narrative synthesis runs every 2 user turns (or when user asks explicitly)
-3. **Final synthesis before publish checkpoint**
-   - One final pass generates polished copy and section ordering
+2. **Final synthesis before publish checkpoint**
+   - One pass generates the complete page from all collected facts
+
+In Phase 1 (after memory layers are active), onboarding preview can optionally trigger
+the hybrid personalizer for a polished final draft before the publish checkpoint.
 
 Section regeneration is incremental: only impacted sections are recomputed.
 
@@ -2086,18 +2147,42 @@ resolved, and the team has confidence the 5-minute promise holds for non-develop
 ### Phase 1 — Living Agent (Months 2-4)
 
 **Goal:** The agent comes alive. It remembers, adapts, and connects to the world.
+Pages become personal — not just data-driven, but voice-driven.
 
 ```
-Agent:
-  [ ] Agent config (personality, tone, behavior — evolving)
-  [ ] Agent memory (meta-observations about the user)
+Agent — Memory & Heartbeat (first):
+  [ ] Agent config (personality, tone, page_voice — evolving)
+  [ ] Agent memory (meta-observations about the user — Tier 3)
+  [ ] Conversation history summarization (Tier 2 rolling summaries)
   [ ] Semantic search (sqlite-vec embeddings)
   [ ] Heartbeat system (periodic self-reflection)
-  [ ] Conversation context assembly (facts + history + page state)
+  [ ] Conversation context assembly (facts + history + memory + page state)
   [ ] LLM usage metering + budget enforcement (daily token limits, cost caps, warning thresholds)
   [ ] Anti-abuse hardening (conversation pace throttle, session length caps, stealth captcha on onboarding→chat transition)
   [ ] Fact conflict resolver v1 (source precedence + supersede semantics + deterministic merge policy)
   [ ] LLM Evals expansion (multi-session coherence: assert KB integrity after 50+ simulated conversations)
+
+Page — Extended sections (after memory foundation):
+  [ ] Education section (timeline/cards variants, multi-item)
+  [ ] Experience section (timeline variant, multi-item with period/role/company)
+  [ ] Achievements section (badges/cards/timeline variants)
+  [ ] Stats section (counters/cards/inline variants)
+  [ ] Reading section (shelf/list/featured variants)
+  [ ] Music section (player-style/list/grid variants)
+  [ ] Contact section (form/links/card variants)
+  [ ] Content type schemas + validators for each new section
+  [ ] Renderer components for each new section
+  [ ] Composer mappings: facts → new section types
+
+Page — Hybrid Live Compiler (after memory + sections):
+  [ ] Per-section LLM personalizer (rewrites content using facts + agent memory)
+  [ ] Drill-down conversation pattern (agent deepens topic before section update)
+  [ ] Section-level copy cache (hash-based, same pattern as translation_cache)
+  [ ] Periodic conformity check (heartbeat job: cross-section style alignment)
+  [ ] Personalizer budget tracking (extend llm_usage_daily accounting)
+  [ ] Fallback: keep deterministic skeleton on personalizer failure
+  [ ] All themes (5 total)
+  [ ] Component variants for new and existing sections
 
 Connectors:
   [ ] Connector interface definition
@@ -2105,23 +2190,20 @@ Connectors:
   [ ] RSS/Atom connector (blog posts from any feed)
   [ ] Manual import (CSV/JSON upload — including LinkedIn data export as priority import source)
 
-Page:
-  [ ] All components (timeline, achievements, stats, reading, music, contact)
-  [ ] All themes (5 total)
-  [ ] Component variants
-  [ ] Static HTML export
-  [ ] PDF export (profile as CV)
-
 Infrastructure:
   [ ] One-click deploy buttons (Vercel, Railway)
   [ ] .env.example with all providers
   [ ] README with screenshots, quick start, demo video
   [ ] Add `LICENSE` (AGPL-3.0) + copyright notices
   [ ] Add inbound contribution policy (`CLA` or `CAA`) + GitHub signature bot
+  [ ] Static HTML export
+  [ ] PDF export (profile as CV)
 ```
 
 **Definition of done:** The agent remembers you across sessions, proactively suggests
-updates, pulls data from GitHub, and you can export your page as static HTML.
+updates, writes personalized page copy that reflects your voice, pulls data from GitHub,
+and you can export your page as static HTML. Pages from different users are noticeably
+distinct in tone and narrative.
 
 ### 13.1 Execution Risk Checklist (Phase 0-1)
 
