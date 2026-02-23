@@ -1,11 +1,8 @@
-import { runMigrations } from "../src/lib/db/migrate";
 import { db } from "../src/lib/db/index";
 import { page } from "../src/lib/db/schema";
 import { mockPageConfig } from "../src/lib/mock/page-config";
 
 try {
-  runMigrations();
-
   const username = mockPageConfig.username;
 
   // Insert published row (id=username, status="published")
