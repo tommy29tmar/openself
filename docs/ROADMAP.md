@@ -27,10 +27,12 @@ When choosing work, apply this order:
 - **NOW-2**: Publish flow hardening → Done (3-state: draft → approval_pending → published, server-side gate)
 - **NOW-3**: Theme alignment → Done (minimal + warm, centralized validation, AVAILABLE_THEMES constant)
 - **NOW-4**: Preview state simplification → Done (idle + optimistic_ready, synthesis states removed)
-- Migration tracking with `_migrations` table and transactional application
+- Auto-migration on DB init (no manual step), `_migrations` table, transactional
 - Two-row page model with DB CHECK constraints
 - Reserved username protection
-- 112 automated tests
+- LLM-powered translation with hash-based cache (compose in factLanguage, translate to target)
+- Role casing fix: lowercase job titles in bio prose (except German)
+- 115 automated tests
 
 ## 4) Now (High Priority)
 

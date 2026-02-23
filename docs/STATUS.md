@@ -11,7 +11,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Server-side publish gate: agent proposes, user confirms via explicit action
 - Centralized theme validation: 2 themes (minimal, warm), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
-- 112 automated tests passing
+- 115 automated tests passing
 
 Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
@@ -35,7 +35,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 | Tool-calling agent | Done | Fact CRUD, page generation, request_publish, reorder, theme |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) |
-| LLM-powered content translation | Done | Translates via generateText on language change, cached in translation_cache |
+| LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
 | Translation cache | Done | Hash-based, no explicit invalidation, eliminates repeated LLM calls |
 | Steady-state mode switching | Missing | Route always uses onboarding prompt mode |
 
@@ -43,7 +43,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
 | Capability | Status | Notes |
 |---|---|---|
-| SQLite schema + migrations | Done | Migration tracking via `_migrations` table, transactional |
+| SQLite schema + migrations | Done | Auto-run on DB init, `_migrations` table, transactional |
 | Two-row page model | Done | draft + published rows, DB CHECK constraints |
 | Facts KB CRUD + taxonomy normalization | Done | Alias mapping and pending categories |
 | Visibility policy engine | Done | Sensitive categories handled |
@@ -107,9 +107,9 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 112 passed / 112 total (Vitest)
+- Automated tests: 115 passed / 115 total (Vitest)
 - Covered areas:
-  1. Fact-to-section composition behavior (15 tests)
+  1. Fact-to-section composition behavior + role casing (18 tests)
   2. PageConfig validation behavior (15 tests)
   3. Rate-limit behavior (6 tests)
   4. Layout and theme validation (8 tests)
