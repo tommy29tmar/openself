@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alexander Chen - Bento Prototype</title>
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+                    },
+                    colors: {
+                        background: '#0d0d0d',
+                        surface: '#161616',  /* Subtle contrast for cards */
+                        surfaceHover: '#1f1f1f',
+                        foreground: '#ffffff',
+                        muted: '#a3a3a3',
+                    }
+                }
+            }
+        }
+    </script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0d0d;
+            color: #ffffff;
+        }
+
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Smooth scale up and border glow for Bento cards */
+        .bento-card {
+            background-color: #161616;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .bento-card:hover {
+            transform: translateY(-4px);
+            background-color: #1f1f1f;
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Ambient glow effect inside cards */
+        .bento-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.03), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+        }
+
+        .bento-card:hover::before {
+            opacity: 1;
+        }
+
+        /* Entry animation sequence */
+        @keyframes bento-in {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .animate-bento {
+            animation: bento-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+    </style>
+</head>
+
+<body class="antialiased font-light min-h-screen p-4 md:p-8 flex items-center justify-center">
+
+    <main class="w-full max-w-6xl mx-auto">
+
+        <!-- Header: Kept elegant and minimal -->
+        <header class="mb-12 animate-bento" style="animation-delay: 0s;">
+            <p class="text-sm tracking-widest uppercase text-muted mb-4 font-medium">Digital Portfolio</p>
+            <h1 class="font-serif text-5xl md:text-7xl mb-4">Alexander Chen.</h1>
+            <p class="text-xl md:text-2xl text-muted max-w-2xl leading-relaxed">
+                Designing minimal software and architectural interfaces for the modern web.
+            </p>
+        </header>
+
+        <!-- Bento Grid Layout -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 auto-rows-[minmax(180px,auto)]">
+
+            <!-- Large Focus Card: The "Now" or "Bio" -->
+            <div class="bento-card md:col-span-2 md:row-span-2 flex flex-col justify-end animate-bento"
+                style="animation-delay: 0.1s;">
+                <div class="absolute top-8 left-8">
+                    <span class="px-3 py-1 bg-white/10 rounded-full text-xs tracking-wider text-white">CURRENTLY</span>
+                </div>
+                <!-- Simulating an abstract architectural image or large text block -->
+                <div class="mt-16">
+                    <h2 class="text-3xl lg:text-4xl font-serif mb-4 leading-tight">Leading design systems at Apple,
+                        redefining how humans interact with macOS.</h2>
+                    <p class="text-muted text-sm uppercase tracking-wide">San Francisco, CA</p>
+                </div>
+            </div>
+
+            <!-- Experience List Card -->
+            <div class="bento-card md:col-span-2 md:row-span-1 animate-bento" style="animation-delay: 0.2s;">
+                <h3 class="text-lg font-medium text-white mb-6">Selected Experience</h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center group cursor-default">
+                        <div>
+                            <p class="text-white group-hover:text-amber-100 transition-colors">Senior Designer</p>
+                            <p class="text-sm text-muted">Apple</p>
+                        </div>
+                        <span class="text-sm text-muted font-mono">2021—Now</span>
+                    </div>
+                    <div class="w-full h-px bg-white/5"></div>
+                    <div class="flex justify-between items-center group cursor-default">
+                        <div>
+                            <p class="text-white group-hover:text-amber-100 transition-colors">Creative Director</p>
+                            <p class="text-sm text-muted">Vogue Labs</p>
+                        </div>
+                        <span class="text-sm text-muted font-mono">2018—2021</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skills/Stack Card -->
+            <div class="bento-card md:col-span-1 md:row-span-1 flex flex-col justify-between animate-bento"
+                style="animation-delay: 0.3s;">
+                <h3 class="text-lg font-medium text-white mb-4">Stack</h3>
+                <div class="flex flex-wrap gap-2 text-sm">
+                    <span class="px-3 py-1.5 rounded-lg bg-black border border-white/10 text-gray-300">Figma</span>
+                    <span class="px-3 py-1.5 rounded-lg bg-black border border-white/10 text-gray-300">React</span>
+                    <span class="px-3 py-1.5 rounded-lg bg-black border border-white/10 text-gray-300">Tailwind</span>
+                    <span class="px-3 py-1.5 rounded-lg bg-black border border-white/10 text-gray-300">Framer</span>
+                </div>
+            </div>
+
+            <!-- Contact / Social Card -->
+            <div class="bento-card md:col-span-1 md:row-span-1 flex flex-col justify-between bg-white text-black animate-bento group cursor-pointer"
+                style="animation-delay: 0.4s;">
+                <h3 class="text-lg font-medium mb-4">Let's talk.</h3>
+                <div>
+                    <p class="text-black/60 text-sm mb-2">Available for select projects.</p>
+                    <a href="mailto:hello@example.com"
+                        class="inline-flex items-center gap-2 font-medium border-b border-black pb-0.5 group-hover:gap-4 transition-all">
+                        Get in touch
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14"></path>
+                            <path d="m12 5 7 7-7 7"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Minimal footer outside the bento -->
+        <footer class="mt-12 text-center text-sm text-muted animate-bento" style="animation-delay: 0.5s;">
+            Built with OpenSelf. © 2026
+        </footer>
+
+    </main>
+
+</body>
+
+</html>

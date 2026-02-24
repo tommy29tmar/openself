@@ -68,6 +68,30 @@ export default function LoginPage() {
         >
           Continue with GitHub
         </a>
+        <a
+          href="/api/auth/discord"
+          className="flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Continue with Discord
+        </a>
+        <a
+          href="/api/auth/linkedin"
+          className="flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Continue with LinkedIn
+        </a>
+        <a
+          href="/api/auth/twitter"
+          className="flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Continue with X (Twitter)
+        </a>
+        <a
+          href="/api/auth/apple"
+          className="flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Continue with Apple
+        </a>
       </div>
 
       <div className="flex w-full max-w-sm items-center gap-3">

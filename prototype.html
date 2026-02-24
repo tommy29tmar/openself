@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alexander Chen - Prototype</title>
+    <!-- Tailwind via CDN for rapid prototyping -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+                    },
+                    colors: {
+                        background: '#111111',
+                        surface: '#1A1A1A',
+                        foreground: '#FFFFFF',
+                        muted: '#A1A1AA',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Using Google Fonts for an elegant look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111111; color: #FFFFFF; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+        
+        /* Subtle entry animation */
+        @keyframes fade-in-up {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-enter {
+            animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.3s; }
+        .delay-3 { animation-delay: 0.5s; }
+    </style>
+</head>
+<body class="antialiased font-light text-foreground selection:bg-white selection:text-black">
+
+    <main class="max-w-4xl mx-auto px-6 py-24 md:py-32">
+        
+        <!-- Hero Section -->
+        <header class="text-center mb-32 animate-enter">
+            <h1 class="font-serif text-5xl md:text-7xl font-normal tracking-tight mb-6">Alexander Chen</h1>
+            <p class="text-muted text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-light">
+                Refined digital experiences and creative strategy. <br class="hidden md:block" />
+                Crafting clarity through design and code.
+            </p>
+        </header>
+
+        <!-- CV Grid Layout -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-16 md:gap-8">
+            
+            <!-- Experience -->
+            <section class="md:col-span-5 animate-enter delay-1">
+                <h2 class="font-serif text-2xl mb-8 border-b border-white/10 pb-4">Experience</h2>
+                
+                <div class="space-y-10">
+                    <div>
+                        <h3 class="text-white font-medium text-lg">Senior Product Designer</h3>
+                        <p class="text-muted text-sm mt-1 mb-3">Apple • 2021 — Present</p>
+                        <p class="text-sm text-gray-400 leading-relaxed">
+                            Leading design systems and creating refined digital experiences for macOS interfaces. Focusing on typography, motion design, and minimal architectural layouts.
+                        </p>
+                    </div>
+
+                    <div>
+                        <h3 class="text-white font-medium text-lg">Creative Director</h3>
+                        <p class="text-muted text-sm mt-1 mb-3">Vogue Labs • 2018 — 2021</p>
+                        <p class="text-sm text-gray-400 leading-relaxed">
+                            Directed digital campaigns and editorial web experiences. Managed a team of 6 designers establishing a high-contrast visual language for premium brands.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Spacer column for desktop -->
+            <div class="hidden md:block md:col-span-1"></div>
+
+            <!-- Skills & Interests -->
+            <div class="md:col-span-6 space-y-16 animate-enter delay-2">
+                
+                <!-- Skills -->
+                <section>
+                    <h2 class="font-serif text-2xl mb-8 border-b border-white/10 pb-4">Capabilities</h2>
+                    <ul class="grid grid-cols-2 gap-y-4 gap-x-8 text-sm text-gray-400 cursor-default">
+                        <li class="hover:text-white transition-colors duration-300">UX / UI Design</li>
+                        <li class="hover:text-white transition-colors duration-300">Frontend Engineering</li>
+                        <li class="hover:text-white transition-colors duration-300">Brand Strategy</li>
+                        <li class="hover:text-white transition-colors duration-300">Interaction Design</li>
+                        <li class="hover:text-white transition-colors duration-300">Design Systems</li>
+                        <li class="hover:text-white transition-colors duration-300">Creative Direction</li>
+                    </ul>
+                </section>
+
+                <!-- Interests -->
+                <section>
+                    <h2 class="font-serif text-2xl mb-8 border-b border-white/10 pb-4">Interests</h2>
+                    <div class="text-sm text-gray-400 leading-relaxed space-y-4">
+                        <p>
+                            Beyond digital screens, I am passionate about modern architecture, medium format film photography, and studying mid-century furniture design. 
+                        </p>
+                        <div class="flex flex-wrap gap-2 mt-4 text-xs">
+                            <span class="px-3 py-1 rounded-full border border-white/10 text-white/60">Photography</span>
+                            <span class="px-3 py-1 rounded-full border border-white/10 text-white/60">Architecture</span>
+                            <span class="px-3 py-1 rounded-full border border-white/10 text-white/60">Horology</span>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-40 pt-10 border-t border-white/10 flex flex-col md:flex-row justify-between items-center text-xs text-muted animate-enter delay-3">
+            <p>© 2026 Alexander Chen. All rights reserved.</p>
+            <div class="flex gap-6 mt-4 md:mt-0">
+                <a href="#" class="hover:text-white transition-colors">X / Twitter</a>
+                <a href="#" class="hover:text-white transition-colors">LinkedIn</a>
+                <a href="#" class="hover:text-white transition-colors">GitHub</a>
+            </div>
+        </footer>
+
+    </main>
+
+</body>
+</html>

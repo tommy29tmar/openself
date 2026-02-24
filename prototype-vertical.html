@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alexander Chen - Vertical Prototype</title>
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+                    },
+                    colors: {
+                        background: '#0a0a0a', /* Slightly deeper black */
+                        foreground: '#ffffff',
+                        muted: '#888888',
+                    }
+                }
+            }
+        }
+    </script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a0a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Elements fade in as you scroll */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 100vh sections for deep vertical scrolling */
+        .scroll-section {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+        }
+    </style>
+</head>
+
+<body class="antialiased font-light">
+
+    <!-- Hero Section (Takes up full screen) -->
+    <section class="scroll-section">
+        <h1 class="font-serif text-6xl md:text-8xl tracking-tight mb-8 reveal active">Alexander Chen</h1>
+        <p class="text-muted text-xl md:text-2xl max-w-2xl leading-relaxed reveal active"
+            style="transition-delay: 0.2s">
+            Digital architecture & minimal design.
+        </p>
+
+        <!-- Scroll indicator -->
+        <div class="absolute bottom-12 left-1/2 -translate-x-1/2 text-muted animate-bounce reveal active"
+            style="transition-delay: 0.6s">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M19 12l-7 7-7-7" />
+            </svg>
+        </div>
+    </section>
+
+    <!-- Bio Section -->
+    <section class="scroll-section">
+        <h2 class="font-serif text-3xl text-muted mb-12 reveal">About</h2>
+        <p class="text-2xl md:text-4xl max-w-3xl leading-snug md:leading-tight reveal">
+            I craft digital experiences at the intersection of <span class="text-white font-medium">design</span> and
+            <span class="text-white font-medium">engineering</span>. Based in San Francisco, currently shaping the
+            future of interfaces at Apple.
+        </p>
+    </section>
+
+    <!-- Experience / Selected Work -->
+    <section class="scroll-section">
+        <h2 class="font-serif text-3xl text-muted mb-16 reveal">Experience</h2>
+
+        <div class="w-full max-w-4xl space-y-24">
+
+            <div class="reveal">
+                <h3 class="text-3xl md:text-5xl font-serif mb-4">Apple</h3>
+                <p class="text-muted text-lg tracking-widest uppercase text-sm mb-6">Senior Designer • 2021 — Present
+                </p>
+                <p class="text-xl max-w-2xl mx-auto text-gray-300">Leading the core design system for macOS, focusing on
+                    typography, fluidity, and reducing cognitive load.</p>
+            </div>
+
+            <div class="reveal">
+                <h3 class="text-3xl md:text-5xl font-serif mb-4">Vogue Labs</h3>
+                <p class="text-muted text-lg tracking-widest uppercase text-sm mb-6">Creative Director • 2018 — 2021</p>
+                <p class="text-xl max-w-2xl mx-auto text-gray-300">Directed high-fashion digital editorials with an
+                    extreme focus on massive typography and negative space.</p>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Skills Container -->
+    <section class="scroll-section">
+        <h2 class="font-serif text-3xl text-muted mb-16 reveal">Expertise</h2>
+        <div class="flex flex-col gap-8 text-2xl md:text-4xl reveal">
+            <span class="hover:text-white text-gray-400 transition-colors cursor-default">Design Systems</span>
+            <span class="hover:text-white text-gray-400 transition-colors cursor-default">Frontend Architecture</span>
+            <span class="hover:text-white text-gray-400 transition-colors cursor-default">Interaction Motion</span>
+            <span class="hover:text-white text-gray-400 transition-colors cursor-default">Brand Strategy</span>
+        </div>
+    </section>
+
+    <!-- Footer Area -->
+    <section class="min-h-[50vh] flex flex-col justify-center items-center text-center p-8 bg-[#050505]">
+        <h2 class="font-serif text-4xl mb-12 reveal">Let's build something.</h2>
+        <div class="flex gap-8 text-muted reveal">
+            <a href="#" class="hover:text-white transition-colors border-b border-white/20 pb-1">Email</a>
+            <a href="#" class="hover:text-white transition-colors border-b border-white/20 pb-1">Twitter</a>
+            <a href="#" class="hover:text-white transition-colors border-b border-white/20 pb-1">LinkedIn</a>
+        </div>
+        <p class="mt-24 text-xs tracking-widest text-[#444] uppercase reveal">© 2026 OpenSelf</p>
+    </section>
+
+    <!-- Simple script to handle scroll reveal animations -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const reveals = document.querySelectorAll('.reveal');
+
+            const revealOnScroll = () => {
+                const windowHeight = window.innerHeight;
+                const elementVisible = 150;
+
+                reveals.forEach(reveal => {
+                    const elementTop = reveal.getBoundingClientRect().top;
+                    // If the element is near viewport, add active class
+                    if (elementTop < windowHeight - elementVisible) {
+                        reveal.classList.add('active');
+                    }
+                });
+            };
+
+            // Run on load and scroll
+            revealOnScroll();
+            window.addEventListener('scroll', revealOnScroll);
+        });
+    </script>
+</body>
+
+</html>

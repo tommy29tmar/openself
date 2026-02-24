@@ -171,6 +171,37 @@ Add these variables (click "New Environment Variable" for each):
 | `INVITE_CODES` | `alpha1,alpha2,alpha3` | Comma-separated list of valid invite codes. When set, visitors must enter a code at `/invite` to access `/builder`. When **not** set, the app runs in single-user mode with no gate (backward-compatible). |
 | `CHAT_MESSAGE_LIMIT` | `10` | Max user messages per session before the registration prompt appears. Default: `10`. Only applies when `INVITE_CODES` is set. |
 
+**Authentication & user accounts:**
+
+| Name | Value | Notes |
+|---|---|---|
+| `AUTH_V2` | `true` | Enables email+password signup/login. When `false` (default), registration accepts only username (legacy mode). |
+| `PROFILE_ID_CANONICAL` | `true` | Uses `profile_id` as the sole data key (no `session_id` fallback). Enable after confirming all data has been backfilled. |
+| `NEXT_PUBLIC_BASE_URL` | `https://openself.dev` | Required for OAuth callback URLs. Must match your public domain. |
+
+**OAuth login (optional — buttons appear only when configured):**
+
+| Name | Value | How to get it |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | `123...apps.googleusercontent.com` | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → Create OAuth 2.0 Client ID. Authorized redirect URI: `https://openself.dev/api/auth/google/callback` |
+| `GOOGLE_CLIENT_SECRET` | `GOCSPX-...` | Same page as above |
+| `GITHUB_CLIENT_ID` | `Iv1.abc123...` | [GitHub Developer Settings](https://github.com/settings/developers) → New OAuth App. Authorization callback URL: `https://openself.dev/api/auth/github/callback` |
+| `GITHUB_CLIENT_SECRET` | `ghp_...` | Same page as above |
+| `DISCORD_CLIENT_ID` | `123456789...` | [Discord Developer Portal](https://discord.com/developers/applications) → New Application → OAuth2. Redirect: `https://openself.dev/api/auth/discord/callback` |
+| `DISCORD_CLIENT_SECRET` | `...` | Same page as above |
+| `LINKEDIN_CLIENT_ID` | `...` | [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps) → Create App → Auth tab. Redirect: `https://openself.dev/api/auth/linkedin/callback`. Requires "Sign In with LinkedIn using OpenID Connect" product. |
+| `LINKEDIN_CLIENT_SECRET` | `...` | Same page as above |
+| `TWITTER_CLIENT_ID` | `...` | [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard) → Project → App → Keys. OAuth 2.0 callback: `https://openself.dev/api/auth/twitter/callback`. Requires OAuth 2.0 enabled. Note: Twitter does not provide email — a placeholder is used. |
+| `TWITTER_CLIENT_SECRET` | `...` | Same page as above |
+| `APPLE_CLIENT_ID` | `com.example.app` | [Apple Developer](https://developer.apple.com/account/resources/identifiers/list/serviceId) → Services IDs → Create. Redirect: `https://openself.dev/api/auth/apple/callback`. Requires Apple Developer account ($99/year). |
+| `APPLE_TEAM_ID` | `XXXXXXXXXX` | 10-character Team ID from Apple Developer Account → Membership |
+| `APPLE_KEY_ID` | `XXXXXXXXXX` | [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) → Keys → Create Key with "Sign in with Apple" |
+| `APPLE_PRIVATE_KEY` | `base64...` | Download the `.p8` key file, then encode: `base64 -w0 AuthKey_XXXXXXXXXX.p8` |
+
+> **Note:** OAuth buttons on `/login` appear for all providers — the server returns 404 if a provider is not configured.
+> Each provider is independent: configure only the ones you need.
+> If no OAuth provider is configured, users can still sign up with email+password (when `AUTH_V2=true`).
+
 Optional cost guardrails (recommended):
 
 | Name | Value |
@@ -441,6 +472,8 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 | Forgot Coolify admin password | SSH into server, check `/data/coolify/source/.env` for reset options. |
 | Need to change API key | Coolify → Environment Variables → edit the relevant key (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) → Save → Redeploy. |
 | Need to switch AI provider | Coolify → Environment Variables → change `AI_PROVIDER` to the new provider (e.g., `openai`), add the corresponding API key if not already present → Save → Redeploy. |
+| OAuth login not working | Verify that both `*_CLIENT_ID` and `*_CLIENT_SECRET` are set for the provider. Check that `NEXT_PUBLIC_BASE_URL` matches your domain exactly (e.g., `https://openself.dev`). Verify the callback URL in the provider's console matches `https://openself.dev/api/auth/{provider}/callback`. |
+| "OAuth sign-in failed" on login page | Check Coolify → Logs for `[google-oauth]` or `[github-oauth]` errors. Common causes: expired client secret, wrong callback URL, missing email permission scope. |
 
 ---
 

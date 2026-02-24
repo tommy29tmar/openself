@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth bg-[#fafafa]">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alexander Chen - 360 Editorial Prototype</title>
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+                    },
+                    colors: {
+                        background: '#fafafa', /* Elevated off-white for print feel */
+                        foreground: '#111111',
+                        muted: '#666666',
+                        accent: '#EAEAEA', /* Soft borders */
+                    }
+                }
+            }
+        }
+    </script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fafafa;
+            color: #111111;
+            overflow-x: hidden;
+        }
+
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Editorial text treatments */
+        .editorial-rule {
+            height: 1px;
+            background-color: #111111;
+            width: 100%;
+            margin: 2rem 0;
+            opacity: 0.15;
+        }
+
+        /* Subtle scroll enter animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+
+<body class="antialiased font-light selection:bg-black selection:text-white">
+
+    <main class="max-w-4xl mx-auto px-6 py-24 md:py-32">
+
+        <!-- THE HERO (Less text, majestic name) -->
+        <header class="mb-24 reveal active" style="transition-delay: 0.1s;">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-end gap-6 border-b border-black/15 pb-12">
+                <div>
+                    <h1 class="font-serif text-6xl md:text-[6rem] leading-[0.9] tracking-tight mb-2">
+                        Alexander<br />Chen.</h1>
+                </div>
+                <!-- Short, punchy tagline instead of a long paragraph -->
+                <div class="md:text-right max-w-sm">
+                    <p class="text-xl md:text-2xl font-serif text-muted italic">
+                        Digital architect, building the future of human interfaces.
+                    </p>
+                    <p class="text-xs uppercase tracking-widest text-[#888] mt-4 font-sans font-medium">San Francisco,
+                        CA</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- THE BIO (Narrative, but concise) -->
+        <section class="grid grid-cols-1 md:grid-cols-12 gap-12 mb-32 reveal">
+            <div class="md:col-span-4">
+                <h2 class="text-xs uppercase tracking-widest text-[#888] font-medium mb-4">About Me</h2>
+            </div>
+            <div class="md:col-span-8">
+                <p class="font-serif text-2xl md:text-3xl leading-relaxed text-[#222]">
+                    I believe that sophisticated software should feel entirely effortless. Currently I lead the core
+                    design systems team at <span class="font-medium italic">Apple</span>, where my focus is on creating
+                    structural clarity and precise motion architecture across macOS.
+                </p>
+            </div>
+        </section>
+
+        <!-- THE PROJECTS / EXPERIENCE (Structured, clean list) -->
+        <section class="mb-32 reveal">
+            <h2 class="text-xs uppercase tracking-widest text-[#888] font-medium mb-12 border-b border-black/15 pb-4">
+                Selected Work & Experience</h2>
+
+            <div class="space-y-12">
+                <!-- Project/Role 1 -->
+                <article class="group">
+                    <div class="flex flex-col md:flex-row md:items-baseline justify-between mb-2">
+                        <h3
+                            class="text-2xl md:text-3xl font-serif font-medium group-hover:text-amber-700 transition-colors cursor-pointer">
+                            Apple Design Systems</h3>
+                        <span class="text-sm font-mono tracking-tight text-[#666] mt-2 md:mt-0">2021 — Present</span>
+                    </div>
+                    <p class="text-muted leading-relaxed max-w-2xl text-lg">
+                        Senior Designer. Managing a team of four to unify the visual language and interaction patterns
+                        across all desktop native applications.
+                    </p>
+                </article>
+
+                <div class="editorial-rule"></div>
+
+                <!-- Project/Role 2 -->
+                <article class="group">
+                    <div class="flex flex-col md:flex-row md:items-baseline justify-between mb-2">
+                        <h3
+                            class="text-2xl md:text-3xl font-serif font-medium group-hover:text-amber-700 transition-colors cursor-pointer">
+                            Vogue Digital Editorial</h3>
+                        <span class="text-sm font-mono tracking-tight text-[#666] mt-2 md:mt-0">2018 — 2021</span>
+                    </div>
+                    <p class="text-muted leading-relaxed max-w-2xl text-lg">
+                        Creative Director. Led the complete redesign of the digital magazine reading experience,
+                        emphasizing large photography and uncompromised typography.
+                    </p>
+                </article>
+
+                <div class="editorial-rule"></div>
+
+                <!-- Project/Role 3 -->
+                <article class="group">
+                    <div class="flex flex-col md:flex-row md:items-baseline justify-between mb-2">
+                        <h3
+                            class="text-2xl md:text-3xl font-serif font-medium group-hover:text-amber-700 transition-colors cursor-pointer">
+                            Open Architecture App</h3>
+                        <span class="text-sm font-mono tracking-tight text-[#666] mt-2 md:mt-0">2020 Independent</span>
+                    </div>
+                    <p class="text-muted leading-relaxed max-w-2xl text-lg">
+                        A personal project. Designed and engineered an iOS application to catalog mid-century modern
+                        buildings around the world using Swift and ARKit.
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <!-- TWO-COLUMN LAYOUT FOR SKILLS & INTERESTS to show "The whole person" -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-16 mb-32 reveal">
+
+            <!-- THE SKILLS (Professional) -->
+            <div>
+                <h2
+                    class="text-xs uppercase tracking-widest text-[#888] font-medium mb-8 border-b border-black/15 pb-4">
+                    Core Competencies</h2>
+                <ul class="space-y-4 text-lg">
+                    <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-black rounded-full"></span>
+                        Interface Architecture</li>
+                    <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-black rounded-full"></span> Design
+                        Systems (Figma)</li>
+                    <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-black rounded-full"></span> Frontend
+                        Engineering (React, TS)</li>
+                    <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-black rounded-full"></span> Motion &
+                        Interaction</li>
+                    <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-black rounded-full"></span> Creative
+                        Direction</li>
+                </ul>
+            </div>
+
+            <!-- THE INTERESTS (Personal, 360 view) -->
+            <div>
+                <h2
+                    class="text-xs uppercase tracking-widest text-[#888] font-medium mb-8 border-b border-black/15 pb-4">
+                    Personal Interests</h2>
+                <div class="prose prose-lg text-muted">
+                    <p class="leading-relaxed">
+                        Design is informed by life. When I step away from the screen, my time is spent heavily immersed
+                        in the analog world.
+                    </p>
+                    <div class="flex flex-wrap gap-2 mt-6">
+                        <span class="px-3 py-1 rounded-full border border-black/20 text-sm text-[#444]">Medium Format
+                            Film</span>
+                        <span class="px-3 py-1 rounded-full border border-black/20 text-sm text-[#444]">Specialty
+                            Coffee</span>
+                        <span class="px-3 py-1 rounded-full border border-black/20 text-sm text-[#444]">Analogue
+                            Horology</span>
+                        <span class="px-3 py-1 rounded-full border border-black/20 text-sm text-[#444]">Mid-Century
+                            Furniture</span>
+                        <span class="px-3 py-1 rounded-full border border-black/20 text-sm text-[#444]">Jazz
+                            Vinyl</span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- FOOTER / CONNECT -->
+        <footer class="text-center pt-20 border-t border-black/15 reveal">
+            <h2 class="font-serif text-4xl mb-6">Start a conversation.</h2>
+            <div class="flex justify-center gap-8 mb-16">
+                <a href="#" class="text-lg hover:text-amber-700 transition-colors border-b border-black/20 pb-0.5">Email
+                    Me</a>
+                <a href="#"
+                    class="text-lg hover:text-amber-700 transition-colors border-b border-black/20 pb-0.5">LinkedIn</a>
+                <a href="#"
+                    class="text-lg hover:text-amber-700 transition-colors border-b border-black/20 pb-0.5">Twitter</a>
+            </div>
+            <p class="text-sm tracking-widest uppercase text-muted">© 2026 OpenSelf. Constructed with precision.</p>
+        </footer>
+
+    </main>
+
+    <!-- Scroll Reveal script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const reveals = document.querySelectorAll('.reveal');
+            const revealOnScroll = () => {
+                const windowHeight = window.innerHeight;
+                reveals.forEach(reveal => {
+                    const MathBound = reveal.getBoundingClientRect().top;
+                    if (MathBound < windowHeight - 100) {
+                        reveal.classList.add('active');
+                    }
+                });
+            };
+            revealOnScroll();
+            window.addEventListener('scroll', revealOnScroll);
+        });
+    </script>
+</body>
+
+</html>

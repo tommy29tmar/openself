@@ -53,7 +53,7 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       const page = composeOptimisticPage(facts, "alice");
 
       const hero = page.sections.find((s) => s.type === "hero");
-      expect(hero!.content.tagline).toBe("Welcome to Alice Smith's page");
+      expect(hero!.content.tagline).toBe("Hello, I'm Alice Smith");
     });
 
     it("uses 'Anonymous' when no name fact is provided", () => {
@@ -231,7 +231,7 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       const page = composeOptimisticPage(facts, "marco", "it");
 
       const hero = page.sections.find((s) => s.type === "hero");
-      expect(hero!.content.tagline).toBe("Benvenuto nella pagina di Marco Rossi");
+      expect(hero!.content.tagline).toBe("Ciao, sono Marco Rossi");
     });
   });
 

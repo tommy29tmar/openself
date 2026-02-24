@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth bg-black">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alexander Chen - The Narrative Prototype</title>
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+                        mono: ['"SF Mono"', 'ui-monospace', 'monospace'],
+                    },
+                    colors: {
+                        background: '#111111',
+                        surface: '#fafafa',
+                        foreground: '#ffffff',
+                        muted: '#a1a1aa',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- We use Playfair for rich, editorial reading and Inter for UI elements -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111111;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Dropcap effect for the first letter of the story */
+        .drop-cap::first-letter {
+            float: left;
+            font-size: 5rem;
+            line-height: 4rem;
+            padding-top: 0.5rem;
+            padding-right: 1rem;
+            margin-bottom: -0.5rem;
+            font-family: 'Playfair Display', serif;
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        /* Subtle fade up animation */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade {
+            animation: fadeUp 1s ease-out forwards;
+            opacity: 0;
+        }
+
+        /* Highlight text effect */
+        .text-highlight {
+            position: relative;
+            display: inline-block;
+            z-index: 1;
+        }
+
+        .text-highlight::after {
+            content: '';
+            position: absolute;
+            left: -2px;
+            right: -2px;
+            bottom: 4px;
+            height: 30%;
+            background-color: rgba(255, 255, 255, 0.15);
+            z-index: -1;
+            transition: height 0.3s ease;
+        }
+
+        .text-highlight:hover::after {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body class="antialiased font-light selection:bg-white selection:text-black">
+
+    <main class="max-w-4xl mx-auto px-6 py-24 md:py-32">
+
+        <!-- Header / Greeting -->
+        <header class="mb-24 animate-fade" style="animation-delay: 0.1s;">
+            <p class="text-sm tracking-widest uppercase text-muted mb-8 font-medium">Hello, World.</p>
+            <h1 class="font-serif text-5xl md:text-7xl lg:text-[5.5rem] leading-[1.1] tracking-tight text-white/90">
+                I am <span class="text-white font-medium italic">Alexander</span>, a designer obsessed with simplicity
+                and clarity.
+            </h1>
+        </header>
+
+        <!-- The Story / Narrative Core -->
+        <section
+            class="prose prose-invert prose-lg md:prose-xl lg:prose-2xl max-w-none text-gray-300 leading-relaxed font-serif mb-32 animate-fade"
+            style="animation-delay: 0.3s;">
+            <p class="drop-cap">
+                For the past ten years, I have lived my life at the intersection of pixel-perfect typography and robust
+                software engineering. My philosophy is surprisingly simple: technology should get out of the way. If a
+                user notices the interface, I haven't done my job right.
+            </p>
+            <p class="mt-8">
+                Currently, I spend my days in Cupertino, California. At <span
+                    class="text-white font-sans text-xl md:text-2xl font-medium tracking-tight">Apple</span>, I lead the
+                core design systems architecture for macOS. It means I spend hours obsessing over the exact curvature of
+                a window shadow or the precise spring tension of a scroll animation. Before that, I shaped narrative
+                digital experiences as a Creative Director at <span class="text-white">Vogue Labs</span> in New York,
+                where we prioritized huge, impactful imagery over dense blocks of text.
+            </p>
+            <p class="mt-8 relative">
+                But I am more than the products I help ship. When I close my laptop, you'll usually find me wandering
+                the fog of San Francisco with a medium-format film camera, studying mid-century modern furniture, or
+                reading about behavioral economics. I believe that being a good designer requires borrowing ideas from
+                fields entirely unrelated to design.
+            </p>
+        </section>
+
+        <!-- A Structured (but narrative) approach to "Expertise" -->
+        <section class="border-t border-white/10 pt-20 mb-32 animate-fade" style="animation-delay: 0.5s;">
+            <h2 class="text-xs tracking-widest uppercase text-muted mb-12 font-sans font-medium">What I can do for you
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-16 font-sans">
+                <!-- Competence Narrative 1 -->
+                <div>
+                    <h3 class="text-2xl text-white font-serif mb-4">I shape brand identities.</h3>
+                    <p class="text-gray-400 leading-relaxed">
+                        I don't just draw logos. I build visual languages from the ground up, ensuring that every
+                        touchpoint—from the app icon to the tone of voice in a push notification—feels uniquely yours.
+                    </p>
+                </div>
+                <!-- Competence Narrative 2 -->
+                <div>
+                    <h3 class="text-2xl text-white font-serif mb-4">I build complex interfaces.</h3>
+                    <p class="text-gray-400 leading-relaxed">
+                        With deep expertise in React and modern CSS architectures, I design in the browser. I bridge the
+                        gap between Figma mockups and production code, ensuring the final product matches the vision
+                        entirely.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- "The Ask" / Connect -->
+        <section class="text-center bg-[#18181b] rounded-3xl p-16 animate-fade" style="animation-delay: 0.6s;">
+            <h2 class="font-serif text-4xl md:text-5xl text-white mb-6">Let’s have a conversation.</h2>
+            <p class="text-gray-400 text-lg md:text-xl mb-10 max-w-xl mx-auto">
+                I am always open to discussing new ideas, architecture revamps, or simply grabbing coffee in the Bay
+                Area to talk about typography.
+            </p>
+            <a href="mailto:alexander@example.com"
+                class="inline-flex items-center gap-3 font-medium px-8 py-4 bg-white text-black rounded-full hover:bg-gray-200 transition-colors font-sans text-sm tracking-wide uppercase">
+                Say Hello
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m22 2-7 20-4-9-9-4Z" />
+                    <path d="M22 2 11 13" />
+                </svg>
+            </a>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer
+        class="py-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center px-8 text-sm font-sans text-muted">
+        <p>© 2026 Alexander Chen.</p>
+        <div class="flex gap-6 mt-4 md:mt-0">
+            <a href="#" class="hover:text-white transition-colors">Twitter</a>
+            <a href="#" class="hover:text-white transition-colors">LinkedIn</a>
+            <a href="#" class="hover:text-white transition-colors">Read.cv</a>
+        </div>
+    </footer>
+
+</body>
+
+</html>
