@@ -15,6 +15,7 @@ import {
   tryIncrementMessageCount,
   getMessageLimit,
   getMessageCount,
+  DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 
 export async function POST(req: Request) {
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
   // Resolve session ID
   const multiUser = isMultiUserEnabled();
   let sessionId: string;
+  let messageSessionId: string;
 
   if (multiUser) {
     sessionId = getSessionIdFromRequest(req);
@@ -97,14 +99,39 @@ export async function POST(req: Request) {
     // Increment counter only for actual user messages
     const lastMessage = messages[messages.length - 1];
     if (lastMessage?.role === "user") {
-      tryIncrementMessageCount(sessionId, limit);
+      const incremented = tryIncrementMessageCount(sessionId, limit);
+      if (!incremented) {
+        const latestCount = getMessageCount(sessionId);
+        return new Response(
+          JSON.stringify({
+            error: "Message limit reached. Register to continue.",
+            messageCount: latestCount,
+            messageLimit: limit,
+          }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Message-Count": String(latestCount),
+              "X-Message-Limit": String(limit),
+            },
+          },
+        );
+      }
     }
+
+    messageSessionId = sessionId;
   } else {
-    // Single-user: use body sessionId for backward compat
-    sessionId = body.sessionId || randomUUID();
+    // Single-user: keep all page/fact/preference writes on the default session.
+    sessionId = DEFAULT_SESSION_ID;
+    // Preserve legacy message-thread grouping if client sends an explicit sessionId.
+    messageSessionId =
+      typeof body.sessionId === "string" && body.sessionId.trim().length > 0
+        ? body.sessionId
+        : DEFAULT_SESSION_ID;
   }
 
-  const sid = sessionId;
+  const sid = messageSessionId;
 
   // Build system prompt with current KB context
   const existingFacts = getAllFacts(sessionId);

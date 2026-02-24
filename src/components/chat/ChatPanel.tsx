@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "ai/react";
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, type FormEvent } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -47,6 +47,7 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading } =
     useChat({
@@ -60,14 +61,25 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
         if (count && limit && parseInt(count) >= parseInt(limit)) {
           setLimitReached(true);
         }
+        setChatError(null);
       },
       onError: (error) => {
         // Check if it's a 429 with limit info
         if (error.message?.includes("Message limit reached")) {
           setLimitReached(true);
+          return;
         }
+        setChatError(error.message || "Unable to generate a response right now.");
       },
     });
+
+  const handleChatSubmit = useCallback(
+    (e: FormEvent<HTMLFormElement>) => {
+      setChatError(null);
+      handleSubmit(e);
+    },
+    [handleSubmit],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -165,12 +177,19 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
           )}
         </div>
       ) : (
-        <ChatInput
-          value={input}
-          onChange={handleInputChange}
-          onSubmit={handleSubmit}
-          isLoading={isLoading}
-        />
+        <>
+          {chatError && (
+            <div className="border-t bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+              {chatError}
+            </div>
+          )}
+          <ChatInput
+            value={input}
+            onChange={handleInputChange}
+            onSubmit={handleChatSubmit}
+            isLoading={isLoading}
+          />
+        </>
       )}
     </div>
   );
