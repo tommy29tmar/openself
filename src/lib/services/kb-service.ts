@@ -133,11 +133,11 @@ export async function createFact(input: CreateFactInput, sessionId: string = "__
   return row as FactRow;
 }
 
-export function updateFact(input: UpdateFactInput): FactRow | null {
+export function updateFact(input: UpdateFactInput, sessionId: string = "__default__"): FactRow | null {
   const existing = db
     .select()
     .from(facts)
-    .where(eq(facts.id, input.factId))
+    .where(and(eq(facts.id, input.factId), eq(facts.sessionId, sessionId)))
     .get();
 
   if (!existing) return null;
@@ -145,7 +145,7 @@ export function updateFact(input: UpdateFactInput): FactRow | null {
   const now = new Date().toISOString();
   db.update(facts)
     .set({ value: input.value, updatedAt: now })
-    .where(eq(facts.id, input.factId))
+    .where(and(eq(facts.id, input.factId), eq(facts.sessionId, sessionId)))
     .run();
 
   logEvent({
@@ -159,16 +159,16 @@ export function updateFact(input: UpdateFactInput): FactRow | null {
   return { ...existing, value: input.value, updatedAt: now } as FactRow;
 }
 
-export function deleteFact(factId: string): boolean {
+export function deleteFact(factId: string, sessionId: string = "__default__"): boolean {
   const existing = db
     .select()
     .from(facts)
-    .where(eq(facts.id, factId))
+    .where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId)))
     .get();
 
   if (!existing) return false;
 
-  db.delete(facts).where(eq(facts.id, factId)).run();
+  db.delete(facts).where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId))).run();
 
   logEvent({
     eventType: "fact_deleted",

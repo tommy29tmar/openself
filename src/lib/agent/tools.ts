@@ -80,7 +80,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId, value }) => {
       try {
-        const fact = updateFact({ factId, value });
+        const fact = updateFact({ factId, value }, sessionId);
         if (!fact) return { success: false, error: "Fact not found" };
         return { success: true, factId: fact.id };
       } catch (error) {
@@ -102,7 +102,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId }) => {
       try {
-        const deleted = deleteFact(factId);
+        const deleted = deleteFact(factId, sessionId);
         return { success: deleted };
       } catch (error) {
         logEvent({
