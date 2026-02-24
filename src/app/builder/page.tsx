@@ -31,6 +31,10 @@ async function persistLanguage(language: LanguageCode, regenerateDraft: boolean)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ language, regenerateDraft }),
     });
+    if (res.status === 401) {
+      window.location.href = "/invite";
+      return;
+    }
     if (!res.ok) {
       console.warn("[preferences] Failed to persist language:", res.status);
     }
@@ -51,6 +55,10 @@ export default function BuilderPage() {
 
       try {
         const res = await fetch("/api/preferences", { cache: "no-store" });
+        if (res.status === 401) {
+          window.location.href = "/invite";
+          return;
+        }
         if (!res.ok) {
           throw new Error("Failed to load preferences");
         }

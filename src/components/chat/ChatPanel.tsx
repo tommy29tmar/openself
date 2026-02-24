@@ -55,6 +55,11 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
       body: { language },
       initialMessages: [getWelcomeMessage(language)],
       onResponse: (response) => {
+        if (response.status === 401) {
+          window.location.href = "/invite";
+          return;
+        }
+
         // Check for message limit headers
         const count = response.headers.get("X-Message-Count");
         const limit = response.headers.get("X-Message-Limit");
@@ -69,6 +74,12 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
           setLimitReached(true);
           return;
         }
+
+        if (error.message && /unauthorized/i.test(error.message)) {
+          window.location.href = "/invite";
+          return;
+        }
+
         setChatError(error.message || "Unable to generate a response right now.");
       },
     });
@@ -98,6 +109,10 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
         body: JSON.stringify({ username: registerUsername.trim().toLowerCase() }),
       });
       const data = await res.json();
+      if (res.status === 401) {
+        window.location.href = "/invite";
+        return;
+      }
       if (data.success) {
         setRegistered(data.username);
       } else {

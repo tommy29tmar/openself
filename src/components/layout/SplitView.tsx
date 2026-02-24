@@ -56,6 +56,10 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
       });
+      if (res.status === 401) {
+        window.location.href = "/invite";
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setPublished(true);
@@ -123,6 +127,10 @@ function persistStyle(patch: {
     body: JSON.stringify(patch),
   })
     .then((res) => {
+      if (res.status === 401) {
+        window.location.href = "/invite";
+        return;
+      }
       if (!res.ok) {
         console.warn("[settings] Failed to persist style:", res.status);
       }
@@ -197,6 +205,10 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
   const fetchPreview = useCallback(async () => {
     try {
       const res = await fetch(`/api/preview?username=draft&language=${language}`);
+      if (res.status === 401) {
+        window.location.href = "/invite";
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       if (data.config) {
