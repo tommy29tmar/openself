@@ -9,7 +9,11 @@ export function runMigrations(sqlite: Database.Database): void {
     applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  const migrationsDir = path.resolve("db/migrations");
+  // In production Docker, migrations are at /app/migrations (outside the volume-mounted /app/db).
+  // In development, they are at db/migrations (relative to project root).
+  const prodDir = path.resolve("migrations");
+  const devDir = path.resolve("db/migrations");
+  const migrationsDir = fs.existsSync(prodDir) ? prodDir : devDir;
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))

@@ -40,8 +40,10 @@ COPY --from=build /app/.next/standalone ./
 # Copy static assets
 COPY --from=build /app/.next/static ./.next/static
 
-# Copy migration SQL files (needed at startup)
-COPY --from=build /app/db/migrations ./db/migrations
+# Copy migration SQL files to a separate path (NOT inside /app/db)
+# The /app/db directory is volume-mounted for SQLite persistence,
+# which would overwrite migrations if they lived there.
+COPY --from=build /app/db/migrations ./migrations
 
 # Create db directory for SQLite volume mount
 RUN mkdir -p /app/db && chown nextjs:nodejs /app/db
