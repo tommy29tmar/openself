@@ -51,6 +51,8 @@ export type Session = {
   username: string | null;
   messageCount: number;
   status: string;
+  userId: string | null;
+  profileId: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };

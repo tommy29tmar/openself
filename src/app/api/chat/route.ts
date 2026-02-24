@@ -8,7 +8,7 @@ import { messages as messagesTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
-import { getSessionIdFromRequest } from "@/lib/auth/session";
+import { getSessionIdFromRequest, getAuthContext } from "@/lib/auth/session";
 import {
   isMultiUserEnabled,
   getSession,
@@ -74,49 +74,57 @@ export async function POST(req: Request) {
       );
     }
 
-    // Gate: always reject if message limit reached, regardless of message role.
-    // This prevents clients from bypassing the limit by crafting non-user payloads.
-    const limit = getMessageLimit();
-    const currentCount = getMessageCount(sessionId);
-    if (currentCount >= limit) {
-      return new Response(
-        JSON.stringify({
-          error: "Message limit reached. Register to continue.",
-          messageCount: currentCount,
-          messageLimit: limit,
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Message-Count": String(currentCount),
-            "X-Message-Limit": String(limit),
-          },
-        },
-      );
-    }
+    // Authenticated users (userId != null) skip the message limit
+    const authCtx = getAuthContext(req);
+    const isAuthenticated = authCtx?.userId != null;
 
-    // Increment counter only for actual user messages
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === "user") {
-      const incremented = tryIncrementMessageCount(sessionId, limit);
-      if (!incremented) {
-        const latestCount = getMessageCount(sessionId);
+    if (!isAuthenticated) {
+      // Gate: always reject if message limit reached, regardless of message role.
+      // This prevents clients from bypassing the limit by crafting non-user payloads.
+      const limit = getMessageLimit();
+      const currentCount = getMessageCount(sessionId);
+      if (currentCount >= limit) {
         return new Response(
           JSON.stringify({
             error: "Message limit reached. Register to continue.",
-            messageCount: latestCount,
+            messageCount: currentCount,
             messageLimit: limit,
+            code: "MESSAGE_LIMIT",
           }),
           {
             status: 429,
             headers: {
               "Content-Type": "application/json",
-              "X-Message-Count": String(latestCount),
+              "X-Message-Count": String(currentCount),
               "X-Message-Limit": String(limit),
             },
           },
         );
+      }
+
+      // Increment counter only for actual user messages
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === "user") {
+        const incremented = tryIncrementMessageCount(sessionId, limit);
+        if (!incremented) {
+          const latestCount = getMessageCount(sessionId);
+          return new Response(
+            JSON.stringify({
+              error: "Message limit reached. Register to continue.",
+              messageCount: latestCount,
+              messageLimit: limit,
+              code: "MESSAGE_LIMIT",
+            }),
+            {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "X-Message-Count": String(latestCount),
+                "X-Message-Limit": String(limit),
+              },
+            },
+          );
+        }
       }
     }
 

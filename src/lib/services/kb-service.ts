@@ -12,6 +12,7 @@ import {
 } from "@/lib/taxonomy/normalizeCategory";
 import { initialVisibility } from "@/lib/visibility/policy";
 import { logEvent } from "@/lib/services/event-service";
+import { PROFILE_ID_CANONICAL } from "@/lib/flags";
 
 // -- Taxonomy store backed by DB
 
@@ -71,7 +72,11 @@ export type FactRow = {
 
 // -- CRUD Operations
 
-export async function createFact(input: CreateFactInput, sessionId: string = "__default__"): Promise<FactRow> {
+export async function createFact(
+  input: CreateFactInput,
+  sessionId: string = "__default__",
+  profileId?: string,
+): Promise<FactRow> {
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
 
@@ -83,11 +88,13 @@ export async function createFact(input: CreateFactInput, sessionId: string = "__
 
   const id = randomUUID();
   const now = new Date().toISOString();
+  const effectiveProfileId = profileId ?? sessionId;
 
   db.insert(facts)
     .values({
       id,
       sessionId,
+      profileId: effectiveProfileId,
       category: normalized.canonical,
       key: input.key,
       value: input.value,
@@ -103,6 +110,7 @@ export async function createFact(input: CreateFactInput, sessionId: string = "__
         value: input.value,
         source: input.source ?? "chat",
         confidence,
+        profileId: effectiveProfileId,
         updatedAt: now,
       },
     })
@@ -206,6 +214,9 @@ export function searchFacts(query: string, sessionId: string = "__default__"): F
 }
 
 export function getAllFacts(sessionId: string = "__default__"): FactRow[] {
+  if (PROFILE_ID_CANONICAL) {
+    return db.select().from(facts).where(eq(facts.profileId, sessionId)).all() as FactRow[];
+  }
   return db.select().from(facts).where(eq(facts.sessionId, sessionId)).all() as FactRow[];
 }
 

@@ -1,6 +1,7 @@
 import {
   DEFAULT_SESSION_ID,
   isMultiUserEnabled,
+  getSession,
 } from "@/lib/services/session-service";
 
 const COOKIE_NAME = "os_session";
@@ -30,4 +31,41 @@ export function getSessionIdFromRequest(req: Request): string {
  */
 export function createSessionCookie(sessionId: string): string {
   return `${COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`;
+}
+
+/**
+ * Auth context derived from session. Used by API routes to get profileId and userId.
+ */
+export type AuthContext = {
+  sessionId: string;
+  profileId: string;
+  userId: string | null;
+  username: string | null;
+};
+
+/**
+ * Get auth context from request. Returns profileId (falling back to sessionId for pre-migration data).
+ */
+export function getAuthContext(req: Request): AuthContext | null {
+  const sessionId = getSessionIdFromRequest(req);
+  if (!sessionId) return null;
+
+  if (!isMultiUserEnabled()) {
+    return {
+      sessionId: DEFAULT_SESSION_ID,
+      profileId: DEFAULT_SESSION_ID,
+      userId: null,
+      username: null,
+    };
+  }
+
+  const session = getSession(sessionId);
+  if (!session) return null;
+
+  return {
+    sessionId,
+    profileId: session.profileId ?? sessionId,
+    userId: session.userId ?? null,
+    username: session.username,
+  };
 }

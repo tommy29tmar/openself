@@ -30,9 +30,15 @@ function getClientIp(req: Request): string {
   return "unknown";
 }
 
-export function checkRateLimit(req: Request): RateLimitResult {
+export function checkRateLimit(
+  req: Request,
+  opts?: { maxRequests?: number; windowMs?: number; skipPace?: boolean },
+): RateLimitResult {
   const ip = getClientIp(req);
   const now = Date.now();
+  const maxReq = opts?.maxRequests ?? MAX_REQUESTS;
+  const windowMs = opts?.windowMs ?? WINDOW_MS;
+  const skipPace = opts?.skipPace ?? false;
 
   let entry = store.get(ip);
   if (!entry) {
@@ -41,23 +47,25 @@ export function checkRateLimit(req: Request): RateLimitResult {
   }
 
   // Prune timestamps outside the window
-  entry.timestamps = entry.timestamps.filter((t) => now - t < WINDOW_MS);
+  entry.timestamps = entry.timestamps.filter((t) => now - t < windowMs);
 
-  // Check conversation pace (1 message per 2 seconds)
-  const gapMs = now - entry.lastMessage;
-  if (entry.lastMessage > 0 && gapMs < MIN_GAP_MS) {
-    const retryAfter = Math.ceil((MIN_GAP_MS - gapMs) / 1000);
-    return {
-      allowed: false,
-      retryAfter,
-      reason: "Too fast — please wait a moment before sending another message.",
-    };
+  // Check conversation pace (1 message per 2 seconds) — skip for auth endpoints
+  if (!skipPace) {
+    const gapMs = now - entry.lastMessage;
+    if (entry.lastMessage > 0 && gapMs < MIN_GAP_MS) {
+      const retryAfter = Math.ceil((MIN_GAP_MS - gapMs) / 1000);
+      return {
+        allowed: false,
+        retryAfter,
+        reason: "Too fast — please wait a moment before sending another message.",
+      };
+    }
   }
 
-  // Check per-IP rate limit (30 req/min)
-  if (entry.timestamps.length >= MAX_REQUESTS) {
+  // Check per-IP rate limit
+  if (entry.timestamps.length >= maxReq) {
     const oldest = entry.timestamps[0];
-    const retryAfter = Math.ceil((oldest + WINDOW_MS - now) / 1000);
+    const retryAfter = Math.ceil((oldest + windowMs - now) / 1000);
     return {
       allowed: false,
       retryAfter,

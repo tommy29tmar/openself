@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 const COOKIE_NAME = "os_session";
 
 // Routes that don't require authentication
-const PUBLIC_PREFIXES = ["/invite", "/api/invite", "/_next", "/favicon"];
+const PUBLIC_PREFIXES = ["/invite", "/api/invite", "/api/auth", "/_next", "/favicon", "/login"];
 
 function isPublicRoute(pathname: string): boolean {
   // Homepage
@@ -47,5 +47,6 @@ export const config = {
     "/api/draft/:path*",
     "/api/preferences",
     "/api/register",
+    "/api/messages",
   ],
 };

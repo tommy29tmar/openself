@@ -38,12 +38,16 @@ function getWelcomeMessage(language: string) {
 
 type ChatPanelProps = {
   language?: string;
+  /** When true, show email + password fields in the signup form */
+  authV2?: boolean;
 };
 
-export function ChatPanel({ language = "en" }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = false }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [limitReached, setLimitReached] = useState(false);
   const [registerUsername, setRegisterUsername] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState<string | null>(null);
@@ -98,15 +102,24 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
 
   const handleRegister = useCallback(async () => {
     if (!registerUsername.trim()) return;
+    if (authV2 && (!registerEmail.trim() || !registerPassword.trim())) return;
 
     setRegistering(true);
     setRegisterError(null);
 
     try {
+      const payload: Record<string, string> = {
+        username: registerUsername.trim().toLowerCase(),
+      };
+      if (authV2) {
+        payload.email = registerEmail.trim().toLowerCase();
+        payload.password = registerPassword;
+      }
+
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: registerUsername.trim().toLowerCase() }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.status === 401) {
@@ -123,7 +136,7 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
     } finally {
       setRegistering(false);
     }
-  }, [registerUsername]);
+  }, [registerUsername, registerEmail, registerPassword, authV2]);
 
   return (
     <div className="flex h-full flex-col">
@@ -166,20 +179,48 @@ export function ChatPanel({ language = "en" }: ChatPanelProps) {
           <p className="text-sm text-amber-800 dark:text-amber-200">
             {LIMIT_MESSAGES[language] ?? LIMIT_MESSAGES.en}
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
             <input
               type="text"
               value={registerUsername}
               onChange={(e) => setRegisterUsername(e.target.value.toLowerCase())}
               placeholder="username"
-              className="flex-1 rounded border bg-background px-2 py-1 text-sm"
+              className="rounded border bg-background px-2 py-1 text-sm"
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleRegister();
+                if (e.key === "Enter" && !authV2) handleRegister();
               }}
             />
+            {authV2 && (
+              <>
+                <input
+                  type="email"
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                  placeholder="email"
+                  className="rounded border bg-background px-2 py-1 text-sm"
+                  autoComplete="email"
+                />
+                <input
+                  type="password"
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  placeholder="password (min 8 chars)"
+                  minLength={8}
+                  className="rounded border bg-background px-2 py-1 text-sm"
+                  autoComplete="new-password"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRegister();
+                  }}
+                />
+              </>
+            )}
             <button
               onClick={handleRegister}
-              disabled={registering || !registerUsername.trim()}
+              disabled={
+                registering ||
+                !registerUsername.trim() ||
+                (authV2 && (!registerEmail.trim() || registerPassword.length < 8))
+              }
               className="shrink-0 rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
             >
               {registering ? "..." : "Claim your page"}
