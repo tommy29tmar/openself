@@ -320,10 +320,18 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
             Preview
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="chat" className="flex-1 overflow-hidden">
+        <TabsContent
+          value="chat"
+          forceMount
+          className="flex-1 overflow-hidden data-[state=inactive]:hidden"
+        >
           <ChatPanel language={language} />
         </TabsContent>
-        <TabsContent value="preview" className="relative flex-1 overflow-hidden">
+        <TabsContent
+          value="preview"
+          forceMount
+          className="relative flex-1 overflow-hidden data-[state=inactive]:hidden"
+        >
           {previewPane}
         </TabsContent>
       </Tabs>

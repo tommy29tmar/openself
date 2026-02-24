@@ -42,7 +42,123 @@ type ChatPanelProps = {
   authV2?: boolean;
 };
 
+type StoredMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
+type MessagesResponse = {
+  success?: boolean;
+  messages?: Array<{
+    id?: string;
+    role?: string;
+    content?: string;
+  }>;
+};
+
+type ChatPanelInnerProps = {
+  language: string;
+  authV2: boolean;
+  initialMessages: StoredMessage[];
+};
+
+function ChatPanelLoading() {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b px-4 py-3">
+        <h2 className="text-sm font-semibold">Chat</h2>
+      </div>
+      <div className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
+        Loading chat history...
+      </div>
+    </div>
+  );
+}
+
 export function ChatPanel({ language = "en", authV2 = false }: ChatPanelProps) {
+  const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
+    getWelcomeMessage(language),
+  ]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHistory = async () => {
+      try {
+        const res = await fetch("/api/messages", { cache: "no-store" });
+        if (res.status === 401) {
+          window.location.href = "/invite";
+          return;
+        }
+        if (!res.ok) return;
+
+        const data = (await res.json()) as MessagesResponse;
+        if (!data.success || !Array.isArray(data.messages)) return;
+
+        const restoredMessages: StoredMessage[] = data.messages
+          .filter(
+            (m): m is { id: string; role: string; content: string } =>
+              typeof m.id === "string" &&
+              typeof m.role === "string" &&
+              typeof m.content === "string",
+          )
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({
+            id: m.id,
+            role: m.role as StoredMessage["role"],
+            content: m.content,
+          }));
+
+        if (cancelled) return;
+
+        setInitialMessages((current) => {
+          const welcome = current[0] ?? getWelcomeMessage("en");
+          if (restoredMessages.length === 0) return [welcome];
+
+          const welcomeAlreadyStored = restoredMessages.some(
+            (message) =>
+              message.role === "assistant" && message.content === welcome.content,
+          );
+
+          return welcomeAlreadyStored
+            ? restoredMessages
+            : [welcome, ...restoredMessages];
+        });
+      } catch {
+        // Keep fallback welcome message when history fetch fails.
+      } finally {
+        if (!cancelled) {
+          setHistoryLoaded(true);
+        }
+      }
+    };
+
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!historyLoaded) {
+    return <ChatPanelLoading />;
+  }
+
+  return (
+    <ChatPanelInner
+      language={language}
+      authV2={authV2}
+      initialMessages={initialMessages}
+    />
+  );
+}
+
+function ChatPanelInner({
+  language,
+  authV2,
+  initialMessages,
+}: ChatPanelInnerProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [limitReached, setLimitReached] = useState(false);
   const [registerUsername, setRegisterUsername] = useState("");
@@ -57,7 +173,7 @@ export function ChatPanel({ language = "en", authV2 = false }: ChatPanelProps) {
     useChat({
       api: "/api/chat",
       body: { language },
-      initialMessages: [getWelcomeMessage(language)],
+      initialMessages,
       onResponse: (response) => {
         if (response.status === 401) {
           window.location.href = "/invite";
