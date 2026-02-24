@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 const COOKIE_NAME = "os_session";
 
 // Routes that don't require authentication
-const PUBLIC_PREFIXES = ["/invite", "/api/invite", "/api/auth", "/_next", "/favicon", "/login"];
+const PUBLIC_PREFIXES = ["/invite", "/api/invite", "/api/auth", "/_next", "/favicon", "/login", "/signup"];
 
 function isPublicRoute(pathname: string): boolean {
   // Homepage

@@ -20,7 +20,7 @@ import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { sqlite } from "@/lib/db";
 
 const USERNAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/;
-const RESERVED = new Set(["draft", "api", "builder", "admin", "invite", "_next", "login"]);
+const RESERVED = new Set(["draft", "api", "builder", "admin", "invite", "_next", "login", "signup"]);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {

@@ -2428,6 +2428,19 @@ Infrastructure:
   [ ] Add inbound contribution policy (`CLA` or `CAA`) + GitHub signature bot
   [ ] Static HTML export
   [ ] PDF export (profile as CV)
+
+Operational — OAuth provider configuration:
+  Routes and code are implemented for all providers below.
+  Each provider requires creating an OAuth app in its developer console,
+  then adding the credentials as env vars on Coolify (or .env locally).
+  Callback URLs follow the pattern: https://openself.dev/api/auth/{provider}/callback
+
+  [ ] Google: GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET (console.cloud.google.com/apis/credentials)
+  [ ] GitHub: GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET (github.com/settings/developers)
+  [ ] Discord: DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET (discord.com/developers/applications)
+  [ ] LinkedIn: LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET (linkedin.com/developers/apps — requires "Sign In with LinkedIn using OpenID Connect" product)
+  [ ] Twitter/X: TWITTER_CLIENT_ID + TWITTER_CLIENT_SECRET (developer.twitter.com — OAuth 2.0 with PKCE)
+  [ ] Set NEXT_PUBLIC_BASE_URL=https://openself.dev on Coolify
 ```
 
 **Definition of done:** The agent remembers you across sessions, proactively suggests

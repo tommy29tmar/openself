@@ -132,8 +132,8 @@ export default function LoginPage() {
       </form>
       <p className="text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link href="/builder" className="underline">
-          Create your page
+        <Link href="/signup" className="underline">
+          Create an account
         </Link>
       </p>
     </main>
