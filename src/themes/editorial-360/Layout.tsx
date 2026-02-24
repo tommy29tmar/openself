@@ -21,10 +21,16 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#fafafa] text-[#111111] font-light antialiased selection:bg-black selection:text-white">
-            <main className="max-w-4xl mx-auto px-6 py-24 md:py-32 flex flex-col gap-12">
+        <div className="min-h-screen bg-[#fafafa] text-[#111111] font-light antialiased selection:bg-black selection:text-white relative overflow-x-hidden">
+            {/* Subtle grain texture overlay */}
+            <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-50 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+            
+            <main className="max-w-5xl mx-auto px-8 py-32 md:py-48 flex flex-col gap-32">
                 {children}
             </main>
+            
+            <div className="fixed top-0 left-0 w-1 h-full bg-black/5 z-40 hidden md:block" />
+            <div className="fixed top-0 right-0 w-1 h-full bg-black/5 z-40 hidden md:block" />
         </div>
     );
 }

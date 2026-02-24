@@ -27,27 +27,36 @@ type L10nStrings = {
   welcomeTagline: (name: string) => string;
   bioRoleAt: (name: string, role: string, company: string) => string;
   bioRole: (name: string, role: string) => string;
+  bioRoleAtFirstPerson: (role: string, company: string) => string;
+  bioRoleFirstPerson: (role: string) => string;
   passionateAbout: (items: string) => string;
   skillsLabel: string;
   interestsLabel: string;
+  experienceLabel: string;
 };
 
 const L10N: Record<string, L10nStrings> = {
   en: {
-    welcomeTagline: (name) => `Welcome to ${name}'s page`,
+    welcomeTagline: (name) => `Hello, I'm ${name}`,
     bioRoleAt: (name, role, company) => `${name} is a ${role} at ${company}.`,
     bioRole: (name, role) => `${name} is a ${role}.`,
+    bioRoleAtFirstPerson: (role, company) => `I am a ${role} at ${company}.`,
+    bioRoleFirstPerson: (role) => `I am a ${role}.`,
     passionateAbout: (items) => `Passionate about ${items}.`,
     skillsLabel: "Skills",
     interestsLabel: "Interests",
+    experienceLabel: "Experience",
   },
   it: {
-    welcomeTagline: (name) => `Benvenuto nella pagina di ${name}`,
+    welcomeTagline: (name) => `Ciao, sono ${name}`,
     bioRoleAt: (name, role, company) => `${name} è ${role} presso ${company}.`,
     bioRole: (name, role) => `${name} è ${role}.`,
-    passionateAbout: (items) => `Appassionato/a di ${items}.`,
+    bioRoleAtFirstPerson: (role, company) => `Sono ${role} presso ${company}.`,
+    bioRoleFirstPerson: (role) => `Sono ${role}.`,
+    passionateAbout: (items) => `Mi occupo di ${items}.`,
     skillsLabel: "Competenze",
     interestsLabel: "Interessi",
+    experienceLabel: "Esperienza",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -126,6 +135,14 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
 }
 
+/** Converts kebab-case to Title Case (e.g., 'my-project' -> 'My Project'). */
+function beautifyKey(key: string): string {
+  return key
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 /** Languages where common nouns (job titles, roles) are capitalized. */
 const CAPITALIZE_NOUNS_LANGUAGES = new Set(["de"]);
 
@@ -167,10 +184,13 @@ function buildHeroSection(identityFacts: FactRow[], language: string): Section |
 
   if (!tagline) {
     // Try to derive from identity facts (role, interests)
-    const role = identityFacts.find((f) => f.key === "role" || f.key === "title");
-    if (role) {
-      const rv = val(role);
-      tagline = str(rv.role) ?? str(rv.title) ?? str(rv.value);
+    const roleFact = identityFacts.find((f) => f.key === "role" || f.key === "title");
+    if (roleFact) {
+      const rv = val(roleFact);
+      const role = str(rv.role) ?? str(rv.title) ?? str(rv.value);
+      if (role) {
+        tagline = getL10n(language).bioRoleFirstPerson(lowerRole(role, language));
+      }
     }
   }
 
@@ -187,7 +207,7 @@ function buildHeroSection(identityFacts: FactRow[], language: string): Section |
   };
 }
 
-function buildBioSection(grouped: FactsByCategory, language: string): Section | null {
+function buildBioSection(grouped: FactsByCategory, language: string, hasInterestsSection: boolean = false): Section | null {
   const identityFacts = grouped.get("identity") ?? [];
   const experienceFacts = grouped.get("experience") ?? [];
   const interestFacts = grouped.get("interest") ?? [];
@@ -222,25 +242,28 @@ function buildBioSection(grouped: FactsByCategory, language: string): Section | 
     }
   }
 
+  // Template-based bio (localized)
+  const l = getL10n(language);
+  const parts: string[] = [];
+  
+  // Try first-person if name is already in Hero
+  if (role && company) {
+    parts.push(l.bioRoleAtFirstPerson(lowerRole(role, language), company));
+  } else if (role) {
+    parts.push(l.bioRoleFirstPerson(lowerRole(role, language)));
+  } else if (name) {
+    // If no role, only use name if we really have to
+    parts.push(`${name}.`);
+  }
+
+  // Only list interests if they aren't in a separate section, or only 3 if they are
+  const maxInterests = hasInterestsSection ? 3 : 5;
   const interests = interestFacts
     .map((f) => {
       const v = val(f);
       return str(v.name) ?? str(v.value) ?? f.key;
     })
-    .slice(0, 5);
-
-  // Template-based bio (localized)
-  const l = getL10n(language);
-  const parts: string[] = [];
-  if (name) {
-    if (role && company) {
-      parts.push(l.bioRoleAt(name, lowerRole(role, language), company));
-    } else if (role) {
-      parts.push(l.bioRole(name, lowerRole(role, language)));
-    } else {
-      parts.push(`${name}.`);
-    }
-  }
+    .slice(0, maxInterests);
 
   if (interests.length > 0) {
     parts.push(l.passionateAbout(interests.join(", ")));
@@ -263,7 +286,7 @@ function buildSkillsSection(skillFacts: FactRow[], language: string): Section | 
 
   const skills = skillFacts.map((f) => {
     const v = val(f);
-    return str(v.name) ?? str(v.value) ?? f.key;
+    return str(v.name) ?? str(v.value) ?? beautifyKey(f.key);
   });
 
   const content: SkillsContent = {
@@ -284,7 +307,7 @@ function buildProjectsSection(projectFacts: FactRow[]): Section | null {
   const items: ProjectItem[] = projectFacts.map((f) => {
     const v = val(f);
     const item: ProjectItem = {
-      title: (str(v.title) ?? str(v.name) ?? f.key)!,
+      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
     };
     const desc = str(v.description);
     if (desc) item.description = desc;
@@ -312,7 +335,7 @@ function buildInterestsSection(interestFacts: FactRow[], language: string): Sect
   const items = interestFacts.map((f) => {
     const v = val(f);
     const item: { name: string; detail?: string } = {
-      name: (str(v.name) ?? str(v.value) ?? f.key)!,
+      name: (str(v.name) ?? str(v.value) ?? beautifyKey(f.key))!,
     };
     const detail = str(v.detail);
     if (detail) item.detail = detail;
@@ -359,6 +382,30 @@ function buildFooterSection(): Section {
   };
 }
 
+function buildTimelineSection(experienceFacts: FactRow[], language: string): Section | null {
+  if (experienceFacts.length === 0) return null;
+
+  const items = experienceFacts.map((f) => {
+    const v = val(f);
+    return {
+      title: (str(v.role) ?? str(v.title) ?? f.key)!,
+      subtitle: str(v.company) ?? str(v.organization),
+      date: str(v.period) ?? str(v.date),
+      description: str(v.description),
+    };
+  });
+
+  return {
+    id: "timeline-1",
+    type: "timeline",
+    variant: "list",
+    content: {
+      title: getL10n(language).experienceLabel,
+      items,
+    } as Record<string, unknown>,
+  };
+}
+
 export function composeOptimisticPage(facts: FactRow[], username: string, language: string = "en"): PageConfig {
   const grouped = groupByCategory(facts);
 
@@ -369,27 +416,36 @@ export function composeOptimisticPage(facts: FactRow[], username: string, langua
   const hero = buildHeroSection(identityFacts, language);
   if (hero) sections.push(hero);
 
+  // Check what sections we might have to avoid redundancy
+  const interestFacts = grouped.get("interest") ?? [];
+  const hasInterestsSection = interestFacts.length > 0;
+
   // 2. Bio
-  const bio = buildBioSection(grouped, language);
+  const bio = buildBioSection(grouped, language, hasInterestsSection);
   if (bio) sections.push(bio);
 
-  // 3. Skills
+  // 3. Experience / Timeline
+  const experienceFacts = grouped.get("experience") ?? [];
+  const timeline = buildTimelineSection(experienceFacts, language);
+  if (timeline) sections.push(timeline);
+
+  // 4. Skills
   const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
   if (skills) sections.push(skills);
 
-  // 4. Projects
+  // 5. Projects
   const projects = buildProjectsSection(grouped.get("project") ?? []);
   if (projects) sections.push(projects);
 
-  // 5. Interests
-  const interests = buildInterestsSection(grouped.get("interest") ?? [], language);
+  // 6. Interests
+  const interests = buildInterestsSection(interestFacts, language);
   if (interests) sections.push(interests);
 
-  // 6. Social
+  // 7. Social
   const social = buildSocialSection(grouped.get("social") ?? []);
   if (social) sections.push(social);
 
-  // 7. Footer — always appended
+  // 8. Footer — always appended
   sections.push(buildFooterSection());
 
   const config: PageConfig = {
