@@ -140,21 +140,29 @@ Coolify sets some defaults for Laravel/PHP apps. Remove them:
 
 In the left sidebar, click **"Environment Variables"**.
 
-Add these two (click "New Environment Variable" for each):
+Add these variables (click "New Environment Variable" for each):
 
-**Variable 1:**
+**Variable 1 — Choose your AI provider:**
 - **Name**: `AI_PROVIDER`
-- **Value**: `anthropic`
+- **Value**: `anthropic` or `openai` or `google` or `ollama`
 - **Available at Runtime**: must be checked
 - Click **Save**
 
-**Variable 2:**
-- **Name**: `ANTHROPIC_API_KEY`
-- **Value**: your Anthropic API key (starts with `sk-ant-...`)
-  - To find it on your local machine: `cat /home/tommaso/dev/repos/openself/.env | grep ANTHROPIC`
-  - Copy only the part after the `=` sign
+**Variable 2 — API key for your chosen provider:**
+
+| Provider | Variable Name | Value |
+|---|---|---|
+| Anthropic | `ANTHROPIC_API_KEY` | `sk-ant-...` ([console.anthropic.com](https://console.anthropic.com)) |
+| OpenAI | `OPENAI_API_KEY` | `sk-proj-...` ([platform.openai.com/api-keys](https://platform.openai.com/api-keys)) |
+| Google | `GOOGLE_API_KEY` | `AI...` ([aistudio.google.dev](https://aistudio.google.dev)) |
+| Ollama | `OLLAMA_BASE_URL` | `http://localhost:11434` (no API key needed) |
+
 - **Available at Runtime**: must be checked
 - Click **Save**
+
+> **Tip:** You can add API keys for multiple providers at the same time. Only the one
+> matching `AI_PROVIDER` will be used. To switch providers, just change `AI_PROVIDER`
+> and redeploy — no need to remove the other keys.
 
 **Multi-user access control (recommended for hosted deployments):**
 
@@ -175,14 +183,46 @@ Optional cost guardrails (recommended):
 
 ### 3.4 Add persistent storage (SQLite volume)
 
-In the left sidebar, click **"Persistent Storage"**.
+**⚠ CRITICAL: Without this step, the database is destroyed on every redeploy.**
 
-Add a new volume:
-- **Source Path**: `/data/openself/db`
-- **Destination Path**: `/app/db`
+The SQLite file lives inside the container at `/app/db/`. By default, Docker containers
+are ephemeral — when Coolify rebuilds and replaces the container, everything inside it
+is lost. A persistent volume mounts a folder from the server's real disk into the
+container, so the database survives across deploys.
 
-This maps a folder on the server's real disk to the container's database folder.
-Without this, the database would be wiped every time you redeploy.
+**Step 1 — Create the host directory with correct permissions:**
+
+SSH into the server and run:
+
+```bash
+ssh root@89.167.111.236
+mkdir -p /data/openself/db
+chown -R 1001:1001 /data/openself/db
+```
+
+The `1001:1001` owner matches the `nextjs` user inside the container (defined in the
+Dockerfile). Without this, the container cannot write to the mounted folder.
+
+**Step 2 — Add the volume in Coolify:**
+
+1. In the left sidebar, click **"Persistent Storage"**
+2. Click **"+ Add"** to open the "Add Volume Mount" dialog
+3. Fill in:
+   - **Name**: `openself-db`
+   - **Source Path**: `/data/openself/db`
+   - **Destination Path**: `/app/db`
+4. Click **"Add"**
+
+**Step 3 — Verify after first deploy:**
+
+After deploying, confirm the database file exists on the host:
+
+```bash
+ssh root@89.167.111.236 "ls -la /data/openself/db/"
+```
+
+You should see `openself.db` (or similar `.sqlite` file). If the directory is empty,
+the volume mount is not working — check Coolify's Persistent Storage tab.
 
 ### 3.5 First deploy
 
@@ -352,6 +392,8 @@ scp root@89.167.111.236:/data/openself/db/openself.db ./openself-backup.db
 | Domain DNS | [Porkbun DNS](https://porkbun.com/account/domainsSpeedy) |
 | GitHub repo | https://github.com/tommy29tmar/openself |
 | Anthropic API keys | https://console.anthropic.com |
+| OpenAI API keys | https://platform.openai.com/api-keys |
+| Google AI Studio | https://aistudio.google.dev |
 
 ---
 
@@ -375,7 +417,7 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
     ├── SQLite database at /app/db/openself.db
     │   └── Volume-mounted to /data/openself/db/ on host (persists across deploys)
     ├── Migrations auto-run on startup from /app/db/migrations/
-    └── Anthropic API key loaded from environment variables
+    └── LLM API key loaded from environment variables (supports Anthropic, OpenAI, Google, Ollama)
 ```
 
 ### Docker build stages (what happens during deploy)
@@ -391,13 +433,14 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 | Problem | Solution |
 |---|---|
 | Build fails on better-sqlite3 | The Dockerfile already handles this (`apk add python3 make g++`). If it still fails, check Docker build logs in Coolify. |
-| Database empty after deploy | Check Persistent Storage in Coolify: Source `/data/openself/db` → Destination `/app/db`. If missing, data resets on each deploy. |
+| Database empty after deploy | **Most common cause**: Persistent Storage not configured in Coolify. Go to Coolify → Persistent Storage → verify the volume `openself-db` exists (Source `/data/openself/db` → Destination `/app/db`). Also check that the host directory exists and has correct permissions: `ssh root@89.167.111.236 "ls -la /data/openself/db/"` — it should be owned by `1001:1001`. If the directory doesn't exist, create it: `mkdir -p /data/openself/db && chown -R 1001:1001 /data/openself/db`. |
 | SSL "connection not private" error | Wait 5-30 minutes for DNS propagation and SSL generation. If it persists, redeploy in Coolify. Check DNS with `dig openself.dev`. |
 | Container keeps restarting | Go to Coolify → Logs tab. Look for errors. Common cause: missing environment variables (AI_PROVIDER, ANTHROPIC_API_KEY). |
 | Coolify panel unreachable | SSH into server (`ssh root@89.167.111.236`), run `docker ps` to check if Coolify containers are running. Restart with `docker restart coolify`. |
 | "Cannot find module" during build | Clear the build cache in Coolify (Danger Zone → Clean Build Cache) and redeploy. |
 | Forgot Coolify admin password | SSH into server, check `/data/coolify/source/.env` for reset options. |
-| Need to change API key | Coolify → Environment Variables → edit ANTHROPIC_API_KEY → Save → Redeploy. |
+| Need to change API key | Coolify → Environment Variables → edit the relevant key (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) → Save → Redeploy. |
+| Need to switch AI provider | Coolify → Environment Variables → change `AI_PROVIDER` to the new provider (e.g., `openai`), add the corresponding API key if not already present → Save → Redeploy. |
 
 ---
 
@@ -423,5 +466,5 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 | Coolify | €0 | Open-source, self-hosted |
 | Let's Encrypt SSL | €0 | Auto-renewed by Coolify |
 | Porkbun domain | ~€12/year | openself.dev renewal |
-| Anthropic API | Pay-per-use | ~$0.25/1M input tokens (Haiku) |
+| LLM API | Pay-per-use | Depends on provider: Anthropic Haiku ~$0.25/1M input, OpenAI GPT-4o ~$2.50/1M input |
 | **Total fixed** | **~€4.65/month** | Server + domain |
