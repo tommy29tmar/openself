@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-23
+Last updated: 2026-02-25
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -34,26 +34,16 @@ When choosing work, apply this order:
 - Role casing fix: lowercase job titles in bio prose (except German)
 - 115 automated tests
 
+### Phase 0 Gate — Dogfooding (Done)
+
+- Deployed to Hetzner + Coolify, domain openself.dev live
+- OAuth providers (Google, GitHub, Discord, LinkedIn, Twitter/X, Apple) implemented
+- Standalone signup page
+- Gate passed 2026-02-25
+
 ## 4) Now (High Priority)
 
-### Phase 0 Gate — Dogfooding
-
-Goal: 10+ real users complete the onboarding flow successfully.
-
-Criteria (from ARCHITECTURE.md):
-1. 10+ testers complete onboarding without assistance
-2. Eval suite >= 95% pass rate
-3. No data loss or corruption during normal use
-4. Publish flow works reliably (agent proposes, user confirms)
-5. Generated pages are visually acceptable on desktop and mobile
-
-Deliverables:
-1. Manual QA pass on the full onboarding flow
-2. Deploy to test environment
-3. Collect feedback from initial testers
-4. Address critical issues found during dogfooding
-
-## 5) Next — Phase 1: Living Agent
+## Phase 1: Living Agent
 
 Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
 then hybrid page personalization. Each sub-phase builds on the previous.

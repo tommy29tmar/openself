@@ -224,6 +224,28 @@ After onboarding, approvals are per change category (unless you enable auto-appr
 **Data flows one way**: information enters through the chat or connectors, gets stored in
 the knowledge base as facts, and flows out through the page engine as a public page.
 
+### 3.1 Chat/Preview State and Persistence Contract
+
+The onboarding builder chat has two state layers:
+
+1. **Ephemeral UI state** (`useChat` in React)
+2. **Durable history** (`messages` table, exposed via `GET /api/messages`)
+
+To avoid chat resets and keep behavior consistent across devices:
+
+- On mobile, switching tabs (`Chat ↔ Preview`) must **not** unmount `ChatPanel`.
+- Mobile tab panes use Radix `TabsContent` with `forceMount`, and inactive panes are
+  hidden with `data-[state=inactive]:hidden` (not removed from the tree).
+- On component mount (including full page refresh), `ChatPanel` hydrates history from
+  `GET /api/messages` before initializing `useChat`.
+- The localized welcome message is a fallback for empty history, and must not be
+  duplicated if the same assistant message already exists in stored history.
+- In multi-user mode, a `401` on history fetch redirects to `/invite`.
+
+This contract guarantees:
+- no reset on mobile tab switch (same mounted component instance)
+- no reset after browser refresh (history restored from DB)
+
 ---
 
 ## 4. The Agent
@@ -2161,6 +2183,8 @@ OpenSelf ships as one codebase with environment-driven runtime profiles:
 - The `facts`, `page`, and `agent_config` tables include a `session_id` column with `NOT NULL DEFAULT '__default__'`.
 - NULL values are never used — the sentinel `'__default__'` preserves UNIQUE constraint behavior in SQLite.
 - Edge middleware only checks cookie presence; DB validation happens in API route handlers (Edge runtime cannot use SQLite).
+- Chat UI state is memory-local but is rehydrated from `GET /api/messages` on mount; on
+  mobile, chat tab content is force-mounted so tab switches preserve in-memory state.
 
 ---
 

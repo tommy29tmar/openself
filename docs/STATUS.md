@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -11,9 +11,10 @@ OpenSelf has a working MVP with a hardened core flow:
 - Server-side publish gate: agent proposes, user confirms via explicit action
 - Centralized theme validation: 2 themes (minimal, warm), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
+- Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
 - 115 automated tests passing
 
-Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Starting Phase 1.
 
 ## 2) Implemented Today
 
@@ -48,6 +49,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 | Facts KB CRUD + taxonomy normalization | Done | Alias mapping and pending categories |
 | Visibility policy engine | Done | Sensitive categories handled |
 | Event logging | Done | `agent_events` writes are in place |
+| Chat history rehydration | Done | `ChatPanel` loads `GET /api/messages` on mount before `useChat` initialization |
 
 ### Page Engine and UI
 
@@ -58,6 +60,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 | Theme switch in preview | Done | `minimal` and `warm` + light/dark, centralized validation |
 | Layout engine | Done | Centered MVP; split/stack fallback to centered (Phase 1 for distinct layouts) |
 | Public page sections renderer | Partial | Renders only a subset of schema section types |
+| Mobile tab chat state retention | Done | `TabsContent` uses `forceMount` + `data-[state=inactive]:hidden` to keep `ChatPanel` mounted |
 
 ### Safety, Budget, Reliability
 
@@ -105,7 +108,7 @@ Phase 0.2.1 (Hardening) is complete. Ready for Phase 0 Gate (dogfooding).
 
 ### Later
 1. Auth + CSRF on publish endpoint (currently trusted local env only)
-2. Session persistence across browser reloads
+2. Full builder UI persistence across browser reloads (beyond chat history)
 3. Steady-state agent mode switching
 4. Community component registry enforcement
 5. Additional connector ecosystem

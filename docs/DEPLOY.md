@@ -275,6 +275,21 @@ http://cokksgw48goscs8okgk48okw.89.167.111.236.sslip.io
 
 Open it in the browser. You should see the OpenSelf homepage with "Create your page" button.
 
+### 3.7 Post-deploy chat persistence smoke test
+
+Run this quick regression test after each deploy (especially frontend changes):
+
+1. Open `/builder` on a mobile viewport (real phone or browser device emulation)
+2. Send 1-2 messages in chat
+3. Switch tab `Chat → Preview → Chat`
+4. Confirm previous messages are still visible (no reset to only welcome message)
+5. Refresh the page
+6. Confirm chat history is restored from DB (via `GET /api/messages`)
+
+Expected result:
+- tab switches do not clear chat
+- refresh restores prior messages
+
 ---
 
 ## 4. Custom Domain (Porkbun → openself.dev)
@@ -465,6 +480,8 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 |---|---|
 | Build fails on better-sqlite3 | The Dockerfile already handles this (`apk add python3 make g++`). If it still fails, check Docker build logs in Coolify. |
 | Database empty after deploy | **Most common cause**: Persistent Storage not configured in Coolify. Go to Coolify → Persistent Storage → verify the volume `openself-db` exists (Source `/data/openself/db` → Destination `/app/db`). Also check that the host directory exists and has correct permissions: `ssh root@89.167.111.236 "ls -la /data/openself/db/"` — it should be owned by `1001:1001`. If the directory doesn't exist, create it: `mkdir -p /data/openself/db && chown -R 1001:1001 /data/openself/db`. |
+| Chat resets when switching `Chat ↔ Preview` on mobile | Usually a stale frontend build running without the tab persistence fix (`forceMount` + `data-[state=inactive]:hidden` on mobile `TabsContent`). Redeploy the latest commit and hard refresh browser cache. |
+| Chat resets after browser refresh | Check browser Network tab: `GET /api/messages` must return `200` and a `messages` array. If it returns `401`, session/auth is invalid (re-enter invite/login). If it returns `200` but empty unexpectedly, verify SQLite persistence (`/app/db` volume mount) and query stored `messages` in DB. |
 | SSL "connection not private" error | Wait 5-30 minutes for DNS propagation and SSL generation. If it persists, redeploy in Coolify. Check DNS with `dig openself.dev`. |
 | Container keeps restarting | Go to Coolify → Logs tab. Look for errors. Common cause: missing environment variables (AI_PROVIDER, ANTHROPIC_API_KEY). |
 | Coolify panel unreachable | SSH into server (`ssh root@89.167.111.236`), run `docker ps` to check if Coolify containers are running. Restart with `docker restart coolify`. |
