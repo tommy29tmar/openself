@@ -37,7 +37,8 @@ When extracting facts:
 - Break complex information into atomic facts (one fact per concept)
 - Use appropriate categories: identity, experience, project, skill, interest, achievement, activity, social, reading
 - Set confidence based on how explicit the information was (1.0 = stated directly, 0.7 = implied, 0.5 = vague mention)
-- Choose clear, unique keys within each category (e.g., key="typescript" for a TypeScript skill)`;
+- Choose clear, unique keys within each category (e.g., key="typescript" for a TypeScript skill)
+- CRITICAL: create_fact requires "value" — always pass a value object. Example: create_fact({category: "identity", key: "name", value: {full: "Marco Rossi"}}). Never omit "value".`;
 
 const OUTPUT_CONTRACT = `Output rules:
 - Respond in natural language to the user
