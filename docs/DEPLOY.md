@@ -290,7 +290,20 @@ Every time you push code to GitHub (`git push origin main`), you need to deploy:
 2. Click **"Deploy"** or **"Redeploy"**
 3. Coolify pulls the latest code from GitHub and rebuilds
 
-**Option B — Auto-deploy via webhook:**
+**Option B — API deploy (current setup):**
+
+Requires a Coolify API token with `deploy` permission (stored in `.env`).
+
+```bash
+curl -s \
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+  -H "Accept: application/json" \
+  "$COOLIFY_BASE_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false"
+```
+
+The `.env` file contains the three variables: `COOLIFY_API_TOKEN`, `COOLIFY_APP_UUID`, `COOLIFY_BASE_URL`.
+
+**Option C — Auto-deploy via GitHub webhook:**
 1. In Coolify, go to your app → **Webhooks** (left sidebar)
 2. Copy the webhook URL
 3. In GitHub, go to your repo → Settings → Webhooks → Add webhook
