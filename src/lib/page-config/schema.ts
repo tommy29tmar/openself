@@ -297,7 +297,7 @@ function validateSection(
   }
 }
 
-export const AVAILABLE_THEMES = ["minimal", "warm"] as const;
+export const AVAILABLE_THEMES = ["minimal", "warm", "editorial-360"] as const;
 export type AvailableTheme = (typeof AVAILABLE_THEMES)[number];
 
 export function validatePageConfig(
