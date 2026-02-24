@@ -82,6 +82,18 @@ What OpenSelf is **not**:
 
 The model is: **personal assistant**, not social platform.
 
+### Market Positioning
+
+The market is moving toward personal AI agents with persistent memory. Generic
+workbots (like OpenClaw) give you an assistant that can do anything but knows
+nothing about you. OpenSelf is the opposite: a vertical agent with a single mission.
+
+> **Generic assistants know what you ask. OpenSelf knows who you are — and
+> communicates it to the world for you.**
+
+This is not a feature difference. It is a category difference. Generic agents
+are tools. OpenSelf is an identity layer.
+
 ---
 
 ## 2. How It Works
@@ -359,6 +371,13 @@ All invisible to the user. They just had a conversation.
 Inspired by OpenClaw's heartbeat system. At configurable intervals, the agent "wakes up"
 and performs autonomous maintenance — without the user being present.
 
+**Mission filter:** Every heartbeat cycle is guided by a single question:
+*"Does this information change how the user should present themselves to the world?"*
+This is the relevance filter. New Strava runs are noise unless the user positions
+themselves as a runner. A new GitHub repo is signal only if it reflects a skill or
+project the user wants to highlight. The heartbeat does not act on everything — it
+acts on what matters for identity.
+
 **What the heartbeat does:**
 
 ```
@@ -375,10 +394,11 @@ Every [interval] (default: daily):
    - Are there facts that seem outdated?
    - Is any information missing that could be inferred?
 
-3. REVIEW PAGE
+3. REVIEW PAGE (apply mission filter)
    - Does the page still reflect the knowledge base accurately?
    - Are there new facts that should be on the page but aren't?
    - Should any sections be regenerated?
+   - Does each change pass the mission filter? (identity-relevant, not just new)
 
 4. DECIDE ACTION
    - If something needs user input → queue a message for next check-in
@@ -442,6 +462,37 @@ Two sub-layers:
 
 Agent memory is stored separately from the KB and used to improve conversation
 quality over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
+
+**Intelligent forgetting (decay + relevance signals):**
+
+Not all facts and memories have equal weight over time. The memory system must
+support natural decay so the agent's understanding stays current:
+
+- **Recency decay**: Facts that haven't been referenced or confirmed in a long
+  time lose relevance. A freelancer who mentioned learning Rust 18 months ago but
+  never brought it up again — that fact should fade, not dominate the page.
+- **Relevance signals**: Some facts resist decay because the user keeps bringing
+  them up, connectors keep confirming them, or they are core to identity (name,
+  role, primary skills). These are "pinned" by evidence, not by a flag.
+- **Stack change detection**: When a user shifts stack or career direction, this is
+  a high-weight signal. The agent should recognize it and cascade updates, not
+  wait for explicit instructions.
+- **No deletion, just archival**: Decayed facts are archived (`visibility='archived'`),
+  not deleted. They remain in the KB for history and can be reactivated if the
+  user brings them up again.
+
+Implementation: each fact carries `updated_at` and an implicit relevance score
+derived from (recency × reference_count × source_weight). The heartbeat uses this
+score to decide what to review and what to let fade. See ADR-012 for why this is
+built in-house.
+
+**Unified memory across contexts:**
+
+The user may interact with OpenSelf via chat, but also through connectors (GitHub,
+RSS, future integrations). All information — regardless of source — converges into
+the same KB and memory layers. The agent does not have separate "chat knowledge"
+and "connector knowledge". A GitHub contribution and a chat message both produce
+facts in the same store, with `source` tracking origin for audit.
 
 ### 4.5.1 Fact Visibility Lifecycle
 
@@ -710,6 +761,13 @@ without loading everything into context.
 This allows queries like:
 - "What does the user know about programming?" → finds all tech skills, projects, experience
 - "What are the user's hobbies?" → finds interests, sports, music, reading
+
+**Foundation for Discovery Scout:** The same semantic search infrastructure powers
+the Discovery Scout (Section 4.6.1). When matching user profile against external
+opportunities, the scout builds embedding-based queries from the KB to find
+semantically relevant results — not keyword matches. This is why the search layer
+must understand *meaning*, not just text. Design the embedding pipeline with this
+dual use in mind from the start.
 
 ### 5.6 Taxonomy Normalization (Execution)
 
@@ -2929,6 +2987,86 @@ draft, facts, and preferences. LLM cost exposure required message limits per ses
 **Trade-off:**
 - Schema is slightly more complex (session_id on 3 tables, sessions table).
 - Invite codes are static (env var), not managed via UI.
+
+### ADR-012: In-House Memory over External APIs
+
+**Decision:** Build the entire memory system (knowledge graph, semantic search,
+decay, summarization) in-house using SQLite + sqlite-vec + LLM calls. Do not
+use external memory APIs (Supermemory, Mem0, Zep, etc.).
+
+**Context:** Several open-source and SaaS memory solutions exist that could
+accelerate development of the agent memory layers (Section 4.5). Supermemory
+offers graph memory with semantic search via API or MCP. Mem0 and Zep offer
+similar capabilities. The question is build vs. buy.
+
+**Rationale:**
+
+- **Cost containment is a hard constraint.** OpenSelf already carries LLM API
+  costs, server hosting, and domain fees. Adding another paid API for memory
+  would increase per-user operating costs with no clear ceiling. The LLM is the
+  single most expensive component — everything else should be as close to zero
+  marginal cost as possible.
+- **Local-first principle.** Memory is identity data — the most sensitive data in
+  the system. Routing it through external APIs contradicts the privacy-first,
+  user-owned-data guarantee. Self-hosted users would lose the "your data never
+  leaves your machine" promise.
+- **SQLite already provides the building blocks.** FTS5 for keyword search,
+  sqlite-vec for vector similarity, and the existing KB schema for structured
+  facts. The gap is not infrastructure — it is the orchestration layer (decay
+  scoring, relevance signals, summarization triggers).
+- **Build time is compressed.** With Claude Opus 4.6 as development accelerator,
+  the time cost of building in-house is dramatically lower than traditional
+  estimates. The orchestration layer is ~500-800 lines of TypeScript, not a
+  multi-month project.
+- **No vendor lock-in.** External memory APIs can change pricing, rate limits,
+  or shut down. An in-house solution on SQLite is portable and permanent.
+
+**Architecture reference (from Supermemory, kept as design pattern):**
+
+The following patterns from graph memory systems are valuable and should be
+implemented in-house:
+- Graph structure: facts as nodes, relationships as edges (via `fact_relations` table)
+- Decay scoring: `relevance = recency × reference_count × source_weight`
+- Semantic search: sqlite-vec embeddings with hybrid text+vector scoring
+- Intelligent forgetting: archive low-relevance facts, don't delete
+
+**What we do NOT need from external APIs:**
+- Cloud-hosted vector stores (sqlite-vec is sufficient for single-user scale)
+- Cross-user knowledge graphs (OpenSelf is single-identity, not multi-tenant search)
+- API-based embedding generation (can use local models via Ollama or batch via LLM provider)
+
+**Trade-off:** More upfront development work. Mitigated by compressed build
+cycles and the fact that memory is a core differentiator — not something to
+outsource.
+
+### ADR-013: Multi-Model Routing for Cost Optimization
+
+**Decision:** Use cheap models for routine operations and capable models for
+strategic decisions. Route dynamically based on task complexity.
+
+**Context:** LLM cost is the primary operating expense (see ADR-009). Not all
+agent operations require the same model capability.
+
+**Routing policy:**
+
+| Operation | Model tier | Examples |
+|---|---|---|
+| Fact extraction from chat | Cheap (Haiku, GPT-4o-mini) | Parsing user messages for new facts |
+| Page section regeneration | Cheap | Recomposing a section from updated facts |
+| Translation | Cheap | Translating page content to target language |
+| Heartbeat KB review | Cheap | Checking for contradictions, staleness |
+| Conversation summarization | Medium (Sonnet, GPT-4o) | Compressing multi-session history |
+| Page voice personalization | Medium | Rewriting sections with personality/voice |
+| Identity coaching / gap analysis | Capable (Opus, GPT-4) | Strategic suggestions, career navigation |
+| Discovery Scout scoring | Medium | Matching opportunities to profile |
+
+**Implementation:** The `getModel()` provider function accepts a `tier` parameter
+(`"cheap" | "medium" | "capable"`) and routes to the appropriate model based on
+`AI_PROVIDER`. Tier mapping is configurable per provider in environment variables.
+
+**Trade-off:** More complex provider layer. But the cost savings compound: a
+system that runs 80% of operations on a cheap model costs 5-10x less than one
+that uses a capable model for everything.
 
 ---
 
