@@ -102,7 +102,7 @@ describe("Tool level — generate_page", () => {
 describe("Tool level — request_publish", () => {
   it("calls requestPublish from service", async () => {
     const mockConfig = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "alice", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "alice", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(requestPublish).mockImplementation(() => {});
 
     const result = await agentTools.request_publish.execute(
@@ -116,7 +116,7 @@ describe("Tool level — request_publish", () => {
 
   it("does NOT call confirmPublish", async () => {
     const mockConfig = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "alice", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "alice", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(requestPublish).mockImplementation(() => {});
 
     await agentTools.request_publish.execute(
@@ -129,7 +129,7 @@ describe("Tool level — request_publish", () => {
 
   it("does NOT recompose from facts (preserves manual changes)", async () => {
     const customConfig = makeValidConfig({ theme: "warm" });
-    vi.mocked(getDraft).mockReturnValue({ config: customConfig, username: "alice", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config: customConfig, username: "alice", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(requestPublish).mockImplementation(() => {});
 
     await agentTools.request_publish.execute(
@@ -159,7 +159,7 @@ describe("Tool level — request_publish", () => {
 describe("Tool level — set_theme", () => {
   it("calls upsertDraft with draft status", async () => {
     const mockConfig = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(upsertDraft).mockImplementation(() => {});
 
     await agentTools.set_theme.execute(
@@ -201,7 +201,7 @@ describe("Service level — getPublishedPage", () => {
 describe("Service level — getDraft", () => {
   it("returns draft row", () => {
     const config = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config, username: "testuser", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config, username: "testuser", status: "draft", configHash: null, updatedAt: null });
     const draft = getDraft();
     expect(draft).toBeDefined();
     expect(draft!.config).toEqual(config);

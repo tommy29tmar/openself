@@ -26,6 +26,8 @@ testSqlite.exec(`
     username TEXT,
     message_count INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
+    user_id TEXT,
+    profile_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -36,8 +38,10 @@ testSqlite.exec(`
   CREATE TABLE page (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
+    profile_id TEXT,
     username TEXT NOT NULL,
     config JSON NOT NULL,
+    config_hash TEXT,
     status TEXT NOT NULL DEFAULT 'draft'
       CHECK (status IN ('draft', 'approval_pending', 'published')),
     generated_at DATETIME,
@@ -250,7 +254,7 @@ describe("font constants", () => {
 // -- Route handler tests (mock page-service, test real handler) --
 
 // Storage for the mock — shared between mock and tests
-let mockDraft: { config: PageConfig; username: string; status: string } | null = null;
+let mockDraft: { config: PageConfig; username: string; status: string; configHash: string | null; updatedAt: string | null } | null = null;
 let lastUpserted: { username: string; config: PageConfig; sessionId: string } | null = null;
 
 vi.mock("@/lib/services/page-service", () => ({
@@ -258,7 +262,7 @@ vi.mock("@/lib/services/page-service", () => ({
   upsertDraft: (username: string, config: PageConfig, sessionId?: string) => {
     lastUpserted = { username, config, sessionId: sessionId ?? "__default__" };
     // Also update mockDraft so subsequent reads see the change
-    mockDraft = { config, username, status: "draft" };
+    mockDraft = { config, username, status: "draft", configHash: null, updatedAt: null };
   },
   getPublishedPage: () => null,
   hasAnyPage: () => mockDraft !== null,
@@ -303,7 +307,7 @@ describe("POST /api/draft/style (route handler)", () => {
   });
 
   it("merges theme and returns 200", async () => {
-    mockDraft = { config: makeConfig(), username: "alice", status: "draft" };
+    mockDraft = { config: makeConfig(), username: "alice", status: "draft", configHash: null, updatedAt: null };
     const res = await POST(makeRequest({ theme: "warm" }));
     expect(res.status).toBe(200);
     const data = await res.json();
@@ -312,7 +316,7 @@ describe("POST /api/draft/style (route handler)", () => {
   });
 
   it("merges style fields and preserves the rest", async () => {
-    mockDraft = { config: makeConfig(), username: "alice", status: "draft" };
+    mockDraft = { config: makeConfig(), username: "alice", status: "draft", configHash: null, updatedAt: null };
     const res = await POST(
       makeRequest({ style: { colorScheme: "dark", fontFamily: "mono" } }),
     );
@@ -326,7 +330,7 @@ describe("POST /api/draft/style (route handler)", () => {
   });
 
   it("ignores invalid values without error", async () => {
-    mockDraft = { config: makeConfig(), username: "alice", status: "draft" };
+    mockDraft = { config: makeConfig(), username: "alice", status: "draft", configHash: null, updatedAt: null };
     const res = await POST(
       makeRequest({ theme: "neon", style: { fontFamily: "comic" } }),
     );
@@ -337,7 +341,7 @@ describe("POST /api/draft/style (route handler)", () => {
   });
 
   it("preserves username from draft", async () => {
-    mockDraft = { config: makeConfig(), username: "bob", status: "draft" };
+    mockDraft = { config: makeConfig(), username: "bob", status: "draft", configHash: null, updatedAt: null };
     await POST(makeRequest({ theme: "warm" }));
     expect(lastUpserted!.username).toBe("bob");
   });

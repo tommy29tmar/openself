@@ -29,6 +29,7 @@ export async function GET(req: Request) {
       status: "optimistic_ready",
       publishStatus: draft.status, // "draft" | "approval_pending"
       config: draft.config,
+      configHash: draft.configHash,
     });
   }
 

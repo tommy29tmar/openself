@@ -10,6 +10,42 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
+// -- Users (auth identity)
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  emailVerified: integer("email_verified").notNull().default(0),
+  passwordHash: text("password_hash").notNull(),
+  displayName: text("display_name"),
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+// -- Auth Identities (OAuth providers)
+export const authIdentities = sqliteTable(
+  "auth_identities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    provider: text("provider").notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    providerEmail: text("provider_email"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("uniq_auth_identity").on(table.provider, table.providerUserId),
+  ],
+);
+
+// -- Profiles (data anchor: owns facts, pages, messages, agent_config)
+export const profiles = sqliteTable("profiles", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id),
+  username: text("username"),
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
 // -- Sessions
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
@@ -17,6 +53,8 @@ export const sessions = sqliteTable("sessions", {
   username: text("username"),
   messageCount: integer("message_count").notNull().default(0),
   status: text("status").notNull().default("active"),
+  userId: text("user_id").references(() => users.id),
+  profileId: text("profile_id").references(() => profiles.id),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
@@ -27,6 +65,7 @@ export const facts = sqliteTable(
   {
     id: text("id").primaryKey(),
     sessionId: text("session_id").notNull().default("__default__"),
+    profileId: text("profile_id"),
     category: text("category").notNull(),
     key: text("key").notNull(),
     value: text("value", { mode: "json" }).notNull(),
@@ -60,6 +99,7 @@ export const categoryAliases = sqliteTable("category_aliases", {
 export const messages = sqliteTable("messages", {
   id: text("id").primaryKey(),
   sessionId: text("session_id").notNull(),
+  profileId: text("profile_id"),
   role: text("role").notNull(),
   content: text("content").notNull(),
   toolCalls: text("tool_calls", { mode: "json" }),
@@ -91,8 +131,10 @@ export const agentEvents = sqliteTable(
 export const page = sqliteTable("page", {
   id: text("id").primaryKey(),
   sessionId: text("session_id").notNull().default("__default__"),
+  profileId: text("profile_id"),
   username: text("username").notNull(),
   config: text("config", { mode: "json" }).notNull(),
+  configHash: text("config_hash"),
   status: text("status").notNull().default("draft"),   // draft | approval_pending | published
   generatedAt: text("generated_at"),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
@@ -103,6 +145,7 @@ export const page = sqliteTable("page", {
 export const agentConfig = sqliteTable("agent_config", {
   id: text("id").primaryKey(),
   sessionId: text("session_id").notNull().default("__default__"),
+  profileId: text("profile_id"),
   config: text("config", { mode: "json" }).notNull(),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });

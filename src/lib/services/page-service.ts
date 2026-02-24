@@ -1,4 +1,5 @@
 import { eq, and, inArray } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { sqlite } from "@/lib/db";
 import { page } from "@/lib/db/schema";
@@ -7,13 +8,28 @@ import {
   validatePageConfig,
 } from "@/lib/page-config/schema";
 
+/** Compute SHA-256 hex digest of a PageConfig JSON. */
+export function computeConfigHash(config: PageConfig): string {
+  return createHash("sha256")
+    .update(JSON.stringify(config))
+    .digest("hex");
+}
+
 const RESERVED_USERNAMES = new Set(["draft", "api", "builder", "admin", "invite", "_next"]);
 
 /**
  * Read the draft row — used by preview and agent tools.
  * Draft id = sessionId (e.g. '__default__' in single-user mode).
  */
-export function getDraft(sessionId: string = "__default__"): { config: PageConfig; username: string; status: string } | null {
+export type DraftResult = {
+  config: PageConfig;
+  username: string;
+  status: string;
+  configHash: string | null;
+  updatedAt: string | null;
+};
+
+export function getDraft(sessionId: string = "__default__"): DraftResult | null {
   const row = db
     .select()
     .from(page)
@@ -31,6 +47,8 @@ export function getDraft(sessionId: string = "__default__"): { config: PageConfi
     config: row.config as PageConfig,
     username: row.username,
     status: row.status,
+    configHash: row.configHash,
+    updatedAt: row.updatedAt ?? null,
   };
 }
 
@@ -66,18 +84,23 @@ export function hasAnyPage(sessionId: string = "__default__"): boolean {
  * Write/update the draft row. Used by generate_page, set_theme, reorder, update_page_config.
  * Draft id = sessionId.
  */
-export function upsertDraft(username: string, config: PageConfig, sessionId: string = "__default__"): void {
+export function upsertDraft(username: string, config: PageConfig, sessionId: string = "__default__", profileId?: string): void {
   const result = validatePageConfig(config);
   if (!result.ok) {
     throw new Error(`Invalid PageConfig: ${result.errors.join("; ")}`);
   }
 
+  const hash = computeConfigHash(config);
+  const effectiveProfileId = profileId ?? sessionId;
+
   db.insert(page)
     .values({
       id: sessionId,
       sessionId,
+      profileId: effectiveProfileId,
       username,
       config,
+      configHash: hash,
       status: "draft",
     })
     .onConflictDoUpdate({
@@ -85,6 +108,8 @@ export function upsertDraft(username: string, config: PageConfig, sessionId: str
       set: {
         username,
         config,
+        configHash: hash,
+        profileId: effectiveProfileId,
         status: "draft",
         updatedAt: new Date().toISOString(),
       },
@@ -140,35 +165,42 @@ export function confirmPublish(username: string, sessionId: string = "__default_
       throw new Error("No page pending approval");
     }
 
-    // Guard 3: ownership — reject if username is already published by another session
+    // Guard 3: ownership — reject if username is already published by another profile/session
+    const profileId = draftRow.profile_id ?? draftRow.session_id;
     const existingPublished = sqlite
-      .prepare("SELECT session_id FROM page WHERE id = ? AND status = 'published'")
-      .get(username) as { session_id: string } | undefined;
+      .prepare("SELECT session_id, profile_id FROM page WHERE id = ? AND status = 'published'")
+      .get(username) as { session_id: string; profile_id: string | null } | undefined;
 
-    if (existingPublished && existingPublished.session_id !== sessionId) {
-      throw new Error("Username already claimed by another user");
+    if (existingPublished) {
+      const existingProfile = existingPublished.profile_id ?? existingPublished.session_id;
+      if (existingProfile !== profileId) {
+        throw new Error("Username already claimed by another user");
+      }
     }
 
     // Step 1: de-publish any previously published page with a different username,
-    // scoped to this session only.
+    // scoped to this profile (fallback: session).
     sqlite
-      .prepare("DELETE FROM page WHERE status = 'published' AND session_id = ? AND username != ?")
-      .run(sessionId, username);
+      .prepare(
+        "DELETE FROM page WHERE status = 'published' AND (profile_id = ? OR session_id = ?) AND username != ?",
+      )
+      .run(profileId, sessionId, username);
 
     // Step 2: upsert published row (id=username, status="published", config from draft)
     const now = new Date().toISOString();
     sqlite
       .prepare(
-        `INSERT INTO page (id, session_id, username, config, status, generated_at, updated_at)
-         VALUES (?, ?, ?, ?, 'published', ?, ?)
+        `INSERT INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            username = excluded.username,
            config = excluded.config,
+           config_hash = excluded.config_hash,
            status = 'published',
            generated_at = excluded.generated_at,
            updated_at = excluded.updated_at`,
       )
-      .run(username, sessionId, username, draftRow.config, draftRow.generated_at, now);
+      .run(username, sessionId, profileId, username, draftRow.config, draftRow.config_hash, draftRow.generated_at, now);
 
     // Step 3: reset draft status back to "draft"
     sqlite

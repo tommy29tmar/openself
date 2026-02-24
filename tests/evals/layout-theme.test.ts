@@ -123,7 +123,7 @@ describe("set_theme tool", () => {
 
   it("accepts 'minimal'", async () => {
     const mockConfig = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(upsertDraft).mockImplementation(() => {});
 
     const result = await agentTools.set_theme.execute(
@@ -136,7 +136,7 @@ describe("set_theme tool", () => {
 
   it("accepts 'warm'", async () => {
     const mockConfig = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft" });
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(upsertDraft).mockImplementation(() => {});
 
     const result = await agentTools.set_theme.execute(

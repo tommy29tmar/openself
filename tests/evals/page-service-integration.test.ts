@@ -26,6 +26,8 @@ testSqlite.exec(`
     username TEXT,
     message_count INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'registered')),
+    user_id TEXT,
+    profile_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -37,8 +39,10 @@ testSqlite.exec(`
   CREATE TABLE page (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL DEFAULT '__default__' REFERENCES sessions(id),
+    profile_id TEXT,
     username TEXT NOT NULL,
     config JSON NOT NULL,
+    config_hash TEXT,
     status TEXT NOT NULL DEFAULT 'draft'
       CHECK (status IN ('draft', 'approval_pending', 'published')),
     generated_at DATETIME,
