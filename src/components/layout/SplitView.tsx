@@ -235,11 +235,62 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     }
   }, [language]);
 
-  // Poll for preview updates
+  // SSE preview with fallback to polling
   useEffect(() => {
-    fetchPreview(); // Initial fetch
-    const interval = setInterval(fetchPreview, POLL_INTERVAL);
-    return () => clearInterval(interval);
+    let es: EventSource | null = null;
+    let errorCount = 0;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    const startSSE = () => {
+      es = new EventSource(`/api/preview/stream`);
+
+      es.onmessage = (event) => {
+        errorCount = 0; // reset on successful message
+        try {
+          const data = JSON.parse(event.data);
+          if (data.config) {
+            setConfig(data.config);
+            const userEditAge = Date.now() - lastUserEdit.current;
+            if (userEditAge > POLL_INTERVAL) {
+              if (data.config.theme) setTheme(data.config.theme);
+              if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
+              if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+            }
+          }
+          if (data.publishStatus) setPublishStatus(data.publishStatus);
+          if (data.config?.username) setPublishUsername(data.config.username);
+        } catch {
+          // Ignore parse errors (e.g., keepalive)
+        }
+      };
+
+      es.onerror = () => {
+        errorCount++;
+        if (errorCount >= 5) {
+          // Fallback to polling
+          es?.close();
+          es = null;
+          startPolling();
+        }
+      };
+    };
+
+    const startPolling = () => {
+      fetchPreview(); // Initial fetch
+      pollInterval = setInterval(fetchPreview, POLL_INTERVAL);
+    };
+
+    // Try SSE first
+    if (typeof EventSource !== "undefined") {
+      startSSE();
+    } else {
+      startPolling();
+    }
+
+    return () => {
+      es?.close();
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [fetchPreview]);
 
   const displayConfig: PageConfig | null = config

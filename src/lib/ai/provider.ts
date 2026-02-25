@@ -6,6 +6,53 @@ import type { LanguageModel } from "ai";
 
 type Provider = "google" | "openai" | "anthropic" | "ollama";
 
+/**
+ * Model tier for cost-aware routing.
+ * - "cheap": fast, low-cost (default for chat, translations)
+ * - "medium": higher quality for summaries, soul proposals
+ */
+export type ModelTier = "cheap" | "medium";
+
+const MEDIUM_MODELS: Record<Provider, string> = {
+  google: "gemini-2.5-flash",
+  openai: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001",
+  ollama: "llama3.3",
+};
+
+export function getModelForTier(tier: ModelTier): LanguageModel {
+  if (tier === "cheap") return getModel();
+
+  const provider = getProvider();
+  const modelId =
+    process.env.AI_MODEL_MEDIUM ?? MEDIUM_MODELS[provider];
+
+  switch (provider) {
+    case "google": {
+      const apiKey =
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY ??
+        process.env.GOOGLE_API_KEY;
+      const google = createGoogleGenerativeAI({ apiKey });
+      return google(modelId);
+    }
+    case "openai":
+      return openai(modelId);
+    case "anthropic":
+      return anthropic(modelId);
+    case "ollama": {
+      const baseURL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
+      const ollama = createOpenAI({ baseURL, apiKey: "ollama" });
+      return ollama(modelId);
+    }
+  }
+}
+
+export function getModelIdForTier(tier: ModelTier): string {
+  if (tier === "cheap") return getModelId();
+  const provider = getProvider();
+  return process.env.AI_MODEL_MEDIUM ?? MEDIUM_MODELS[provider];
+}
+
 const DEFAULT_MODELS: Record<Provider, string> = {
   google: "gemini-2.0-flash",
   openai: "gpt-4o-mini",

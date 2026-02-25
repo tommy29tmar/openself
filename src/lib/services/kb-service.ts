@@ -1,4 +1,4 @@
-import { eq, and, like, or, sql } from "drizzle-orm";
+import { eq, and, like, or, sql, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   facts,
@@ -141,19 +141,37 @@ export async function createFact(
   return row as FactRow;
 }
 
-export function updateFact(input: UpdateFactInput, sessionId: string = "__default__"): FactRow | null {
-  const existing = db
-    .select()
-    .from(facts)
-    .where(and(eq(facts.id, input.factId), eq(facts.sessionId, sessionId)))
-    .get();
+/**
+ * Update a fact. Accepts knowledgePrimaryKey (anchor session) to enable cross-session updates.
+ * The fact lookup is scoped to knowledgeReadKeys (all sessions for the profile).
+ */
+export function updateFact(
+  input: UpdateFactInput,
+  sessionId: string = "__default__",
+  readKeys?: string[],
+): FactRow | null {
+  // If readKeys provided, find the fact across all sessions for this profile
+  let existing;
+  if (readKeys && readKeys.length > 0) {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, input.factId), inArray(facts.sessionId, readKeys)))
+      .get();
+  } else {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, input.factId), eq(facts.sessionId, sessionId)))
+      .get();
+  }
 
   if (!existing) return null;
 
   const now = new Date().toISOString();
   db.update(facts)
     .set({ value: input.value, updatedAt: now })
-    .where(and(eq(facts.id, input.factId), eq(facts.sessionId, sessionId)))
+    .where(eq(facts.id, input.factId))
     .run();
 
   logEvent({
@@ -167,16 +185,32 @@ export function updateFact(input: UpdateFactInput, sessionId: string = "__defaul
   return { ...existing, value: input.value, updatedAt: now } as FactRow;
 }
 
-export function deleteFact(factId: string, sessionId: string = "__default__"): boolean {
-  const existing = db
-    .select()
-    .from(facts)
-    .where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId)))
-    .get();
+/**
+ * Delete a fact. Accepts knowledgeReadKeys to enable cross-session deletes.
+ */
+export function deleteFact(
+  factId: string,
+  sessionId: string = "__default__",
+  readKeys?: string[],
+): boolean {
+  let existing;
+  if (readKeys && readKeys.length > 0) {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, factId), inArray(facts.sessionId, readKeys)))
+      .get();
+  } else {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId)))
+      .get();
+  }
 
   if (!existing) return false;
 
-  db.delete(facts).where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId))).run();
+  db.delete(facts).where(eq(facts.id, factId)).run();
 
   logEvent({
     eventType: "fact_deleted",
@@ -213,9 +247,15 @@ export function searchFacts(query: string, sessionId: string = "__default__"): F
   return rows as FactRow[];
 }
 
-export function getAllFacts(sessionId: string = "__default__"): FactRow[] {
+/**
+ * Get all facts for a session. Supports multi-key read via sessionIds array.
+ */
+export function getAllFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
   if (PROFILE_ID_CANONICAL) {
     return db.select().from(facts).where(eq(facts.profileId, sessionId)).all() as FactRow[];
+  }
+  if (sessionIds && sessionIds.length > 0) {
+    return db.select().from(facts).where(inArray(facts.sessionId, sessionIds)).all() as FactRow[];
   }
   return db.select().from(facts).where(eq(facts.sessionId, sessionId)).all() as FactRow[];
 }
@@ -226,4 +266,17 @@ export function getFactsByCategory(category: string, sessionId: string = "__defa
     .from(facts)
     .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
     .all() as FactRow[];
+}
+
+/**
+ * Count facts across multiple session keys. Used by mode detection.
+ */
+export function countFacts(sessionIds: string[]): number {
+  if (sessionIds.length === 0) return 0;
+  const row = db
+    .select({ count: sql<number>`count(*)` })
+    .from(facts)
+    .where(inArray(facts.sessionId, sessionIds))
+    .get();
+  return row?.count ?? 0;
 }

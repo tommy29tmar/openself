@@ -3,11 +3,27 @@ import {
   isMultiUserEnabled,
   getSession,
 } from "@/lib/services/session-service";
+import { sqlite } from "@/lib/db";
 
 const COOKIE_NAME = "os_session";
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
 export { COOKIE_NAME, COOKIE_MAX_AGE };
+
+/**
+ * OwnerScope: per-request identity envelope for all cognitive + knowledge operations.
+ *
+ * - cognitiveOwnerKey: indexes NEW tables (memory, soul, summaries, heartbeat, trust_ledger)
+ * - knowledgeReadKeys: reads from EXISTING tables (facts, page, messages, agent_config)
+ * - knowledgePrimaryKey: writes to EXISTING tables (facts, page) — stable anchor session
+ * - currentSessionId: current request's session (message writes, quota tracking)
+ */
+export type OwnerScope = {
+  cognitiveOwnerKey: string;
+  knowledgeReadKeys: string[];
+  knowledgePrimaryKey: string;
+  currentSessionId: string;
+};
 
 /**
  * Extract session ID from request.
@@ -67,5 +83,78 @@ export function getAuthContext(req: Request): AuthContext | null {
     profileId: session.profileId ?? sessionId,
     userId: session.userId ?? null,
     username: session.username,
+  };
+}
+
+/**
+ * Get the oldest session linked to a profile (the anchor).
+ * The anchor is the stable key for writes to existing tables (facts, page, agent_config).
+ * Fallback to currentSessionId if no sessions have profileId.
+ */
+function anchorSessionId(profileId: string, currentSessionId: string): string {
+  const row = sqlite
+    .prepare(
+      "SELECT id FROM sessions WHERE profile_id = ? ORDER BY created_at ASC LIMIT 1",
+    )
+    .get(profileId) as { id: string } | undefined;
+  return row?.id ?? currentSessionId;
+}
+
+/**
+ * Get all session IDs linked to a profile.
+ */
+function allSessionIdsForProfile(profileId: string): string[] {
+  const rows = sqlite
+    .prepare("SELECT id FROM sessions WHERE profile_id = ?")
+    .all(profileId) as { id: string }[];
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Resolve the OwnerScope for a request.
+ *
+ * - Authenticated: cognitiveOwnerKey=profileId, knowledgeReadKeys=all sessions for profile ∪ currentSessionId
+ * - Anonymous (multi-user): all keys = sessionId
+ * - Single-user: all keys = "__default__"
+ */
+export function resolveOwnerScope(req: Request): OwnerScope | null {
+  if (!isMultiUserEnabled()) {
+    return {
+      cognitiveOwnerKey: DEFAULT_SESSION_ID,
+      knowledgeReadKeys: [DEFAULT_SESSION_ID],
+      knowledgePrimaryKey: DEFAULT_SESSION_ID,
+      currentSessionId: DEFAULT_SESSION_ID,
+    };
+  }
+
+  const sessionId = getSessionIdFromRequest(req);
+  if (!sessionId) return null;
+
+  const session = getSession(sessionId);
+  if (!session) return null;
+
+  const profileId = session.profileId;
+
+  if (profileId) {
+    // Authenticated: profile-scoped
+    const sessionIds = allSessionIdsForProfile(profileId);
+    const readKeys = new Set(sessionIds);
+    readKeys.add(sessionId); // safety net: always include current
+    const anchor = anchorSessionId(profileId, sessionId);
+
+    return {
+      cognitiveOwnerKey: profileId,
+      knowledgeReadKeys: Array.from(readKeys),
+      knowledgePrimaryKey: anchor,
+      currentSessionId: sessionId,
+    };
+  }
+
+  // Anonymous: session-scoped
+  return {
+    cognitiveOwnerKey: sessionId,
+    knowledgeReadKeys: [sessionId],
+    knowledgePrimaryKey: sessionId,
+    currentSessionId: sessionId,
   };
 }

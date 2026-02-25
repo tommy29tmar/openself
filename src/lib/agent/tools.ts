@@ -13,8 +13,12 @@ import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
+import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
+import { proposeSoulChange, type SoulOverlay } from "@/lib/services/soul-service";
+import { resolveConflict } from "@/lib/services/conflict-service";
 
-export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__") {
+export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string) {
+  const effectiveOwnerKey = ownerKey ?? sessionId;
   return {
   create_fact: tool({
     description:
@@ -366,6 +370,118 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           eventType: "tool_call_error",
           actor: "assistant",
           payload: { tool: "request_publish", error: String(error) },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  propose_soul_change: tool({
+    description:
+      "Propose changes to the user's soul profile (voice, tone, values, communication style). Use when you notice consistent patterns in how the user expresses themselves or what they value. The user must approve soul changes before they take effect.",
+    parameters: z.object({
+      overlay: z
+        .record(z.unknown())
+        .describe(
+          "Soul overlay object with optional fields: voice (string), tone (string), values (string[]), selfDescription (string), communicationStyle (string)",
+        ),
+      reason: z
+        .string()
+        .optional()
+        .describe("Brief explanation of why this change is proposed"),
+    }),
+    execute: async ({ overlay, reason }) => {
+      try {
+        const proposal = proposeSoulChange(
+          effectiveOwnerKey,
+          overlay as SoulOverlay,
+          reason,
+        );
+        return {
+          success: true,
+          proposalId: proposal.id,
+          message: "Soul change proposed. The user will be able to review and approve it.",
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { tool: "propose_soul_change", error: String(error) },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  save_memory: tool({
+    description:
+      "Save a meta-memory about the user or conversation pattern. Use for observations, preferences, insights, or patterns you notice that aren't individual facts but are useful for future interactions. Examples: 'User prefers concise responses', 'User is excited about AI projects', 'User tends to downplay achievements'.",
+    parameters: z.object({
+      content: z
+        .string()
+        .describe("The memory content — a concise observation, preference, or insight"),
+      memoryType: z
+        .enum(["observation", "preference", "insight", "pattern"])
+        .optional()
+        .describe("Type of memory: observation (default), preference, insight, or pattern"),
+      category: z
+        .string()
+        .optional()
+        .describe("Optional category for grouping (e.g., 'communication', 'interests', 'work')"),
+    }),
+    execute: async ({ content, memoryType, category }) => {
+      try {
+        const result = saveMemory(
+          effectiveOwnerKey,
+          content,
+          (memoryType as MemoryType) ?? "observation",
+          category,
+        );
+        if (!result) {
+          return { success: false, error: "Memory not saved (duplicate, quota, or cooldown)" };
+        }
+        return { success: true, memoryId: result.id };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { tool: "save_memory", error: String(error) },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  resolve_conflict: tool({
+    description:
+      "Resolve a fact conflict. Use when you detect contradictory information and can propose a resolution. The user can also resolve conflicts via the UI.",
+    parameters: z.object({
+      conflictId: z.string().describe("The ID of the conflict to resolve"),
+      resolution: z
+        .enum(["keep_a", "keep_b", "merge"])
+        .describe("Resolution: keep_a (keep first fact), keep_b (keep second), merge (combine)"),
+      mergedValue: z
+        .record(z.unknown())
+        .optional()
+        .describe("The merged value object (required when resolution is 'merge')"),
+    }),
+    execute: async ({ conflictId, resolution, mergedValue }) => {
+      try {
+        const result = resolveConflict(
+          conflictId,
+          effectiveOwnerKey,
+          resolution,
+          mergedValue,
+        );
+        if (!result.success) {
+          return { success: false, error: result.error };
+        }
+        return { success: true, conflictId, resolution };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { tool: "resolve_conflict", error: String(error) },
         });
         return { success: false, error: String(error) };
       }

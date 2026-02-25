@@ -32,6 +32,9 @@ const TOOL_POLICY = `Tool usage rules:
 - Use set_theme when the user requests visual changes
 - Use reorder_sections when the user wants to rearrange their page
 - Use request_publish when the user approves their page and chooses a username. This proposes publishing — the user will see a confirmation button
+- Use save_memory for meta-observations about the user (communication style, preferences, behavioral patterns) — not individual facts
+- Use propose_soul_change when you notice consistent patterns in voice/tone/values — the user must approve soul changes
+- Use resolve_conflict when you detect contradictory facts and can propose which to keep or how to merge them
 
 When extracting facts:
 - Break complex information into atomic facts (one fact per concept)

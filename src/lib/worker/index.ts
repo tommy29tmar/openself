@@ -1,28 +1,75 @@
 import { eq, and, lte } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { logEvent } from "@/lib/services/event-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { upsertDraft } from "@/lib/services/page-service";
 import { getAllFacts } from "@/lib/services/kb-service";
+import { generateSummary } from "@/lib/services/summary-service";
+import { handleHeartbeatLight, handleHeartbeatDeep } from "./heartbeat";
+import { expireStaleProposals } from "@/lib/services/soul-service";
 
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MINUTES = [1, 5, 15];
 
 type JobRow = typeof jobs.$inferSelect;
 
-type JobHandler = (payload: Record<string, unknown>) => void;
+type JobHandler = (payload: Record<string, unknown>) => void | Promise<void>;
 
 const handlers: Record<string, JobHandler> = {
   page_synthesis: (payload) => {
     const username = payload.username as string;
     const language = (payload.language as string) ?? "en";
-    const facts = getAllFacts();
+    const sessionId = (payload.sessionId as string) ?? "__default__";
+    const facts = getAllFacts(sessionId);
     const config = composeOptimisticPage(facts, username, language);
-    upsertDraft(username, config);
+    upsertDraft(username, config, sessionId);
+  },
+
+  memory_summary: async (payload) => {
+    const ownerKey = payload.ownerKey as string;
+    const messageKeys = (payload.messageKeys as string[]) ?? [ownerKey];
+    await generateSummary(ownerKey, messageKeys);
+  },
+
+  heartbeat_light: (payload) => {
+    handleHeartbeatLight(payload);
+  },
+
+  heartbeat_deep: (payload) => {
+    handleHeartbeatDeep(payload);
+  },
+
+  expire_proposals: () => {
+    expireStaleProposals(48);
+  },
+
+  soul_proposal: () => {
+    // Placeholder — soul proposals are created via agent tool, not worker
+  },
+
+  connector_sync: () => {
+    // Placeholder — connector sync not yet implemented
+  },
+
+  page_regen: (payload) => {
+    const username = payload.username as string;
+    const language = (payload.language as string) ?? "en";
+    const sessionId = (payload.sessionId as string) ?? "__default__";
+    const facts = getAllFacts(sessionId);
+    const config = composeOptimisticPage(facts, username, language);
+    upsertDraft(username, config, sessionId);
+  },
+
+  taxonomy_review: () => {
+    // Placeholder — taxonomy review not yet implemented
   },
 };
+
+export function getHandlerCount(): number {
+  return Object.keys(handlers).length;
+}
 
 function computeRunAfter(attempts: number): string {
   const delayMinutes = BACKOFF_MINUTES[Math.min(attempts, BACKOFF_MINUTES.length - 1)];
@@ -30,7 +77,7 @@ function computeRunAfter(attempts: number): string {
   return runAfter.toISOString();
 }
 
-function executeJob(job: JobRow): void {
+async function executeJob(job: JobRow): Promise<void> {
   const handler = handlers[job.jobType];
   if (!handler) {
     db.update(jobs)
@@ -55,7 +102,7 @@ function executeJob(job: JobRow): void {
   }
 
   try {
-    handler(job.payload as Record<string, unknown>);
+    await handler(job.payload as Record<string, unknown>);
 
     db.update(jobs)
       .set({
@@ -113,7 +160,19 @@ function executeJob(job: JobRow): void {
   }
 }
 
-export function processJobs(): number {
+/**
+ * Atomic claim: mark job as running only if still queued.
+ */
+function claimJob(jobId: string): boolean {
+  const result = sqlite
+    .prepare(
+      "UPDATE jobs SET status = 'running', updated_at = ? WHERE id = ? AND status = 'queued'",
+    )
+    .run(new Date().toISOString(), jobId);
+  return result.changes === 1;
+}
+
+export async function processJobs(): Promise<number> {
   const now = new Date().toISOString();
 
   const dueJobs = db
@@ -122,20 +181,15 @@ export function processJobs(): number {
     .where(and(eq(jobs.status, "queued"), lte(jobs.runAfter, now)))
     .all();
 
+  let processed = 0;
   for (const job of dueJobs) {
-    // Mark as in-progress to prevent double-processing
-    db.update(jobs)
-      .set({
-        status: "running",
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(jobs.id, job.id))
-      .run();
-
-    executeJob(job);
+    // Atomic claim to prevent double-processing
+    if (!claimJob(job.id)) continue;
+    await executeJob(job);
+    processed++;
   }
 
-  return dueJobs.length;
+  return processed;
 }
 
 export function enqueueJob(
@@ -154,6 +208,7 @@ export function enqueueJob(
       runAfter: (runAfter ?? new Date()).toISOString(),
       attempts: 0,
     })
+    .onConflictDoNothing() // dedup via unique index on (job_type, ownerKey) WHERE queued/running
     .run();
 
   return id;

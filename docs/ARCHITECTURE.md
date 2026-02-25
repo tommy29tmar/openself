@@ -193,10 +193,11 @@ After onboarding, approvals are per change category (unless you enable auto-appr
 │  │  Text /   │     │  - Fact extract  │     │  - Renderer    │  │
 │  │  Voice    │     │  - KB management │     │  - Themes      │  │
 │  │           │     │  - Page compose  │     │  - Components  │  │
-│  └───────────┘     │  - Heartbeat     │     │                │  │
-│                    └────────┬─────────┘     └───────┬────────┘  │
-│                             │                       │           │
-│                             ▼                       ▼           │
+│  └───────────┘     │  - Memory (3-tier)│    │                │  │
+│                    │  - Soul profiles │     └───────┬────────┘  │
+│                    └────────┬─────────┘             │           │
+│                             │         ┌─────────────┘           │
+│                             ▼         ▼                         │
 │                    ┌──────────────────┐     ┌────────────────┐  │
 │                    │                  │     │                │  │
 │                    │  KNOWLEDGE BASE  │     │  PUBLIC PAGE   │  │
@@ -205,18 +206,26 @@ After onboarding, approvals are per change category (unless you enable auto-appr
 │                    │  - Agent config  │     │                │  │
 │                    │  - Preferences   │     │  Accessible    │  │
 │                    │  - History       │     │  by anyone     │  │
-│                    │                  │     │                │  │
+│                    │  - Summaries     │     │                │  │
+│                    │  - Conflicts     │     │                │  │
 │                    └────────▲─────────┘     └────────────────┘  │
 │                             │                                   │
-│                    ┌────────┴─────────┐                         │
-│                    │                  │                         │
-│                    │   CONNECTORS     │                         │
-│                    │                  │                         │
-│                    │  GitHub, Strava  │                         │
-│                    │  Spotify, Books  │                         │
-│                    │  Scholar, etc.   │                         │
-│                    │                  │                         │
-│                    └──────────────────┘                         │
+│               ┌─────────────┼─────────────┐                     │
+│               │             │             │                     │
+│      ┌────────┴─────────┐  │  ┌──────────┴───────┐             │
+│      │                  │  │  │                   │             │
+│      │   CONNECTORS     │  │  │     WORKER        │             │
+│      │                  │  │  │                   │             │
+│      │  GitHub, Strava  │  │  │  - Heartbeat      │             │
+│      │  Spotify, Books  │  │  │    (light/deep)   │             │
+│      │  Scholar, etc.   │  │  │  - Jobs (9 types) │             │
+│      │                  │  │  │  - Memory summary │             │
+│      └──────────────────┘  │  │  - Soul review    │             │
+│                            │  │                   │             │
+│                            │  └───────────────────┘             │
+│                            │          │                         │
+│                            └──────────┘                         │
+│                        (reads/writes KB)                        │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -315,64 +324,71 @@ System prompt (agent identity + instructions)
 
 ### 4.2.1 System Prompt Architecture
 
-The system prompt is structured in deterministic blocks (assembled server-side):
+The system prompt is assembled by `src/lib/agent/context.ts` from deterministic blocks:
 
-1. **Core charter**
-   - Product goal, non-goals, persona boundaries
-2. **Safety and privacy policy**
-   - Visibility constraints, sensitive-data rules, no silent publication
-3. **Tool policy**
-   - When to call tools, required arguments, retry/error behavior
-4. **Output contracts**
-   - JSON/schema requirements for tool payloads and page content generation
-5. **Mode policy**
-   - `onboarding` vs `steady_state` vs `heartbeat`
-6. **Dynamic context attachments**
-   - Retrieved facts, summarized history, current page config, connector status
+1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries
+2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
+3. **Tool policy** — 12 tools (see Section 4.3), when to call, required arguments, retry/error behavior
+4. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
+5. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
+6. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
+7. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
+8. **Conversation summary** — Tier 2 rolling summary, 800 token budget
+9. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
+10. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
+
+Total context budget: 7500 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
 Prompt assembly is code-driven (no prompt text embedded in UI files). Each block has a
 version id for reproducibility and A/B testing.
 
 ### 4.2.2 Context Budget Policy
 
-Context is budgeted explicitly to avoid window overflows:
+Context is budgeted explicitly to avoid window overflows. Token estimation uses
+`estimateTokens = ceil(chars / 4)`.
 
-1. **Recent chat:** last 12 turns (or token cap), always included
-2. **Long-term summary:** rolling summary of older conversations
-3. **Facts:** top-K relevant facts from hybrid retrieval (`K=40` default)
-4. **Page config:** included only when intent is page creation/edit/styling
-5. **Connectors state:** included only when connector-related intent is detected
+```
+Total budget: 7500 tokens
 
-If budget is exceeded, truncation order is deterministic:
-- Drop connector status first
-- Reduce fact K
-- Compress older summary
-- Never drop the active user turn or safety/policy blocks
+Per-block allocation:
+  Soul (compiled):     1500 tokens max
+  Facts:               2000 tokens max (top 50, truncated if over)
+  Summary (Tier 2):     800 tokens max
+  Memories (Tier 3):    400 tokens max
+  Pending conflicts:    200 tokens max
+  Recent turns:        2600 tokens max (last 12, reduce if over)
+```
+
+Post-assembly guard: if total exceeds 7500, iteratively truncate the largest block
+by 20% until under budget. Safety/policy blocks and the active user turn are never
+truncated.
 
 ### 4.3 Tool Calling (Autonomous Actions)
 
-During conversation, the agent calls tools silently to manage the knowledge base and page.
-The user sees a natural conversation. Under the hood, the agent is performing structured
-actions:
+During conversation, the agent calls tools silently to manage the knowledge base, page,
+and cognitive state. The user sees a natural conversation. Under the hood, the agent is
+performing structured actions:
 
 ```
-Available tools:
+Available tools (12):
 
-# Knowledge Base management
-create_fact(category, key, value, source?)    # Learn something new
-update_fact(id, value)                         # Update existing knowledge
-delete_fact(id)                                # Remove outdated info
-search_facts(query)                            # Search the KB semantically
+Knowledge Base management:
+  create_fact(category, key, value, confidence?)     # Learn something new
+  update_fact(factId, value)                          # Update existing knowledge
+  delete_fact(factId)                                 # Remove outdated info
+  search_facts(query)                                 # Search the KB
 
-# Page management
-update_page_config(changes)                    # Modify page structure/content
-set_theme(theme_id)                            # Change visual theme
-reorder_sections(section_order)                # Rearrange page sections
-regenerate_section(section_type)               # Re-synthesize a section from facts
+Page management:
+  update_page_config(username, config)                # Modify page structure/content
+  set_theme(username, theme)                          # Change visual theme
+  reorder_sections(username, sectionOrder)            # Rearrange page sections
+  generate_page(username, language?)                  # Full page synthesis from facts
+  request_publish(username)                           # Request publish approval
 
-# Agent self-management
-update_agent_config(changes)                   # Adapt own behavior
-schedule_reminder(message, when)               # Set a future check-in topic
+Cognitive management:
+  save_memory(content, memoryType?, category?)        # Save agent observation (Tier 3)
+  propose_soul_change(overlay, reason?)               # Propose identity profile update
+  resolve_conflict(conflictId, resolution, mergedValue?)  # Resolve a fact contradiction
 ```
 
 **Example of what happens in a single exchange:**
@@ -382,9 +398,9 @@ User says: "I just started a new job at Acme Corp as a product manager"
 The agent simultaneously:
 1. Responds naturally: "Congrats! That's a big move. How are you liking it so far?"
 2. Calls `create_fact(category="experience", key="acme-corp", value={role: "Product Manager", company: "Acme Corp", start: "2026-02", status: "current"})`
-3. Calls `update_fact(id="prev-job-id", value={...status: "past", end: "2026-01"})`
-4. Calls `regenerate_section("timeline")` to update the experience section
-5. Calls `update_agent_config({focus_areas: [..., "product-management"]})` if this seems like a core identity shift
+3. Calls `update_fact(factId="prev-job-id", value={...status: "past", end: "2026-01"})`
+4. Calls `generate_page(username)` to rebuild the page from updated facts
+5. Calls `save_memory(content="User transitioned to product management — significant career shift", memoryType="insight")` if this seems like a core identity shift
 
 All invisible to the user. They just had a conversation.
 
@@ -400,33 +416,33 @@ themselves as a runner. A new GitHub repo is signal only if it reflects a skill 
 project the user wants to highlight. The heartbeat does not act on everything — it
 acts on what matters for identity.
 
-**What the heartbeat does:**
+**Dual-loop architecture:**
+
+The heartbeat runs two complementary loops at different cadences:
 
 ```
-Every [interval] (default: daily):
+heartbeat_light (daily):
+  1. KB freshness check — are there stale or contradictory facts?
+  2. Expire stale soul change proposals (>48h pending)
+  3. Quick connector status check (if connectors are active)
 
-1. CHECK CONNECTORS
-   - Poll connected services for new data
-   - GitHub: new repos? new contributions?
-   - Strava: new activities?
-   - Spotify: listening patterns changed?
-
-2. REVIEW KNOWLEDGE BASE
-   - Are there contradictory facts?
-   - Are there facts that seem outdated?
-   - Is any information missing that could be inferred?
-
-3. REVIEW PAGE (apply mission filter)
-   - Does the page still reflect the knowledge base accurately?
-   - Are there new facts that should be on the page but aren't?
-   - Should any sections be regenerated?
-   - Does each change pass the mission filter? (identity-relevant, not just new)
-
-4. DECIDE ACTION
-   - If something needs user input → queue a message for next check-in
-   - If auto-approve is enabled for this category → update silently
-   - If nothing to do → stay quiet (like OpenClaw's HEARTBEAT_OK)
+heartbeat_deep (weekly):
+  1. Cross-section coherence review — does the page narrative hold together?
+  2. Conflict cleanup — dismiss old unresolved conflicts (>7 days)
+  3. Soul profile review — are voice/tone still aligned with recent conversations?
+  4. Full KB audit with mission filter applied
 ```
+
+**Per-owner daily budget (DST-safe):**
+
+Each owner gets one heartbeat_light per calendar day and one heartbeat_deep per
+calendar week. Day boundaries are computed via `computeOwnerDay()` using
+`Intl.DateTimeFormat` with the owner's timezone, ensuring DST transitions do not
+cause double-runs or missed runs.
+
+Budget enforcement is two-tier:
+- **Global budget**: `checkBudget()` guards total LLM spend across all owners
+- **Per-owner budget**: `checkOwnerBudget()` ensures no single owner exceeds daily allocation
 
 **Example heartbeat outcomes:**
 
@@ -450,26 +466,55 @@ heartbeat:
   page_review: true            # Review page freshness
 ```
 
-Execution note:
-- `interval` is a human-friendly input. At runtime it is converted into scheduler state
-  (`next_run_at`) by the worker.
-- Accepted forms: duration (`15m`, `1h`, `24h`, `7d`) and cron (`0 */6 * * *`).
-- Heartbeat jobs are executed by a background worker, not by request handlers.
+**Worker execution:**
+
+The heartbeat runs in a standalone worker process (`src/worker.ts`), built with
+tsup and deployed as a separate service. See Section 11 for deployment details.
+
+The worker uses a jobs table with atomic claim semantics (UPDATE WHERE status='queued')
+and 3 retry attempts with exponential backoff.
+
+**9 job handlers:**
+- `page_synthesis` — Full page rebuild from facts
+- `memory_summary` — Tier 2 conversation summary generation
+- `heartbeat_light` — Daily lightweight maintenance
+- `heartbeat_deep` — Weekly deep review
+- `expire_proposals` — Clean up stale soul change proposals
+- `soul_proposal` — Process pending soul profile changes
+- `connector_sync` — Pull data from connected services
+- `page_regen` — Targeted section regeneration
+- `taxonomy_review` — Review pending category registrations
+
+**DB bootstrap coordination:**
+
+Web and worker processes coordinate schema migrations via `DB_BOOTSTRAP_MODE`:
+- `web` runs as leader (executes migrations on startup)
+- `worker` runs as follower (polls `schema_meta` table until leader has completed migrations)
+
+This prevents race conditions when both processes start simultaneously.
 
 ### 4.5 Memory Architecture
 
 The agent's memory has three tiers (inspired by OpenClaw):
 
 **Tier 1 — Short-Term: Conversation History (ephemeral)**
-Raw chat messages from the current session. Kept for immediate context. Older
-messages are summarized (Tier 2) and key facts are extracted to the KB (Tier 3)
-before being archived.
+Raw chat messages from the current and recent sessions. Trimmed to last 12 turns
+within a 2600 token budget during context assembly. Older messages are summarized
+(Tier 2) and key facts are extracted to the KB before being dropped from context.
 
 **Tier 2 — Medium-Term: Conversation Summaries (rolling)**
-Compressed summaries of past conversations. The agent does not re-read full
-transcripts — it works from distilled summaries that capture the essential
-information, emotional tone, and unresolved threads. Summaries are updated
-progressively: each new conversation enriches or refines previous summaries.
+Compressed summaries of past conversations stored in the `conversation_summaries`
+table (UNIQUE on `owner_key`). The agent does not re-read full transcripts — it
+works from distilled summaries that capture essential information, emotional tone,
+and unresolved threads.
+
+Implementation details:
+- **CAS (compare-and-swap) for race safety**: INSERT ON CONFLICT DO NOTHING + UPDATE
+  WHERE cursor matches. This prevents concurrent summary jobs from overwriting each other.
+- **Compound cursor**: `(cursor_created_at, cursor_message_id)` — survives cross-session
+  message reads and ensures summaries are built incrementally without gaps.
+- Generated via "medium" tier LLM call (see ADR-013).
+- Enqueued as `memory_summary` job in the worker, not generated inline during chat.
 
 **Tier 3 — Long-Term: Consolidated Knowledge (durable)**
 Two sub-layers:
@@ -477,10 +522,22 @@ Two sub-layers:
 - **Knowledge Base** — Structured facts about the user. The source of truth for
   page generation. See Section 5.
 - **Agent Memory** — The agent's own meta-observations about the user — not facts,
-  but behavioral notes:
+  but behavioral notes stored in the `agent_memory` table:
   - "User gets annoyed when I ask too many questions in a row"
   - "User prefers to talk about projects rather than skills"
   - "User's mood is usually better in evening conversations"
+
+Agent memory implementation:
+- **Expanded schema**: `owner_key`, `memory_type` (observation, preference, insight, pattern),
+  `category`, `content_hash` (SHA-256), `confidence`, `is_active`, `user_feedback`,
+  `deactivated_at`
+- **Dedup**: SHA-256 content hash prevents duplicate active memories
+- **Quota**: 50 active memories per owner
+- **Cooldown**: 5 writes per 60-second window (DB-based, survives restart)
+- **User feedback**: "helpful" increases confidence by +0.1 (capped at 1.0);
+  "wrong" immediately deactivates the memory
+- **Memory types**: `observation` (behavioral notes), `preference` (user likes/dislikes),
+  `insight` (inferred understanding), `pattern` (recurring behavior)
 
 Agent memory is stored separately from the KB and used to improve conversation
 quality over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
@@ -545,7 +602,122 @@ Every fact in the KB follows a four-state visibility lifecycle:
 The agent manages these transitions through heartbeat cycles, optimizing for
 relevance without wasting LLM calls on facts that haven't changed.
 
-### 4.5.2 Heartbeat Cost Optimization
+### 4.5.2 Owner Identity & Scoping
+
+All cognitive and knowledge data is scoped through `OwnerScope`, which unifies
+authenticated and anonymous access patterns:
+
+```ts
+type OwnerScope = {
+  cognitiveOwnerKey: string;   // NEW tables: memory, soul, summaries, heartbeat, trust_ledger
+  knowledgeReadKeys: string[]; // EXISTING tables reads: facts, page, messages
+  knowledgePrimaryKey: string; // EXISTING tables writes: facts, page — stable anchor session
+  currentSessionId: string;    // Current request's session (message writes, quota tracking)
+};
+```
+
+**Authenticated users:**
+- `cognitiveOwnerKey` = profileId (stable across sessions)
+- `knowledgeReadKeys` = all session IDs for the profile (union of {currentSessionId})
+- `knowledgePrimaryKey` = anchor session ID (oldest session for the profile — stable
+  write key for facts/page/config)
+- `currentSessionId` = from cookie
+
+**Anonymous users:**
+- All keys = sessionId (single session, no cross-session unification)
+
+**Anchor session:** The oldest session associated with a profile. This provides a stable
+write key for facts, page, and config tables, avoiding data fragmentation when users
+have multiple sessions.
+
+**Session backfill:** When a user registers or logs in via OAuth, all existing sessions
+for that profile are backfilled with the `profile_id`, enabling cross-session reads.
+
+**Message quota:**
+- Authenticated: per-profile quota via `profile_message_usage` table (200 message limit)
+- Anonymous: per-session quota (50 message limit)
+
+### 4.5.3 Soul Profiles
+
+Soul profiles capture the agent's evolving understanding of the user's identity
+characteristics — voice, tone, values, and communication style.
+
+**Table:** `soul_profiles` (versioned, UNIQUE active profile per owner)
+
+**Overlay structure:**
+```ts
+{
+  voice: string;              // e.g., "conversational, direct"
+  tone: string;               // e.g., "warm but professional"
+  values: string[];           // e.g., ["open source", "privacy", "craftsmanship"]
+  selfDescription: string;    // How the user describes themselves
+  communicationStyle: string; // e.g., "concise, avoids jargon"
+}
+```
+
+The active soul profile is compiled into a prose string and injected into the system
+prompt (block 7, 1500 token budget). This ensures the agent's responses and page copy
+reflect the user's authentic voice.
+
+**Change proposal flow:**
+- The agent proposes changes via the `propose_soul_change` tool
+- Proposals are stored in `soul_change_proposals` with status: pending/accepted/rejected/expired
+- The user reviews proposals via `GET /api/soul/review` and `POST /api/soul/review`
+- Proposals expire after 48 hours (cleaned up by `expire_proposals` heartbeat job)
+- Accepted proposals create a new version of the soul profile (previous version deactivated)
+
+### 4.5.4 Fact Conflicts
+
+When the agent or a connector introduces information that contradicts an existing fact,
+a conflict is created rather than silently overwriting.
+
+**Table:** `fact_conflicts` (dedicated table, not stored on `agent_events`)
+
+**Source precedence (highest to lowest):**
+1. `user_explicit` (weight 4) — user directly stated or confirmed
+2. `chat` (weight 3) — extracted from conversation
+3. `connector` (weight 2) — imported from external service
+4. `heartbeat` (weight 1) — inferred during maintenance
+
+**Auto-skip rule:** When precedence difference is >= 2 (e.g., user_explicit vs. connector),
+the higher-precedence value wins automatically without creating a conflict.
+
+**3 resolution paths:**
+1. **Agent tool**: `resolve_conflict(conflictId, resolution, mergedValue?)` — agent resolves
+   during conversation
+2. **User API**: `POST /api/conflicts/:id/resolve` — user resolves via UI
+3. **Auto-expire**: unresolved conflicts are dismissed after 7 days (heartbeat_deep cleanup)
+
+**System prompt injection:** Open conflicts are injected into the system prompt (block 10,
+200 token budget) so the agent can proactively address contradictions in conversation.
+
+### 4.5.5 Trust Ledger
+
+Every cognitive action (memory, soul, conflict resolution) is logged in the `trust_ledger`
+table with an `undo_payload` saved at write time. This provides full auditability and
+reversibility of the agent's autonomous decisions.
+
+**Table:** `trust_ledger` with columns: id, owner_key, action_type, entity_type, entity_id,
+description, undo_payload, reversed_at, created_at
+
+**Logged action types:**
+- `memory_saved`, `memory_deactivated`
+- `soul_accepted`, `soul_rejected`
+- `conflict_resolved`, `conflict_dismissed`
+- `fact_created`, `fact_updated`, `fact_deleted`
+
+**Reversibility:** Any trust ledger entry can be reversed via `reverseTrustAction()`, which
+uses transactional CAS (compare-and-swap) to prevent double-undo and partial commits. The
+`undo_payload` contains the exact state needed to restore the previous condition.
+
+**API:**
+- `GET /api/trust-ledger` — List recent trust actions (filterable by action_type)
+- `POST /api/trust-ledger/:id/reverse` — Reverse a specific action
+
+This implements the "radical transparency" UX principle (Section 9.1, commandment 8): the
+user can always see why the agent did something and undo it.
+
+### 4.5.6 Heartbeat Cost Optimization
 
 The heartbeat should be event-driven, not blindly periodic:
 
@@ -1208,6 +1380,21 @@ the hybrid personalizer for a polished final draft before the publish checkpoint
 
 Section regeneration is incremental: only impacted sections are recomputed.
 
+**SSE live preview (implemented):**
+
+Preview updates are now delivered via Server-Sent Events (SSE), superseding the
+polling-based approach from ADR-0005:
+
+- **Endpoint**: `GET /api/preview/stream` — SSE with adaptive interval (1s base,
+  backs off to 5s on idle), keepalive ping every 15s
+- **Client**: `SplitView.tsx` uses `EventSource` as primary transport, falls back
+  to polling (`GET /api/preview`) after 5 consecutive SSE errors
+- **Payload**: Same preview data shape as the polling endpoint (draft config +
+  publishStatus), sent as JSON in SSE `data` field
+
+This reduces unnecessary network requests during idle periods while providing
+near-instant updates when the agent modifies the page.
+
 ### 6.4 How the Agent Modifies the Page
 
 When the user asks for changes in chat, the agent modifies the page config —
@@ -1664,11 +1851,20 @@ CREATE TABLE agent_config (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Agent memory (meta-knowledge, observations)
+-- Agent memory (meta-knowledge, observations — Tier 3)
 CREATE TABLE agent_memory (
     id TEXT PRIMARY KEY,
-    content TEXT NOT NULL,        -- Free-form observation
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    owner_key TEXT NOT NULL,       -- OwnerScope.cognitiveOwnerKey
+    content TEXT NOT NULL,         -- Free-form observation
+    memory_type TEXT NOT NULL DEFAULT 'observation', -- 'observation', 'preference', 'insight', 'pattern'
+    category TEXT,                 -- Optional grouping
+    content_hash TEXT NOT NULL,    -- SHA-256 for dedup
+    confidence REAL DEFAULT 0.8,
+    is_active INTEGER DEFAULT 1,
+    user_feedback TEXT,            -- 'helpful', 'wrong', or NULL
+    deactivated_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Connected services
@@ -1715,13 +1911,18 @@ CREATE TABLE sync_log (
 );
 
 -- Background jobs (heartbeat, connector sync, retries)
+-- Rebuilt in Phase 1a with CHECK constraints and expanded job types
 CREATE TABLE jobs (
     id TEXT PRIMARY KEY,
-    job_type TEXT NOT NULL,         -- 'heartbeat', 'connector_sync', 'page_regen', 'taxonomy_review'
+    job_type TEXT NOT NULL CHECK (job_type IN (
+        'page_synthesis', 'memory_summary', 'heartbeat_light', 'heartbeat_deep',
+        'expire_proposals', 'soul_proposal', 'connector_sync', 'page_regen', 'taxonomy_review'
+    )),
+    owner_key TEXT,                  -- OwnerScope.cognitiveOwnerKey (NULL for global jobs)
     payload JSON NOT NULL,
-    status TEXT NOT NULL DEFAULT 'queued', -- 'queued', 'running', 'done', 'error'
+    status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'done', 'error')),
     run_after DATETIME NOT NULL,
-    attempts INTEGER DEFAULT 0,
+    attempts INTEGER DEFAULT 0,     -- max 3, with exponential backoff
     last_error TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -1765,6 +1966,112 @@ CREATE VIRTUAL TABLE facts_fts USING fts5(
     content='facts',
     content_rowid='rowid'
 );
+
+-- ============================================================
+-- Phase 1a additions (migrations 0012-0016)
+-- ============================================================
+
+-- Conversation summaries (Tier 2 — rolling, one per owner)
+CREATE TABLE conversation_summaries (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL UNIQUE,  -- OwnerScope.cognitiveOwnerKey
+    summary TEXT NOT NULL,
+    cursor_created_at TEXT,          -- compound cursor for CAS
+    cursor_message_id TEXT,
+    token_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Per-profile message quota (atomic counter)
+CREATE TABLE profile_message_usage (
+    profile_id TEXT PRIMARY KEY,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    period_start DATETIME NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Schema version tracking for leader/follower coordination
+CREATE TABLE schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Soul profiles (versioned identity overlays)
+CREATE TABLE soul_profiles (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    overlay JSON NOT NULL,           -- {voice, tone, values, selfDescription, communicationStyle}
+    compiled TEXT,                    -- Prose string for system prompt injection
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+-- Only one active soul profile per owner
+CREATE UNIQUE INDEX uniq_soul_active ON soul_profiles(owner_key) WHERE is_active = 1;
+
+-- Soul change proposals (pending changes with TTL)
+CREATE TABLE soul_change_proposals (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    proposed_overlay JSON NOT NULL,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'expired')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME
+);
+
+-- Heartbeat run history (DST-safe budget tracking)
+CREATE TABLE heartbeat_runs (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    run_type TEXT NOT NULL,          -- 'light' or 'deep'
+    owner_day TEXT NOT NULL,         -- YYYY-MM-DD in owner's timezone
+    status TEXT NOT NULL,
+    summary TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Per-owner heartbeat configuration
+CREATE TABLE heartbeat_config (
+    owner_key TEXT PRIMARY KEY,
+    enabled INTEGER DEFAULT 1,
+    timezone TEXT DEFAULT 'UTC',
+    light_interval_hours INTEGER DEFAULT 24,
+    deep_interval_hours INTEGER DEFAULT 168, -- 7 days
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trust ledger (audit trail with undo capability)
+CREATE TABLE trust_ledger (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    action_type TEXT NOT NULL,       -- 'memory_saved', 'soul_accepted', 'conflict_resolved', etc.
+    entity_type TEXT NOT NULL,       -- 'memory', 'soul', 'conflict', 'fact'
+    entity_id TEXT NOT NULL,
+    description TEXT,
+    undo_payload JSON,               -- Saved at write time for reversibility
+    reversed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_trust_ledger_owner ON trust_ledger(owner_key, created_at);
+
+-- Fact conflicts (detected contradictions with resolution tracking)
+CREATE TABLE fact_conflicts (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    fact_id TEXT NOT NULL,            -- The existing fact
+    conflicting_value JSON NOT NULL,  -- The new contradictory value
+    conflicting_source TEXT NOT NULL,  -- Source of the new value
+    existing_source TEXT NOT NULL,     -- Source of the existing fact
+    resolution TEXT,                   -- 'kept_existing', 'accepted_new', 'merged', 'dismissed'
+    merged_value JSON,                -- Result if resolution = 'merged'
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME
+);
+CREATE INDEX idx_fact_conflicts_open ON fact_conflicts(owner_key, status) WHERE status = 'open';
 ```
 
 ### 8.2 Storage
@@ -2147,8 +2454,8 @@ the functionality. The cloud version is convenience.
 
 OpenSelf runs with two execution roles:
 
-1. **Web app (Next.js)**: chat UI, public pages, APIs
-2. **Worker (Node.js process)**: heartbeat, connector polling, retries, scheduled tasks
+1. **Web app (Next.js)**: chat UI, public pages, APIs — runs as DB leader (`DB_BOOTSTRAP_MODE=web`)
+2. **Worker (Node.js process)**: heartbeat, connector polling, retries, scheduled tasks — runs as DB follower (`DB_BOOTSTRAP_MODE=follower`)
 
 Why this split:
 - Next.js request handlers are not a reliable place for long-lived periodic jobs
@@ -2158,6 +2465,28 @@ Scheduling model:
 - Human config (`interval: "24h"`) is compiled into `jobs.run_after`
 - Worker dequeues due jobs and processes them transactionally
 - Serverless deployments use cron-triggered scheduler ticks to enqueue due work
+
+**Worker deployment:**
+
+The worker is a standalone Node.js process built separately from the Next.js app:
+
+```bash
+# Build
+tsup src/worker.ts --format cjs --out-dir dist --external better-sqlite3
+
+# Run
+node dist/worker.js
+
+# Health check (DB ping + schema check + handler count)
+node dist/worker.js --health-check
+```
+
+**DB bootstrap coordination:**
+- Web process (`DB_BOOTSTRAP_MODE=web`): runs migrations on startup (leader role)
+- Worker process (`DB_BOOTSTRAP_MODE=follower`): polls `schema_meta` table until the
+  leader has completed migrations, then begins processing jobs
+
+This ensures the worker never attempts to process jobs against an outdated schema.
 
 ### 11.6 Runtime Access Profiles
 
@@ -3185,7 +3514,13 @@ Runtime behavior:
 
 ### 15.7 Bootstrap Seed (SQL Reference)
 
-Suggested migration files:
+Migration files (16 total, `db/migrations/0001-0016`):
+- `0001`-`0011`: Phase 0 core schema, taxonomy, components, sessions, media, translation cache, etc.
+- `0012`-`0016`: Phase 1a additions — agent memory expansion, conversation summaries,
+  soul profiles, fact conflicts, trust ledger, heartbeat tables, jobs rebuild, schema_meta,
+  profile_message_usage
+
+Key bootstrap migrations:
 - `db/migrations/0001_core_schema.sql` (creates taxonomy tables)
 - `db/migrations/0002_taxonomy_seed.sql` (seeds canonical categories + aliases)
 - `db/migrations/0003_component_registry.sql` (component registry bootstrap)
@@ -3380,19 +3715,32 @@ Default runtime DB settings for web+worker mode:
 
 `SQLITE_BUSY` incidents must be logged in `agent_events` with context (actor, job/message id).
 
-### 15.16 Fact Conflict Resolution Contract (Phase 1+)
+### 15.16 Fact Conflict Resolution Contract (Implemented — Phase 1a)
 
-Conflict precedence (highest to lowest):
+Source precedence (highest to lowest, numeric weight):
 
-1. User explicit confirmation/correction
-2. Connector facts with direct evidence
-3. Agent inference from conversation
+1. `user_explicit` (4) — user directly stated or confirmed
+2. `chat` (3) — extracted from conversation by the agent
+3. `connector` (2) — imported from external service
+4. `heartbeat` (1) — inferred during autonomous maintenance
+
+**Auto-skip rule:** When precedence difference >= 2, the higher-precedence value wins
+automatically and no conflict record is created.
+
+**Resolution paths:**
+1. Agent resolves via `resolve_conflict` tool during conversation
+2. User resolves via `POST /api/conflicts/:id/resolve` API
+3. Auto-expire: unresolved conflicts are dismissed after 7 days (heartbeat_deep cleanup)
+
+**Resolution types:** `kept_existing`, `accepted_new`, `merged` (with `merged_value`), `dismissed`
 
 Merge rules:
-- Contradictory lower-priority facts are marked superseded, not silently deleted.
-- Preserve provenance (`source`, timestamps, confidence) for every competing fact.
+- Contradictory lower-priority facts are recorded in `fact_conflicts`, not silently overwritten.
+- Preserve provenance (`source`, timestamps, confidence) for every competing value.
 - Public rendering uses only the winning fact per conflict set.
-- All conflict decisions emit `agent_events` (`event_type='fact_conflict_resolved'`).
+- All conflict decisions are logged in the `trust_ledger` (action_type='conflict_resolved')
+  and emitted to `agent_events`.
+- Open conflicts are injected into the system prompt (200 token budget) for agent awareness.
 
 ### 15.17 Observability Contract
 

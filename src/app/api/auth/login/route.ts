@@ -5,8 +5,9 @@ import {
   getProfileForUser,
   createAuthSession,
 } from "@/lib/services/auth-service";
-import { createSessionCookie } from "@/lib/auth/session";
+import { createSessionCookie, getSessionIdFromRequest } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
+import { sqlite } from "@/lib/db";
 
 /**
  * POST /api/auth/login
@@ -59,6 +60,16 @@ export async function POST(req: Request) {
         { success: false, error: "Invalid credentials", code: "INVALID_CREDENTIALS" },
         { status: 401 },
       );
+    }
+
+    // Backfill existing session's profileId (if user had an invite session before logging in)
+    const existingSessionId = getSessionIdFromRequest(req);
+    if (existingSessionId) {
+      sqlite
+        .prepare(
+          "UPDATE sessions SET profile_id = ? WHERE id = ? AND profile_id IS NULL",
+        )
+        .run(profile.id, existingSessionId);
     }
 
     // Create new session (session rotation for anti-fixation)

@@ -41,46 +41,37 @@ When choosing work, apply this order:
 - Standalone signup page
 - Gate passed 2026-02-25
 
+### Phase 1a — Agent Memory & Heartbeat (Done)
+
+- **NEXT-1**: Agent memory (Tier 2 + Tier 3) → Done
+  - Conversation summaries with CAS (race-safe compound cursor)
+  - Meta-memory with dedup (SHA-256), quota (50), cooldown (DB-based), feedback (helpful/wrong)
+  - Memory-aware context assembly (facts + soul + summaries + memories + conflicts in prompt)
+- **NEXT-2**: History summarization in context budget → Done
+  - 7500-token total budget with per-block allocation
+  - Post-assembly iterative guard (truncate largest block by 20%)
+  - Mode auto-detection (onboarding vs steady_state)
+- **NEXT-3**: Worker scheduler wiring + Heartbeat → Done
+  - Standalone worker process (tsup build, separate service)
+  - 9 job handlers, atomic claim, 3-retry backoff
+  - Dual-loop heartbeat (light daily, deep weekly)
+  - Per-owner budget (DST-safe via Intl.DateTimeFormat)
+  - Leader/follower bootstrap (DB_BOOTSTRAP_MODE env)
+  - Soul profiles with versioned overlays and proposals
+  - Trust ledger with undo_payload + transactional CAS reverse
+  - Fact conflicts with source precedence + 3 resolution paths
+- **NEXT-4**: SSE preview (replace polling) → Done
+  - SSE endpoint /api/preview/stream with adaptive interval
+  - Client fallback to polling after 5 errors
+- OwnerScope: multi-session identity, anchor session, per-profile quota
+- 206 automated tests (133 + 73 new)
+
 ## 4) Now (High Priority)
 
 ## Phase 1: Living Agent
 
 Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
 then hybrid page personalization. Each sub-phase builds on the previous.
-
-### Phase 1a: Agent Memory & Heartbeat
-
-The agent comes alive — it remembers, reflects, and evolves its understanding.
-
-#### NEXT-1: Agent memory (Tier 2 + Tier 3)
-
-Deliverables:
-1. Conversation history summarization (Tier 2 rolling summaries)
-2. Agent meta-memory (behavioral observations, user preferences — Tier 3)
-3. Agent config persistence (personality, tone, page_voice)
-4. Memory-aware context assembly (facts + summaries + memory in prompt)
-
-#### NEXT-2: History summarization in context budget
-
-Deliverables:
-1. Summarize old conversation turns to fit context window
-2. Maintain fact references across summarization
-3. Progressive enrichment: new conversations refine existing summaries
-
-#### NEXT-3: Worker scheduler wiring + Heartbeat
-
-Deliverables:
-1. Wire background job processor into app lifecycle
-2. Schedule periodic jobs (heartbeat, page re-composition on fact changes)
-3. Heartbeat system: KB review, page freshness check, connector polling
-4. Event-driven: skip LLM calls if nothing changed
-
-#### NEXT-4: SSE preview (replace polling)
-
-Deliverables:
-1. Server-sent events endpoint for preview updates
-2. Client-side EventSource connection
-3. Remove polling interval
 
 ### Phase 1b: Extended Sections
 

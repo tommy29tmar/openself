@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { authIdentities, users, profiles } from "@/lib/db/schema";
 import {
   createAuthSession,
@@ -115,7 +115,16 @@ export async function handleOAuthCallback(
     profile = created as any;
   }
 
-  // 5. Create session
+  // 5. Backfill existing session's profileId (if user had an invite session)
+  if (existingSessionId) {
+    sqlite
+      .prepare(
+        "UPDATE sessions SET profile_id = ? WHERE id = ? AND profile_id IS NULL",
+      )
+      .run(profile!.id, existingSessionId);
+  }
+
+  // 6. Create session
   const sessionId = createAuthSession(userId, profile!.id);
 
   return { sessionId, username: profile?.username ?? null, isNew };

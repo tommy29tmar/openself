@@ -21,6 +21,9 @@ ENV NODE_ENV=production
 
 RUN npm run build
 
+# Build worker (tsup)
+RUN npx tsup src/worker.ts --format cjs --out-dir dist --external better-sqlite3
+
 # Stage 3: Production runtime
 FROM node:20-alpine AS runtime
 
@@ -44,6 +47,9 @@ COPY --from=build /app/.next/static ./.next/static
 # The /app/db directory is volume-mounted for SQLite persistence,
 # which would overwrite migrations if they lived there.
 COPY --from=build /app/db/migrations ./migrations
+
+# Copy worker build
+COPY --from=build /app/dist ./dist
 
 # Create db directory for SQLite volume mount
 RUN mkdir -p /app/db && chown nextjs:nodejs /app/db

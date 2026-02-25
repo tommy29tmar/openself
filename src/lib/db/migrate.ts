@@ -2,6 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
 
+/**
+ * Increment this when adding new migrations.
+ * Worker (follower mode) will poll schema_meta until this version appears.
+ */
+export const EXPECTED_SCHEMA_VERSION = 16;
+
 export function runMigrations(sqlite: Database.Database): void {
   // Create migration tracking table
   sqlite.exec(`CREATE TABLE IF NOT EXISTS _migrations (
@@ -46,4 +52,42 @@ export function runMigrations(sqlite: Database.Database): void {
     applyMigration();
     console.log(`[migrate] Applied: ${file}`);
   }
+
+  // Write schema version to schema_meta (created by 0012_owner_scoping.sql or later)
+  // Use try-catch: schema_meta may not exist if running migrations < 0012
+  try {
+    sqlite
+      .prepare(
+        "INSERT OR REPLACE INTO schema_meta(key, value, updated_at) VALUES ('schema_version', ?, datetime('now'))",
+      )
+      .run(String(EXPECTED_SCHEMA_VERSION));
+  } catch {
+    // schema_meta table doesn't exist yet — pre-0012 state, skip
+  }
+}
+
+/**
+ * Async poll for schema readiness. Used by worker (follower mode) to wait
+ * for the web process (leader) to complete migrations.
+ */
+export async function awaitSchema(
+  sqlite: Database.Database,
+  expected: number,
+  maxRetries = 30,
+  delayMs = 1000,
+): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const row = sqlite
+        .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+        .get() as { value: string } | undefined;
+      if (row && parseInt(row.value) >= expected) return;
+    } catch {
+      /* table may not exist yet */
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  throw new Error(
+    `Schema not ready after ${maxRetries}s. Expected version ${expected}.`,
+  );
 }

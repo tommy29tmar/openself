@@ -150,12 +150,28 @@ export const agentConfig = sqliteTable("agent_config", {
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
-// -- Agent Memory
-export const agentMemory = sqliteTable("agent_memory", {
-  id: text("id").primaryKey(),
-  content: text("content").notNull(),
-  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-});
+// -- Agent Memory (Tier 3 meta-memory)
+export const agentMemory = sqliteTable(
+  "agent_memory",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull().default("__default__"),
+    content: text("content").notNull(),
+    memoryType: text("memory_type").notNull().default("observation"),
+    category: text("category"),
+    contentHash: text("content_hash"),
+    confidence: real("confidence").default(1.0),
+    isActive: integer("is_active").notNull().default(1),
+    userFeedback: text("user_feedback"),
+    deactivatedAt: text("deactivated_at"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_agent_memory_owner_active")
+      .on(table.ownerKey, table.isActive)
+      .where(sql`is_active = 1`),
+  ],
+);
 
 // -- Connectors
 export const connectors = sqliteTable("connectors", {
@@ -206,7 +222,7 @@ export const mediaAssets = sqliteTable(
   ],
 );
 
-// -- Jobs
+// -- Jobs (rebuilt in 0016 with expanded job_type CHECK)
 export const jobs = sqliteTable(
   "jobs",
   {
@@ -221,6 +237,84 @@ export const jobs = sqliteTable(
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [index("idx_jobs_due").on(table.status, table.runAfter)],
+);
+
+// -- Heartbeat Runs (audit log for each heartbeat execution)
+export const heartbeatRuns = sqliteTable(
+  "heartbeat_runs",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    runType: text("run_type").notNull(),
+    ownerDay: text("owner_day").notNull(),
+    outcome: text("outcome").notNull().default("ok"),
+    proposals: text("proposals", { mode: "json" }).default("{}"),
+    estimatedCostUsd: real("estimated_cost_usd").default(0),
+    tokensIn: integer("tokens_in").default(0),
+    tokensOut: integer("tokens_out").default(0),
+    model: text("model"),
+    durationMs: integer("duration_ms"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_heartbeat_runs_owner_day").on(table.ownerKey, table.ownerDay),
+  ],
+);
+
+// -- Heartbeat Config (per-owner settings)
+export const heartbeatConfig = sqliteTable("heartbeat_config", {
+  ownerKey: text("owner_key").primaryKey(),
+  lightBudgetDailyUsd: real("light_budget_daily_usd").default(0.1),
+  deepBudgetDailyUsd: real("deep_budget_daily_usd").default(0.25),
+  timezone: text("timezone").default("UTC"),
+  lightIntervalHours: integer("light_interval_hours").default(24),
+  deepIntervalHours: integer("deep_interval_hours").default(168),
+  enabled: integer("enabled").default(1),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+// -- Trust Ledger (audit trail for all cognitive actions)
+export const trustLedger = sqliteTable(
+  "trust_ledger",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    actionType: text("action_type").notNull(),
+    summary: text("summary").notNull(),
+    entityId: text("entity_id"),
+    details: text("details", { mode: "json" }).default("{}"),
+    undoPayload: text("undo_payload", { mode: "json" }),
+    reversed: integer("reversed").default(0),
+    reversedAt: text("reversed_at"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_trust_ledger_owner").on(table.ownerKey, table.createdAt),
+  ],
+);
+
+// -- Fact Conflicts (dedicated table for conflicting facts)
+export const factConflicts = sqliteTable(
+  "fact_conflicts",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    factAId: text("fact_a_id").notNull(),
+    factBId: text("fact_b_id"),
+    category: text("category").notNull(),
+    key: text("key").notNull(),
+    status: text("status").notNull().default("open"),
+    resolution: text("resolution"),
+    sourceA: text("source_a"),
+    sourceB: text("source_b"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [
+    index("idx_fact_conflicts_owner_open")
+      .on(table.ownerKey, table.status)
+      .where(sql`status = 'open'`),
+  ],
 );
 
 // -- LLM Usage
@@ -278,3 +372,72 @@ export const componentRegistry = sqliteTable(
   },
   (table) => [index("idx_component_registry_status").on(table.status)],
 );
+
+// -- Soul Profiles (compiled identity overlay)
+export const soulProfiles = sqliteTable(
+  "soul_profiles",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    version: integer("version").notNull().default(1),
+    overlay: text("overlay", { mode: "json" }).notNull().default("{}"),
+    compiled: text("compiled").notNull().default(""),
+    isActive: integer("is_active").notNull().default(1),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("uniq_soul_active_per_owner")
+      .on(table.ownerKey)
+      .where(sql`is_active = 1`),
+  ],
+);
+
+// -- Soul Change Proposals
+export const soulChangeProposals = sqliteTable(
+  "soul_change_proposals",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    soulProfileId: text("soul_profile_id").references(() => soulProfiles.id),
+    proposedOverlay: text("proposed_overlay", { mode: "json" }).notNull().default("{}"),
+    reason: text("reason"),
+    status: text("status").notNull().default("pending"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [
+    index("idx_soul_proposals_owner_pending")
+      .on(table.ownerKey, table.status)
+      .where(sql`status = 'pending'`),
+  ],
+);
+
+// -- Conversation Summaries (Tier 2 memory)
+export const conversationSummaries = sqliteTable("conversation_summaries", {
+  id: text("id").primaryKey(),
+  ownerKey: text("owner_key").notNull().unique(),
+  summary: text("summary").notNull(),
+  cursorCreatedAt: text("cursor_created_at").notNull(),
+  cursorMessageId: text("cursor_message_id").notNull(),
+  messageCount: integer("message_count").notNull(),
+  tokensIn: integer("tokens_in"),
+  tokensOut: integer("tokens_out"),
+  model: text("model"),
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+// -- Schema Meta (migration versioning for leader/follower bootstrap)
+export const schemaMeta = sqliteTable("schema_meta", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+// -- Profile Message Usage (per-profile atomic quota for authenticated users)
+export const profileMessageUsage = sqliteTable("profile_message_usage", {
+  profileKey: text("profile_key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});

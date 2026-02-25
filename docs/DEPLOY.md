@@ -1,6 +1,6 @@
 # OpenSelf — Deploy Guide (Hetzner + Coolify)
 
-Last updated: 2026-02-24
+Last updated: 2026-02-25
 
 ---
 
@@ -474,7 +474,66 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 
 ---
 
-## 7. Troubleshooting
+## 7. Worker Process
+
+OpenSelf includes a background worker process for async jobs (heartbeat, summary generation, etc.). In production, it runs as a separate service alongside the web process.
+
+### Build
+
+The worker is built with tsup (bundled in devDependencies):
+
+```bash
+npm run worker:build
+# Output: dist/worker.js (CJS, ~80KB)
+```
+
+### Health Check
+
+Verify the worker can connect to the DB and all handlers are registered:
+
+```bash
+npm run worker:check
+# Runs: node dist/worker.js --health-check
+# Exit 0 = healthy, Exit 1 = error
+```
+
+### Environment Variables
+
+The worker needs the same database path as the web process, plus:
+
+| Variable | Value | Description |
+|---|---|---|
+| `DB_BOOTSTRAP_MODE` | `follower` | Worker waits for web (leader) to run migrations |
+
+The web process should have `DB_BOOTSTRAP_MODE=leader` (this is the default if not set).
+
+### Coolify Deployment
+
+To run the worker as a second service in Coolify:
+
+1. Create a new service in Coolify pointing to the same repository
+2. Set the **Build command** to: `npm ci && npm run build && npm run worker:build`
+3. Set the **Start command** to: `node dist/worker.js`
+4. Add environment variable: `DB_BOOTSTRAP_MODE=follower`
+5. Mount the same SQLite volume as the web service (`/data/openself/db` → `/app/db`)
+6. The worker will poll `schema_meta` until the web process runs migrations, then start processing jobs
+
+### Local Development
+
+Run the worker alongside the dev server:
+
+```bash
+# Terminal 1: web
+npm run dev
+
+# Terminal 2: worker
+npm run worker:dev
+# Uses tsx watch for hot reload
+```
+
+---
+
+## 8. Troubleshooting
 
 | Problem | Solution |
 |---|---|
@@ -491,10 +550,11 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 | Need to switch AI provider | Coolify → Environment Variables → change `AI_PROVIDER` to the new provider (e.g., `openai`), add the corresponding API key if not already present → Save → Redeploy. |
 | OAuth login not working | Verify that both `*_CLIENT_ID` and `*_CLIENT_SECRET` are set for the provider. Check that `NEXT_PUBLIC_BASE_URL` matches your domain exactly (e.g., `https://openself.dev`). Verify the callback URL in the provider's console matches `https://openself.dev/api/auth/{provider}/callback`. |
 | "OAuth sign-in failed" on login page | Check Coolify → Logs for `[google-oauth]` or `[github-oauth]` errors. Common causes: expired client secret, wrong callback URL, missing email permission scope. |
+| Worker not processing jobs | Check `DB_BOOTSTRAP_MODE=follower` is set. Check logs for "Schema not ready" errors. Verify the web process has `DB_BOOTSTRAP_MODE=leader` and has started successfully. |
 
 ---
 
-## 8. Key Files in the Repository
+## 9. Key Files in the Repository
 
 | File | Purpose |
 |---|---|
@@ -508,7 +568,7 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 
 ---
 
-## 9. Cost Summary
+## 10. Cost Summary
 
 | Item | Cost | Notes |
 |---|---|---|

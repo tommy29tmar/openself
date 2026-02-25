@@ -118,6 +118,13 @@ export async function POST(req: Request) {
       // Publish via shared pipeline
       const result = await prepareAndPublish(username, sessionId, { mode: "register" });
 
+      // Backfill old session's profileId so it appears in allSessionIdsForProfile()
+      sqlite
+        .prepare(
+          "UPDATE sessions SET profile_id = ? WHERE id = ? AND profile_id IS NULL",
+        )
+        .run(profileId, sessionId);
+
       // Session rotation: new session linked to user + profile
       const newSessionId = createAuthSession(user.id, profileId);
 

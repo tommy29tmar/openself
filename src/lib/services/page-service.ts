@@ -81,6 +81,26 @@ export function hasAnyPage(sessionId: string = "__default__"): boolean {
 }
 
 /**
+ * Check if any published page exists across multiple session IDs.
+ * Used by mode detection (steady_state vs onboarding).
+ */
+export function hasAnyPublishedPage(sessionIds: string[]): boolean {
+  if (sessionIds.length === 0) return false;
+  const row = db
+    .select({ id: page.id })
+    .from(page)
+    .where(
+      and(
+        inArray(page.sessionId, sessionIds),
+        eq(page.status, "published"),
+      ),
+    )
+    .limit(1)
+    .get();
+  return Boolean(row);
+}
+
+/**
  * Write/update the draft row. Used by generate_page, set_theme, reorder, update_page_config.
  * Draft id = sessionId.
  */

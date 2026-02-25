@@ -19,6 +19,8 @@ Do not use ADRs for:
 3. `ADR-0003-mvp-theme-and-layout-scope.md` - MVP scoped to 2 themes and 1 layout
 4. `ADR-0004-page-two-row-model-and-publish-gate.md` - Two-row page model with server-side publish gate
 5. `ADR-0005-preview-polling-over-sse.md` - Polling-based preview with simplified state machine
+6. `ADR-0006-owner-scope-and-cognitive-architecture.md` - OwnerScope design, multi-session identity, trust ledger, migration bootstrap
+7. `ADR-0007-sse-preview-upgrade.md` - SSE preview with polling fallback (supersedes ADR-0005)
 
 ## Naming Convention
 

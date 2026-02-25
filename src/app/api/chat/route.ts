@@ -3,20 +3,51 @@ import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
 import { getSystemPromptText } from "@/lib/agent/prompts";
 import { createAgentTools } from "@/lib/agent/tools";
 import { getAllFacts } from "@/lib/services/kb-service";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
-import { getSessionIdFromRequest, getAuthContext } from "@/lib/auth/session";
+import { resolveOwnerScope } from "@/lib/auth/session";
 import {
   isMultiUserEnabled,
-  getSession,
   tryIncrementMessageCount,
   getMessageLimit,
   getMessageCount,
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
+import { enqueueSummaryJob } from "@/lib/services/summary-service";
+
+/**
+ * Per-profile message quota for authenticated users.
+ * Atomic check+increment (single UPDATE with WHERE guard — no race).
+ */
+function checkAndIncrementQuota(
+  profileKey: string,
+  limit: number,
+): { allowed: boolean; count: number } {
+  // Ensure row exists
+  sqlite
+    .prepare(
+      "INSERT INTO profile_message_usage(profile_key, count) VALUES(?, 0) ON CONFLICT(profile_key) DO NOTHING",
+    )
+    .run(profileKey);
+
+  // Atomic: increment ONLY if under limit
+  const result = sqlite
+    .prepare(
+      "UPDATE profile_message_usage SET count = count + 1, updated_at = datetime('now') WHERE profile_key = ? AND count < ?",
+    )
+    .run(profileKey, limit);
+
+  const row = sqlite
+    .prepare("SELECT count FROM profile_message_usage WHERE profile_key = ?")
+    .get(profileKey) as { count: number };
+
+  return { allowed: result.changes === 1, count: row.count };
+}
+
+const AUTH_MESSAGE_LIMIT = 200;
 
 export async function POST(req: Request) {
   // Rate limiting
@@ -53,34 +84,75 @@ export async function POST(req: Request) {
     return new Response("messages is required", { status: 400 });
   }
 
-  // Resolve session ID
+  // Resolve owner scope
   const multiUser = isMultiUserEnabled();
-  let sessionId: string;
-  let messageSessionId: string;
+  const scope = resolveOwnerScope(req);
+
+  if (multiUser && !scope) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  // Use scope keys for reads/writes, fallback to defaults for single-user
+  const effectiveScope = scope ?? {
+    cognitiveOwnerKey: DEFAULT_SESSION_ID,
+    knowledgeReadKeys: [DEFAULT_SESSION_ID],
+    knowledgePrimaryKey: DEFAULT_SESSION_ID,
+    currentSessionId: DEFAULT_SESSION_ID,
+  };
+
+  // Session ID for facts/page writes (anchor)
+  const writeSessionId = effectiveScope.knowledgePrimaryKey;
+  // Session ID for message writes (current session)
+  const messageSessionId = multiUser
+    ? effectiveScope.currentSessionId
+    : typeof body.sessionId === "string" && body.sessionId.trim().length > 0
+      ? body.sessionId
+      : DEFAULT_SESSION_ID;
+
+  // Quota enforcement
+  const isAuthenticated =
+    multiUser && effectiveScope.cognitiveOwnerKey !== effectiveScope.currentSessionId;
+
+  const extraHeaders: Record<string, string> = {};
 
   if (multiUser) {
-    sessionId = getSessionIdFromRequest(req);
-    if (!sessionId) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json" } },
-      );
-    }
-    const session = getSession(sessionId);
-    if (!session) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json" } },
-      );
-    }
+    const lastMessage = messages[messages.length - 1];
+    const isUserMessage = lastMessage?.role === "user";
 
-    // Authenticated users (userId != null) skip the message limit
-    const authCtx = getAuthContext(req);
-    const isAuthenticated = authCtx?.userId != null;
-
-    if (!isAuthenticated) {
-      // Gate: always reject if message limit reached, regardless of message role.
-      // This prevents clients from bypassing the limit by crafting non-user payloads.
+    if (isAuthenticated) {
+      // Authenticated: per-profile quota
+      if (isUserMessage) {
+        const { allowed, count } = checkAndIncrementQuota(
+          effectiveScope.cognitiveOwnerKey,
+          AUTH_MESSAGE_LIMIT,
+        );
+        extraHeaders["X-Message-Count"] = String(count);
+        extraHeaders["X-Message-Limit"] = String(AUTH_MESSAGE_LIMIT);
+        if (!allowed) {
+          return new Response(
+            JSON.stringify({
+              error: "Message limit reached.",
+              messageCount: count,
+              messageLimit: AUTH_MESSAGE_LIMIT,
+              code: "MESSAGE_LIMIT",
+            }),
+            {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "X-Message-Count": String(count),
+                "X-Message-Limit": String(AUTH_MESSAGE_LIMIT),
+              },
+            },
+          );
+        }
+      }
+    } else {
+      // Anonymous: per-session quota (existing behavior)
+      const sessionId = effectiveScope.currentSessionId;
       const limit = getMessageLimit();
       const currentCount = getMessageCount(sessionId);
       if (currentCount >= limit) {
@@ -102,9 +174,7 @@ export async function POST(req: Request) {
         );
       }
 
-      // Increment counter only for actual user messages
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage?.role === "user") {
+      if (isUserMessage) {
         const incremented = tryIncrementMessageCount(sessionId, limit);
         if (!incremented) {
           const latestCount = getMessageCount(sessionId);
@@ -126,23 +196,14 @@ export async function POST(req: Request) {
           );
         }
       }
-    }
 
-    messageSessionId = sessionId;
-  } else {
-    // Single-user: keep all page/fact/preference writes on the default session.
-    sessionId = DEFAULT_SESSION_ID;
-    // Preserve legacy message-thread grouping if client sends an explicit sessionId.
-    messageSessionId =
-      typeof body.sessionId === "string" && body.sessionId.trim().length > 0
-        ? body.sessionId
-        : DEFAULT_SESSION_ID;
+      extraHeaders["X-Message-Count"] = String(getMessageCount(sessionId));
+      extraHeaders["X-Message-Limit"] = String(limit);
+    }
   }
 
-  const sid = messageSessionId;
-
   // Build system prompt with current KB context
-  const existingFacts = getAllFacts(sessionId);
+  const existingFacts = getAllFacts(writeSessionId, effectiveScope.knowledgeReadKeys);
   const factsContext =
     existingFacts.length > 0
       ? `\n\n---\n\nKNOWN FACTS ABOUT THE USER (${existingFacts.length} facts):\n${existingFacts
@@ -164,7 +225,7 @@ export async function POST(req: Request) {
     db.insert(messagesTable)
       .values({
         id: randomUUID(),
-        sessionId: sid,
+        sessionId: messageSessionId,
         role: "user",
         content: lastMessage.content,
       })
@@ -174,29 +235,20 @@ export async function POST(req: Request) {
   const provider = getProviderName();
   const modelId = getModelId();
 
-  // Build response headers with message count info (multi-user)
-  const extraHeaders: Record<string, string> = {};
-  if (multiUser) {
-    const count = getMessageCount(sessionId);
-    const limit = getMessageLimit();
-    extraHeaders["X-Message-Count"] = String(count);
-    extraHeaders["X-Message-Limit"] = String(limit);
-  }
-
   try {
     const model = getModel();
     const result = streamText({
       model,
       system: systemPrompt,
       messages,
-      tools: createAgentTools(sessionLanguage, sessionId),
+      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey),
       maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
       onFinish: async ({ text, usage }) => {
         if (text) {
           db.insert(messagesTable)
             .values({
               id: randomUUID(),
-              sessionId: sid,
+              sessionId: messageSessionId,
               role: "assistant",
               content: text,
             })
@@ -209,6 +261,9 @@ export async function POST(req: Request) {
         if (inputTokens > 0 || outputTokens > 0) {
           recordUsage(provider, modelId, inputTokens, outputTokens);
         }
+
+        // Enqueue summary generation (best-effort, non-blocking)
+        enqueueSummaryJob(effectiveScope.cognitiveOwnerKey);
       },
     });
 

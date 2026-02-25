@@ -1,0 +1,270 @@
+/**
+ * Tests for the context assembler module (Sub-Phase 1).
+ * Pure-function tests for estimateTokens, detectMode, assembleContext.
+ * Service imports are mocked via vi.mock.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// --- Mock all service dependencies before importing the module under test ---
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getAllFacts: vi.fn(() => []),
+  countFacts: vi.fn(() => 0),
+}));
+vi.mock("@/lib/services/page-service", () => ({
+  hasAnyPublishedPage: vi.fn(() => false),
+}));
+vi.mock("@/lib/services/summary-service", () => ({
+  getSummary: vi.fn(() => null),
+}));
+vi.mock("@/lib/services/memory-service", () => ({
+  getActiveMemories: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/soul-service", () => ({
+  getActiveSoul: vi.fn(() => null),
+}));
+vi.mock("@/lib/services/conflict-service", () => ({
+  getOpenConflicts: vi.fn(() => []),
+}));
+vi.mock("@/lib/agent/prompts", () => ({
+  getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
+}));
+
+import { estimateTokens, detectMode, assembleContext } from "@/lib/agent/context";
+import type { OwnerScope } from "@/lib/auth/session";
+import { countFacts, getAllFacts } from "@/lib/services/kb-service";
+import { hasAnyPublishedPage } from "@/lib/services/page-service";
+import { getSummary } from "@/lib/services/summary-service";
+import { getActiveMemories } from "@/lib/services/memory-service";
+import { getActiveSoul } from "@/lib/services/soul-service";
+import { getOpenConflicts } from "@/lib/services/conflict-service";
+
+const SCOPE: OwnerScope = {
+  cognitiveOwnerKey: "cog-1",
+  knowledgeReadKeys: ["sess-a", "sess-b"],
+  knowledgePrimaryKey: "sess-a",
+  currentSessionId: "sess-b",
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Reset defaults
+  vi.mocked(countFacts).mockReturnValue(0);
+  vi.mocked(hasAnyPublishedPage).mockReturnValue(false);
+  vi.mocked(getAllFacts).mockReturnValue([]);
+  vi.mocked(getSummary).mockReturnValue(null);
+  vi.mocked(getActiveMemories).mockReturnValue([]);
+  vi.mocked(getActiveSoul).mockReturnValue(null);
+  vi.mocked(getOpenConflicts).mockReturnValue([]);
+});
+
+// ---------------------------------------------------------------------------
+// estimateTokens
+// ---------------------------------------------------------------------------
+describe("estimateTokens", () => {
+  it("returns 0 for empty string", () => {
+    expect(estimateTokens("")).toBe(0);
+  });
+
+  it("returns 100 for 400-char string", () => {
+    expect(estimateTokens("a".repeat(400))).toBe(100);
+  });
+
+  it("rounds up for non-divisible lengths", () => {
+    // 5 chars -> ceil(5/4) = 2
+    expect(estimateTokens("hello")).toBe(2);
+  });
+
+  it("handles exact boundary (4 chars = 1 token)", () => {
+    expect(estimateTokens("abcd")).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectMode
+// ---------------------------------------------------------------------------
+describe("detectMode", () => {
+  it("returns 'onboarding' with no facts and no published page", () => {
+    expect(detectMode(SCOPE.knowledgeReadKeys)).toBe("onboarding");
+  });
+
+  it("returns 'steady_state' when >= 5 facts", () => {
+    vi.mocked(countFacts).mockReturnValue(5);
+    expect(detectMode(SCOPE.knowledgeReadKeys)).toBe("steady_state");
+  });
+
+  it("returns 'steady_state' when a published page exists (even with 0 facts)", () => {
+    vi.mocked(hasAnyPublishedPage).mockReturnValue(true);
+    expect(detectMode(SCOPE.knowledgeReadKeys)).toBe("steady_state");
+  });
+
+  it("returns 'onboarding' with 4 facts and no published page", () => {
+    vi.mocked(countFacts).mockReturnValue(4);
+    expect(detectMode(SCOPE.knowledgeReadKeys)).toBe("onboarding");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assembleContext — basic shape
+// ---------------------------------------------------------------------------
+describe("assembleContext", () => {
+  it("produces valid ContextResult with systemPrompt, trimmedMessages, mode", () => {
+    const result = assembleContext(SCOPE, "en", [
+      { role: "user", content: "Hi" },
+    ]);
+    expect(result).toHaveProperty("systemPrompt");
+    expect(result).toHaveProperty("trimmedMessages");
+    expect(result).toHaveProperty("mode");
+    expect(typeof result.systemPrompt).toBe("string");
+    expect(Array.isArray(result.trimmedMessages)).toBe(true);
+    expect(["onboarding", "steady_state"]).toContain(result.mode);
+  });
+
+  it("includes facts block when facts exist", () => {
+    vi.mocked(getAllFacts).mockReturnValue([
+      { id: "f1", sessionId: "s", profileId: null, category: "identity", key: "name", value: '{"full":"Alice"}', source: "chat", confidence: 1, visibility: "public", createdAt: "", updatedAt: "" },
+    ] as any);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.systemPrompt).toContain("KNOWN FACTS ABOUT THE USER");
+    expect(result.systemPrompt).toContain("identity/name");
+  });
+
+  it("includes soul block when soul is active", () => {
+    vi.mocked(getActiveSoul).mockReturnValue({
+      compiled: "Soul: warm creative introvert",
+    } as any);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.systemPrompt).toContain("SOUL PROFILE:");
+    expect(result.systemPrompt).toContain("warm creative introvert");
+  });
+
+  it("includes summary block when summary exists", () => {
+    vi.mocked(getSummary).mockReturnValue("User discussed career goals.");
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.systemPrompt).toContain("CONVERSATION SUMMARY:");
+    expect(result.systemPrompt).toContain("User discussed career goals.");
+  });
+
+  it("includes memories block when memories exist", () => {
+    vi.mocked(getActiveMemories).mockReturnValue([
+      { memoryType: "preference", content: "Loves TypeScript" },
+    ] as any);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.systemPrompt).toContain("AGENT MEMORIES:");
+    expect(result.systemPrompt).toContain("[preference] Loves TypeScript");
+  });
+
+  it("includes conflicts block when open conflicts exist", () => {
+    vi.mocked(getOpenConflicts).mockReturnValue([
+      { id: "c1", category: "identity", key: "name", factAId: "f1", sourceA: "chat", factBId: "f2", sourceB: "chat" },
+    ] as any);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.systemPrompt).toContain("PENDING CONFLICTS:");
+    expect(result.systemPrompt).toContain("[c1]");
+  });
+
+  it("truncates oversized facts block to budget", () => {
+    // Generate facts that exceed the 2000-token (8000-char) budget
+    const bigFacts = Array.from({ length: 50 }, (_, i) => ({
+      id: `f${i}`, sessionId: "s", profileId: null,
+      category: "skill", key: `skill_${i}`,
+      value: JSON.stringify({ name: "x".repeat(200) }),
+      source: "chat", confidence: 1, visibility: "public",
+      createdAt: "", updatedAt: "",
+    }));
+    vi.mocked(getAllFacts).mockReturnValue(bigFacts as any);
+
+    const result = assembleContext(SCOPE, "en", []);
+    // The facts portion should not exceed its budget (2000 tokens = 8000 chars)
+    // Verify truncation marker is present
+    expect(result.systemPrompt).toContain("...");
+    // Total facts-related text should be bounded
+    const factsMatch = result.systemPrompt.match(/KNOWN FACTS[\s\S]*?(?=\n\n---|\n*$)/);
+    if (factsMatch) {
+      expect(estimateTokens(factsMatch[0])).toBeLessThanOrEqual(2000);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Post-assembly guard
+// ---------------------------------------------------------------------------
+describe("post-assembly guard", () => {
+  it("truncates when total system prompt exceeds 7500 tokens", () => {
+    // Inject large content into multiple blocks to blow past 7500 tokens (30000 chars)
+    vi.mocked(getAllFacts).mockReturnValue(
+      Array.from({ length: 50 }, (_, i) => ({
+        id: `f${i}`, sessionId: "s", profileId: null,
+        category: "bio", key: `k${i}`,
+        value: JSON.stringify({ text: "y".repeat(200) }),
+        source: "chat", confidence: 1, visibility: "public",
+        createdAt: "", updatedAt: "",
+      })) as any,
+    );
+    vi.mocked(getActiveSoul).mockReturnValue({
+      compiled: "Z".repeat(6000), // 1500 tokens worth
+    } as any);
+    vi.mocked(getSummary).mockReturnValue("S".repeat(3200)); // 800 tokens
+    vi.mocked(getActiveMemories).mockReturnValue(
+      Array.from({ length: 10 }, (_, i) => ({
+        memoryType: "note",
+        content: "M".repeat(160),
+      })) as any,
+    );
+
+    const result = assembleContext(SCOPE, "en", []);
+    const totalTokens = estimateTokens(result.systemPrompt);
+    expect(totalTokens).toBeLessThanOrEqual(7500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Message trimming
+// ---------------------------------------------------------------------------
+describe("message trimming", () => {
+  it("keeps at most 12 most recent messages", () => {
+    const msgs = Array.from({ length: 20 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `msg-${i}`,
+    }));
+
+    const result = assembleContext(SCOPE, "en", msgs);
+    expect(result.trimmedMessages.length).toBeLessThanOrEqual(12);
+    // The last message should be preserved
+    expect(result.trimmedMessages[result.trimmedMessages.length - 1].content).toBe("msg-19");
+  });
+
+  it("stays within ~2600 token budget for messages", () => {
+    // Each message is ~500 chars = 125 tokens; 12 of them = 1500 tokens (fits)
+    // But if each is ~1200 chars = 300 tokens, 12 would be 3600 (exceeds 2600)
+    const msgs = Array.from({ length: 12 }, (_, i) => ({
+      role: "user",
+      content: "x".repeat(1200),
+    }));
+
+    const result = assembleContext(SCOPE, "en", msgs);
+    const totalChars = result.trimmedMessages.reduce(
+      (sum, m) => sum + m.content.length,
+      0,
+    );
+    // Budget is 2600 tokens = 10400 chars; allow the mandatory 2-message minimum
+    // so we just check it trimmed below the full set
+    expect(result.trimmedMessages.length).toBeLessThan(12);
+    expect(totalChars).toBeLessThanOrEqual(10400 + 2400); // 2 mandatory msgs can exceed
+  });
+
+  it("always keeps at least 2 most recent messages even if over budget", () => {
+    const msgs = [
+      { role: "user", content: "a".repeat(6000) },
+      { role: "assistant", content: "b".repeat(6000) },
+    ];
+
+    const result = assembleContext(SCOPE, "en", msgs);
+    expect(result.trimmedMessages.length).toBe(2);
+  });
+});
