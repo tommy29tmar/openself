@@ -24,7 +24,7 @@ import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
 
-export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string) {
+export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[]) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
   return {
   create_fact: tool({
@@ -94,7 +94,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId, value }) => {
       try {
-        const fact = updateFact({ factId, value }, sessionId);
+        const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
         return { success: true, factId: fact.id };
       } catch (error) {
@@ -119,7 +119,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId }) => {
       try {
-        const deleted = deleteFact(factId, sessionId);
+        const deleted = deleteFact(factId, sessionId, readKeys);
         return { success: deleted };
       } catch (error) {
         logEvent({
@@ -144,7 +144,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ query }) => {
       try {
-        const results = searchFacts(query, sessionId);
+        const results = searchFacts(query, sessionId, readKeys);
         return {
           success: true,
           count: results.length,
@@ -307,7 +307,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ username, language }) => {
       try {
-        const facts = getAllFacts(sessionId);
+        const facts = getAllFacts(sessionId, readKeys);
         if (facts.length === 0) {
           return { success: false, error: "No facts in knowledge base yet" };
         }

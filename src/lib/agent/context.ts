@@ -58,10 +58,16 @@ function truncateToTokenBudget(text: string, budget: number): string {
  * composes the system prompt with per-block token budgets,
  * and trims client messages to fit within the total budget.
  */
+export type AuthInfo = {
+  authenticated: boolean;
+  username: string | null;
+};
+
 export function assembleContext(
   scope: OwnerScope,
   language: string,
   clientMessages: Array<{ role: string; content: string }>,
+  authInfo?: AuthInfo,
 ): ContextResult {
   const mode = detectMode(scope.knowledgeReadKeys);
 
@@ -123,6 +129,15 @@ export function assembleContext(
     contextParts.push(`\n\n---\n\nAGENT MEMORIES:\n${memoriesBlock}`);
   if (conflictsBlock)
     contextParts.push(`\n\n---\n\nPENDING CONFLICTS:\n${conflictsBlock}`);
+
+  // Auth context for steady-state publishing guidance
+  if (mode === "steady_state" && authInfo?.authenticated && authInfo.username) {
+    contextParts.push(
+      `\n\n---\n\nUSER AUTH: Authenticated as "${authInfo.username}". Published page: /${authInfo.username}.\n` +
+      `Use request_publish with username "${authInfo.username}" — do NOT ask for a username.\n` +
+      `The user can also publish from the navigation bar.`,
+    );
+  }
 
   let systemPrompt = contextParts.join("");
 

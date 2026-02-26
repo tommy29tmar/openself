@@ -9,6 +9,7 @@ import type { AuthState } from "@/app/builder/page";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { SignupModal } from "@/components/auth/SignupModal";
+import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
 import { PageRenderer } from "@/components/page";
 import {
   Tabs,
@@ -22,6 +23,8 @@ type SplitViewProps = {
   onLanguageChange?: (lang: LanguageCode) => void;
   initialConfig?: PageConfig | null;
   authState?: AuthState;
+  publishedConfigHash?: string | null;
+  onPublishedConfigHashChange?: (hash: string | null) => void;
 };
 
 const POLL_INTERVAL = 3000; // 3 seconds
@@ -37,229 +40,6 @@ function EmptyPreview() {
           Start chatting and watch it build in real time
         </p>
       </div>
-    </div>
-  );
-}
-
-type PublishBarProps = {
-  username: string;
-  configHash: string | null;
-  authState?: AuthState;
-};
-
-function PublishBar({ username: initialUsername, configHash, authState }: PublishBarProps) {
-  const [username, setUsername] = useState(initialUsername);
-  const [publishing, setPublishing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [signupOpen, setSignupOpen] = useState(false);
-
-  // Sync username when initialUsername changes post-mount (e.g. request_publish arrives late)
-  useEffect(() => {
-    if (initialUsername) setUsername(initialUsername);
-  }, [initialUsername]);
-
-  const multiUser = authState?.multiUser ?? false;
-  const authenticated = authState?.authenticated ?? false;
-  const authUsername = authState?.username ?? null;
-
-  const handlePublish = async () => {
-    setPublishing(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: authUsername ?? username, expectedHash: configHash }),
-      });
-      if (res.status === 401) {
-        window.location.href = "/invite";
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
-        window.location.href = data.url;
-      } else {
-        setError(data.error || "Publish failed");
-      }
-    } catch {
-      setError("Network error");
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  // Mode 1: Single-user (no multi-user) — username input + publish (original behavior)
-  if (!multiUser) {
-    return (
-      <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
-        <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-          Ready to publish
-        </span>
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value.toLowerCase())}
-          className="w-32 rounded border px-2 py-1 text-sm"
-          placeholder="username"
-        />
-        <button
-          onClick={handlePublish}
-          disabled={publishing || !username}
-          className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          {publishing ? "Publishing..." : "Publish"}
-        </button>
-        {error && (
-          <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
-        )}
-      </div>
-    );
-  }
-
-  // Mode 2: Multi-user, NOT authenticated — sign up to publish
-  if (!authenticated) {
-    return (
-      <>
-        <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
-          <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-            Your page is ready!
-          </span>
-          <button
-            onClick={() => setSignupOpen(true)}
-            className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
-          >
-            Sign up to publish
-          </button>
-        </div>
-        <SignupModal open={signupOpen} onClose={() => setSignupOpen(false)} initialUsername={username} />
-      </>
-    );
-  }
-
-  // Mode 3: Multi-user, authenticated
-  // 3a: Has username — publish directly
-  if (authUsername) {
-    return (
-      <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
-        <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-          Publish as {authUsername}
-        </span>
-        <button
-          onClick={handlePublish}
-          disabled={publishing}
-          className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          {publishing ? "Publishing..." : "Publish"}
-        </button>
-        {error && (
-          <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
-        )}
-      </div>
-    );
-  }
-
-  // 3b: Authenticated but no username (OAuth edge case) — username input + publish
-  return (
-    <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
-      <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-        Choose your username
-      </span>
-      <input
-        type="text"
-        value={username}
-        onChange={(e) => setUsername(e.target.value.toLowerCase())}
-        className="w-32 rounded border px-2 py-1 text-sm"
-        placeholder="username"
-      />
-      <button
-        onClick={handlePublish}
-        disabled={publishing || !username}
-        className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-      >
-        {publishing ? "Publishing..." : "Publish"}
-      </button>
-      {error && (
-        <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
-      )}
-    </div>
-  );
-}
-
-function AuthIndicator({ authState }: { authState?: AuthState }) {
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  if (!authState?.authenticated || !authState?.username) return null;
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/";
-    } catch {
-      setLoggingOut(false);
-    }
-  };
-
-  return (
-    <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
-      <span className="font-medium">{authState.username}</span>
-      <span className="text-muted-foreground">·</span>
-      <button
-        onClick={handleLogout}
-        disabled={loggingOut}
-        className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-      >
-        {loggingOut ? "..." : "Log out"}
-      </button>
-    </div>
-  );
-}
-
-function BuilderBanner({ authState }: { authState?: AuthState }) {
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  if (!authState?.authenticated || !authState?.publishedUsername) return null;
-
-  const handleShare = () => {
-    const url = `${window.location.origin}/${authState.publishedUsername}`;
-    if (navigator.share) {
-      navigator.share({ title: "My OpenSelf page", url });
-    } else {
-      navigator.clipboard.writeText(url);
-    }
-  };
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/";
-    } catch {
-      setLoggingOut(false);
-    }
-  };
-
-  return (
-    <div className="sticky top-0 z-50 flex items-center justify-center gap-4 border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <a
-        href={`/${authState.publishedUsername}`}
-        className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-      >
-        Live page
-      </a>
-      <button
-        onClick={handleShare}
-        className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline"
-      >
-        Share
-      </button>
-      <button
-        onClick={handleLogout}
-        disabled={loggingOut}
-        className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
-      >
-        {loggingOut ? "Logging out..." : "Log out"}
-      </button>
     </div>
   );
 }
@@ -316,7 +96,14 @@ function GearButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function SplitView({ language, onLanguageChange, initialConfig, authState }: SplitViewProps) {
+export function SplitView({
+  language,
+  onLanguageChange,
+  initialConfig,
+  authState,
+  publishedConfigHash,
+  onPublishedConfigHashChange,
+}: SplitViewProps) {
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
   const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
@@ -332,11 +119,64 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
     (config?.layoutTemplate as LayoutTemplateId) ?? "vertical",
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // Tracks the last user-initiated style edit. Polls that arrive within
-  // one POLL_INTERVAL after a user edit are suppressed to avoid overwriting
-  // in-flight changes. Polls after that window sync from server, picking up
-  // both the user's persisted changes and any agent-driven updates.
+
+  // Lifted publish / signup state
+  const [signupOpen, setSignupOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  // Username input for authenticated-but-no-username (OAuth edge case)
+  const [usernameInputOpen, setUsernameInputOpen] = useState(false);
+  const [pendingUsername, setPendingUsername] = useState("");
+
+  // Tracks the last user-initiated style edit
   const lastUserEdit = useRef(0);
+
+  // Change detection: draft differs from published
+  const hasUnpublishedChanges = Boolean(
+    configHash && (
+      (publishedConfigHash && configHash !== publishedConfigHash) ||
+      (!publishedConfigHash && config) // first publish: draft exists, never published
+    )
+  );
+
+  const doPublish = async (username: string) => {
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, expectedHash: configHash }),
+      });
+      if (res.status === 401) {
+        window.location.href = "/invite";
+        return;
+      }
+      const data = await res.json();
+      if (data.success) {
+        // Sync hashes so button disappears
+        onPublishedConfigHashChange?.(configHash);
+        window.location.href = data.url;
+      } else {
+        setPublishError(data.error || "Publish failed");
+      }
+    } catch {
+      setPublishError("Network error");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handlePublish = () => {
+    const username = authState?.username ?? pendingUsername;
+    if (authState?.authenticated && !username) {
+      setUsernameInputOpen(true);
+      return;
+    }
+    if (!username) return;
+    void doPublish(username);
+  };
 
   const handleThemeChange = useCallback((t: string) => {
     setTheme(t);
@@ -361,9 +201,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
     lastUserEdit.current = Date.now();
     const ok = await persistStyle({ layoutTemplate: t });
     if (ok) {
-      // Layout changes require server-side slot reassignment.
-      // Force a refetch to get the updated sections with correct slot assignments.
-      lastUserEdit.current = 0; // Allow the refetch to update all state
+      lastUserEdit.current = 0;
       try {
         const res = await fetch(`/api/preview?username=draft&language=${language}`);
         if (res.ok) {
@@ -373,7 +211,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
             if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
           }
         }
-      } catch { /* ignore — next poll will catch up */ }
+      } catch { /* ignore */ }
     }
   }, [language]);
 
@@ -389,9 +227,6 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
       if (data.config) {
         setConfig(data.config);
 
-        // Sync style from server unless user just edited locally.
-        // The suppression window prevents a stale poll from overwriting
-        // a change the user made before the POST completed.
         const userEditAge = Date.now() - lastUserEdit.current;
         if (userEditAge > POLL_INTERVAL) {
           if (data.config.theme) setTheme(data.config.theme);
@@ -422,7 +257,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
       es = new EventSource(`/api/preview/stream`);
 
       es.onmessage = (event) => {
-        errorCount = 0; // reset on successful message
+        errorCount = 0;
         try {
           const data = JSON.parse(event.data);
           if (data.config) {
@@ -439,14 +274,13 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
           if (data.publishStatus) setPublishStatus(data.publishStatus);
           if (data.config?.username) setPublishUsername(data.config.username);
         } catch {
-          // Ignore parse errors (e.g., keepalive)
+          // Ignore parse errors
         }
       };
 
       es.onerror = () => {
         errorCount++;
         if (errorCount >= 5) {
-          // Fallback to polling
           es?.close();
           es = null;
           startPolling();
@@ -455,11 +289,10 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
     };
 
     const startPolling = () => {
-      fetchPreview(); // Initial fetch
+      fetchPreview();
       pollInterval = setInterval(fetchPreview, POLL_INTERVAL);
     };
 
-    // Try SSE first
     if (typeof EventSource !== "undefined") {
       startSSE();
     } else {
@@ -501,19 +334,61 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
     />
   );
 
+  const navBar = (
+    <BuilderNavBar
+      authState={authState}
+      hasUnpublishedChanges={hasUnpublishedChanges}
+      publishing={publishing}
+      publishError={publishError}
+      onPublish={handlePublish}
+      onSignup={() => setSignupOpen(true)}
+    />
+  );
+
+  const usernameInput = usernameInputOpen && (
+    <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
+      <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
+        Choose your username
+      </span>
+      <input
+        type="text"
+        value={pendingUsername}
+        onChange={(e) => setPendingUsername(e.target.value.toLowerCase())}
+        className="w-32 rounded border px-2 py-1 text-sm"
+        placeholder="username"
+      />
+      <button
+        onClick={() => {
+          if (!pendingUsername) return;
+          setUsernameInputOpen(false);
+          void doPublish(pendingUsername);
+        }}
+        disabled={!pendingUsername || publishing}
+        className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+      >
+        Publish
+      </button>
+    </div>
+  );
+
   const previewPane = displayConfig ? (
     <div className="relative h-full overflow-y-auto">
-      {authState?.authenticated && authState?.publishedUsername ? (
-        <BuilderBanner authState={authState} />
-      ) : (
-        <AuthIndicator authState={authState} />
-      )}
-      {publishStatus === "approval_pending" && (
-        <PublishBar
-          username={publishUsername !== "draft" ? publishUsername : ""}
-          configHash={configHash}
-          authState={authState}
-        />
+      {navBar}
+      {usernameInput}
+      {/* Show PublishBar only when agent requested publish AND NavBar doesn't already show publish */}
+      {publishStatus === "approval_pending" && !hasUnpublishedChanges && (
+        <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
+          <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
+            Ready to publish
+          </span>
+          <button
+            onClick={handlePublish}
+            disabled={publishing}
+            className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {publishing ? "Publishing..." : "Publish"}
+          </button>
+        </div>
       )}
       <PageRenderer config={displayConfig} previewMode={true} />
       <GearButton onClick={() => setSettingsOpen(true)} />
@@ -521,11 +396,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
-      {authState?.authenticated && authState?.publishedUsername ? (
-        <BuilderBanner authState={authState} />
-      ) : (
-        <AuthIndicator authState={authState} />
-      )}
+      {navBar}
       <EmptyPreview />
       <GearButton onClick={() => setSettingsOpen(true)} />
       <SettingsPanel
@@ -551,6 +422,13 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
 
   return (
     <>
+      {/* Signup modal — rendered at top level */}
+      <SignupModal
+        open={signupOpen}
+        onClose={() => setSignupOpen(false)}
+        initialUsername={publishUsername !== "draft" ? publishUsername : ""}
+      />
+
       {/* Desktop: side-by-side */}
       <div className="hidden h-screen md:flex">
         <div className="w-[400px] shrink-0 overflow-hidden border-r">

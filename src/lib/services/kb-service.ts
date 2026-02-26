@@ -234,24 +234,27 @@ export function deleteFact(
   return true;
 }
 
-export function searchFacts(query: string, sessionId: string = "__default__"): FactRow[] {
+export function searchFacts(query: string, sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
   const pattern = `%${query}%`;
-  const rows = db
-    .select()
-    .from(facts)
-    .where(
-      and(
-        eq(facts.sessionId, sessionId),
-        or(
-          like(facts.category, pattern),
-          like(facts.key, pattern),
-          sql`json_extract(${facts.value}, '$') LIKE ${pattern}`,
-        ),
-      ),
-    )
-    .all();
+  const matchCondition = or(
+    like(facts.category, pattern),
+    like(facts.key, pattern),
+    sql`json_extract(${facts.value}, '$') LIKE ${pattern}`,
+  );
 
-  return rows as FactRow[];
+  if (PROFILE_ID_CANONICAL) {
+    return db.select().from(facts)
+      .where(and(eq(facts.profileId, sessionId), matchCondition))
+      .all() as FactRow[];
+  }
+  if (sessionIds && sessionIds.length > 0) {
+    return db.select().from(facts)
+      .where(and(inArray(facts.sessionId, sessionIds), matchCondition))
+      .all() as FactRow[];
+  }
+  return db.select().from(facts)
+    .where(and(eq(facts.sessionId, sessionId), matchCondition))
+    .all() as FactRow[];
 }
 
 /**

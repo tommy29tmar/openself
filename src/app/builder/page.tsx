@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { SplitView } from "@/components/layout/SplitView";
 import {
   LanguagePicker,
@@ -59,6 +59,23 @@ export default function BuilderPage() {
     multiUser: false,
     publishedUsername: null,
   });
+  const [publishedConfigHash, setPublishedConfigHash] = useState<string | null>(null);
+
+  // Lightweight auth refresh — only updates auth-related state, no language or loading side effects
+  const refreshAuth = useCallback(async () => {
+    try {
+      const res = await fetch("/api/preferences", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAuthState({
+        authenticated: !!data.authenticated,
+        username: data.username ?? null,
+        multiUser: !!data.multiUser,
+        publishedUsername: data.publishedUsername ?? null,
+      });
+      setPublishedConfigHash(data.publishedConfigHash ?? null);
+    } catch { /* silent */ }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +100,7 @@ export default function BuilderPage() {
           username?: string | null;
           multiUser?: boolean;
           publishedUsername?: string | null;
+          publishedConfigHash?: string | null;
         };
         const serverLanguage = isLanguageCode(data.language) ? data.language : null;
 
@@ -93,6 +111,7 @@ export default function BuilderPage() {
             multiUser: !!data.multiUser,
             publishedUsername: data.publishedUsername ?? null,
           });
+          setPublishedConfigHash(data.publishedConfigHash ?? null);
         }
 
         const resolvedLanguage = serverLanguage
@@ -124,6 +143,26 @@ export default function BuilderPage() {
     };
   }, []);
 
+  // Re-validate auth on tab switch, back navigation, and window focus
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshAuth();
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void refreshAuth();
+    };
+    const onFocus = () => void refreshAuth();
+
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refreshAuth]);
+
   const handleSelectLanguage = async (selectedLanguage: LanguageCode) => {
     setLanguage(selectedLanguage);
     storeLanguage(selectedLanguage);
@@ -142,5 +181,13 @@ export default function BuilderPage() {
     return <LanguagePicker onSelect={handleSelectLanguage} />;
   }
 
-  return <SplitView language={language} onLanguageChange={handleSelectLanguage} authState={authState} />;
+  return (
+    <SplitView
+      language={language}
+      onLanguageChange={handleSelectLanguage}
+      authState={authState}
+      publishedConfigHash={publishedConfigHash}
+      onPublishedConfigHashChange={setPublishedConfigHash}
+    />
+  );
 }

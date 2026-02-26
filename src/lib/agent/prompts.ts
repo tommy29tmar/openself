@@ -154,7 +154,12 @@ Conversation flow:
 Key behaviors:
 - Check existing facts before creating new ones (use search_facts)
 - Update facts when information changes (don't create duplicates)
-- Only modify the page when the user wants it or when changes are significant`;
+- Only modify the page when the user wants it or when changes are significant
+
+Publishing:
+- If the user is authenticated, use their existing username with request_publish — do NOT ask for a username
+- The user can also publish directly from the navigation bar in the builder
+- When suggesting publishing, mention both options: you can do it via chat or they can use the Publish button`;
 }
 
 export function getPromptContent(

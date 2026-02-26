@@ -86,6 +86,20 @@ export function getPublishedUsername(sessionIds: string[]): string | null {
 }
 
 /**
+ * Get the config_hash of the most recent published page for a set of session IDs.
+ */
+export function getPublishedConfigHash(sessionIds: string[]): string | null {
+  if (sessionIds.length === 0) return null;
+  const placeholders = sessionIds.map(() => "?").join(",");
+  const row = sqlite
+    .prepare(
+      `SELECT config_hash FROM page WHERE session_id IN (${placeholders}) AND status = 'published' ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .get(...sessionIds) as { config_hash: string } | undefined;
+  return row?.config_hash ?? null;
+}
+
+/**
  * True when at least one page row exists for a session (draft or published).
  */
 export function hasAnyPage(sessionId: string = "__default__"): boolean {

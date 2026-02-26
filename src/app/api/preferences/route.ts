@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { getAllFacts } from "@/lib/services/kb-service";
-import { getDraft, hasAnyPage, upsertDraft, getPublishedUsername } from "@/lib/services/page-service";
+import { getDraft, hasAnyPage, upsertDraft, getPublishedUsername, getPublishedConfigHash } from "@/lib/services/page-service";
 import { logEvent } from "@/lib/services/event-service";
 import {
   getPreferences,
@@ -35,6 +35,7 @@ export async function GET(req: Request) {
     username: authCtx?.username ?? null,
     multiUser: isMultiUserEnabled(),
     publishedUsername,
+    publishedConfigHash: getPublishedConfigHash(readKeys),
   });
 }
 

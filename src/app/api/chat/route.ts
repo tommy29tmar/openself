@@ -7,7 +7,7 @@ import { messages as messagesTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
-import { resolveOwnerScope } from "@/lib/auth/session";
+import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import {
   isMultiUserEnabled,
   tryIncrementMessageCount,
@@ -207,11 +207,15 @@ export async function POST(req: Request) {
   const requestId = randomUUID();
   const sessionLanguage = language || "en";
 
+  // Resolve auth for context injection
+  const chatAuthCtx = multiUser ? getAuthContext(req) : null;
+
   // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
   const { systemPrompt, trimmedMessages, mode } = assembleContext(
     effectiveScope,
     sessionLanguage,
     messages,
+    chatAuthCtx ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null } : undefined,
   );
 
   // Role whitelist: AI SDK expects only these roles
@@ -240,7 +244,7 @@ export async function POST(req: Request) {
       model,
       system: systemPrompt,
       messages: safeMessages,
-      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId),
+      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys),
       maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
