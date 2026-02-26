@@ -11,6 +11,15 @@ import { getPreferences } from "@/lib/services/preferences-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { translatePageContent } from "@/lib/ai/translate";
 import type { PageConfig } from "@/lib/page-config/schema";
+import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
+import { resolveLayoutTemplate } from "@/lib/layout/registry";
+import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
+import { validateLayoutComposition } from "@/lib/layout/quality";
+import { buildWidgetMap } from "@/lib/layout/widgets";
+import {
+  toSlotAssignments,
+  canFullyValidateSection,
+} from "@/lib/layout/validate-adapter";
 
 export type PublishMode = "register" | "publish";
 
@@ -114,8 +123,62 @@ export async function prepareAndPublish(
       ? { ...composed, theme: draft.config.theme, style: draft.config.style }
       : composed;
 
-    finalConfig = await translatePageContent(styled, targetLang, factLang);
+    finalConfig = normalizeConfigForWrite(
+      await translatePageContent(styled, targetLang, factLang),
+    );
   }
+
+  // Step 4b: Layout validation gate
+  const configToPublish = finalConfig ?? draft!.config;
+  const resolvedTemplate = resolveLayoutTemplate(configToPublish);
+
+  // Check if all sections can be fully validated
+  const allSectionsValidatable = configToPublish.sections.every((s) =>
+    canFullyValidateSection(s),
+  );
+
+  const sectionsForValidation = allSectionsValidatable
+    ? configToPublish.sections
+    : assignSlotsFromFacts(
+        resolvedTemplate,
+        configToPublish.sections,
+        undefined,
+        { repair: false },
+      ).sections;
+
+  const conversionResult = toSlotAssignments(sectionsForValidation);
+  const assignments = conversionResult.assignments;
+  const skipped = conversionResult.skipped;
+
+  // INVARIANT: every section must have an explicit outcome
+  if (skipped.length > 0) {
+    const isPostAssignment = !allSectionsValidatable;
+    const statusCode = isPostAssignment ? 500 : 400;
+    const errorCode = isPostAssignment
+      ? "LAYOUT_VALIDATION_INCOMPLETE"
+      : "LAYOUT_CONFIG_INVALID";
+    throw new PublishError(
+      `Layout validation: ${skipped.length} section(s) not validatable: ${skipped.map((s) => `${s.sectionId} (${s.reason})`).join("; ")}`,
+      errorCode,
+      statusCode,
+    );
+  }
+
+  const widgetMap = buildWidgetMap();
+  const layoutResult = validateLayoutComposition(
+    resolvedTemplate,
+    assignments,
+    widgetMap,
+  );
+  const layoutErrors = layoutResult.all.filter((i) => i.severity === "error");
+  if (layoutErrors.length > 0) {
+    throw new PublishError(
+      `Layout invalid: ${layoutErrors.map((e) => e.message).join("; ")}`,
+      "LAYOUT_INVALID",
+      400,
+    );
+  }
+  // Warnings → log but don't block (layout validation passes)
 
   // Step 5: atomic DB writes
   const txn = sqlite.transaction(() => {

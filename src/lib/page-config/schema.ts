@@ -1,3 +1,5 @@
+import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
+
 export type ComponentType =
   | "hero"
   | "bio"
@@ -24,10 +26,32 @@ export type StyleConfig = {
   layout: "centered" | "split" | "stack";
 };
 
+export type SectionLock = {
+  position?: boolean;
+  widget?: boolean;
+  content?: boolean;
+  lockedBy: "user" | "agent";
+  lockedAt: string;
+  reason?: string;
+};
+
+export type SectionLockProposal = {
+  position?: boolean;
+  widget?: boolean;
+  content?: boolean;
+  proposedBy: "agent";
+  proposedAt: string;
+  reason?: string;
+};
+
 export type Section = {
   id: string;
   type: AnyComponentType;
   variant?: string;
+  widgetId?: string;
+  slot?: string;
+  lock?: SectionLock;
+  lockProposal?: SectionLockProposal;
   content: Record<string, unknown>;
 };
 
@@ -35,6 +59,7 @@ export type PageConfig = {
   version: number;
   username: string;
   theme: string;
+  layoutTemplate?: LayoutTemplateId;
   style: StyleConfig;
   sections: Section[];
 };
@@ -246,6 +271,20 @@ function validateSection(
     errors.push(`${path}.variant must be a non-empty string when provided`);
   }
 
+  // Validate new optional fields
+  if (section.widgetId !== undefined && !isString(section.widgetId)) {
+    errors.push(`${path}.widgetId must be a non-empty string when provided`);
+  }
+  if (section.slot !== undefined && !isString(section.slot)) {
+    errors.push(`${path}.slot must be a non-empty string when provided`);
+  }
+  if (section.lock !== undefined) {
+    validateSectionLock(section.lock, `${path}.lock`, errors);
+  }
+  if (section.lockProposal !== undefined) {
+    validateSectionLockProposal(section.lockProposal, `${path}.lockProposal`, errors);
+  }
+
   if (
     registered &&
     isString(section.variant) &&
@@ -297,6 +336,50 @@ function validateSection(
   }
 }
 
+function validateSectionLock(lock: unknown, path: string, errors: string[]): void {
+  if (!isObject(lock)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  if (lock.position !== undefined && typeof lock.position !== "boolean") {
+    errors.push(`${path}.position must be a boolean`);
+  }
+  if (lock.widget !== undefined && typeof lock.widget !== "boolean") {
+    errors.push(`${path}.widget must be a boolean`);
+  }
+  if (lock.content !== undefined && typeof lock.content !== "boolean") {
+    errors.push(`${path}.content must be a boolean`);
+  }
+  if (lock.lockedBy !== "user" && lock.lockedBy !== "agent") {
+    errors.push(`${path}.lockedBy must be "user" or "agent"`);
+  }
+  if (!isString(lock.lockedAt)) {
+    errors.push(`${path}.lockedAt must be a non-empty string`);
+  }
+}
+
+function validateSectionLockProposal(proposal: unknown, path: string, errors: string[]): void {
+  if (!isObject(proposal)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  if (proposal.position !== undefined && typeof proposal.position !== "boolean") {
+    errors.push(`${path}.position must be a boolean`);
+  }
+  if (proposal.widget !== undefined && typeof proposal.widget !== "boolean") {
+    errors.push(`${path}.widget must be a boolean`);
+  }
+  if (proposal.content !== undefined && typeof proposal.content !== "boolean") {
+    errors.push(`${path}.content must be a boolean`);
+  }
+  if (proposal.proposedBy !== "agent") {
+    errors.push(`${path}.proposedBy must be "agent"`);
+  }
+  if (!isString(proposal.proposedAt)) {
+    errors.push(`${path}.proposedAt must be a non-empty string`);
+  }
+}
+
 export const AVAILABLE_THEMES = ["minimal", "warm", "editorial-360"] as const;
 export type AvailableTheme = (typeof AVAILABLE_THEMES)[number];
 
@@ -322,6 +405,19 @@ export function validatePageConfig(
     errors.push(
       `theme must be one of: ${AVAILABLE_THEMES.join(", ")}`,
     );
+  }
+
+  // Validate layoutTemplate if present
+  if (input.layoutTemplate !== undefined) {
+    if (typeof input.layoutTemplate !== "string") {
+      errors.push("layoutTemplate must be a string");
+    } else if (
+      !(LAYOUT_TEMPLATES as readonly string[]).includes(input.layoutTemplate)
+    ) {
+      errors.push(
+        `layoutTemplate must be one of: ${LAYOUT_TEMPLATES.join(", ")}`,
+      );
+    }
   }
 
   validateStyleConfig(input.style, errors);

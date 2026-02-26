@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-25
+Last updated: 2026-02-26
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,10 +12,11 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 2 themes (minimal, warm), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 206 automated tests passing
+- 268 automated tests passing (22 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
+- Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete.
 
 ## 2) Implemented Today
 
@@ -34,7 +35,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Streaming AI chat | Done | `useChat` + `/api/chat` |
-| Tool-calling agent | Done | Fact CRUD, page generation, request_publish, reorder, theme |
+| Tool-calling agent | Done | Fact CRUD, page generation, request_publish, reorder, theme, set_layout, propose_lock |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) |
 | LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
@@ -69,7 +70,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Optimistic page composition from facts | Done | Deterministic skeleton: Hero/Bio/Skills/Projects/Interests/Social/Footer. Hybrid LLM personalizer planned for Phase 1c. |
 | Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors |
 | Theme switch in preview | Done | `minimal` and `warm` + light/dark, centralized validation |
-| Layout engine | Done | Centered MVP; split/stack fallback to centered (Phase 1 for distinct layouts) |
+| Layout template engine | Done | 3 templates (vertical, sidebar-left, bento-standard) with slot-based section assignment, widget registry, validation gates. Anticipated from Phase 1b. |
 | Public page sections renderer | Partial | Renders only a subset of schema section types |
 | Mobile tab chat state retention | Done | `TabsContent` uses `forceMount` + `data-[state=inactive]:hidden` to keep `ChatPanel` mounted |
 
@@ -97,11 +98,24 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 All items complete. See Section 2 for implementation details.
 
+### Layout Template Engine (Anticipated from Phase 1b) ✅
+
+Layout template engine anticipated and completed ahead of Phase 1b. Includes:
+1. 3 layout templates: vertical, sidebar-left, bento-standard
+2. Slot-based section assignment with capacity constraints
+3. Widget registry (20+ widgets with slot compatibility)
+4. Renderer decoupling: ThemeLayout = visual wrapper, LayoutComponent = grid structure
+5. Granular section lock system (position/widget/content, user locks vs agent proposals)
+6. Layout validation gates at 4 points (composer, set_layout tool, update_page_config, publish pipeline)
+7. Settings UI with template picker
+8. Agent tools: `set_layout`, `propose_lock`
+9. 62+ new layout-specific tests
+
 ### Phase 1b — Extended Sections
 1. Education section (timeline/cards, multi-item)
 2. Experience section (timeline, multi-item)
 3. Additional section types: achievements, stats, reading, music, contact
-4. Split/stack layout implementations (distinct from centered)
+4. ~~Split/stack layout implementations~~ → **Done** (replaced by layout template engine with 3 templates)
 5. Bold/elegant/hacker themes
 
 ### Phase 1c — Hybrid Page Compiler
@@ -127,16 +141,18 @@ All items complete. See Section 2 for implementation details.
 ## 4) Layout Count (Requested Snapshot)
 
 Page web layout counts at current code state:
-- Declared in schema: 3 (`centered`, `split`, `stack`)
-- Actually rendered on public page today: 1 (centered; split/stack fallback to centered)
+- Layout templates: 3 (`vertical`, `sidebar-left`, `bento-standard`) — all fully functional
+- Legacy `style.layout` field (`centered`, `split`, `stack`): retained for backward compat but ignored for layout resolution; canonicalized to `"centered"` when `layoutTemplate` is present
+- Default without explicit `layoutTemplate`: vertical (renders identically to the original centered layout)
 
 Builder interface layouts (chat experience):
 - Desktop split view: 1
 - Mobile tab view: 1
+- Settings panel: template picker with 3 options
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 206 passed / 206 total (Vitest)
+- Automated tests: 268 passed / 268 total (Vitest, 22 test files)
 - Covered areas:
   1. Fact-to-section composition behavior + role casing (18 tests)
   2. PageConfig validation behavior (15 tests)
@@ -150,10 +166,15 @@ Builder interface layouts (chat experience):
   10. Memory service — CRUD, dedup, quota, cooldown, feedback (15 tests)
   11. Soul service — versioning, proposals, review, expire (12 tests)
   12. Trust ledger + conflicts + heartbeat config (15 tests)
+  13. Layout registry — template lookup, fallback, no legacy mapping (12 tests)
+  14. Layout widgets — widget compatibility, getBestWidget, resolveVariant (13 tests)
+  15. Layout quality — severity policy, error/warning split (9 tests)
+  16. Group slots — type routing, slot fallback, capacity limits (9 tests)
+  17. Assign slots — assignment, locks, no-truncate, post-assign invariant (8 tests)
+  18. Lock policy — canMutateSection for all actor/lock combinations (11 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
-  2. Renderer behavior for visual layout modes
-  3. Connector and worker lifecycle integration
+  2. Connector and worker lifecycle integration
 
 ## 6) Definition of Done (Project-Level)
 

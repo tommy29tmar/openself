@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-25
+Last updated: 2026-02-26
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -66,6 +66,37 @@ When choosing work, apply this order:
 - OwnerScope: multi-session identity, anchor session, per-profile quota
 - 206 automated tests (133 + 73 new)
 
+### Layout Template Engine (Anticipated from Phase 1b — Done)
+
+Layout template engine was originally planned as NEXT-8 in Phase 1b. It was anticipated
+and implemented ahead of schedule as a standalone deliverable.
+
+- **Layout Registry**: 3 templates (vertical, sidebar-left, bento-standard) with slot-based section placement
+  - Slot definitions with size, capacity, accepted section types, desktop/mobile ordering
+  - `resolveLayoutTemplate()` — no legacy mapping, always defaults to "vertical"
+- **Widget Registry**: 20+ widget definitions with section type + slot size compatibility
+  - `widgetId` as source of truth for variant resolution (replaces legacy `variant` field)
+  - `getBestWidget()` for automatic widget selection based on section type + slot size
+- **Renderer Decoupling**: ThemeLayout (visual wrapper only) + LayoutComponent (CSS Grid structure)
+  - VerticalLayout reproduces original centered layout pixel-for-pixel
+  - SidebarLayout: two-column responsive grid (7/5 split)
+  - BentoLayout: magazine-style 6-column grid with varying card sizes
+  - Mobile: all grids collapse to single column with `mobileOrder` from registry
+- **Slot Assignment Engine**: lock-aware, deterministic section-to-slot assignment
+  - Type routing: hero → heroSlot, footer → footerSlot (always, regardless of metadata)
+  - Auto-repair: changes widget/slot only, never truncates user content
+- **Lock System**: granular section locks (position/widget/content)
+  - Two paths: agent `propose_lock` (pending proposal) vs user lock via authenticated API
+  - Central enforcement via `canMutateSection()` policy
+- **Validation Gates**: 4 points — composer, set_layout tool, update_page_config, publish pipeline
+  - Severity policy: `missing_required`/`incompatible_widget` = error (blocking); `overflow_risk`/`too_sparse` = warning
+  - Publish gate with `toSlotAssignments()` adapter distinguishes 400 (bad config) vs 500 (internal bug)
+- **Schema Extensions**: `layoutTemplate` (top-level), `widgetId`, `slot`, `lock`, `lockProposal` on sections
+- **Settings UI**: template picker in SettingsPanel; `POST /api/draft/style` accepts `layoutTemplate`
+- **Agent Tools**: `set_layout` (change template + re-assign slots), `propose_lock` (pending lock proposal)
+- **Normalization**: `normalizeConfigForWrite()` centralizes canonicalization for all write paths
+- 62+ new layout-specific tests, 268 total (22 test files)
+
 ## 4) Now (High Priority)
 
 ## Phase 1: Living Agent
@@ -107,13 +138,15 @@ Deliverables:
 2. Add to `AVAILABLE_THEMES` constant
 3. Visual QA for all theme × colorScheme combinations
 
-#### NEXT-8: Distinct layout implementations — split, stack
+#### NEXT-8: Distinct layout implementations ✅ (Anticipated — Done)
 
-Deliverables:
-1. Split layout: two-column with sidebar
-2. Stack layout: full-width sections
-3. CSS rules replace fallback-to-centered behavior
-4. Layout-aware component variants
+**Completed ahead of schedule** as part of the Layout Template Engine work.
+Superseded by a more comprehensive slot-based template system:
+1. ~~Split layout: two-column with sidebar~~ → `sidebar-left` template (grid-cols-12, 7/5 split)
+2. ~~Stack layout: full-width sections~~ → `vertical` template (reproduces original layout)
+3. ~~CSS rules replace fallback-to-centered behavior~~ → CSS Grid layouts with `--md-order` for desktop reordering
+4. ~~Layout-aware component variants~~ → Widget registry with slot-size-aware widget selection
+5. **Additional**: `bento-standard` template (magazine-style 6-column grid) — not originally planned
 
 ### Phase 1c: Hybrid Page Compiler
 

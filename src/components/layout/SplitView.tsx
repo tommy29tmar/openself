@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
 import type { LanguageCode } from "@/lib/i18n/languages";
 import type { AvailableFont } from "@/lib/page-config/fonts";
+import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { PageRenderer } from "@/components/page";
@@ -120,6 +121,7 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
 function persistStyle(patch: {
   theme?: string;
   style?: Partial<StyleConfig>;
+  layoutTemplate?: string;
 }) {
   fetch("/api/draft/style", {
     method: "POST",
@@ -177,6 +179,9 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
   const [fontFamily, setFontFamily] = useState<string>(
     config?.style?.fontFamily ?? "inter",
   );
+  const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplateId>(
+    (config?.layoutTemplate as LayoutTemplateId) ?? "vertical",
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Tracks the last user-initiated style edit. Polls that arrive within
   // one POLL_INTERVAL after a user edit are suppressed to avoid overwriting
@@ -202,6 +207,12 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     persistStyle({ style: { fontFamily: f } });
   }, []);
 
+  const handleLayoutTemplateChange = useCallback((t: LayoutTemplateId) => {
+    setLayoutTemplate(t);
+    lastUserEdit.current = Date.now();
+    persistStyle({ layoutTemplate: t });
+  }, []);
+
   const fetchPreview = useCallback(async () => {
     try {
       const res = await fetch(`/api/preview?username=draft&language=${language}`);
@@ -222,6 +233,7 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
           if (data.config.theme) setTheme(data.config.theme);
           if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
           if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+          if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
         }
       }
       if (data.publishStatus) {
@@ -255,6 +267,7 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
               if (data.config.theme) setTheme(data.config.theme);
               if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
               if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+              if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
             }
           }
           if (data.publishStatus) setPublishStatus(data.publishStatus);
@@ -297,6 +310,7 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     ? {
         ...config,
         theme,
+        layoutTemplate,
         style: { ...config.style, colorScheme, fontFamily },
       }
     : null;
@@ -316,6 +330,8 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
       onColorSchemeChange={handleColorSchemeChange}
       fontFamily={fontFamily}
       onFontFamilyChange={handleFontFamilyChange}
+      layoutTemplate={layoutTemplate}
+      onLayoutTemplateChange={handleLayoutTemplateChange}
     />
   );
 
@@ -347,6 +363,8 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
         onColorSchemeChange={handleColorSchemeChange}
         fontFamily={fontFamily}
         onFontFamilyChange={handleFontFamilyChange}
+        layoutTemplate={layoutTemplate}
+        onLayoutTemplateChange={handleLayoutTemplateChange}
       />
     </div>
   );

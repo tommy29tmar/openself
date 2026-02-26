@@ -7,6 +7,7 @@ import {
   type PageConfig,
   validatePageConfig,
 } from "@/lib/page-config/schema";
+import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
 
 /** Compute SHA-256 hex digest of a PageConfig JSON. */
 export function computeConfigHash(config: PageConfig): string {
@@ -105,12 +106,15 @@ export function hasAnyPublishedPage(sessionIds: string[]): boolean {
  * Draft id = sessionId.
  */
 export function upsertDraft(username: string, config: PageConfig, sessionId: string = "__default__", profileId?: string): void {
-  const result = validatePageConfig(config);
+  const normalized = normalizeConfigForWrite(config);
+  const result = validatePageConfig(normalized);
   if (!result.ok) {
     throw new Error(`Invalid PageConfig: ${result.errors.join("; ")}`);
   }
 
-  const hash = computeConfigHash(config);
+  const hash = computeConfigHash(normalized);
+  // Use normalized config from here on
+  config = normalized;
   const effectiveProfileId = profileId ?? sessionId;
 
   db.insert(page)

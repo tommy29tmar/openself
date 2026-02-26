@@ -16,6 +16,10 @@ import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
 import { proposeSoulChange, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
+import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
+import { getLayoutTemplate } from "@/lib/layout/registry";
+import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
+import { extractLocks } from "@/lib/layout/lock-policy";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
@@ -161,13 +165,18 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ username, config }) => {
       try {
-        // Preserve user's style customizations (theme, colors, font) from
-        // the existing draft so agent-driven structural changes don't reset
-        // manually chosen style settings.
+        // Preserve user's style customizations (theme, colors, font, layout)
+        // and section locks from the existing draft.
         const currentDraft = getDraft(sessionId);
         const incoming = config as PageConfig;
         const merged: PageConfig = currentDraft
-          ? { ...incoming, theme: currentDraft.config.theme, style: currentDraft.config.style }
+          ? {
+              ...incoming,
+              theme: currentDraft.config.theme,
+              style: currentDraft.config.style,
+              layoutTemplate: currentDraft.config.layoutTemplate,
+              sections: mergeSectionLocks(incoming.sections, currentDraft.config.sections),
+            }
           : incoming;
         upsertDraft(username, merged, sessionId);
         logEvent({
@@ -292,14 +301,24 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         // in the same language, then translate the coherent result.
         const targetLang = language ?? sessionLanguage;
         const factLang = getFactLanguage(sessionId) ?? targetLang;
+        const existingTemplate = currentDraft?.config.layoutTemplate;
         const composed = composeOptimisticPage(
           facts,
           username,
           factLang,
+          existingTemplate,
         );
-        const styled = currentDraft
+        let styled: PageConfig = currentDraft
           ? { ...composed, theme: currentDraft.config.theme, style: currentDraft.config.style }
           : composed;
+        // Preserve layoutTemplate and re-assign slots with locks
+        if (existingTemplate && currentDraft) {
+          styled.layoutTemplate = existingTemplate;
+          const template = getLayoutTemplate(existingTemplate);
+          const locks = extractLocks(currentDraft.config.sections);
+          const { sections } = assignSlotsFromFacts(template, styled.sections, locks);
+          styled = { ...styled, sections };
+        }
 
         const config = await translatePageContent(styled, targetLang, factLang);
 
@@ -452,6 +471,126 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
+  set_layout: tool({
+    description:
+      "Change the page layout template. Available: vertical, sidebar-left, bento-standard.",
+    parameters: z.object({
+      username: z.string().describe("The username for the page"),
+      layoutTemplate: z
+        .enum(LAYOUT_TEMPLATES)
+        .describe("Layout template to use"),
+    }),
+    execute: async ({ username, layoutTemplate }) => {
+      try {
+        const draft = getDraft(sessionId);
+        if (!draft) {
+          return { success: false, error: "Page not found" };
+        }
+
+        const template = getLayoutTemplate(layoutTemplate);
+        const locks = extractLocks(draft.config.sections);
+        const { sections, issues } = assignSlotsFromFacts(
+          template,
+          draft.config.sections,
+          locks,
+        );
+
+        const errors = issues.filter((i) => i.severity === "error");
+        if (errors.length > 0) {
+          return {
+            success: false,
+            error: "Layout incompatible",
+            issues: errors,
+          };
+        }
+
+        const updated: PageConfig = {
+          ...draft.config,
+          layoutTemplate,
+          sections,
+        };
+        upsertDraft(username, updated, sessionId);
+
+        const warnings = issues.filter((i) => i.severity === "warning");
+        logEvent({
+          eventType: "page_config_updated",
+          actor: "assistant",
+          payload: { username, change: "layout", layoutTemplate },
+        });
+        return { success: true, layoutTemplate, warnings };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  propose_lock: tool({
+    description:
+      "Propose locking a section. The user will see a confirmation prompt. The lock is NOT applied until the user confirms via the UI.",
+    parameters: z.object({
+      sectionId: z.string().describe("The ID of the section to lock"),
+      lockPosition: z
+        .boolean()
+        .optional()
+        .describe("Lock the slot position"),
+      lockWidget: z
+        .boolean()
+        .optional()
+        .describe("Lock the widget variant"),
+      lockContent: z
+        .boolean()
+        .optional()
+        .describe("Lock the content from being rewritten"),
+      reason: z
+        .string()
+        .describe("Why you're suggesting this lock"),
+    }),
+    execute: async ({ sectionId, lockPosition, lockWidget, lockContent, reason }) => {
+      try {
+        const draft = getDraft(sessionId);
+        if (!draft) {
+          return { success: false, error: "No draft" };
+        }
+
+        const sectionIndex = draft.config.sections.findIndex(
+          (s) => s.id === sectionId,
+        );
+        if (sectionIndex === -1) {
+          return { success: false, error: "Section not found" };
+        }
+
+        // Create a lock proposal (pending), not an actual lock
+        const config = { ...draft.config };
+        config.sections = config.sections.map((s, i) => {
+          if (i === sectionIndex) {
+            return {
+              ...s,
+              lockProposal: {
+                position: lockPosition ?? true,
+                widget: lockWidget ?? true,
+                content: lockContent ?? false,
+                proposedBy: "agent" as const,
+                proposedAt: new Date().toISOString(),
+                reason,
+              },
+            };
+          }
+          return s;
+        });
+
+        upsertDraft(draft.config.username, config as PageConfig, sessionId);
+        return {
+          success: true,
+          proposed: sectionId,
+          status: "pending_user_confirmation",
+          reason,
+        };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
   resolve_conflict: tool({
     description:
       "Resolve a fact conflict. Use when you detect contradictory information and can propose a resolution. The user can also resolve conflicts via the UI.",
@@ -488,6 +627,29 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
   };
+}
+
+/**
+ * Merge locks from existing sections onto incoming sections (match by id).
+ * Preserves user locks that the agent shouldn't overwrite.
+ */
+function mergeSectionLocks(
+  incoming: PageConfig["sections"],
+  existing: PageConfig["sections"],
+): PageConfig["sections"] {
+  const lockMap = new Map<string, { lock?: PageConfig["sections"][0]["lock"]; lockProposal?: PageConfig["sections"][0]["lockProposal"] }>();
+  for (const s of existing) {
+    if (s.lock || s.lockProposal) {
+      lockMap.set(s.id, { lock: s.lock, lockProposal: s.lockProposal });
+    }
+  }
+  return incoming.map((s) => {
+    const locks = lockMap.get(s.id);
+    if (locks) {
+      return { ...s, ...locks };
+    }
+    return s;
+  });
 }
 
 // Backward compatibility for tests/imports that expect a static object.

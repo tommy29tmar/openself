@@ -5,6 +5,10 @@ import { isAvailableFont } from "@/lib/page-config/fonts";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { getSessionIdFromRequest } from "@/lib/auth/session";
 import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
+import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
+import { getLayoutTemplate } from "@/lib/layout/registry";
+import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
+import { extractLocks } from "@/lib/layout/lock-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +63,35 @@ export async function POST(req: Request) {
       }
 
       config.style = style;
+    }
+
+    // Merge layoutTemplate if provided
+    if (
+      typeof body.layoutTemplate === "string" &&
+      (LAYOUT_TEMPLATES as readonly string[]).includes(body.layoutTemplate)
+    ) {
+      config.layoutTemplate = body.layoutTemplate as LayoutTemplateId;
+
+      // Re-assign slots for the new template
+      const template = getLayoutTemplate(config.layoutTemplate);
+      const locks = extractLocks(config.sections);
+      const { sections, issues } = assignSlotsFromFacts(
+        template,
+        config.sections,
+        locks,
+      );
+
+      const errors = issues.filter((i) => i.severity === "error");
+      if (errors.length > 0) {
+        return NextResponse.json(
+          { success: false, error: "Layout incompatible", issues: errors },
+          { status: 400 },
+        );
+      }
+      config.sections = sections;
+
+      // Canonicalize style.layout when layoutTemplate is present
+      config.style = { ...config.style, layout: "centered" };
     }
 
     upsertDraft(draft.username, config as PageConfig, sessionId);

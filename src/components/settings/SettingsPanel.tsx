@@ -10,6 +10,8 @@ import {
 } from "@/lib/page-config/fonts";
 import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { cn } from "@/lib/utils";
+import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
+import { getLayoutTemplate } from "@/lib/layout/registry";
 
 type SettingsPanelProps = {
   open: boolean;
@@ -24,6 +26,8 @@ type SettingsPanelProps = {
   onColorSchemeChange: (scheme: "light" | "dark") => void;
   fontFamily: string;
   onFontFamilyChange: (font: AvailableFont) => void;
+  layoutTemplate?: LayoutTemplateId;
+  onLayoutTemplateChange?: (t: LayoutTemplateId) => void;
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -79,6 +83,8 @@ export function SettingsPanel({
   onColorSchemeChange,
   fontFamily,
   onFontFamilyChange,
+  layoutTemplate = "vertical",
+  onLayoutTemplateChange,
 }: SettingsPanelProps) {
   // Close on Escape
   useEffect(() => {
@@ -204,17 +210,18 @@ export function SettingsPanel({
                 <div className="flex flex-col gap-2.5">
                   <SectionLabel>Layout</SectionLabel>
                   <OptionGroup>
-                    <OptionButton selected onClick={() => {}}>
-                      Centered
-                    </OptionButton>
-                    <OptionButton selected={false} disabled onClick={() => {}}>
-                      Split
-                      <span className="ml-1 text-[9px] opacity-60">Soon</span>
-                    </OptionButton>
-                    <OptionButton selected={false} disabled onClick={() => {}}>
-                      Stack
-                      <span className="ml-1 text-[9px] opacity-60">Soon</span>
-                    </OptionButton>
+                    {LAYOUT_TEMPLATES.map((t) => {
+                      const tmpl = getLayoutTemplate(t);
+                      return (
+                        <OptionButton
+                          key={t}
+                          selected={layoutTemplate === t}
+                          onClick={() => onLayoutTemplateChange?.(t)}
+                        >
+                          {tmpl.name}
+                        </OptionButton>
+                      );
+                    })}
                   </OptionGroup>
                 </div>
               </>

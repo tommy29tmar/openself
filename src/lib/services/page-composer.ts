@@ -11,6 +11,9 @@ import type {
   SocialLink,
   SocialContent,
 } from "@/lib/page-config/content-types";
+import type { LayoutTemplateId } from "@/lib/layout/contracts";
+import { getLayoutTemplate } from "@/lib/layout/registry";
+import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 
 const DEFAULT_STYLE: StyleConfig = {
   colorScheme: "light",
@@ -424,7 +427,12 @@ function buildTimelineSection(experienceFacts: FactRow[], language: string): Sec
   };
 }
 
-export function composeOptimisticPage(facts: FactRow[], username: string, language: string = "en"): PageConfig {
+export function composeOptimisticPage(
+  facts: FactRow[],
+  username: string,
+  language: string = "en",
+  layoutTemplate?: LayoutTemplateId,
+): PageConfig {
   const grouped = groupByCategory(facts);
 
   const sections: Section[] = [];
@@ -466,12 +474,32 @@ export function composeOptimisticPage(facts: FactRow[], username: string, langua
   // 8. Footer — always appended
   sections.push(buildFooterSection());
 
+  // Slot assignment: distribute sections into layout slots
+  const resolvedTemplate = layoutTemplate ?? "vertical";
+  const template = getLayoutTemplate(resolvedTemplate);
+  const { sections: assigned, issues } = assignSlotsFromFacts(template, sections);
+
+  let finalSections: Section[];
+  let finalTemplate: LayoutTemplateId;
+
+  if (issues.some((i) => i.severity === "error")) {
+    // Fallback: use "vertical" if the requested template has errors
+    const fallback = getLayoutTemplate("vertical");
+    const { sections: fallbackAssigned } = assignSlotsFromFacts(fallback, sections);
+    finalSections = fallbackAssigned;
+    finalTemplate = "vertical";
+  } else {
+    finalSections = assigned;
+    finalTemplate = resolvedTemplate;
+  }
+
   const config: PageConfig = {
     version: 1,
     username,
     theme: DEFAULT_THEME,
+    layoutTemplate: finalTemplate,
     style: { ...DEFAULT_STYLE },
-    sections,
+    sections: finalSections,
   };
 
   return repairAndValidate(config, username, language);

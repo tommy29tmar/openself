@@ -25,7 +25,9 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
             {/* Subtle grain texture overlay */}
             <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-50 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
             
-            <main className="max-w-5xl mx-auto px-8 py-32 md:py-48 flex flex-col gap-32">
+            {/* ThemeLayout is a visual wrapper only — no flex/grid flow control.
+                Layout components (Vertical, Sidebar, Bento) handle structure. */}
+            <main className="px-4 md:px-8 py-16 md:py-32">
                 {children}
             </main>
             

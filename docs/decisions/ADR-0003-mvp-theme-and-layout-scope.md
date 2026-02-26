@@ -1,7 +1,8 @@
 # ADR-0003: MVP Theme and Layout Scope
 
-Status: Accepted
+Status: Accepted (Layout scope superseded — see update below)
 Date: 2026-02-23
+Updated: 2026-02-26
 Deciders: OpenSelf engineering
 
 ## Context
@@ -64,3 +65,20 @@ Negative:
    - Rejected: non-deterministic output, high latency, and difficult to ensure
      accessibility and consistency. Contradicts the deterministic composition decision
      (ADR-0002).
+
+## Update (2026-02-26): Layout Scope Superseded
+
+The layout portion of this ADR has been superseded by the Layout Template Engine
+implementation, which was anticipated from Phase 1b (NEXT-8) and completed ahead of
+schedule. The original `style.layout` field (`centered`, `split`, `stack`) is retained
+in the schema for backward compatibility but is no longer used for layout resolution.
+
+The new system uses a top-level `layoutTemplate` field with 3 fully functional templates:
+- `vertical` — reproduces the original centered layout (default, backward-compatible)
+- `sidebar-left` — two-column responsive grid
+- `bento-standard` — magazine-style 6-column grid
+
+The theme portion of this ADR (2 themes: minimal, warm) remains in effect. Additional
+themes (bold, elegant, hacker) are still deferred to a future phase.
+
+See `docs/ARCHITECTURE.md` Section 6.6.1 for the full layout template engine architecture.

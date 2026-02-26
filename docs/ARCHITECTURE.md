@@ -1170,13 +1170,35 @@ type StyleConfig = {
   colorScheme: "light" | "dark";
   primaryColor: string;
   fontFamily: string;
-  layout: "centered" | "split" | "stack";
+  layout: "centered" | "split" | "stack";   // legacy — canonicalized to "centered" when layoutTemplate present
+};
+
+type SectionLock = {
+  position?: boolean;     // slot assignment locked
+  widget?: boolean;       // widget choice locked
+  content?: boolean;      // content locked
+  lockedBy: "user" | "agent";
+  lockedAt: string;       // ISO timestamp
+  reason?: string;
+};
+
+type SectionLockProposal = {
+  position?: boolean;
+  widget?: boolean;
+  content?: boolean;
+  proposedBy: "agent";
+  proposedAt: string;
+  reason?: string;
 };
 
 type Section = {
   id: string;
   type: ComponentType;
-  variant?: string;
+  variant?: string;                    // legacy — kept for backward compat
+  widgetId?: string;                   // source of truth (overrides variant)
+  slot?: string;                       // slot in the layout template
+  lock?: SectionLock;                  // effective lock (only via authenticated API)
+  lockProposal?: SectionLockProposal;  // pending proposal (via agent tool)
   content: Record<string, unknown>;
 };
 
@@ -1185,6 +1207,7 @@ type PageConfig = {
   username: string;
   sourceLanguage: string;     // ISO 639-1 code (e.g., "it", "en", "de") — set from onboarding
   theme: string;
+  layoutTemplate?: LayoutTemplateId;   // top-level, not in style — "vertical" | "sidebar-left" | "bento-standard"
   style: StyleConfig;
   sections: Section[];
 };
@@ -1409,6 +1432,9 @@ it does not regenerate everything:
 | "Add a section for my books" | Add `reading` component, populate from KB |
 | "Use a different color" | `style.primaryColor = "#..."` |
 | "Make it more minimal" | `theme = "minimal"`, reduce variant complexity |
+| "Use a two-column layout" | `set_layout("sidebar-left")` — re-assigns slots with lock awareness |
+| "Use a bento grid" | `set_layout("bento-standard")` — sections redistributed across grid slots |
+| "Lock the skills section" | `propose_lock("skills-1")` — creates pending proposal for user confirmation |
 
 ### 6.5 OpenSelf Visual Identity
 
@@ -1478,6 +1504,116 @@ This means:
 - The page can be exported as static HTML (no server needed)
 - The renderer can be tested independently (input JSON → assert output)
 - Third parties can build alternative renderers
+
+### 6.6.1 Layout Template Engine
+
+> **Status:** Implemented. Anticipated from Phase 1b (NEXT-8) and completed ahead of schedule.
+
+The layout template engine separates **spatial structure** (where sections go) from
+**visual styling** (how they look). This decoupling allows the same theme to work with
+any layout template, and any layout template to work with any theme.
+
+**Architecture:**
+
+```
+PageConfig
+    │
+    ├─ layoutTemplate ──→ Layout Registry ──→ LayoutComponent (CSS Grid structure)
+    │                                              │
+    │                                              ├─ groupSectionsBySlot()
+    │                                              │
+    ├─ theme ──────────→ Theme Registry ──→ ThemeLayout (visual wrapper: colors, fonts, animations)
+    │                                              │
+    └─ sections ───────→ Widget Registry ──→ variant resolution ──→ SectionComponent
+```
+
+**Key separation:**
+- `LayoutComponent` controls *where* sections go (CSS Grid areas, columns, ordering)
+- `ThemeLayout` controls *how* they look (background, typography, animations, texture)
+- These are composed, not fused: `ThemeLayout` wraps `LayoutComponent`
+
+**Layout Templates (3):**
+
+| Template | Description | Grid |
+|---|---|---|
+| `vertical` | Classic single-column (default, backward-compatible) | `flex-col`, max-w-5xl |
+| `sidebar-left` | Two-column with main content + sidebar | `grid-cols-12` (7/5 split) |
+| `bento-standard` | Magazine-style grid with varying card sizes | `grid-cols-6` |
+
+Each template defines named **slots** with constraints:
+- `size`: wide, half, third (determines compatible widgets)
+- `required`: whether the slot must have content (hero, footer)
+- `maxSections`: capacity limit per slot
+- `accepts`: which section types fit in this slot
+- `order` / `mobileOrder`: rendering order for desktop and mobile
+
+**Widget Registry:**
+
+`widgetId` is the source of truth for variant resolution. Each widget has:
+- Section type compatibility (e.g., `skills-chips` works with `skills` sections)
+- Slot size compatibility (e.g., `skills-chips` fits in `half` and `third` slots)
+- Item count constraints (`minItems`, `maxItems`)
+
+Resolution: `section.widgetId` → widget variant (source of truth). Fallback: `section.variant` (legacy).
+
+**Slot Assignment (`assignSlotsFromFacts`):**
+
+Deterministic, lock-aware algorithm:
+1. Locked sections keep their current slot
+2. Hero → heroSlot, footer → footerSlot (always, regardless of metadata)
+3. Remaining sections assigned to best available slot based on type compatibility + widget match
+4. Overflow sections go to the main slot as fallback
+5. Auto-repair (draft only): changes widget/slot, **never truncates user content**
+
+**Lock System:**
+
+Granular per-section locks (`position`, `widget`, `content`):
+- **User locks** (via `POST /api/draft/lock`): only user can override
+- **Agent proposals** (via `propose_lock` tool): creates pending `lockProposal`, not an actual lock
+- Central enforcement: `canMutateSection(section, mutation, actor)` called by all mutation paths
+
+**Validation Gates (4 points):**
+
+| Point | File | Behavior |
+|---|---|---|
+| `composeOptimisticPage()` | `page-composer.ts` | Error → fallback to vertical. Warning → log |
+| `set_layout` tool | `tools.ts` | Error → reject change. Warning → return suggestion |
+| `update_page_config` tool | `tools.ts` | Error → reject. Warning → log |
+| `prepareAndPublish()` | `publish-pipeline.ts` | Error → throw PublishError. Warning → publish with log |
+
+Severity policy: `missing_required` / `incompatible_widget` = **error** (blocking);
+`overflow_risk` / `too_sparse` = **warning** (non-blocking).
+
+**Renderer Decoupling:**
+
+ThemeLayout (e.g., `EditorialLayout`) is a pure visual wrapper — background, texture,
+border, scroll reveal. It does **not** control flex direction, gap, or max-width.
+LayoutComponent (e.g., `VerticalLayout`, `BentoLayout`) handles the CSS Grid structure.
+
+`VerticalLayout` reproduces the original `max-w-5xl flex-col gap-32` layout, so pages
+without `layoutTemplate` render **identically** to before.
+
+**Mobile:** All grids collapse to single column below 768px, with ordering driven by
+`mobileOrder` from the registry (not hardcoded in components).
+
+**Backward Compatibility:**
+- Pages without `layoutTemplate` → always `"vertical"` (no legacy mapping)
+- `style.layout` field retained in schema but **ignored** for template resolution
+- When `layoutTemplate` is present, `style.layout` is canonicalized to `"centered"` by `normalizeConfigForWrite()`
+- All new fields (`widgetId`, `slot`, `lock`, `lockProposal`, `layoutTemplate`) are optional
+
+**Key files:**
+- `src/lib/layout/contracts.ts` — pure constants (zero deps, breaks import cycles)
+- `src/lib/layout/types.ts` — FullSlotDefinition, LayoutTemplateDefinition
+- `src/lib/layout/registry.ts` — template definitions + resolveLayoutTemplate()
+- `src/lib/layout/widgets.ts` — widget definitions + resolveVariant()
+- `src/lib/layout/quality.ts` — structural validator with severity policy
+- `src/lib/layout/assign-slots.ts` — slot assignment engine
+- `src/lib/layout/group-slots.ts` — groupSectionsBySlot() for renderer
+- `src/lib/layout/lock-policy.ts` — canMutateSection() central enforcement
+- `src/lib/layout/validate-adapter.ts` — Section[] → SlotAssignment[] bridge for publish gate
+- `src/lib/page-config/normalize.ts` — normalizeConfigForWrite() for all write paths
+- `src/components/layout-templates/` — VerticalLayout, SidebarLayout, BentoLayout
 
 ### 6.7 Automatic Page Translation
 
@@ -2632,6 +2768,7 @@ Execution as delivered:
    message limits + registration flow. Backward-compatible: without `INVITE_CODES`
    env var, the app runs in single-user mode with zero behavior change.
 2. **Phase 1 (current):** Agent quality (memory, heartbeat, extended sections, hybrid compiler).
+3. **Layout template engine (done, anticipated from Phase 1b):** 3 templates, slot assignment, widget registry, lock system, validation gates.
 
 ### Phase 0 — Foundation (Months 1-2)
 
@@ -2744,6 +2881,16 @@ Agent — Memory & Heartbeat (first):
   [ ] Anti-abuse hardening (conversation pace throttle, session length caps, stealth captcha on onboarding→chat transition)
   [ ] Fact conflict resolver v1 (source precedence + supersede semantics + deterministic merge policy)
   [ ] LLM Evals expansion (multi-session coherence: assert KB integrity after 50+ simulated conversations)
+
+Page — Layout Template Engine (anticipated, done):
+  [x] Layout registry: 3 templates (vertical, sidebar-left, bento-standard) with slot-based assignment
+  [x] Widget registry: 20+ widgets with section type + slot size compatibility
+  [x] Renderer decoupling: ThemeLayout (visual wrapper) + LayoutComponent (CSS Grid)
+  [x] Lock system: granular section locks + agent proposals + central enforcement
+  [x] Validation gates: composer, set_layout, update_page_config, publish pipeline
+  [x] Agent tools: set_layout, propose_lock
+  [x] Settings UI: template picker + persistence via /api/draft/style
+  [x] 62+ layout-specific tests
 
 Page — Extended sections (after memory foundation):
   [ ] Education section (timeline/cards variants, multi-item)
