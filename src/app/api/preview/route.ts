@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAllFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
-import { getSessionIdFromRequest } from "@/lib/auth/session";
-import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
+import { resolveOwnerScope } from "@/lib/auth/session";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
 
 /**
  * GET /api/preview?username=...
@@ -14,16 +14,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const language = searchParams.get("language") || "en";
 
-  // Resolve session
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  // Resolve owner scope (survives session rotation)
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
+  const readKeys = scope?.knowledgeReadKeys;
 
   // Always read the draft
-  const draft = getDraft(sessionId);
+  const draft = getDraft(primaryKey);
   if (draft) {
     return NextResponse.json({
       status: "optimistic_ready",
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   }
 
   // No draft yet — compose optimistic page from facts
-  const facts = getAllFacts(sessionId);
+  const facts = getAllFacts(primaryKey, readKeys);
   if (facts.length === 0) {
     return NextResponse.json({
       status: "idle",

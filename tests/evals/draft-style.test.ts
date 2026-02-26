@@ -272,6 +272,12 @@ vi.mock("@/lib/services/page-service", () => ({
 
 vi.mock("@/lib/auth/session", () => ({
   getSessionIdFromRequest: () => "__default__",
+  resolveOwnerScope: () => ({
+    cognitiveOwnerKey: "__default__",
+    knowledgeReadKeys: ["__default__"],
+    knowledgePrimaryKey: "__default__",
+    currentSessionId: "__default__",
+  }),
   createSessionCookie: () => "",
 }));
 

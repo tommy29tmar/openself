@@ -11,33 +11,32 @@ import {
 } from "@/lib/services/preferences-service";
 import { isLanguageCode } from "@/lib/i18n/languages";
 import { translatePageContent } from "@/lib/ai/translate";
-import { getSessionIdFromRequest } from "@/lib/auth/session";
-import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
+import { resolveOwnerScope } from "@/lib/auth/session";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
-  const prefs = getPreferences(sessionId);
+  const prefs = getPreferences(primaryKey);
   return NextResponse.json({
     language: prefs.language,
-    hasPage: hasAnyPage(sessionId),
+    hasPage: hasAnyPage(primaryKey),
   });
 }
 
 export async function POST(req: Request) {
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
+  const readKeys = scope?.knowledgeReadKeys;
 
   try {
     const body = await req.json();
@@ -52,19 +51,19 @@ export async function POST(req: Request) {
     }
 
     // Record the fact language on first call (before changing preference)
-    setFactLanguageIfUnset(language, sessionId);
+    setFactLanguageIfUnset(language, primaryKey);
 
-    setPreferredLanguage(language, sessionId);
+    setPreferredLanguage(language, primaryKey);
 
     let regenerated = false;
     if (regenerateDraft) {
-      const facts = getAllFacts(sessionId);
+      const facts = getAllFacts(primaryKey, readKeys);
       if (facts.length > 0) {
-        const currentDraft = getDraft(sessionId);
+        const currentDraft = getDraft(primaryKey);
         const username = currentDraft?.username ?? "draft";
         // Always compose in the fact language so values and templates are
         // in the same language, then translate the coherent result.
-        const factLanguage = getFactLanguage(sessionId) ?? language;
+        const factLanguage = getFactLanguage(primaryKey) ?? language;
         const regeneratedConfig = composeOptimisticPage(facts, username, factLanguage);
         const nextConfig = currentDraft
           ? {
@@ -76,7 +75,7 @@ export async function POST(req: Request) {
 
         const translated = await translatePageContent(nextConfig, language, factLanguage);
 
-        upsertDraft(username, translated, sessionId);
+        upsertDraft(username, translated, primaryKey);
         regenerated = true;
       }
     }

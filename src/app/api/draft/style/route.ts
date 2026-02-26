@@ -3,8 +3,8 @@ import { getDraft, upsertDraft } from "@/lib/services/page-service";
 import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { isAvailableFont } from "@/lib/page-config/fonts";
 import type { PageConfig } from "@/lib/page-config/schema";
-import { getSessionIdFromRequest } from "@/lib/auth/session";
-import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
+import { resolveOwnerScope } from "@/lib/auth/session";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
@@ -13,17 +13,16 @@ import { extractLocks } from "@/lib/layout/lock-policy";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  // Resolve session
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  // Resolve owner scope (survives session rotation)
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
   try {
     const body = await req.json();
-    const draft = getDraft(sessionId);
+    const draft = getDraft(primaryKey);
 
     if (!draft) {
       return NextResponse.json(
@@ -94,7 +93,7 @@ export async function POST(req: Request) {
       config.style = { ...config.style, layout: "centered" };
     }
 
-    upsertDraft(draft.username, config as PageConfig, sessionId);
+    upsertDraft(draft.username, config as PageConfig, primaryKey);
 
     return NextResponse.json({ success: true });
   } catch (error) {

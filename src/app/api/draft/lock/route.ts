@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDraft, upsertDraft } from "@/lib/services/page-service";
 import type { PageConfig, SectionLock } from "@/lib/page-config/schema";
-import { getSessionIdFromRequest } from "@/lib/auth/session";
-import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
+import { resolveOwnerScope } from "@/lib/auth/session";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +11,11 @@ export const dynamic = "force-dynamic";
  * Only via authenticated UI — creates lock with lockedBy: "user".
  */
 export async function POST(req: Request) {
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
   try {
     const body = await req.json();
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const draft = getDraft(sessionId);
+    const draft = getDraft(primaryKey);
     if (!draft) {
       return NextResponse.json(
         { success: false, error: "No draft exists" },
@@ -64,7 +63,7 @@ export async function POST(req: Request) {
       return s;
     });
 
-    upsertDraft(draft.username, config as PageConfig, sessionId);
+    upsertDraft(draft.username, config as PageConfig, primaryKey);
 
     return NextResponse.json({ success: true, sectionId, lock });
   } catch (error) {
@@ -80,12 +79,11 @@ export async function POST(req: Request) {
  * DELETE /api/draft/lock — Remove a lock from a section.
  */
 export async function DELETE(req: Request) {
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
   try {
     const body = await req.json();
@@ -98,7 +96,7 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const draft = getDraft(sessionId);
+    const draft = getDraft(primaryKey);
     if (!draft) {
       return NextResponse.json(
         { success: false, error: "No draft exists" },
@@ -115,7 +113,7 @@ export async function DELETE(req: Request) {
       return s;
     });
 
-    upsertDraft(draft.username, config as PageConfig, sessionId);
+    upsertDraft(draft.username, config as PageConfig, primaryKey);
 
     return NextResponse.json({ success: true, sectionId });
   } catch (error) {

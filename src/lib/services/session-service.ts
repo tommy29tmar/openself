@@ -67,12 +67,18 @@ export function getSession(sessionId: string): Session | null {
 }
 
 export function isUsernameTaken(username: string): boolean {
-  const row = db
+  // Legacy: sessions table
+  const sessionRow = db
     .select({ id: sessions.id })
     .from(sessions)
     .where(eq(sessions.username, username))
     .get();
-  return !!row;
+  if (sessionRow) return true;
+  // Auth v2: profiles table (signup writes username there only)
+  const profileRow = sqlite
+    .prepare("SELECT id FROM profiles WHERE username = ?")
+    .get(username);
+  return !!profileRow;
 }
 
 export function registerUsername(sessionId: string, username: string): void {

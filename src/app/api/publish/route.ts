@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 import { logEvent } from "@/lib/services/event-service";
-import { getSessionIdFromRequest } from "@/lib/auth/session";
-import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
+import { resolveOwnerScope } from "@/lib/auth/session";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
 
 /**
  * POST /api/publish
@@ -14,16 +14,15 @@ import { isMultiUserEnabled, getSession } from "@/lib/services/session-service";
  * Accepts optional `expectedHash` in body for concurrency guard.
  */
 export async function POST(req: Request) {
-  // Resolve session
-  const sessionId = getSessionIdFromRequest(req);
-  if (isMultiUserEnabled()) {
-    if (!sessionId || !getSession(sessionId)) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized", code: "UNAUTHORIZED" },
-        { status: 401 },
-      );
-    }
+  // Resolve owner scope (survives session rotation)
+  const scope = resolveOwnerScope(req);
+  if (isMultiUserEnabled() && !scope) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized", code: "UNAUTHORIZED" },
+      { status: 401 },
+    );
   }
+  const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
   try {
     const body = await req.json();
@@ -45,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await prepareAndPublish(username, sessionId, {
+    const result = await prepareAndPublish(username, primaryKey, {
       mode: "publish",
       expectedHash: typeof expectedHash === "string" ? expectedHash : undefined,
     });

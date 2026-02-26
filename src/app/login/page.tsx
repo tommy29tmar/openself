@@ -29,11 +29,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
-        if (data.username) {
-          window.location.href = `/${data.username}`;
-        } else {
-          window.location.href = "/builder";
-        }
+        window.location.href = "/builder";
       } else {
         setError(data.error || "Login failed");
       }
