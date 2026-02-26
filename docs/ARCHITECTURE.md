@@ -328,14 +328,15 @@ The system prompt is assembled by `src/lib/agent/context.ts` from deterministic 
 
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
-3. **Tool policy** — 12 tools (see Section 4.3), when to call, required arguments, retry/error behavior
-4. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
-5. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
-6. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
-7. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
-8. **Conversation summary** — Tier 2 rolling summary, 800 token budget
-9. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
-10. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
+3. **Tool policy** — 14 tools (see Section 4.3), when to call, required arguments, retry/error behavior
+4. **Fact schema reference** — Structured category→value shape table for all 14 fact categories + common mistakes to avoid
+5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
+6. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
+7. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
+8. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
+9. **Conversation summary** — Tier 2 rolling summary, 800 token budget
+10. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
+11. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
 
 Total context budget: 7500 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
@@ -370,20 +371,22 @@ and cognitive state. The user sees a natural conversation. Under the hood, the a
 performing structured actions:
 
 ```
-Available tools (12):
+Available tools (14):
 
 Knowledge Base management:
   create_fact(category, key, value, confidence?)     # Learn something new
-  update_fact(factId, value)                          # Update existing knowledge
+  update_fact(factId, value)                          # Update existing knowledge (value REQUIRED)
   delete_fact(factId)                                 # Remove outdated info
   search_facts(query)                                 # Search the KB
 
 Page management:
   update_page_config(username, config)                # Modify page structure/content
   set_theme(username, theme)                          # Change visual theme
+  set_layout(username, layoutTemplate)                # Change layout template
   reorder_sections(username, sectionOrder)            # Rearrange page sections
   generate_page(username, language?)                  # Full page synthesis from facts
   request_publish(username)                           # Request publish approval
+  propose_lock(sectionId, lockPosition?, ...)         # Propose locking a section
 
 Cognitive management:
   save_memory(content, memoryType?, category?)        # Save agent observation (Tier 3)
@@ -403,6 +406,27 @@ The agent simultaneously:
 5. Calls `save_memory(content="User transitioned to product management — significant career shift", memoryType="insight")` if this seems like a core identity shift
 
 All invisible to the user. They just had a conversation.
+
+### 4.3.1 Tool Call Reliability
+
+Two mechanisms ensure the agent calls tools correctly despite the growing complexity of
+14 tools × 18 section types × 14 fact categories:
+
+1. **Structured fact schema reference** (prevention): The system prompt includes a
+   category→value shape lookup table so the LLM has the exact structure for every
+   `create_fact`/`update_fact` call. Also includes explicit "common mistakes" rules
+   (e.g., "NEVER call update_fact without value"). This is the primary defense.
+
+2. **`experimental_repairToolCall`** (recovery): If the LLM still sends invalid tool
+   arguments (Zod validation fails before execution), the AI SDK intercepts the error
+   and asks the same model to regenerate correct JSON using the original args + the
+   tool's JSON Schema. The repaired call is retried transparently — the user never
+   sees validation errors in the chat. If repair also fails, the error is logged but
+   not surfaced to the user.
+
+Key files:
+- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` constant (category→value table)
+- `src/app/api/chat/route.ts` — `experimental_repairToolCall` callback in `streamText()`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
 

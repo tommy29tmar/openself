@@ -36,7 +36,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Streaming AI chat | Done | `useChat` + `/api/chat` |
-| Tool-calling agent | Done | Fact CRUD, page generation, request_publish, reorder, theme, set_layout, propose_lock |
+| Tool-calling agent | Done | 14 tools: Fact CRUD, page generation, request_publish, reorder, theme, set_layout, propose_lock. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) |
 | LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
