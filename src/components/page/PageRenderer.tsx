@@ -8,6 +8,7 @@ import { resolveVariant } from "@/lib/layout/widgets";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { getLayoutComponent } from "@/components/layout-templates";
 import { OwnerBanner } from "@/components/page/OwnerBanner";
+import { filterCompleteSections } from "@/lib/page-config/section-completeness";
 
 export type PageRendererProps = {
   config: PageConfig;
@@ -24,8 +25,11 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
   const template = resolveLayoutTemplate(config);
   const LayoutComponent = getLayoutComponent(template.id);
 
+  // 2b. Safety net: filter incomplete sections in non-preview mode (published pages)
+  const sections = previewMode ? config.sections : filterCompleteSections(config.sections);
+
   // 3. Group sections by slot
-  const slots = groupSectionsBySlot(config.sections, template);
+  const slots = groupSectionsBySlot(sections, template);
 
   // 4. Render section with variant resolution and data-section wrapper
   const renderSection = (section: Section) => {
@@ -54,12 +58,17 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     );
   };
 
+  const themeName = config.theme || "editorial-360";
+  const colorScheme = config.style?.colorScheme ?? "light";
+
   return (
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
-      <ThemeLayout config={config} previewMode={previewMode}>
-        <LayoutComponent slots={slots} renderSection={renderSection} />
-      </ThemeLayout>
+      <div data-theme={themeName} data-color-scheme={colorScheme}>
+        <ThemeLayout config={config} previewMode={previewMode}>
+          <LayoutComponent slots={slots} renderSection={renderSection} />
+        </ThemeLayout>
+      </div>
     </>
   );
 }

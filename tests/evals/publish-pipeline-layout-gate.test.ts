@@ -11,6 +11,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: vi.fn(),
+  setFactVisibility: vi.fn(),
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
@@ -26,7 +27,21 @@ vi.mock("@/lib/services/preferences-service", () => ({
 }));
 
 vi.mock("@/lib/services/page-composer", () => ({
-  composeOptimisticPage: vi.fn(),
+  composeOptimisticPage: vi.fn(() => ({
+    version: 1,
+    username: "testuser",
+    theme: "minimal",
+    style: {
+      colorScheme: "light",
+      primaryColor: "#6366f1",
+      fontFamily: "inter",
+      layout: "centered",
+    },
+    sections: [
+      { id: "hero-1", type: "hero", content: { name: "Test", tagline: "Hello" } },
+      { id: "footer-1", type: "footer", content: {} },
+    ],
+  })),
 }));
 
 vi.mock("@/lib/ai/translate", () => ({

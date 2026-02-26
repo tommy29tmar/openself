@@ -1,8 +1,7 @@
 import { streamText, generateText } from "ai";
 import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
-import { getSystemPromptText } from "@/lib/agent/prompts";
+import { assembleContext } from "@/lib/agent/context";
 import { createAgentTools } from "@/lib/agent/tools";
-import { getAllFacts } from "@/lib/services/kb-service";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -202,22 +201,18 @@ export async function POST(req: Request) {
     }
   }
 
-  // Build system prompt with current KB context
-  const existingFacts = getAllFacts(writeSessionId, effectiveScope.knowledgeReadKeys);
-  const factsContext =
-    existingFacts.length > 0
-      ? `\n\n---\n\nKNOWN FACTS ABOUT THE USER (${existingFacts.length} facts):\n${existingFacts
-          .map(
-            (f) =>
-              `- [${f.category}/${f.key}]: ${JSON.stringify(f.value)}`,
-          )
-          .join("\n")}`
-      : "";
-
   const sessionLanguage = language || "en";
 
-  const systemPrompt =
-    getSystemPromptText("onboarding", sessionLanguage) + factsContext;
+  // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
+  const { systemPrompt, trimmedMessages, mode } = assembleContext(
+    effectiveScope,
+    sessionLanguage,
+    messages,
+  );
+
+  // Role whitelist: AI SDK expects only these roles
+  const VALID_ROLES = new Set(["user", "assistant", "system", "tool"]);
+  const safeMessages = trimmedMessages.filter(m => VALID_ROLES.has(m.role));
 
   // Persist the latest user message
   const lastMessage = messages[messages.length - 1];
@@ -240,7 +235,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model,
       system: systemPrompt,
-      messages,
+      messages: safeMessages,
       tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey),
       maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {

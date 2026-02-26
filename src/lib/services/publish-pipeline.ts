@@ -1,5 +1,5 @@
 import { sqlite } from "@/lib/db";
-import { getAllFacts } from "@/lib/services/kb-service";
+import { getAllFacts, setFactVisibility } from "@/lib/services/kb-service";
 import {
   getDraft,
   upsertDraft,
@@ -8,7 +8,6 @@ import {
   computeConfigHash,
 } from "@/lib/services/page-service";
 import { getPreferences } from "@/lib/services/preferences-service";
-import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { translatePageContent } from "@/lib/ai/translate";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
@@ -22,12 +21,16 @@ import {
   toSlotAssignments,
   canFullyValidateSection,
 } from "@/lib/layout/validate-adapter";
+import {
+  filterPublishableFacts,
+  projectPublishableConfig,
+} from "@/lib/services/page-projection";
 
 export type PublishMode = "register" | "publish";
 
 export type PrepareAndPublishOptions = {
   mode: PublishMode;
-  /** If provided and doesn't match the current draft configHash, returns 409 STALE_PREVIEW_HASH. */
+  /** If provided and doesn't match the canonical config hash, returns 409 STALE_PREVIEW_HASH. */
   expectedHash?: string;
   /** If set, claim profile.username inside the publish transaction (atomic). */
   claimProfileId?: string;
@@ -37,7 +40,6 @@ export type PublishResult = {
   success: true;
   username: string;
   url: string;
-  regenerated: boolean;
 };
 
 // Re-export for backward compatibility
@@ -46,10 +48,11 @@ export { PublishError };
 /**
  * Shared publish pipeline used by both /api/register and /api/publish.
  *
- * 1. Load all facts
- * 2. Freshness check: compare latest fact timestamp with draft timestamp
- * 3. If regeneration needed: compose + translate (async, outside transaction)
- * 4. Atomic transaction: upsertDraft (if regenerated) + requestPublish + confirmPublish
+ * Flow:
+ * A. Validate: check facts, filter publishable
+ * B. Canonical config + hash guard (BEFORE any side-effects)
+ * C. Translate (async, outside transaction — LLM call can't be in SQLite txn)
+ * D. Atomic transaction: promote proposed→public, persist, publish
  */
 export async function prepareAndPublish(
   username: string,
@@ -58,86 +61,77 @@ export async function prepareAndPublish(
 ): Promise<PublishResult> {
   const { mode, expectedHash } = opts;
 
-  // Step 1: load all facts
+  // Step A: Validate — use shared filter
   const facts = getAllFacts(sessionId);
   if (facts.length === 0) {
     throw new PublishError("No facts to publish", "NO_FACTS", 400);
   }
 
-  // Step 2: load current draft
+  const publishable = filterPublishableFacts(facts);
+  if (publishable.length === 0) {
+    throw new PublishError(
+      "No publishable facts — all facts are private or sensitive",
+      "NO_PUBLISHABLE_FACTS",
+      400,
+    );
+  }
+
+  // Load draft for metadata
   const draft = getDraft(sessionId);
 
-  // Step 2b: expectedHash guard (concurrency check)
-  if (expectedHash && draft && draft.configHash !== expectedHash) {
+  // Username mismatch guard (publish mode only)
+  if (mode === "publish" && draft && draft.username !== username) {
     throw new PublishError(
-      "Preview is stale — reload and try again",
-      "STALE_PREVIEW_HASH",
+      `Username mismatch: draft is "${draft.username}" but publish requested "${username}"`,
+      "USERNAME_MISMATCH",
       409,
     );
   }
 
-  // Step 3: freshness check
-  let needsRegeneration = false;
-  let finalConfig: PageConfig | null = null;
+  // Step B: Canonical config + hash guard (BEFORE any side-effects)
+  const { language, factLanguage } = getPreferences(sessionId);
+  const factLang = factLanguage ?? language ?? "en";
+  const targetLang = language ?? "en";
 
-  if (!draft) {
-    // No draft at all — must regenerate
-    needsRegeneration = true;
-  } else {
-    // Compare latest fact updated_at with draft updatedAt
-    const latestFactTime = Math.max(
-      ...facts.map((f) => new Date(f.updatedAt ?? 0).getTime()),
-    );
-    const draftTime = new Date(draft.updatedAt ?? 0).getTime();
-
-    if (latestFactTime > draftTime) {
-      // Facts are newer than draft
-      if (mode === "register") {
-        // Onboarding: auto-regenerate (user hasn't customized yet)
-        needsRegeneration = true;
-      } else {
-        // Explicit publish: refuse — user may have customized
-        throw new PublishError(
-          "Draft is not up to date — regenerate the page before publishing",
-          "STALE_DRAFT",
-          409,
-        );
+  const draftMeta = draft
+    ? {
+        theme: draft.config.theme,
+        style: draft.config.style,
+        layoutTemplate: draft.config.layoutTemplate,
+        sections: draft.config.sections,
       }
+    : undefined;
+
+  const canonicalConfig = projectPublishableConfig(
+    facts,
+    username,
+    factLang,
+    draftMeta,
+  );
+
+  if (expectedHash) {
+    const canonicalHash = computeConfigHash(canonicalConfig);
+    if (canonicalHash !== expectedHash) {
+      throw new PublishError(
+        "Preview is stale — reload and try again",
+        "STALE_PREVIEW_HASH",
+        409,
+      );
     }
   }
 
-  // Step 4: regenerate if needed (async, OUTSIDE transaction)
-  if (needsRegeneration) {
-    const { language, factLanguage } = getPreferences(sessionId);
-    const factLang = factLanguage ?? language ?? "en";
-    const targetLang = language ?? "en";
+  // Layout validation gate
+  const resolvedTemplate = resolveLayoutTemplate(canonicalConfig);
 
-    const composed = composeOptimisticPage(facts, username, factLang);
-
-    // Preserve theme/style from existing draft if any
-    const styled: PageConfig = draft
-      ? { ...composed, theme: draft.config.theme, style: draft.config.style }
-      : composed;
-
-    finalConfig = normalizeConfigForWrite(
-      await translatePageContent(styled, targetLang, factLang),
-    );
-  }
-
-  // Step 4b: Layout validation gate
-  const configToPublish = finalConfig ?? draft!.config;
-  const resolvedTemplate = resolveLayoutTemplate(configToPublish);
-
-  // Check if all sections can be fully validated
-  const allSectionsValidatable = configToPublish.sections.every((s) =>
+  const allSectionsValidatable = canonicalConfig.sections.every((s) =>
     canFullyValidateSection(s),
   );
 
   const sectionsForValidation = allSectionsValidatable
-    ? configToPublish.sections
+    ? canonicalConfig.sections
     : assignSlotsFromFacts(
         resolvedTemplate,
-        configToPublish.sections,
+        canonicalConfig.sections,
         undefined,
         { repair: false },
       ).sections;
@@ -146,7 +140,6 @@ export async function prepareAndPublish(
   const assignments = conversionResult.assignments;
   const skipped = conversionResult.skipped;
 
-  // INVARIANT: every section must have an explicit outcome
   if (skipped.length > 0) {
     const isPostAssignment = !allSectionsValidatable;
     const statusCode = isPostAssignment ? 500 : 400;
@@ -174,16 +167,27 @@ export async function prepareAndPublish(
       400,
     );
   }
-  // Warnings → log but don't block (layout validation passes)
 
-  // Step 5: atomic DB writes
+  // Step C: Translate (async, OUTSIDE transaction — LLM call can't be in SQLite txn)
+  const renderedConfig = normalizeConfigForWrite(
+    await translatePageContent(canonicalConfig, targetLang, factLang),
+  );
+
+  // Step D: Atomic transaction — promote proposed→public, persist, publish
   const txn = sqlite.transaction(() => {
     if (opts.claimProfileId) {
       setProfileUsername(opts.claimProfileId, username);
     }
-    if (finalConfig) {
-      upsertDraft(username, finalConfig, sessionId);
+
+    // Promote all proposed publishable facts to public
+    for (const fact of publishable) {
+      if (fact.visibility === "proposed") {
+        setFactVisibility(fact.id, "public", "user", sessionId);
+      }
     }
+
+    // Persist rendered (translated) config and publish
+    upsertDraft(username, renderedConfig, sessionId);
     requestPublish(username, sessionId);
     confirmPublish(username, sessionId);
   });
@@ -206,6 +210,5 @@ export async function prepareAndPublish(
     success: true,
     username,
     url: `/${username}`,
-    regenerated: needsRegeneration,
   };
 }

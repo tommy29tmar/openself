@@ -43,10 +43,11 @@ function EmptyPreview() {
 
 type PublishBarProps = {
   username: string;
+  configHash: string | null;
   authState?: AuthState;
 };
 
-function PublishBar({ username: initialUsername, authState }: PublishBarProps) {
+function PublishBar({ username: initialUsername, configHash, authState }: PublishBarProps) {
   const [username, setUsername] = useState(initialUsername);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +64,7 @@ function PublishBar({ username: initialUsername, authState }: PublishBarProps) {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: authUsername ?? username }),
+        body: JSON.stringify({ username: authUsername ?? username, expectedHash: configHash }),
       });
       if (res.status === 401) {
         window.location.href = "/invite";
@@ -263,6 +264,7 @@ function GearButton({ onClick }: { onClick: () => void }) {
 
 export function SplitView({ language, onLanguageChange, initialConfig, authState }: SplitViewProps) {
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
+  const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
   const [publishUsername, setPublishUsername] = useState<string>("");
   const [theme, setTheme] = useState(config?.theme ?? "minimal");
@@ -344,6 +346,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
           if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
         }
       }
+      if (data.configHash) setConfigHash(data.configHash);
       if (data.publishStatus) {
         setPublishStatus(data.publishStatus);
       }
@@ -378,6 +381,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
               if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
             }
           }
+          if (data.configHash) setConfigHash(data.configHash);
           if (data.publishStatus) setPublishStatus(data.publishStatus);
           if (data.config?.username) setPublishUsername(data.config.username);
         } catch {
@@ -449,6 +453,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
       {publishStatus === "approval_pending" && (
         <PublishBar
           username={publishUsername !== "draft" ? publishUsername : ""}
+          configHash={configHash}
           authState={authState}
         />
       )}

@@ -18,7 +18,7 @@ export function Languages({ content }: SectionProps<LanguagesContent>) {
 
     return (
         <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-[#888888] font-medium mb-12 border-b border-black/15 pb-4">
+            <h2 className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium mb-12 border-b border-[var(--page-border)] pb-4">
                 {title || "Languages"}
             </h2>
 
@@ -28,11 +28,11 @@ export function Languages({ content }: SectionProps<LanguagesContent>) {
                         key={index}
                         className="flex items-center gap-4"
                     >
-                        <span className="text-xl font-serif text-[#111111]">
+                        <span className="text-xl font-[var(--page-font-heading)] text-[var(--page-fg)]">
                             {item.language}
                         </span>
                         {item.proficiency && (
-                            <span className="px-3 py-1 text-xs uppercase tracking-widest font-medium text-[#666666] bg-[#f5f5f5] border border-black/10 rounded-full">
+                            <span className="px-3 py-1 text-xs uppercase tracking-widest font-medium text-[var(--page-fg-secondary)] bg-[var(--page-badge-bg)] border border-[var(--page-card-border)] rounded-full">
                                 {item.proficiency}
                             </span>
                         )}

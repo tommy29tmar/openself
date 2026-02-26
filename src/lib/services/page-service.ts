@@ -9,6 +9,7 @@ import {
 } from "@/lib/page-config/schema";
 import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
 import { PublishError } from "@/lib/services/errors";
+import { RESERVED_USERNAMES } from "@/lib/page-config/usernames";
 
 /** Compute SHA-256 hex digest of a PageConfig JSON. */
 export function computeConfigHash(config: PageConfig): string {
@@ -16,8 +17,6 @@ export function computeConfigHash(config: PageConfig): string {
     .update(JSON.stringify(config))
     .digest("hex");
 }
-
-const RESERVED_USERNAMES = new Set(["draft", "api", "builder", "admin", "invite", "_next"]);
 
 /**
  * Read the draft row — used by preview and agent tools.

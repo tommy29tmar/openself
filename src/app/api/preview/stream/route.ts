@@ -1,7 +1,9 @@
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
-import { getDraft } from "@/lib/services/page-service";
+import { getDraft, computeConfigHash } from "@/lib/services/page-service";
 import { getAllFacts } from "@/lib/services/kb-service";
+import { getPreferences } from "@/lib/services/preferences-service";
+import { projectPublishableConfig } from "@/lib/services/page-projection";
 
 export const runtime = "nodejs";
 
@@ -9,8 +11,8 @@ export const runtime = "nodejs";
  * GET /api/preview/stream
  *
  * SSE endpoint for real-time preview updates.
- * Sends lightweight payload at adaptive intervals (1s → 5s backoff).
- * Falls back to polling if SSE not supported.
+ * Always composes from facts using shared projection — never serves draft.config raw.
+ * Change detection uses canonical hash (not draft.configHash).
  */
 export async function GET(req: Request) {
   const scope = resolveOwnerScope(req);
@@ -46,34 +48,55 @@ export async function GET(req: Request) {
       const poll = () => {
         if (closed) return;
 
+        const facts = getAllFacts(writeSessionId, readKeys);
         const draft = getDraft(writeSessionId);
-        if (draft) {
-          const changed = draft.configHash !== lastHash;
-          lastHash = draft.configHash;
+
+        if (facts.length > 0) {
+          const canonicalUsername = draft?.username ?? "draft";
+          const { factLanguage, language } = getPreferences(writeSessionId);
+          const factLang = factLanguage ?? language ?? "en";
+
+          const draftMeta = draft
+            ? {
+                theme: draft.config.theme,
+                style: draft.config.style,
+                layoutTemplate: draft.config.layoutTemplate,
+                sections: draft.config.sections,
+              }
+            : undefined;
+
+          const config = projectPublishableConfig(
+            facts,
+            canonicalUsername,
+            factLang,
+            draftMeta,
+          );
+          const hash = computeConfigHash(config);
+
+          const changed = hash !== lastHash;
+          lastHash = hash;
 
           if (changed) {
             unchangedCount = 0;
             sendEvent({
               status: "optimistic_ready",
-              publishStatus: draft.status,
-              config: draft.config,
-              configHash: draft.configHash,
+              publishStatus: draft?.status ?? "draft",
+              config,
+              configHash: hash,
             });
           } else {
             unchangedCount++;
-            // Send lightweight keepalive
             sendEvent({
               status: "keepalive",
-              publishStatus: draft.status,
-              configHash: draft.configHash,
+              publishStatus: draft?.status ?? "draft",
+              configHash: hash,
             });
           }
         } else {
-          const facts = getAllFacts(writeSessionId, readKeys);
           sendEvent({
-            status: facts.length > 0 ? "facts_only" : "idle",
+            status: "idle",
             publishStatus: "draft",
-            factCount: facts.length,
+            factCount: 0,
           });
         }
 

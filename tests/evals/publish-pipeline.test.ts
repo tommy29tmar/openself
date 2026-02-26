@@ -10,8 +10,12 @@ vi.mock("@/lib/services/event-service", () => ({
   logEvent: vi.fn(),
 }));
 
+const mockGetAllFacts = vi.fn();
+const mockSetFactVisibility = vi.fn();
+
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: vi.fn(),
+  getAllFacts: (...args: any[]) => mockGetAllFacts(...args),
+  setFactVisibility: (...args: any[]) => mockSetFactVisibility(...args),
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
@@ -44,13 +48,49 @@ vi.mock("@/lib/ai/translate", () => ({
   translatePageContent: vi.fn(async (config: any) => config),
 }));
 
+vi.mock("@/lib/services/auth-service", () => ({
+  setProfileUsername: vi.fn(),
+}));
+
+vi.mock("@/lib/layout/registry", () => ({
+  resolveLayoutTemplate: vi.fn(() => ({
+    id: "vertical",
+    slots: [{ id: "main", label: "Main", accepts: "*" }],
+  })),
+}));
+
+vi.mock("@/lib/layout/assign-slots", () => ({
+  assignSlotsFromFacts: vi.fn((_t: any, sections: any) => ({ sections })),
+}));
+
+vi.mock("@/lib/layout/quality", () => ({
+  validateLayoutComposition: vi.fn(() => ({ all: [], errors: [], warnings: [] })),
+}));
+
+vi.mock("@/lib/layout/widgets", () => ({
+  buildWidgetMap: vi.fn(() => new Map()),
+}));
+
+vi.mock("@/lib/layout/validate-adapter", () => ({
+  toSlotAssignments: vi.fn(() => ({ assignments: [], skipped: [] })),
+  canFullyValidateSection: vi.fn(() => true),
+}));
+
+vi.mock("@/lib/page-config/normalize", () => ({
+  normalizeConfigForWrite: vi.fn((config: any) => config),
+}));
+
+vi.mock("@/lib/flags", () => ({
+  PROFILE_ID_CANONICAL: false,
+}));
+
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
-import { getAllFacts } from "@/lib/services/kb-service";
 import {
   getDraft,
   upsertDraft,
   requestPublish,
   confirmPublish,
+  computeConfigHash,
 } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import type { PageConfig } from "@/lib/page-config/schema";
@@ -69,7 +109,7 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   };
 }
 
-function makeFact(overrides: { category: string; key: string; updatedAt?: string }) {
+function makeFact(overrides: { category: string; key: string; visibility?: string; updatedAt?: string }) {
   return {
     id: "fact-" + Math.random().toString(36).slice(2, 8),
     category: overrides.category,
@@ -77,7 +117,7 @@ function makeFact(overrides: { category: string; key: string; updatedAt?: string
     value: { name: "test" },
     source: "chat",
     confidence: 1.0,
-    visibility: "public",
+    visibility: overrides.visibility ?? "public",
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: overrides.updatedAt ?? "2026-01-01T00:00:00Z",
   };
@@ -85,11 +125,12 @@ function makeFact(overrides: { category: string; key: string; updatedAt?: string
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSetFactVisibility.mockReturnValue(undefined);
 });
 
 describe("prepareAndPublish", () => {
   it("throws NO_FACTS when facts are empty", async () => {
-    vi.mocked(getAllFacts).mockReturnValue([]);
+    mockGetAllFacts.mockReturnValue([]);
 
     await expect(
       prepareAndPublish("testuser", "session-1", { mode: "register" }),
@@ -104,53 +145,23 @@ describe("prepareAndPublish", () => {
     }
   });
 
-  it("publishes draft as-is when draft is up to date", async () => {
-    const facts = [makeFact({ category: "identity", key: "name", updatedAt: "2026-01-01T10:00:00Z" })];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
-    vi.mocked(getDraft).mockReturnValue({
-      config: makeConfig(),
-      username: "testuser",
-      status: "draft",
-      configHash: "hash-abc",
-      updatedAt: "2026-01-01T12:00:00Z", // draft newer than facts
-    });
+  it("throws NO_PUBLISHABLE_FACTS when all facts are private", async () => {
+    const facts = [makeFact({ category: "skill", key: "js", visibility: "private" })];
+    mockGetAllFacts.mockReturnValue(facts);
 
-    const result = await prepareAndPublish("testuser", "session-1", { mode: "publish" });
-
-    expect(result.success).toBe(true);
-    expect(result.regenerated).toBe(false);
-    expect(upsertDraft).not.toHaveBeenCalled();
-    expect(requestPublish).toHaveBeenCalledWith("testuser", "session-1");
-    expect(confirmPublish).toHaveBeenCalledWith("testuser", "session-1");
+    try {
+      await prepareAndPublish("testuser", "session-1", { mode: "register" });
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(PublishError);
+      expect((e as PublishError).code).toBe("NO_PUBLISHABLE_FACTS");
+      expect((e as PublishError).httpStatus).toBe(400);
+    }
   });
 
-  it("register mode: auto-regenerates when facts are newer than draft", async () => {
-    const facts = [
-      makeFact({ category: "identity", key: "name", updatedAt: "2026-01-01T14:00:00Z" }),
-      makeFact({ category: "skill", key: "ts", updatedAt: "2026-01-01T14:00:00Z" }),
-    ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
-    vi.mocked(getDraft).mockReturnValue({
-      config: makeConfig(),
-      username: "testuser",
-      status: "draft",
-      configHash: "hash-old",
-      updatedAt: "2026-01-01T12:00:00Z", // draft older than facts
-    });
-
-    const result = await prepareAndPublish("testuser", "session-1", { mode: "register" });
-
-    expect(result.success).toBe(true);
-    expect(result.regenerated).toBe(true);
-    expect(composeOptimisticPage).toHaveBeenCalled();
-    expect(upsertDraft).toHaveBeenCalled();
-  });
-
-  it("publish mode: rejects with STALE_DRAFT when facts are newer than draft", async () => {
-    const facts = [
-      makeFact({ category: "identity", key: "name", updatedAt: "2026-01-01T14:00:00Z" }),
-    ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+  it("always recomposes from facts (never uses cached draft.config)", async () => {
+    const facts = [makeFact({ category: "identity", key: "name" })];
+    mockGetAllFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -159,32 +170,70 @@ describe("prepareAndPublish", () => {
       updatedAt: "2026-01-01T12:00:00Z",
     });
 
-    try {
-      await prepareAndPublish("testuser", "session-1", { mode: "publish" });
-      expect.unreachable("Should have thrown");
-    } catch (e) {
-      expect(e).toBeInstanceOf(PublishError);
-      expect((e as PublishError).code).toBe("STALE_DRAFT");
-      expect((e as PublishError).httpStatus).toBe(409);
-    }
+    const result = await prepareAndPublish("testuser", "session-1", { mode: "publish" });
+
+    expect(result.success).toBe(true);
+    // Pipeline always calls upsertDraft with the recomposed+translated config
+    expect(upsertDraft).toHaveBeenCalled();
+    expect(requestPublish).toHaveBeenCalledWith("testuser", "session-1");
+    expect(confirmPublish).toHaveBeenCalledWith("testuser", "session-1");
   });
 
-  it("regenerates from zero when no draft exists", async () => {
+  it("promotes proposed facts to public in the transaction", async () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", visibility: "proposed" }),
+      makeFact({ category: "skill", key: "js", visibility: "public" }),
+    ];
+    mockGetAllFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue({
+      config: makeConfig(),
+      username: "testuser",
+      status: "draft",
+      configHash: "hash-abc",
+      updatedAt: "2026-01-01T12:00:00Z",
+    });
+
+    await prepareAndPublish("testuser", "session-1", { mode: "publish" });
+
+    // Only the proposed fact should be promoted
+    expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
+    expect(mockSetFactVisibility).toHaveBeenCalledWith(
+      facts[0].id, "public", "user", "session-1",
+    );
+  });
+
+  it("does not promote already-public facts", async () => {
+    const facts = [
+      makeFact({ category: "skill", key: "js", visibility: "public" }),
+    ];
+    mockGetAllFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue({
+      config: makeConfig(),
+      username: "testuser",
+      status: "draft",
+      configHash: "hash-abc",
+      updatedAt: "2026-01-01T12:00:00Z",
+    });
+
+    await prepareAndPublish("testuser", "session-1", { mode: "publish" });
+
+    expect(mockSetFactVisibility).not.toHaveBeenCalled();
+  });
+
+  it("publishes from zero when no draft exists", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    mockGetAllFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue(null);
 
     const result = await prepareAndPublish("testuser", "session-1", { mode: "register" });
 
     expect(result.success).toBe(true);
-    expect(result.regenerated).toBe(true);
-    expect(composeOptimisticPage).toHaveBeenCalled();
     expect(upsertDraft).toHaveBeenCalled();
   });
 
-  it("preserves theme/style from existing draft when regenerating", async () => {
-    const facts = [makeFact({ category: "identity", key: "name", updatedAt: "2026-01-01T14:00:00Z" })];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+  it("preserves theme/style from existing draft metadata", async () => {
+    const facts = [makeFact({ category: "identity", key: "name" })];
+    mockGetAllFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig({ theme: "warm", style: { colorScheme: "dark", primaryColor: "#ff0000", fontFamily: "serif", layout: "centered" } }),
       username: "testuser",
@@ -192,9 +241,6 @@ describe("prepareAndPublish", () => {
       configHash: "hash-old",
       updatedAt: "2026-01-01T12:00:00Z",
     });
-
-    // composeOptimisticPage returns default theme/style
-    vi.mocked(composeOptimisticPage).mockReturnValue(makeConfig());
 
     await prepareAndPublish("testuser", "session-1", { mode: "register" });
 
@@ -207,8 +253,8 @@ describe("prepareAndPublish", () => {
   });
 
   it("rejects with STALE_PREVIEW_HASH when expectedHash doesn't match", async () => {
-    const facts = [makeFact({ category: "identity", key: "name", updatedAt: "2026-01-01T10:00:00Z" })];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    const facts = [makeFact({ category: "identity", key: "name" })];
+    mockGetAllFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -216,6 +262,7 @@ describe("prepareAndPublish", () => {
       configHash: "hash-current",
       updatedAt: "2026-01-01T12:00:00Z",
     });
+    // computeConfigHash returns "hash-abc123" by default, different from "hash-stale"
 
     try {
       await prepareAndPublish("testuser", "session-1", {
@@ -230,9 +277,9 @@ describe("prepareAndPublish", () => {
     }
   });
 
-  it("passes when expectedHash matches current configHash", async () => {
-    const facts = [makeFact({ category: "identity", key: "name", updatedAt: "2026-01-01T10:00:00Z" })];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+  it("passes when expectedHash matches canonical config hash", async () => {
+    const facts = [makeFact({ category: "identity", key: "name" })];
+    mockGetAllFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -241,11 +288,97 @@ describe("prepareAndPublish", () => {
       updatedAt: "2026-01-01T12:00:00Z",
     });
 
+    // computeConfigHash mock returns "hash-abc123", so use that as expectedHash
     const result = await prepareAndPublish("testuser", "session-1", {
       mode: "publish",
-      expectedHash: "hash-current",
+      expectedHash: "hash-abc123",
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("stale hash check runs BEFORE any side-effects", async () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", visibility: "proposed" }),
+    ];
+    mockGetAllFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue({
+      config: makeConfig(),
+      username: "testuser",
+      status: "draft",
+      configHash: "hash-current",
+      updatedAt: "2026-01-01T12:00:00Z",
+    });
+
+    try {
+      await prepareAndPublish("testuser", "session-1", {
+        mode: "publish",
+        expectedHash: "wrong-hash",
+      });
+    } catch {
+      // Expected
+    }
+
+    // No visibility changes should have happened
+    expect(mockSetFactVisibility).not.toHaveBeenCalled();
+    // No draft should have been written
+    expect(upsertDraft).not.toHaveBeenCalled();
+    expect(requestPublish).not.toHaveBeenCalled();
+    expect(confirmPublish).not.toHaveBeenCalled();
+  });
+
+  it("USERNAME_MISMATCH in publish mode when body.username ≠ draft.username", async () => {
+    const facts = [makeFact({ category: "identity", key: "name" })];
+    mockGetAllFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue({
+      config: makeConfig(),
+      username: "alice", // draft says alice
+      status: "draft",
+      configHash: "hash-abc",
+      updatedAt: "2026-01-01T12:00:00Z",
+    });
+
+    try {
+      // but publish requests "bob"
+      await prepareAndPublish("bob", "session-1", { mode: "publish" });
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(PublishError);
+      expect((e as PublishError).code).toBe("USERNAME_MISMATCH");
+      expect((e as PublishError).httpStatus).toBe(409);
+    }
+  });
+
+  it("USERNAME_MISMATCH NOT enforced in register mode", async () => {
+    const facts = [makeFact({ category: "identity", key: "name" })];
+    mockGetAllFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue({
+      config: makeConfig(),
+      username: "draft", // draft still has placeholder username
+      status: "draft",
+      configHash: "hash-abc",
+      updatedAt: "2026-01-01T12:00:00Z",
+    });
+
+    // register mode: chosen username ≠ draft.username is OK
+    const result = await prepareAndPublish("alice", "session-1", { mode: "register" });
+    expect(result.success).toBe(true);
+  });
+
+  it("sensitive+proposed facts excluded from both projection and promote loop", async () => {
+    const facts = [
+      makeFact({ category: "contact", key: "email", visibility: "proposed" }), // sensitive
+      makeFact({ category: "skill", key: "js", visibility: "proposed" }), // non-sensitive
+    ];
+    mockGetAllFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue(null);
+
+    await prepareAndPublish("testuser", "session-1", { mode: "register" });
+
+    // Only the skill fact should be promoted (contact is sensitive, excluded by filterPublishableFacts)
+    expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
+    expect(mockSetFactVisibility).toHaveBeenCalledWith(
+      facts[1].id, "public", "user", "session-1",
+    );
   });
 });

@@ -331,7 +331,7 @@ The system prompt is assembled by `src/lib/agent/context.ts` from deterministic 
 
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
-3. **Tool policy** — 14 tools (see Section 4.3), when to call, required arguments, retry/error behavior
+3. **Tool policy** — 15 tools (see Section 4.3), when to call, required arguments, retry/error behavior
 4. **Fact schema reference** — Structured category→value shape table for all 14 fact categories + common mistakes to avoid
 5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
 6. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
@@ -374,16 +374,17 @@ and cognitive state. The user sees a natural conversation. Under the hood, the a
 performing structured actions:
 
 ```
-Available tools (14):
+Available tools (15):
 
 Knowledge Base management:
   create_fact(category, key, value, confidence?)     # Learn something new
   update_fact(factId, value)                          # Update existing knowledge (value REQUIRED)
   delete_fact(factId)                                 # Remove outdated info
   search_facts(query)                                 # Search the KB
+  set_fact_visibility(factId, visibility)             # Change fact visibility (proposed/private only)
 
 Page management:
-  update_page_config(username, config)                # Modify page structure/content
+  update_page_style(username, theme?, style?, layoutTemplate?)  # Modify page metadata (not section content)
   set_theme(username, theme)                          # Change visual theme
   set_layout(username, layoutTemplate)                # Change layout template
   reorder_sections(username, sectionOrder)            # Rearrange page sections
@@ -413,7 +414,7 @@ All invisible to the user. They just had a conversation.
 ### 4.3.1 Tool Call Reliability
 
 Two mechanisms ensure the agent calls tools correctly despite the growing complexity of
-14 tools × 18 section types × 14 fact categories:
+15 tools × 18 section types × 14 fact categories:
 
 1. **Structured fact schema reference** (prevention): The system prompt includes a
    category→value shape lookup table so the LLM has the exact structure for every
@@ -1386,10 +1387,20 @@ The skeleton composer (`composeOptimisticPage`) maps facts directly to sections 
 localized templates. No LLM call is needed for page structure or content — the
 composer is purely deterministic.
 
+**Privacy gate** (entry point): The composer's first action is a global visibility filter —
+only facts with `visibility === "public" || "proposed"` pass through. Private facts are
+excluded before any section building begins. This is enforced at the top of
+`composeOptimisticPage()`, not per-section.
+
+**Fact validation gate**: All facts are validated at write time by `validateFactValue()`
+(`src/lib/services/fact-validation.ts`). Per-category rules enforce value shapes,
+reject placeholders (e.g., "N/A", "example.com"), and ensure URLs/emails are strings.
+Invalid facts throw `FactValidationError` and are never persisted. Both `createFact`
+and `updateFact` in `kb-service.ts` enforce this gate.
+
 ```
-1. Load facts from KB eligible for the current mode
-   (onboarding preview: `public + proposed`; public render: `public` only)
-   (facts below confidence threshold are excluded from auto-public paths)
+1. Filter facts: global visibility filter (public + proposed only, exclude private)
+   Also exclude sensitive categories (contact, compensation, health, legal)
 2. Decide which components are relevant
    (no projects? skip the projects section)
    (user has achievements? add achievements section)
@@ -1397,6 +1408,7 @@ composer is purely deterministic.
    a. Select relevant facts
    b. Fill localized template strings (deterministic, no LLM)
    c. Choose variant based on amount of data
+   d. Filter empty items (no placeholder URLs, no "—" stats, no empty bios)
 4. Assemble the page config JSON
 5. Validate against schema
 6. Save to database
@@ -1480,8 +1492,14 @@ polling-based approach from ADR-0005:
   backs off to 5s on idle), keepalive ping every 15s
 - **Client**: `SplitView.tsx` uses `EventSource` as primary transport, falls back
   to polling (`GET /api/preview`) after 5 consecutive SSE errors
-- **Payload**: Same preview data shape as the polling endpoint (draft config +
-  publishStatus), sent as JSON in SSE `data` field
+- **Payload**: Same preview data shape as the polling endpoint (config +
+  publishStatus + configHash), sent as JSON in SSE `data` field
+- **Privacy**: Both SSE and polling routes serve config from `projectPublishableConfig()`
+  (see Section 6.10), never `draft.config` raw. This prevents private facts baked into
+  legacy drafts from leaking to the preview.
+- **Change detection**: Uses canonical hash computed from `projectPublishableConfig()`,
+  not `draft.configHash`. This means fact-level changes (new fact, visibility toggle)
+  are detected immediately, even if the draft row hasn't been updated yet.
 
 This reduces unnecessary network requests during idle periods while providing
 near-instant updates when the agent modifies the page.
@@ -1524,18 +1542,29 @@ profile at a glance, OpenSelf pages should be instantly recognizable.
 - Density (spacious vs compact)
 - Visual embellishments (borders, shadows, gradients)
 
-**Built-in themes (initial set):**
+**Built-in themes (implemented):**
+
+| Theme | Description | Status |
+|---|---|---|
+| `minimal` | Clean, lots of whitespace, monochrome with one accent color | Implemented |
+| `warm` | Soft colors, rounded elements, friendly feel | Implemented |
+| `editorial-360` | Magazine-inspired editorial layout with distinct typography | Implemented |
+
+Each theme is powered by CSS custom properties (`--theme-*` tokens) defined in
+`src/app/globals.css`. Theme tokens control colors, typography, spacing, and
+decorative elements. The `ThemeProvider` in `PageRenderer.tsx` applies the correct
+token set based on `config.theme`. All three themes support light/dark color schemes.
+
+**Aspirational themes (not yet implemented):**
 
 | Theme | Description |
 |---|---|
-| `minimal` | Clean, lots of whitespace, monochrome with one accent color |
-| `warm` | Soft colors, rounded elements, friendly feel |
 | `bold` | Strong contrast, large typography, confident |
 | `elegant` | Serif fonts, refined spacing, understated |
 | `hacker` | Monospace, dark background, terminal aesthetic |
 
-Users can request theme changes in conversation. New themes can be added
-as the project grows.
+Users can request theme changes in conversation via the `set_theme` tool.
+Source of truth for valid themes: `AVAILABLE_THEMES` in `src/lib/page-config/schema.ts`.
 
 ### 6.5.1 Non-Negotiable Brand Guardrails
 
@@ -1649,7 +1678,7 @@ Granular per-section locks (`position`, `widget`, `content`):
 |---|---|---|
 | `composeOptimisticPage()` | `page-composer.ts` | Error → fallback to vertical. Warning → log |
 | `set_layout` tool | `tools.ts` | Error → reject change. Warning → return suggestion |
-| `update_page_config` tool | `tools.ts` | Error → reject. Warning → log |
+| `update_page_style` tool | `tools.ts` | Error → reject. Warning → log |
 | `prepareAndPublish()` | `publish-pipeline.ts` | Error → throw PublishError. Warning → publish with log |
 
 Severity policy: `missing_required` / `incompatible_widget` = **error** (blocking);
@@ -1887,6 +1916,91 @@ pages hosted in different places, there is no central search.
 community-run directories can interoperate with the main one.
 
 This is designed in Phase 3 alongside the protocol layer.
+
+### 6.10 Shared Canonical Projection
+
+> **Status:** Implemented. Single source of truth for preview and publish page config.
+
+Pages are fact projections. The canonical config is always recomposed from facts —
+never read from a cached `draft.config`. This prevents private facts from leaking
+through stale draft data.
+
+**Core functions** (`src/lib/services/page-projection.ts`):
+
+```typescript
+// Single publishable filter — used by BOTH projection AND promote loop
+filterPublishableFacts(facts: FactRow[]): FactRow[]
+// Returns facts where visibility is public/proposed AND category is not sensitive
+
+// Full projection: filter → compose → preserve metadata → slot assign → completeness filter
+projectPublishableConfig(
+  facts: FactRow[], username: string, factLanguage: string,
+  draftMeta?: DraftMeta,
+): PageConfig
+```
+
+**Usage:** Both `/api/preview` and `/api/preview/stream` call `projectPublishableConfig()`.
+The publish pipeline (`prepareAndPublish`) also uses it for the canonical hash check
+before any side-effects.
+
+**Two configs in publish flow:**
+1. **Canonical config** — composed from publishable facts in `factLanguage`, no translation.
+   Used for hashing (`computeConfigHash`). Compared against `expectedHash` from frontend.
+2. **Rendered config** — canonical + optional translation to target language. This is what
+   gets persisted via `upsertDraft` and displayed on the published page.
+
+**Concurrency guard (expectedHash):**
+The frontend stores `configHash` from the latest preview response. On publish, it sends
+`expectedHash` in the request body. The pipeline computes the canonical hash and rejects
+with `STALE_PREVIEW_HASH` (409) if they don't match — zero side-effects on mismatch.
+
+**Username guard:**
+In `mode: "publish"`, the pipeline checks `draft.username === username`. Mismatch throws
+`USERNAME_MISMATCH` (409). This check is skipped in `mode: "register"` because the draft
+username hasn't been updated yet at that point.
+
+**Publish promotes all proposed → public:**
+Inside an atomic SQLite transaction, the pipeline:
+1. Promotes all `proposed` facts to `public` via `setFactVisibility`
+2. Persists the rendered (translated) config via `upsertDraft`
+3. Calls `requestPublish` + `confirmPublish`
+
+If the hash guard fails, none of these steps execute.
+
+**Key files:**
+- `src/lib/services/page-projection.ts` — `filterPublishableFacts`, `projectPublishableConfig`
+- `src/lib/services/publish-pipeline.ts` — `prepareAndPublish` (hash guard + promote + publish)
+- `src/lib/visibility/policy.ts` — `SENSITIVE_CATEGORIES` (exported `ReadonlySet<string>`)
+- `src/components/layout/SplitView.tsx` — stores `configHash` state, sends `expectedHash`
+
+### 6.11 Section Completeness
+
+> **Status:** Implemented. Filters incomplete sections from published pages.
+
+`isSectionComplete(section)` (`src/lib/page-config/section-completeness.ts`) checks
+whether a section has meaningful content. Hero and footer always pass. Other section
+types require at least one non-empty item, group, link, method, or text field.
+
+**Usage:**
+- `filterCompleteSections(sections)` — returns only complete sections
+- `PageRenderer.tsx` applies this filter in non-preview mode (published pages).
+  Preview mode shows all sections (including incomplete) so the user can see work
+  in progress.
+- The publish pipeline does NOT filter incomplete sections — it publishes whatever
+  `projectPublishableConfig()` produces. The renderer is the safety net.
+
+### 6.12 Maintenance Scripts
+
+Two one-shot scripts for data hygiene on existing databases:
+
+**`scripts/sanitize-drafts.ts`** — Recomposes all draft configs from facts using
+`projectPublishableConfig()`. Ensures no private facts are baked into `draft.config`
+from legacy writes. Modes: `--dry-run` (default), `--export` (JSON report),
+`--apply` (update DB). Owner-scoped, idempotent.
+
+**`scripts/cleanup-facts.ts`** — Validates all facts against `validateFactValue()`
+and reports/removes invalid entries. Groups errors by type for summary.
+Modes: `--dry-run` (default), `--export` (JSON report), `--apply` (delete invalid).
 
 ---
 
@@ -3460,29 +3574,46 @@ export async function normalizeCategory(
 
 ### 15.9 Visibility State Machine
 
-Fact visibility has four states and transitions are explicit and mode-dependent:
+Fact visibility has four states and transitions are explicit, actor-dependent, and
+category-sensitive:
 
 ```
 private → proposed → public → archived
-   ↑                    │         │
+   ↑         ↕         │         │
+   └─────────┘         │         │
+   ↑    (agent/user)   │         │
    └────────────────────┘         │
    ↑         (revoke)             │
    └──────────────────────────────┘
               (reactivate as private, then re-propose)
 ```
 
-Transition rules:
-- `private -> proposed` only via `VisibilityPolicy` in onboarding/draft flows
-- `proposed -> public` only on publish checkpoint approval
-- `public -> archived` when the agent or user decides a fact is no longer relevant
-  for the page (e.g., old job, past event) but should be preserved for history
-- `archived -> private` for reactivation (re-enters the proposal flow)
-- `public -> private` allowed anytime by user request/policy action
-- `private -> public` direct jump is disabled in onboarding; allowed in steady state only
-  with explicit approval
+**Actor-based transition matrix** (enforced by `setFactVisibility` in `kb-service.ts`):
+
+| Actor | Category | Allowed targets | Blocked |
+|-------|----------|----------------|---------|
+| `assistant` | any | `proposed`, `private` | `public` (always) |
+| `user` | non-sensitive | `private`, `proposed`, `public` (all directions) | — |
+| `user` | sensitive | `private` only | `proposed`, `public` |
+| any | sensitive | — | `public`, `proposed` (always blocked) |
+
+Key rules:
+- **Agent** can only toggle between `private` ↔ `proposed`. Never `public`.
+- **User** has full control on non-sensitive facts (private ↔ proposed ↔ public).
+- **Sensitive categories** (`contact`, `compensation`, `health`, `legal`) can only be
+  set to `private` by user (for legacy cleanup). Never `proposed` or `public`.
+- **Publish** promotes all `proposed` → `public` atomically (the "publish = approve all" model).
+  This is the ONLY path from `proposed` to `public` — handled by the publish pipeline, not
+  by direct visibility API calls.
+
+**Implementation:**
+- Service: `setFactVisibility(factId, target, actor, sessionId, readKeys?)` in `kb-service.ts`
+- Agent tool: `set_fact_visibility` in `tools.ts` (calls with `actor: "assistant"`)
+- User API: `POST /api/facts/[id]/visibility` (calls with `actor: "user"`)
+- Audit: every transition logged via `logEvent` with `eventType: "fact_visibility_changed"`
 
 Renderer mode rules:
-- Draft preview: render `public + proposed`
+- Draft preview: render `public + proposed` (excluding sensitive categories)
 - Public page: render `public` only
 - Archived facts are never rendered but remain queryable by the agent for context
 

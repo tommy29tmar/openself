@@ -2,6 +2,7 @@ import type { FactRow } from "@/lib/services/kb-service";
 import type { PageConfig, Section, StyleConfig } from "@/lib/page-config/schema";
 import { validatePageConfig } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
+import { isDisplayableUsername } from "@/lib/page-config/usernames";
 import type {
   HeroContent,
   BioContent,
@@ -246,13 +247,6 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
 }
 
-/** Converts kebab-case to Title Case (e.g., 'my-project' -> 'My Project'). */
-function beautifyKey(key: string): string {
-  return key
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
 /** Languages where common nouns (job titles, roles) are capitalized. */
 const CAPITALIZE_NOUNS_LANGUAGES = new Set(["de"]);
@@ -264,7 +258,7 @@ function lowerRole(role: string, language: string): string {
   return role[0].toLowerCase() + role.slice(1);
 }
 
-function buildHeroSection(identityFacts: FactRow[], language: string): Section | null {
+function buildHeroSection(identityFacts: FactRow[], language: string, username: string): Section | null {
   let name: string | undefined;
   let tagline: string | undefined;
 
@@ -290,8 +284,9 @@ function buildHeroSection(identityFacts: FactRow[], language: string): Section |
     }
   }
 
-  // Always produce a hero — use placeholder if needed
-  const heroName = name ?? "Anonymous";
+  // Fallback chain: explicit name → displayable username → localized neutral
+  const l = getL10n(language);
+  const heroName = name ?? (isDisplayableUsername(username) ? username : undefined);
 
   if (!tagline) {
     // Try to derive from identity facts (role, interests)
@@ -300,14 +295,18 @@ function buildHeroSection(identityFacts: FactRow[], language: string): Section |
       const rv = val(roleFact);
       const role = str(rv.role) ?? str(rv.title) ?? str(rv.value);
       if (role) {
-        tagline = getL10n(language).bioRoleFirstPerson(lowerRole(role, language));
+        tagline = l.bioRoleFirstPerson(lowerRole(role, language));
       }
     }
   }
 
+  // If we have a name, use a personalized tagline; otherwise use neutral
+  const finalName = heroName ?? l.welcomeTagline("").replace(/,?\s*$/, "").trim();
+  const finalTagline = tagline ?? (heroName ? l.welcomeTagline(heroName) : l.welcomeTagline(finalName));
+
   const content: HeroContent = {
-    name: heroName,
-    tagline: tagline ?? getL10n(language).welcomeTagline(heroName),
+    name: heroName ?? finalName,
+    tagline: finalTagline,
   };
 
   return {
@@ -372,8 +371,9 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
   const interests = interestFacts
     .map((f) => {
       const v = val(f);
-      return str(v.name) ?? str(v.value) ?? f.key;
+      return str(v.name) ?? str(v.value);
     })
+    .filter((s): s is string => s !== undefined)
     .slice(0, maxInterests);
 
   if (interests.length > 0) {
@@ -395,10 +395,14 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
 function buildSkillsSection(skillFacts: FactRow[], language: string): Section | null {
   if (skillFacts.length === 0) return null;
 
-  const skills = skillFacts.map((f) => {
-    const v = val(f);
-    return str(v.name) ?? str(v.value) ?? beautifyKey(f.key);
-  });
+  const skills = skillFacts
+    .map((f) => {
+      const v = val(f);
+      return str(v.name) ?? str(v.value);
+    })
+    .filter((s): s is string => s !== undefined);
+
+  if (skills.length === 0) return null;
 
   const content: SkillsContent = {
     groups: [{ label: getL10n(language).skillsLabel, skills }],
@@ -415,20 +419,24 @@ function buildSkillsSection(skillFacts: FactRow[], language: string): Section | 
 function buildProjectsSection(projectFacts: FactRow[]): Section | null {
   if (projectFacts.length === 0) return null;
 
-  const items: ProjectItem[] = projectFacts.map((f) => {
-    const v = val(f);
-    const item: ProjectItem = {
-      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
-    };
-    const desc = str(v.description);
-    if (desc) item.description = desc;
-    const url = str(v.url);
-    if (url) item.url = url;
-    if (Array.isArray(v.tags)) {
-      item.tags = v.tags.filter((t): t is string => typeof t === "string");
-    }
-    return item;
-  });
+  const items: ProjectItem[] = projectFacts
+    .map((f) => {
+      const v = val(f);
+      const title = str(v.title) ?? str(v.name);
+      if (!title) return null;
+      const item: ProjectItem = { title };
+      const desc = str(v.description);
+      if (desc) item.description = desc;
+      const url = str(v.url);
+      if (url) item.url = url;
+      if (Array.isArray(v.tags)) {
+        item.tags = v.tags.filter((t): t is string => typeof t === "string");
+      }
+      return item;
+    })
+    .filter((item): item is ProjectItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: ProjectsContent = { items };
 
@@ -443,15 +451,19 @@ function buildProjectsSection(projectFacts: FactRow[]): Section | null {
 function buildInterestsSection(interestFacts: FactRow[], language: string): Section | null {
   if (interestFacts.length === 0) return null;
 
-  const items = interestFacts.map((f) => {
-    const v = val(f);
-    const item: { name: string; detail?: string } = {
-      name: (str(v.name) ?? str(v.value) ?? beautifyKey(f.key))!,
-    };
-    const detail = str(v.detail);
-    if (detail) item.detail = detail;
-    return item;
-  });
+  const items = interestFacts
+    .map((f) => {
+      const v = val(f);
+      const name = str(v.name) ?? str(v.value);
+      if (!name) return null;
+      const item: { name: string; detail?: string } = { name };
+      const detail = str(v.detail);
+      if (detail) item.detail = detail;
+      return item;
+    })
+    .filter((item): item is { name: string; detail?: string } => item !== null);
+
+  if (items.length === 0) return null;
 
   return {
     id: "interests-1",
@@ -464,16 +476,22 @@ function buildInterestsSection(interestFacts: FactRow[], language: string): Sect
 function buildSocialSection(socialFacts: FactRow[]): Section | null {
   if (socialFacts.length === 0) return null;
 
-  const links: SocialLink[] = socialFacts.map((f) => {
-    const v = val(f);
-    const link: SocialLink = {
-      platform: (str(v.platform) ?? f.key)!,
-      url: (str(v.url) ?? str(v.value) ?? "")!,
-    };
-    const label = str(v.label);
-    if (label) link.label = label;
-    return link;
-  });
+  const links: SocialLink[] = socialFacts
+    .map((f) => {
+      const v = val(f);
+      const url = str(v.url) ?? str(v.value);
+      if (!url) return null;
+      const link: SocialLink = {
+        platform: str(v.platform) ?? f.key,
+        url,
+      };
+      const label = str(v.label);
+      if (label) link.label = label;
+      return link;
+    })
+    .filter((link): link is SocialLink => link !== null);
+
+  if (links.length === 0) return null;
 
   const content: SocialContent = { links };
 
@@ -496,15 +514,21 @@ function buildFooterSection(): Section {
 function buildTimelineSection(experienceFacts: FactRow[], language: string): Section | null {
   if (experienceFacts.length === 0) return null;
 
-  const items = experienceFacts.map((f) => {
-    const v = val(f);
-    return {
-      title: (str(v.role) ?? str(v.title) ?? f.key)!,
-      subtitle: str(v.company) ?? str(v.organization),
-      date: str(v.period) ?? str(v.date),
-      description: str(v.description),
-    };
-  });
+  const items = experienceFacts
+    .map((f) => {
+      const v = val(f);
+      const title = str(v.role) ?? str(v.title);
+      if (!title) return null;
+      return {
+        title,
+        subtitle: str(v.company) ?? str(v.organization),
+        date: str(v.period) ?? str(v.date),
+        description: str(v.description),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  if (items.length === 0) return null;
 
   return {
     id: "timeline-1",
@@ -526,20 +550,24 @@ function isExtendedSectionsEnabled(): boolean {
 function buildExperienceSection(experienceFacts: FactRow[], language: string): Section | null {
   if (experienceFacts.length === 0) return null;
 
-  const items: ExperienceItem[] = experienceFacts.map((f) => {
-    const v = val(f);
-    const item: ExperienceItem = {
-      title: (str(v.role) ?? str(v.title) ?? beautifyKey(f.key))!,
-    };
-    const company = str(v.company) ?? str(v.organization);
-    if (company) item.company = company;
-    const period = str(v.period) ?? str(v.date);
-    if (period) item.period = period;
-    const description = str(v.description);
-    if (description) item.description = description;
-    if (v.status === "current" || v.current === true) item.current = true;
-    return item;
-  });
+  const items: ExperienceItem[] = experienceFacts
+    .map((f) => {
+      const v = val(f);
+      const title = str(v.role) ?? str(v.title);
+      if (!title) return null;
+      const item: ExperienceItem = { title };
+      const company = str(v.company) ?? str(v.organization);
+      if (company) item.company = company;
+      const period = str(v.period) ?? str(v.date);
+      if (period) item.period = period;
+      const description = str(v.description);
+      if (description) item.description = description;
+      if (v.status === "current" || v.current === true) item.current = true;
+      return item;
+    })
+    .filter((item): item is ExperienceItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: ExperienceContent = { items, title: getL10n(language).experienceLabel };
 
@@ -554,21 +582,25 @@ function buildExperienceSection(experienceFacts: FactRow[], language: string): S
 function buildEducationSection(educationFacts: FactRow[], language: string): Section | null {
   if (educationFacts.length === 0) return null;
 
-  const items: EducationItem[] = educationFacts.map((f) => {
-    const v = val(f);
-    const item: EducationItem = {
-      institution: (str(v.institution) ?? str(v.school) ?? str(v.name) ?? beautifyKey(f.key))!,
-    };
-    const degree = str(v.degree);
-    if (degree) item.degree = degree;
-    const field = str(v.field);
-    if (field) item.field = field;
-    const period = str(v.period) ?? str(v.date);
-    if (period) item.period = period;
-    const description = str(v.description);
-    if (description) item.description = description;
-    return item;
-  });
+  const items: EducationItem[] = educationFacts
+    .map((f) => {
+      const v = val(f);
+      const institution = str(v.institution) ?? str(v.school) ?? str(v.name);
+      if (!institution) return null;
+      const item: EducationItem = { institution };
+      const degree = str(v.degree);
+      if (degree) item.degree = degree;
+      const field = str(v.field);
+      if (field) item.field = field;
+      const period = str(v.period) ?? str(v.date);
+      if (period) item.period = period;
+      const description = str(v.description);
+      if (description) item.description = description;
+      return item;
+    })
+    .filter((item): item is EducationItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: EducationContent = { items, title: getL10n(language).educationLabel };
 
@@ -583,19 +615,23 @@ function buildEducationSection(educationFacts: FactRow[], language: string): Sec
 function buildAchievementsSection(achievementFacts: FactRow[], language: string): Section | null {
   if (achievementFacts.length === 0) return null;
 
-  const items: AchievementItem[] = achievementFacts.map((f) => {
-    const v = val(f);
-    const item: AchievementItem = {
-      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
-    };
-    const description = str(v.description);
-    if (description) item.description = description;
-    const date = str(v.date);
-    if (date) item.date = date;
-    const issuer = str(v.issuer) ?? str(v.organization);
-    if (issuer) item.issuer = issuer;
-    return item;
-  });
+  const items: AchievementItem[] = achievementFacts
+    .map((f) => {
+      const v = val(f);
+      const title = str(v.title) ?? str(v.name);
+      if (!title) return null;
+      const item: AchievementItem = { title };
+      const description = str(v.description);
+      if (description) item.description = description;
+      const date = str(v.date);
+      if (date) item.date = date;
+      const issuer = str(v.issuer) ?? str(v.organization);
+      if (issuer) item.issuer = issuer;
+      return item;
+    })
+    .filter((item): item is AchievementItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: AchievementsContent = { items, title: getL10n(language).achievementsLabel };
 
@@ -610,14 +646,17 @@ function buildAchievementsSection(achievementFacts: FactRow[], language: string)
 function buildStatsSection(statFacts: FactRow[], language: string): Section | null {
   if (statFacts.length === 0) return null;
 
-  const items: StatItem[] = statFacts.map((f) => {
-    const v = val(f);
-    return {
-      label: (str(v.label) ?? str(v.name) ?? beautifyKey(f.key))!,
-      value: (str(v.value) ?? str(v.number) ?? "—")!,
-      unit: str(v.unit),
-    };
-  });
+  const items: StatItem[] = statFacts
+    .map((f) => {
+      const v = val(f);
+      const label = str(v.label) ?? str(v.name);
+      const value = str(v.value) ?? str(v.number);
+      if (!label || !value) return null;
+      return { label, value, unit: str(v.unit) };
+    })
+    .filter((item): item is StatItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: StatsContent = { items, title: getL10n(language).statsLabel };
 
@@ -632,20 +671,24 @@ function buildStatsSection(statFacts: FactRow[], language: string): Section | nu
 function buildReadingSection(readingFacts: FactRow[], language: string): Section | null {
   if (readingFacts.length === 0) return null;
 
-  const items: ReadingItem[] = readingFacts.map((f) => {
-    const v = val(f);
-    const item: ReadingItem = {
-      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
-    };
-    const author = str(v.author);
-    if (author) item.author = author;
-    if (typeof v.rating === "number") item.rating = v.rating;
-    const note = str(v.note) ?? str(v.description);
-    if (note) item.note = note;
-    const url = str(v.url);
-    if (url) item.url = url;
-    return item;
-  });
+  const items: ReadingItem[] = readingFacts
+    .map((f) => {
+      const v = val(f);
+      const title = str(v.title) ?? str(v.name);
+      if (!title) return null;
+      const item: ReadingItem = { title };
+      const author = str(v.author);
+      if (author) item.author = author;
+      if (typeof v.rating === "number") item.rating = v.rating;
+      const note = str(v.note) ?? str(v.description);
+      if (note) item.note = note;
+      const url = str(v.url);
+      if (url) item.url = url;
+      return item;
+    })
+    .filter((item): item is ReadingItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: ReadingContent = { items, title: getL10n(language).booksLabel };
 
@@ -660,19 +703,23 @@ function buildReadingSection(readingFacts: FactRow[], language: string): Section
 function buildMusicSection(musicFacts: FactRow[], language: string): Section | null {
   if (musicFacts.length === 0) return null;
 
-  const items: MusicItem[] = musicFacts.map((f) => {
-    const v = val(f);
-    const item: MusicItem = {
-      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
-    };
-    const artist = str(v.artist);
-    if (artist) item.artist = artist;
-    const note = str(v.note) ?? str(v.description);
-    if (note) item.note = note;
-    const url = str(v.url);
-    if (url) item.url = url;
-    return item;
-  });
+  const items: MusicItem[] = musicFacts
+    .map((f) => {
+      const v = val(f);
+      const title = str(v.title) ?? str(v.name);
+      if (!title) return null;
+      const item: MusicItem = { title };
+      const artist = str(v.artist);
+      if (artist) item.artist = artist;
+      const note = str(v.note) ?? str(v.description);
+      if (note) item.note = note;
+      const url = str(v.url);
+      if (url) item.url = url;
+      return item;
+    })
+    .filter((item): item is MusicItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: MusicContent = { items, title: getL10n(language).musicLabel };
 
@@ -687,15 +734,19 @@ function buildMusicSection(musicFacts: FactRow[], language: string): Section | n
 function buildLanguagesSection(languageFacts: FactRow[], language: string): Section | null {
   if (languageFacts.length === 0) return null;
 
-  const items: LanguageItem[] = languageFacts.map((f) => {
-    const v = val(f);
-    const item: LanguageItem = {
-      language: (str(v.language) ?? str(v.name) ?? beautifyKey(f.key))!,
-    };
-    const proficiency = str(v.proficiency) ?? str(v.level);
-    if (proficiency) item.proficiency = proficiency as LanguageItem["proficiency"];
-    return item;
-  });
+  const items: LanguageItem[] = languageFacts
+    .map((f) => {
+      const v = val(f);
+      const lang = str(v.language) ?? str(v.name);
+      if (!lang) return null;
+      const item: LanguageItem = { language: lang };
+      const proficiency = str(v.proficiency) ?? str(v.level);
+      if (proficiency) item.proficiency = proficiency as LanguageItem["proficiency"];
+      return item;
+    })
+    .filter((item): item is LanguageItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: LanguagesContent = { items, title: getL10n(language).languagesLabel };
 
@@ -708,22 +759,25 @@ function buildLanguagesSection(languageFacts: FactRow[], language: string): Sect
 }
 
 function buildContactSection(contactFacts: FactRow[], language: string): Section | null {
-  // Only include facts with public or proposed visibility (contact is sensitive)
-  const publicFacts = contactFacts.filter(
-    (f) => f.visibility === "public" || f.visibility === "proposed",
-  );
-  if (publicFacts.length === 0) return null;
+  // Visibility already filtered globally at composeOptimisticPage top
+  if (contactFacts.length === 0) return null;
 
-  const methods: ContactMethod[] = publicFacts.map((f) => {
-    const v = val(f);
-    const method: ContactMethod = {
-      type: (str(v.type) ?? "other") as ContactMethod["type"],
-      value: (str(v.value) ?? str(v.email) ?? str(v.phone) ?? str(v.address) ?? "")!,
-    };
-    const label = str(v.label);
-    if (label) method.label = label;
-    return method;
-  });
+  const methods: ContactMethod[] = contactFacts
+    .map((f) => {
+      const v = val(f);
+      const value = str(v.value) ?? str(v.email) ?? str(v.phone) ?? str(v.address);
+      if (!value) return null;
+      const method: ContactMethod = {
+        type: (str(v.type) ?? "other") as ContactMethod["type"],
+        value,
+      };
+      const label = str(v.label);
+      if (label) method.label = label;
+      return method;
+    })
+    .filter((m): m is ContactMethod => m !== null);
+
+  if (methods.length === 0) return null;
 
   const content: ContactContent = { methods, title: getL10n(language).contactLabel };
 
@@ -738,19 +792,23 @@ function buildContactSection(contactFacts: FactRow[], language: string): Section
 function buildActivitiesSection(activityFacts: FactRow[], language: string): Section | null {
   if (activityFacts.length === 0) return null;
 
-  const items: ActivityItem[] = activityFacts.map((f) => {
-    const v = val(f);
-    const item: ActivityItem = {
-      name: (str(v.name) ?? str(v.value) ?? beautifyKey(f.key))!,
-    };
-    const activityType = str(v.activityType) ?? str(v.type);
-    if (activityType) item.activityType = activityType as ActivityItem["activityType"];
-    const frequency = str(v.frequency);
-    if (frequency) item.frequency = frequency;
-    const description = str(v.description);
-    if (description) item.description = description;
-    return item;
-  });
+  const items: ActivityItem[] = activityFacts
+    .map((f) => {
+      const v = val(f);
+      const name = str(v.name) ?? str(v.value);
+      if (!name) return null;
+      const item: ActivityItem = { name };
+      const activityType = str(v.activityType) ?? str(v.type);
+      if (activityType) item.activityType = activityType as ActivityItem["activityType"];
+      const frequency = str(v.frequency);
+      if (frequency) item.frequency = frequency;
+      const description = str(v.description);
+      if (description) item.description = description;
+      return item;
+    })
+    .filter((item): item is ActivityItem => item !== null);
+
+  if (items.length === 0) return null;
 
   const content: ActivitiesContent = { items, title: getL10n(language).activitiesLabel };
 
@@ -762,20 +820,23 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
   };
 }
 
-// TODO(Phase-1d): global visibility filter — only compose facts with visibility IN ('public', 'proposed') for ALL categories
 export function composeOptimisticPage(
   facts: FactRow[],
   username: string,
   language: string = "en",
   layoutTemplate?: LayoutTemplateId,
 ): PageConfig {
-  const grouped = groupByCategory(facts);
+  // Global privacy gate: only compose from public/proposed facts
+  const visibleFacts = facts.filter(
+    (f) => f.visibility === "public" || f.visibility === "proposed",
+  );
+  const grouped = groupByCategory(visibleFacts);
 
   const sections: Section[] = [];
 
-  // 1. Hero — always present (uses placeholder if no identity facts)
+  // 1. Hero — always present (uses username fallback if no identity facts)
   const identityFacts = grouped.get("identity") ?? [];
-  const hero = buildHeroSection(identityFacts, language);
+  const hero = buildHeroSection(identityFacts, language, username);
   if (hero) sections.push(hero);
 
   // Check what sections we might have to avoid redundancy

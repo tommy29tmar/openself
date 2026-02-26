@@ -10,9 +10,10 @@ import {
   normalizeCategory,
   type TaxonomyStore,
 } from "@/lib/taxonomy/normalizeCategory";
-import { initialVisibility } from "@/lib/visibility/policy";
+import { initialVisibility, isSensitiveCategory, type Visibility } from "@/lib/visibility/policy";
 import { logEvent } from "@/lib/services/event-service";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
+import { validateFactValue } from "@/lib/services/fact-validation";
 
 // -- Taxonomy store backed by DB
 
@@ -77,6 +78,9 @@ export async function createFact(
   sessionId: string = "__default__",
   profileId?: string,
 ): Promise<FactRow> {
+  // Validate fact value before persisting
+  validateFactValue(input.category, input.key, input.value);
+
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
 
@@ -150,7 +154,7 @@ export function updateFact(
   sessionId: string = "__default__",
   readKeys?: string[],
 ): FactRow | null {
-  // If readKeys provided, find the fact across all sessions for this profile
+  // Find existing fact to get category/key for validation
   let existing;
   if (readKeys && readKeys.length > 0) {
     existing = db
@@ -167,6 +171,9 @@ export function updateFact(
   }
 
   if (!existing) return null;
+
+  // Validate new value before persisting
+  validateFactValue(existing.category, existing.key, input.value);
 
   const now = new Date().toISOString();
   db.update(facts)
@@ -279,4 +286,121 @@ export function countFacts(sessionIds: string[]): number {
     .where(inArray(facts.sessionId, sessionIds))
     .get();
   return row?.count ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Visibility management
+// ---------------------------------------------------------------------------
+
+export type VisibilityActor = "assistant" | "user";
+
+export class VisibilityTransitionError extends Error {
+  public readonly code = "VISIBILITY_TRANSITION_BLOCKED" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "VisibilityTransitionError";
+  }
+}
+
+/**
+ * Set fact visibility with enforced transition matrix.
+ *
+ * | Actor     | Category    | Allowed targets                          |
+ * |-----------|-------------|------------------------------------------|
+ * | assistant | any         | proposed, private                        |
+ * | assistant | any         | public → BLOCKED                         |
+ * | user      | non-sensitive | private, proposed, public              |
+ * | user      | sensitive   | private only                             |
+ * | any       | sensitive   | public, proposed → BLOCKED               |
+ */
+export function setFactVisibility(
+  factId: string,
+  targetVisibility: Visibility,
+  actor: VisibilityActor,
+  sessionId: string,
+  readKeys?: string[],
+): FactRow {
+  // Find fact
+  let existing;
+  if (readKeys && readKeys.length > 0) {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, factId), inArray(facts.sessionId, readKeys)))
+      .get();
+  } else {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId)))
+      .get();
+  }
+
+  if (!existing) {
+    throw new VisibilityTransitionError(`Fact ${factId} not found`);
+  }
+
+  const sensitive = isSensitiveCategory(existing.category);
+  const from = (existing.visibility ?? "private") as Visibility;
+
+  // Enforce transition matrix
+  if (actor === "assistant" && targetVisibility === "public") {
+    throw new VisibilityTransitionError(
+      "Assistant cannot set visibility to public",
+    );
+  }
+
+  if (sensitive && (targetVisibility === "public" || targetVisibility === "proposed")) {
+    throw new VisibilityTransitionError(
+      `Sensitive category "${existing.category}" cannot be set to ${targetVisibility}`,
+    );
+  }
+
+  if (actor === "user" && sensitive && targetVisibility !== "private") {
+    throw new VisibilityTransitionError(
+      `User can only set sensitive category "${existing.category}" to private`,
+    );
+  }
+
+  // Apply
+  const now = new Date().toISOString();
+  db.update(facts)
+    .set({ visibility: targetVisibility, updatedAt: now })
+    .where(eq(facts.id, factId))
+    .run();
+
+  logEvent({
+    eventType: "fact_visibility_changed",
+    actor,
+    payload: { factId, from, to: targetVisibility, category: existing.category },
+    entityType: "fact",
+    entityId: factId,
+  });
+
+  return { ...existing, visibility: targetVisibility, updatedAt: now } as FactRow;
+}
+
+/**
+ * Get a single fact by ID (scoped to readKeys).
+ */
+export function getFactById(
+  factId: string,
+  sessionId: string,
+  readKeys?: string[],
+): FactRow | null {
+  let existing;
+  if (readKeys && readKeys.length > 0) {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, factId), inArray(facts.sessionId, readKeys)))
+      .get();
+  } else {
+    existing = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.id, factId), eq(facts.sessionId, sessionId)))
+      .get();
+  }
+  return existing ? (existing as FactRow) : null;
 }

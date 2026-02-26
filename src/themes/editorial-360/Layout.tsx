@@ -21,7 +21,7 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#fafafa] text-[#111111] font-light antialiased selection:bg-black selection:text-white relative overflow-x-hidden">
+        <div className="min-h-screen bg-[var(--page-bg)] text-[var(--page-fg)] font-light antialiased selection:bg-[var(--page-fg)] selection:text-[var(--page-bg)] relative overflow-x-hidden">
             {/* Subtle grain texture overlay */}
             <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-50 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
             
@@ -31,8 +31,8 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
                 {children}
             </main>
             
-            <div className="fixed top-0 left-0 w-1 h-full bg-black/5 z-40 hidden md:block" />
-            <div className="fixed top-0 right-0 w-1 h-full bg-black/5 z-40 hidden md:block" />
+            <div className="fixed top-0 left-0 w-1 h-full bg-[var(--page-border)] opacity-30 z-40 hidden md:block" />
+            <div className="fixed top-0 right-0 w-1 h-full bg-[var(--page-border)] opacity-30 z-40 hidden md:block" />
         </div>
     );
 }

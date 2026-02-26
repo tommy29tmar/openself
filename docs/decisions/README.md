@@ -22,6 +22,7 @@ Do not use ADRs for:
 6. `ADR-0006-owner-scope-and-cognitive-architecture.md` - OwnerScope design, multi-session identity, trust ledger, migration bootstrap
 7. `ADR-0007-sse-preview-upgrade.md` - SSE preview with polling fallback (supersedes ADR-0005)
 8. `ADR-0008-signup-before-publish.md` - Require signup before publish in multi-user mode (resolves ADR-0004 negative #2)
+9. `ADR-0009-shared-projection-and-publish-safety.md` - Shared canonical projection and publish safety (hash guard, promote-all, no raw draft serving)
 
 ## Naming Convention
 

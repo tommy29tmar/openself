@@ -6,6 +6,8 @@ import {
   deleteFact,
   searchFacts,
   getAllFacts,
+  setFactVisibility,
+  VisibilityTransitionError,
 } from "@/lib/services/kb-service";
 import { getDraft, upsertDraft, requestPublish } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
@@ -16,6 +18,7 @@ import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
 import { proposeSoulChange, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
+import { FactValidationError } from "@/lib/services/fact-validation";
 import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
@@ -40,7 +43,6 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         ),
       value: z
         .record(z.unknown())
-        .default({})
         .describe(
           "REQUIRED. Structured value object. Examples: {name: 'TypeScript', level: 'advanced'} for skills, {full: 'Tommaso Rossi'} for identity name, {role: 'economist', company: 'Acme', status: 'current'} for experience, {institution: 'MIT', degree: 'MSc', field: 'Computer Science', period: '2018-2020'} for education, {label: 'Years Experience', value: '10+'} for stat, {language: 'Spanish', proficiency: 'fluent'} for language, {type: 'email', value: 'me@example.com'} for contact, {title: 'Clean Code', author: 'Robert Martin', rating: 5} for reading, {title: 'Bohemian Rhapsody', artist: 'Queen'} for music, {name: 'Tennis', activityType: 'sport', frequency: 'weekly'} for activity. Use lowercase for common nouns (job titles, roles, skills) — only capitalize proper nouns (names, companies, brands). Must always be provided.",
         ),
@@ -68,6 +70,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           key: fact.key,
         };
       } catch (error) {
+        if (error instanceof FactValidationError) {
+          return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
+        }
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
@@ -93,6 +98,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         if (!fact) return { success: false, error: "Fact not found" };
         return { success: true, factId: fact.id };
       } catch (error) {
+        if (error instanceof FactValidationError) {
+          return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
+        }
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
@@ -154,35 +162,44 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
-  update_page_config: tool({
+  update_page_style: tool({
     description:
-      "Update the page configuration. Use for structural changes like adding/removing sections, changing content, or modifying style. Provide a full valid PageConfig object.",
+      "Update the page style metadata (theme, colors, font, layout). Does NOT modify section content — use generate_page for that. Pages are composed from facts, not from direct config edits.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
-      config: z
-        .record(z.unknown())
-        .describe("The full PageConfig object to save"),
+      theme: z.string().optional().describe(`Theme name: ${AVAILABLE_THEMES.join(" or ")}`),
+      style: z.record(z.unknown()).optional().describe("Style object with colorScheme, primaryColor, fontFamily, layout"),
+      layoutTemplate: z.string().optional().describe("Layout template: vertical, sidebar-left, or bento-standard"),
     }),
-    execute: async ({ username, config }) => {
+    execute: async ({ username, theme, style, layoutTemplate }) => {
       try {
-        // Preserve user's style customizations (theme, colors, font, layout)
-        // and section locks from the existing draft.
         const currentDraft = getDraft(sessionId);
-        const incoming = config as PageConfig;
-        const merged: PageConfig = currentDraft
-          ? {
-              ...incoming,
-              theme: currentDraft.config.theme,
-              style: currentDraft.config.style,
-              layoutTemplate: currentDraft.config.layoutTemplate,
-              sections: mergeSectionLocks(incoming.sections, currentDraft.config.sections),
-            }
-          : incoming;
-        upsertDraft(username, merged, sessionId);
+        if (!currentDraft) {
+          return { success: false, error: "No draft page exists. Generate a page first." };
+        }
+
+        const updated: PageConfig = { ...currentDraft.config };
+
+        if (theme !== undefined) {
+          if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
+            return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
+          }
+          updated.theme = theme;
+        }
+
+        if (style !== undefined) {
+          updated.style = { ...currentDraft.config.style, ...style } as PageConfig["style"];
+        }
+
+        if (layoutTemplate !== undefined) {
+          updated.layoutTemplate = layoutTemplate as PageConfig["layoutTemplate"];
+        }
+
+        upsertDraft(username, updated, sessionId);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
-          payload: { username, sections: merged.sections?.length ?? 0 },
+          payload: { username, change: "style", theme, layoutTemplate },
         });
         return { success: true };
       } catch (error) {
@@ -190,7 +207,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           eventType: "tool_call_error",
           actor: "assistant",
           payload: {
-            tool: "update_page_config",
+            tool: "update_page_style",
             error: String(error),
             username,
           },
@@ -621,6 +638,37 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           eventType: "tool_call_error",
           actor: "assistant",
           payload: { tool: "resolve_conflict", error: String(error) },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  set_fact_visibility: tool({
+    description:
+      "Set the visibility of a fact. As an assistant, you can only set facts to 'proposed' (visible in preview, promoted on publish) or 'private' (hidden from page). You CANNOT set facts to 'public' — only the user can do that by publishing.",
+    parameters: z.object({
+      factId: z.string().describe("The ID of the fact to change visibility for"),
+      visibility: z
+        .enum(["proposed", "private"])
+        .describe("Target visibility: 'proposed' (page-visible) or 'private' (hidden)"),
+    }),
+    execute: async ({ factId, visibility }) => {
+      try {
+        const fact = setFactVisibility(factId, visibility, "assistant", sessionId);
+        return {
+          success: true,
+          factId: fact.id,
+          visibility: fact.visibility,
+        };
+      } catch (error) {
+        if (error instanceof VisibilityTransitionError) {
+          return { success: false, error: error.message, code: "VISIBILITY_TRANSITION_BLOCKED" };
+        }
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { tool: "set_fact_visibility", error: String(error), factId },
         });
         return { success: false, error: String(error) };
       }

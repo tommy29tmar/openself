@@ -264,6 +264,54 @@
   --page-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+/* ─── Editorial-360 Theme ─── */
+
+[data-theme="editorial-360"][data-color-scheme="light"] {
+  --page-bg: #fafafa;
+  --page-fg: #111111;
+  --page-fg-secondary: #666666;
+  --page-muted: #f0f0f0;
+  --page-border: #e0e0e0;
+  --page-accent: var(--primary-color, #e11d48);
+  --page-accent-fg: #ffffff;
+  --page-card-bg: #ffffff;
+  --page-card-border: #e0e0e0;
+  --page-card-hover: #f5f5f5;
+  --page-badge-bg: #f5f5f5;
+  --page-badge-fg: #444444;
+  --page-badge-border: #e0e0e0;
+  --page-footer-fg: #888888;
+
+  --page-font-heading: "Arial Narrow", "Helvetica Neue", var(--font-sans, sans-serif);
+  --page-font-body: var(--font-sans, sans-serif);
+  --page-radius-base: 0.125rem;
+  --page-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --page-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="editorial-360"][data-color-scheme="dark"] {
+  --page-bg: #0f0f0f;
+  --page-fg: #f5f5f5;
+  --page-fg-secondary: #a3a3a3;
+  --page-muted: #1a1a1a;
+  --page-border: #2a2a2a;
+  --page-accent: var(--primary-color, #fb7185);
+  --page-accent-fg: #ffffff;
+  --page-card-bg: #141414;
+  --page-card-border: #2a2a2a;
+  --page-card-hover: #1f1f1f;
+  --page-badge-bg: #1f1f1f;
+  --page-badge-fg: #d4d4d4;
+  --page-badge-border: #333333;
+  --page-footer-fg: #555555;
+
+  --page-font-heading: "Arial Narrow", "Helvetica Neue", var(--font-sans, sans-serif);
+  --page-font-body: var(--font-sans, sans-serif);
+  --page-radius-base: 0.125rem;
+  --page-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --page-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
 /* --- Layout Modes (legacy — kept for backward compat) --- */
 [data-layout="centered"] .page-layout {
   max-width: var(--page-max-width);

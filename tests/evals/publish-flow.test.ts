@@ -171,13 +171,20 @@ describe("Tool level — set_theme", () => {
   });
 });
 
-describe("Tool level — update_page_config", () => {
-  it("calls upsertDraft", async () => {
+describe("Tool level — update_page_style", () => {
+  it("calls upsertDraft with style changes", async () => {
     const config = makeValidConfig();
     vi.mocked(upsertDraft).mockImplementation(() => {});
+    vi.mocked(getDraft).mockReturnValue({
+      config,
+      username: "testuser",
+      status: "draft",
+      configHash: "abc",
+      updatedAt: null,
+    });
 
-    await agentTools.update_page_config.execute(
-      { username: "testuser", config: config as any },
+    await agentTools.update_page_style.execute(
+      { username: "testuser", theme: "warm" },
       toolContext,
     );
 

@@ -56,11 +56,20 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(hero!.content.tagline).toBe("Hello, I'm Alice Smith");
     });
 
-    it("uses 'Anonymous' when no name fact is provided", () => {
+    it("uses displayable username when no name fact is provided", () => {
       const page = composeOptimisticPage([], "alice");
       const hero = page.sections.find((s) => s.type === "hero");
       expect(hero).toBeDefined();
-      expect(hero!.content.name).toBe("Anonymous");
+      expect(hero!.content.name).toBe("alice");
+    });
+
+    it("uses neutral fallback for reserved username 'draft'", () => {
+      const page = composeOptimisticPage([], "draft");
+      const hero = page.sections.find((s) => s.type === "hero");
+      expect(hero).toBeDefined();
+      // Should NOT be "draft" or "Anonymous"
+      expect(hero!.content.name).not.toBe("draft");
+      expect(hero!.content.name).not.toBe("Anonymous");
     });
   });
 

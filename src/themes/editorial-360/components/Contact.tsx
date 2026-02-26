@@ -19,7 +19,7 @@ export function Contact({ content }: SectionProps<ContactContent>) {
 
     return (
         <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-[#888888] font-medium mb-12 border-b border-black/15 pb-4">
+            <h2 className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium mb-12 border-b border-[var(--page-border)] pb-4">
                 {title || "Contact"}
             </h2>
 
@@ -29,10 +29,10 @@ export function Contact({ content }: SectionProps<ContactContent>) {
                         key={index}
                         className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-6"
                     >
-                        <span className="text-xs uppercase tracking-widest text-[#888888] font-medium min-w-[100px]">
+                        <span className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium min-w-[100px]">
                             {method.label || method.type}
                         </span>
-                        <span className="text-xl font-serif text-[#111111]">
+                        <span className="text-xl font-[var(--page-font-heading)] text-[var(--page-fg)]">
                             {method.value}
                         </span>
                     </div>

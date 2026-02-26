@@ -15,13 +15,13 @@ export function Custom({ content }: SectionProps<CustomContent>) {
     return (
         <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
             {title && (
-                <h2 className="text-xs uppercase tracking-widest text-[#888888] font-medium mb-12 border-b border-black/15 pb-4">
+                <h2 className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium mb-12 border-b border-[var(--page-border)] pb-4">
                     {title}
                 </h2>
             )}
 
             {body && (
-                <p className="text-[#444444] leading-relaxed max-w-2xl text-lg mb-8">
+                <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-2xl text-lg mb-8">
                     {body}
                 </p>
             )}
@@ -33,10 +33,10 @@ export function Custom({ content }: SectionProps<CustomContent>) {
                             key={index}
                             className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-6"
                         >
-                            <span className="text-xs uppercase tracking-widest text-[#888888] font-medium min-w-[120px]">
+                            <span className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium min-w-[120px]">
                                 {item.label}
                             </span>
-                            <span className="text-xl font-serif text-[#111111]">
+                            <span className="text-xl font-[var(--page-font-heading)] text-[var(--page-fg)]">
                                 {item.value}
                             </span>
                         </div>

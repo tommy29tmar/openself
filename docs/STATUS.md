@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-27
+Last updated: 2026-02-26
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,13 +12,19 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 340 automated tests passing (25 test files)
+- 603 automated tests passing (31 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
 - Signup-before-publish: anonymous users must sign up before publishing (multi-user mode), auth indicator + logout on builder and published page
+- Privacy-by-architecture: shared canonical projection ensures private facts never enter page config
+- Fact validation gate: per-category rules reject invalid/placeholder values at write time
+- Visibility controls: actor-based transition matrix with user API and agent tool
+- Publish safety: hash guard, promote-all (proposed→public atomically), username mismatch guard
+- CSS custom property theming: 3 themes powered by `--theme-*` tokens
+- Chat context integration: `assembleContext` wired with role normalization
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete.
 
 ## 2) Implemented Today
 
@@ -39,7 +45,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Streaming AI chat | Done | `useChat` + `/api/chat` |
-| Tool-calling agent | Done | 14 tools: Fact CRUD, page generation, request_publish, reorder, theme, set_layout, propose_lock. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
+| Tool-calling agent | Done | 15 tools: Fact CRUD, set_fact_visibility, page generation, update_page_style, request_publish, reorder, theme, set_layout, propose_lock, save_memory, propose_soul_change, resolve_conflict. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) |
 | LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
@@ -57,7 +63,8 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | SQLite schema + migrations | Done | Auto-run on DB init, `_migrations` table, transactional |
 | Two-row page model | Done | draft + published rows, DB CHECK constraints |
 | Facts KB CRUD + taxonomy normalization | Done | Alias mapping and pending categories |
-| Visibility policy engine | Done | Sensitive categories handled |
+| Visibility policy engine | Done | Actor-based transition matrix (assistant: proposed/private; user: full on non-sensitive; sensitive: private only). API: `POST /api/facts/[id]/visibility`. Agent tool: `set_fact_visibility`. Audit logged. |
+| Fact validation gate | Done | Per-category value rules, placeholder rejection, enforced at `createFact`/`updateFact` |
 | Event logging | Done | agent_events + trust_ledger (reversible audit trail) |
 | Conversation summaries (Tier 2) | Done | CAS-based rolling summaries, compound cursor, medium-tier LLM |
 | Owner scoping (OwnerScope) | Done | Multi-session identity, anchor session, per-profile quota |
@@ -72,8 +79,11 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Extended sections (experience, education, languages, activities, achievements, stats, reading, music, contact) gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
-| Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors |
-| Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, centralized validation |
+| Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors. Both routes use `projectPublishableConfig()` — never serve raw `draft.config` |
+| Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, CSS custom property tokens (`--theme-*`), centralized validation |
+| Shared canonical projection | Done | `projectPublishableConfig()` is single source of truth for preview + publish. `filterPublishableFacts()` shared filter. |
+| Publish pipeline safety | Done | Hash guard (expectedHash from frontend), promote-all (proposed→public atomically), username mismatch guard (publish mode only) |
+| Section completeness filter | Done | `filterCompleteSections()` in renderer for published pages. Hero/footer always pass. |
 | Layout template engine | Done | 3 templates (vertical, sidebar-left, bento-standard) with slot-based section assignment, widget registry, validation gates. Anticipated from Phase 1b. |
 | Public page sections renderer | Done | All 18 section types rendered (hero, bio, skills, projects, timeline, interests, social, footer + experience, education, achievements, stats, reading, music, languages, activities, contact, custom) |
 | Mobile tab chat state retention | Done | `TabsContent` uses `forceMount` + `data-[state=inactive]:hidden` to keep `ChatPanel` mounted |
@@ -111,7 +121,7 @@ Layout template engine anticipated and completed ahead of Phase 1b. Includes:
 3. Widget registry (20+ widgets with slot compatibility)
 4. Renderer decoupling: ThemeLayout = visual wrapper, LayoutComponent = grid structure
 5. Granular section lock system (position/widget/content, user locks vs agent proposals)
-6. Layout validation gates at 4 points (composer, set_layout tool, update_page_config, publish pipeline)
+6. Layout validation gates at 4 points (composer, set_layout tool, update_page_style, publish pipeline)
 7. Settings UI with template picker
 8. Agent tools: `set_layout`, `propose_lock`
 9. 62+ new layout-specific tests
@@ -140,6 +150,19 @@ All items complete. Includes:
 
 **Remaining from original Phase 1b scope:**
 - Bold/elegant/hacker themes (deferred to NEXT-7)
+
+### Quality, Privacy, Themes & Chat Context Hardening ✅
+
+All items complete. 8 sub-phases:
+1. **Fact validation gate** — per-category `validateFactValue()` rules, placeholder rejection, enforced at `createFact`/`updateFact`
+2. **Composer hardening** — global visibility filter at composer entry, `update_page_config` renamed to `update_page_style` (metadata-only), hero deterministic fallback (no "Anonymous"), `beautifyKey` removal, empty item filtering
+3. **Visibility controls** — actor-based transition matrix (`setFactVisibility`), agent tool `set_fact_visibility` (proposed/private only), user API `POST /api/facts/[id]/visibility`, audit logging
+4. **Chat context integration** — `assembleContext` wired in chat route, role normalization whitelist
+5. **CSS custom property theming** — `--theme-*` tokens for all 3 themes in `globals.css`, `ThemeProvider` in PageRenderer, all 18 section components converted
+6. **Shared canonical projection** — `projectPublishableConfig()` as single source of truth for preview+publish, `filterPublishableFacts()`, hash guard (`expectedHash`), username mismatch guard, promote-all (proposed→public atomically)
+7. **Draft sanitization** — `scripts/sanitize-drafts.ts` (recompose all drafts from facts, idempotent)
+8. **Legacy fact cleanup** — `scripts/cleanup-facts.ts` (validate all facts, remove invalid entries)
+- 263 new tests (603 total, 31 files)
 
 ### Phase 1c — Hybrid Page Compiler
 1. Per-section LLM personalizer (rewrites content using facts + agent memory)
@@ -174,13 +197,13 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 340 passed / 340 total (Vitest, 25 test files)
+- Automated tests: 603 passed / 603 total (Vitest, 31 test files)
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
   2. PageConfig validation behavior + extended section validators (28 tests)
   3. Rate-limit behavior (6 tests)
   4. Layout and theme validation + set_theme editorial-360 (9 tests)
-  5. Publish flow — tool level, service level, edge cases (15 tests, mocked)
+  5. Publish flow — tool level, service level, metadata-only update_page_style (15 tests, mocked)
   6. Page service integration — real SQLite in-memory DB (18 tests)
   7. Translation — LLM translation + cache behavior (18 tests)
   8. Owner scope — multi-session anchor, quota, migration bootstrap (12 tests)
@@ -199,6 +222,14 @@ Builder interface layouts (chat experience):
   21. Auth service — user creation, password hashing (3 tests)
   22. KB session isolation — fact CRUD scoping (9 tests)
   23. Publish auth gate — anonymous block, username resolution, atomic claim+publish (6 tests)
+  24. Fact validation — per-category rules, placeholder rejection, URL/email validation (37 tests)
+  25. Fact visibility — transition matrix, actor enforcement, sensitive categories, audit log (27 tests)
+  26. Section completeness — isSectionComplete, filterCompleteSections, publish pipeline integration (61 tests)
+  27. Preview privacy — private fact exclusion, sensitive category exclusion, legacy draft override, hash determinism (6 tests)
+  28. Publish pipeline — always-recompose, promote-all, hash guard, username mismatch, sensitive exclusion (13 tests)
+  29. Theme tokens — CSS custom property validation, ThemeProvider, 3-theme coverage (15 tests)
+  30. Fact extraction — hero fallback, empty item filtering, beautifyKey removal (24 tests)
+  31. Chat context — assembleContext integration, role normalization (8 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration

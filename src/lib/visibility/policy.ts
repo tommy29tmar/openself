@@ -11,6 +11,7 @@ export type VisibilityInput = {
 
 const PROPOSAL_ALLOWLIST = new Set([
   "identity",
+  "experience",
   "project",
   "skill",
   "interest",
@@ -24,7 +25,7 @@ const PROPOSAL_ALLOWLIST = new Set([
   "activity",
 ]);
 
-const SENSITIVE_CATEGORIES = new Set([
+export const SENSITIVE_CATEGORIES: ReadonlySet<string> = new Set([
   "compensation",
   "salary",
   "health",
@@ -34,7 +35,7 @@ const SENSITIVE_CATEGORIES = new Set([
   "contact",
 ]);
 
-function isSensitiveCategory(category: string): boolean {
+export function isSensitiveCategory(category: string): boolean {
   return SENSITIVE_CATEGORIES.has(category);
 }
 

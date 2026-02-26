@@ -19,7 +19,7 @@ export function Stats({ content }: SectionProps<StatsContent>) {
 
     return (
         <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-[#888888] font-medium mb-12 border-b border-black/15 pb-4">
+            <h2 className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium mb-12 border-b border-[var(--page-border)] pb-4">
                 {title || "Stats"}
             </h2>
 
@@ -27,17 +27,17 @@ export function Stats({ content }: SectionProps<StatsContent>) {
                 {items.map((item, index) => (
                     <div
                         key={index}
-                        className="text-center p-6 border border-black/10 rounded-sm hover:border-black/25 transition-colors"
+                        className="text-center p-6 border border-[var(--page-card-border)] rounded-[var(--page-radius-base)] hover:border-[var(--page-fg-secondary)] transition-colors"
                     >
-                        <div className="text-4xl md:text-5xl font-serif font-medium text-[#111111] mb-2">
+                        <div className="text-4xl md:text-5xl font-[var(--page-font-heading)] font-medium text-[var(--page-fg)] mb-2">
                             {item.value}
                             {item.unit && (
-                                <span className="text-xl text-[#888888] ml-1">
+                                <span className="text-xl text-[var(--page-footer-fg)] ml-1">
                                     {item.unit}
                                 </span>
                             )}
                         </div>
-                        <div className="text-sm uppercase tracking-widest text-[#888888] font-medium">
+                        <div className="text-sm uppercase tracking-widest text-[var(--page-footer-fg)] font-medium">
                             {item.label}
                         </div>
                     </div>

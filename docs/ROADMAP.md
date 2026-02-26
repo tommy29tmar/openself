@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-27
+Last updated: 2026-02-26
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -43,7 +43,7 @@ When choosing work, apply this order:
 - Signup-before-publish flow: anonymous users must sign up before publishing (multi-user mode)
 - Server-side publish auth gate: 403 for anonymous, username enforcement, atomic claim+publish
 - Auth indicator + logout on builder and published page
-- 340 automated tests (25 test files)
+- 340 automated tests (25 test files) — now 603 (31 files) after quality/privacy hardening
 
 ### Phase 1a — Agent Memory & Heartbeat (Done)
 
@@ -92,7 +92,7 @@ and implemented ahead of schedule as a standalone deliverable.
 - **Lock System**: granular section locks (position/widget/content)
   - Two paths: agent `propose_lock` (pending proposal) vs user lock via authenticated API
   - Central enforcement via `canMutateSection()` policy
-- **Validation Gates**: 4 points — composer, set_layout tool, update_page_config, publish pipeline
+- **Validation Gates**: 4 points — composer, set_layout tool, update_page_style, publish pipeline
   - Severity policy: `missing_required`/`incompatible_widget` = error (blocking); `overflow_risk`/`too_sparse` = warning
   - Publish gate with `toSlotAssignments()` adapter distinguishes 400 (bad config) vs 500 (internal bug)
 - **Schema Extensions**: `layoutTemplate` (top-level), `widgetId`, `slot`, `lock`, `lockProposal` on sections
@@ -125,6 +125,31 @@ and implemented ahead of schedule as a standalone deliverable.
   - Agent tools updated with new category guidance
   - 46 new tests (314 total)
 
+### Quality, Privacy, Themes & Chat Context Hardening (Done)
+
+Cross-cutting hardening pass across data quality, privacy, theming, and publish safety.
+8 sub-phases, all complete. 263 new tests (603 total, 31 files).
+
+1. **Fact validation gate** — `validateFactValue()` with per-category rules, placeholder rejection.
+   Enforced at `createFact`/`updateFact` (service-level gate).
+2. **Composer hardening + privacy** — Global visibility filter at `composeOptimisticPage` entry
+   (public+proposed only). `update_page_style` renamed to `update_page_style` (metadata-only).
+   Hero: deterministic localized fallback (no "Anonymous"/"Ciao"). `beautifyKey` removal.
+   Empty item filtering (no placeholder URLs, no "—" stats). `experience` added to proposal allowlist.
+3. **Visibility controls** — Actor-based transition matrix in `setFactVisibility`:
+   assistant (proposed/private only), user (full on non-sensitive, private-only on sensitive).
+   Agent tool: `set_fact_visibility`. User API: `POST /api/facts/[id]/visibility`.
+   Every transition audit-logged via `logEvent`.
+4. **Chat context integration** — `assembleContext` wired in `/api/chat/route.ts`, role normalization.
+5. **CSS custom property theming** — `--theme-*` tokens in `globals.css` for minimal/warm/editorial-360.
+   ThemeProvider in PageRenderer. All 18 section components converted to CSS custom properties.
+6. **Shared canonical projection + publish safety** — `projectPublishableConfig()` (single source of
+   truth for preview + publish). `filterPublishableFacts()` shared filter. Hash guard (`expectedHash`
+   from frontend → publish endpoint). Username mismatch guard (publish mode only). Promote-all:
+   proposed→public atomically in SQLite transaction. Preview/stream never serves raw `draft.config`.
+7. **Draft sanitization script** — `scripts/sanitize-drafts.ts` (recompose all drafts from facts).
+8. **Legacy fact cleanup script** — `scripts/cleanup-facts.ts` (validate and remove invalid facts).
+
 ## 4) Now (High Priority)
 
 ### Phase 1: Living Agent
@@ -132,8 +157,8 @@ and implemented ahead of schedule as a standalone deliverable.
 Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
 then hybrid page personalization. Each sub-phase builds on the previous.
 
-Phase 1a (memory/heartbeat) and Phase 1b (extended sections) are complete. Phase 1c
-(hybrid page compiler) is next.
+Phase 1a (memory/heartbeat) and Phase 1b (extended sections) are complete.
+Quality/Privacy/Themes hardening complete. Phase 1c (hybrid page compiler) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 
