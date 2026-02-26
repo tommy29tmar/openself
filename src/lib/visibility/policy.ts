@@ -16,6 +16,12 @@ const PROPOSAL_ALLOWLIST = new Set([
   "interest",
   "achievement",
   "social",
+  "education",
+  "stat",
+  "reading",
+  "music",
+  "language",
+  "activity",
 ]);
 
 const SENSITIVE_CATEGORIES = new Set([
@@ -25,6 +31,7 @@ const SENSITIVE_CATEGORIES = new Set([
   "mental-health",
   "private-contact",
   "personal-struggle",
+  "contact",
 ]);
 
 function isSensitiveCategory(category: string): boolean {

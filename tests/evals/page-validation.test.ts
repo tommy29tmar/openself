@@ -165,6 +165,157 @@ describe("validatePageConfig", () => {
     });
   });
 
+  describe("extended section types (Phase 1b)", () => {
+    it("accepts experience section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "experience-1", type: "experience", content: { items: [{ title: "Engineer" }] } },
+          { id: "footer-1", type: "footer", content: {} },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts education section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "education-1", type: "education", content: { items: [{ institution: "MIT" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts languages section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "languages-1", type: "languages", content: { items: [{ language: "Spanish" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts activities section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "activities-1", type: "activities", content: { items: [{ name: "Tennis" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts achievements section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "achievements-1", type: "achievements", content: { items: [{ title: "Award" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts stats section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "stats-1", type: "stats", content: { items: [{ label: "Years", value: "10+" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts reading section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "reading-1", type: "reading", content: { items: [{ title: "Clean Code" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts music section with items array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "music-1", type: "music", content: { items: [{ title: "Bohemian Rhapsody" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts contact section with methods array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "contact-1", type: "contact", content: { methods: [{ type: "email", value: "a@b.com" }] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts empty items array (lenient validators)", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "experience-1", type: "experience", content: { items: [] } },
+          { id: "education-1", type: "education", content: { items: [] } },
+          { id: "languages-1", type: "languages", content: { items: [] } },
+          { id: "contact-1", type: "contact", content: { methods: [] } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+
+    it("fails when experience items is not an array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "experience-1", type: "experience", content: { items: "bad" } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((e) => e.includes("experience"))).toBe(true);
+    });
+
+    it("fails when contact methods is not an array", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "contact-1", type: "contact", content: { methods: "bad" } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((e) => e.includes("contact"))).toBe(true);
+    });
+
+    it("does not validate custom section content (permissive)", () => {
+      const config = makeValidConfig({
+        sections: [
+          { id: "hero-1", type: "hero", content: { name: "A", tagline: "B" } },
+          { id: "custom-1", type: "custom", content: { anything: "goes" } },
+        ],
+      });
+      const result = validatePageConfig(config);
+      expect(result.ok).toBe(true);
+    });
+  });
+
   describe("schema repair via composeOptimisticPage", () => {
     it("always produces a valid page config even with empty facts", () => {
       const page = composeOptimisticPage([], "testuser");

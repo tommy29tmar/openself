@@ -8,6 +8,16 @@ import { Interests } from "./components/Interests";
 import { Social } from "./components/Social";
 import { Timeline } from "./components/Timeline";
 import { Footer } from "./components/Footer";
+import { Experience } from "./components/Experience";
+import { Education } from "./components/Education";
+import { Achievements } from "./components/Achievements";
+import { Stats } from "./components/Stats";
+import { Reading } from "./components/Reading";
+import { Music } from "./components/Music";
+import { Languages } from "./components/Languages";
+import { Activities } from "./components/Activities";
+import { Contact } from "./components/Contact";
+import { Custom } from "./components/Custom";
 
 // Components map connects schema component types to React components
 const components: Record<string, React.ComponentType<any>> = {
@@ -19,6 +29,16 @@ const components: Record<string, React.ComponentType<any>> = {
     social: Social,
     timeline: Timeline,
     footer: Footer,
+    experience: Experience,
+    education: Education,
+    achievements: Achievements,
+    stats: Stats,
+    reading: Reading,
+    music: Music,
+    languages: Languages,
+    activities: Activities,
+    contact: Contact,
+    custom: Custom,
 };
 
 export const Editorial360Theme: ThemeRegistryItem = {

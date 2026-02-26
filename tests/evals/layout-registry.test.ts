@@ -107,6 +107,56 @@ describe("resolveLayoutTemplate", () => {
   });
 });
 
+describe("Phase 1b: new types accepted in layout slots", () => {
+  it("vertical main slot accepts experience, education, languages, activities", () => {
+    const t = getLayoutTemplate("vertical");
+    const main = t.slots.find((s) => s.id === "main")!;
+    expect(main.accepts).toContain("experience");
+    expect(main.accepts).toContain("education");
+    expect(main.accepts).toContain("languages");
+    expect(main.accepts).toContain("activities");
+  });
+
+  it("sidebar-left main accepts experience, education, activities", () => {
+    const t = getLayoutTemplate("sidebar-left");
+    const main = t.slots.find((s) => s.id === "main")!;
+    expect(main.accepts).toContain("experience");
+    expect(main.accepts).toContain("education");
+    expect(main.accepts).toContain("activities");
+  });
+
+  it("sidebar-left sidebar accepts languages, activities", () => {
+    const t = getLayoutTemplate("sidebar-left");
+    const sidebar = t.slots.find((s) => s.id === "sidebar")!;
+    expect(sidebar.accepts).toContain("languages");
+    expect(sidebar.accepts).toContain("activities");
+  });
+
+  it("bento-standard feature-left accepts experience, education", () => {
+    const t = getLayoutTemplate("bento-standard");
+    const featureLeft = t.slots.find((s) => s.id === "feature-left")!;
+    expect(featureLeft.accepts).toContain("experience");
+    expect(featureLeft.accepts).toContain("education");
+  });
+
+  it("bento-standard full-row accepts experience, education, activities", () => {
+    const t = getLayoutTemplate("bento-standard");
+    const fullRow = t.slots.find((s) => s.id === "full-row")!;
+    expect(fullRow.accepts).toContain("experience");
+    expect(fullRow.accepts).toContain("education");
+    expect(fullRow.accepts).toContain("activities");
+  });
+
+  it("bento-standard card slots accept languages, activities", () => {
+    const t = getLayoutTemplate("bento-standard");
+    for (const cardId of ["card-1", "card-2", "card-3"]) {
+      const card = t.slots.find((s) => s.id === cardId)!;
+      expect(card.accepts).toContain("languages");
+      expect(card.accepts).toContain("activities");
+    }
+  });
+});
+
 describe("getAllTemplates", () => {
   it("returns all registered templates", () => {
     const all = getAllTemplates();

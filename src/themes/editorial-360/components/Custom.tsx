@@ -1,0 +1,48 @@
+import React from "react";
+import type { SectionProps } from "../../types";
+
+type CustomContent = {
+    title?: string;
+    body?: string;
+    items?: { label: string; value: string }[];
+};
+
+export function Custom({ content }: SectionProps<CustomContent>) {
+    const { title, body, items = [] } = content;
+
+    if (!title && !body && !items.length) return null;
+
+    return (
+        <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
+            {title && (
+                <h2 className="text-xs uppercase tracking-widest text-[#888888] font-medium mb-12 border-b border-black/15 pb-4">
+                    {title}
+                </h2>
+            )}
+
+            {body && (
+                <p className="text-[#444444] leading-relaxed max-w-2xl text-lg mb-8">
+                    {body}
+                </p>
+            )}
+
+            {items.length > 0 && (
+                <div className="space-y-4">
+                    {items.map((item, index) => (
+                        <div
+                            key={index}
+                            className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-6"
+                        >
+                            <span className="text-xs uppercase tracking-widest text-[#888888] font-medium min-w-[120px]">
+                                {item.label}
+                            </span>
+                            <span className="text-xl font-serif text-[#111111]">
+                                {item.value}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}

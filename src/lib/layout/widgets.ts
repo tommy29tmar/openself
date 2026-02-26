@@ -215,6 +215,49 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
     fitsIn: ["wide", "half", "third"],
     label: "Custom block",
   },
+
+  // Experience
+  {
+    id: "experience-timeline",
+    sectionType: "experience",
+    variant: "timeline",
+    fitsIn: ["wide", "half"],
+    label: "Experience (timeline)",
+  },
+
+  // Education
+  {
+    id: "education-cards",
+    sectionType: "education",
+    variant: "cards",
+    fitsIn: ["wide", "half"],
+    label: "Education (cards)",
+  },
+
+  // Languages
+  {
+    id: "languages-list",
+    sectionType: "languages",
+    variant: "list",
+    fitsIn: ["wide", "half", "third"],
+    label: "Languages (list)",
+  },
+
+  // Activities
+  {
+    id: "activities-list",
+    sectionType: "activities",
+    variant: "list",
+    fitsIn: ["wide", "half"],
+    label: "Activities (list)",
+  },
+  {
+    id: "activities-compact",
+    sectionType: "activities",
+    variant: "compact",
+    fitsIn: ["third"],
+    label: "Activities (compact)",
+  },
 ];
 
 // Pre-computed maps for fast lookup

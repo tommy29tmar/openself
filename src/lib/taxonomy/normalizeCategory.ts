@@ -20,8 +20,8 @@ const BUILTIN_ALIAS_MAP: Record<string, string> = {
   career: "experience",
   skills: "skill",
   tech: "skill",
-  hobby: "interest",
-  hobbies: "interest",
+  hobby: "activity",
+  hobbies: "activity",
   book: "reading",
   books: "reading",
 };

@@ -14,6 +14,10 @@ export type ComponentType =
   | "reading"
   | "music"
   | "contact"
+  | "experience"
+  | "education"
+  | "languages"
+  | "activities"
   | "footer";
 
 export type CommunityComponentType = `x.${string}.${string}`;
@@ -106,6 +110,10 @@ const COMPONENT_TYPES: ReadonlySet<string> = new Set([
   "reading",
   "music",
   "contact",
+  "experience",
+  "education",
+  "languages",
+  "activities",
   "footer",
 ]);
 
@@ -321,6 +329,23 @@ function validateSection(
         break;
       case "social":
         validateSocialContent(section.content, errors);
+        break;
+      case "experience":
+      case "education":
+      case "languages":
+      case "activities":
+      case "achievements":
+      case "stats":
+      case "reading":
+      case "music":
+        if (!Array.isArray(section.content.items)) {
+          errors.push(`${sectionType}.content.items must be an array`);
+        }
+        break;
+      case "contact":
+        if (!Array.isArray(section.content.methods)) {
+          errors.push(`contact.content.methods must be an array`);
+        }
         break;
       default:
         break;

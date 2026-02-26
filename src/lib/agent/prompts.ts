@@ -38,9 +38,18 @@ const TOOL_POLICY = `Tool usage rules:
 
 When extracting facts:
 - Break complex information into atomic facts (one fact per concept)
-- Use appropriate categories: identity, experience, project, skill, interest, achievement, activity, social, reading
+- Use appropriate categories: identity, experience, education, project, skill, interest, achievement, stat, activity, social, reading, music, language, contact
+- Use "education" (not "experience") for study/degree/school facts: {institution: "MIT", degree: "MSc", field: "Computer Science", period: "2018-2020"}
+- Use "stat" for quantitative achievements or metrics: {label: "Years Experience", value: "10+"}
+- Use "language" for spoken languages (not "skill"): {language: "Spanish", proficiency: "fluent"}
+- Use "music" for favorite songs/artists/albums: {title: "Bohemian Rhapsody", artist: "Queen"}
+- Use "contact" for email/phone/address — these are marked sensitive by default: {type: "email", value: "me@example.com"}
+- Interest vs activity distinction:
+  - "interest" = passive preferences and general tastes (e.g., "I love sci-fi", "I'm into Japanese food", "I enjoy nature")
+  - "activity" = things the person actively does with frequency or context (e.g., "I play tennis every week", "I volunteer at a shelter", "I'm in a running club")
+  - Rule of thumb: if the user describes *doing* something regularly → activity. If they describe *liking* something → interest
 - Set confidence based on how explicit the information was (1.0 = stated directly, 0.7 = implied, 0.5 = vague mention)
-- Choose clear, unique keys within each category (e.g., key="typescript" for a TypeScript skill)
+- Choose clear, unique keys within each category (e.g., key="typescript" for a skill)
 - CRITICAL: create_fact requires "value" — always pass a value object. Example: create_fact({category: "identity", key: "name", value: {full: "Marco Rossi"}}). Never omit "value".`;
 
 const OUTPUT_CONTRACT = `Output rules:

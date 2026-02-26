@@ -146,4 +146,17 @@ describe("set_theme tool", () => {
     expect(result.success).toBe(true);
     expect(result.theme).toBe("warm");
   });
+
+  it("accepts 'editorial-360'", async () => {
+    const mockConfig = makeValidConfig();
+    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft", configHash: null, updatedAt: null });
+    vi.mocked(upsertDraft).mockImplementation(() => {});
+
+    const result = await agentTools.set_theme.execute(
+      { username: "testuser", theme: "editorial-360" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+    expect(result.success).toBe(true);
+    expect(result.theme).toBe("editorial-360");
+  });
 });

@@ -9,14 +9,15 @@ OpenSelf has a working MVP with a hardened core flow:
 - Full onboarding loop: chat → fact extraction → page generation → live preview → publish
 - Two-row page model: draft and published coexist, editing never breaks the live page
 - Server-side publish gate: agent proposes, user confirms via explicit action
-- Centralized theme validation: 2 themes (minimal, warm), single source of truth
+- Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 268 automated tests passing (22 test files)
+- 314 automated tests passing (22 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
+- Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete.
 
 ## 2) Implemented Today
 
@@ -67,11 +68,11 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 | Capability | Status | Notes |
 |---|---|---|
-| Optimistic page composition from facts | Done | Deterministic skeleton: Hero/Bio/Skills/Projects/Interests/Social/Footer. Hybrid LLM personalizer planned for Phase 1c. |
+| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Extended sections (experience, education, languages, activities, achievements, stats, reading, music, contact) gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
 | Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors |
-| Theme switch in preview | Done | `minimal` and `warm` + light/dark, centralized validation |
+| Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, centralized validation |
 | Layout template engine | Done | 3 templates (vertical, sidebar-left, bento-standard) with slot-based section assignment, widget registry, validation gates. Anticipated from Phase 1b. |
-| Public page sections renderer | Partial | Renders only a subset of schema section types |
+| Public page sections renderer | Done | All 18 section types rendered (hero, bio, skills, projects, timeline, interests, social, footer + experience, education, achievements, stats, reading, music, languages, activities, contact, custom) |
 | Mobile tab chat state retention | Done | `TabsContent` uses `forceMount` + `data-[state=inactive]:hidden` to keep `ChatPanel` mounted |
 
 ### Safety, Budget, Reliability
@@ -111,12 +112,30 @@ Layout template engine anticipated and completed ahead of Phase 1b. Includes:
 8. Agent tools: `set_layout`, `propose_lock`
 9. 62+ new layout-specific tests
 
-### Phase 1b — Extended Sections
-1. Education section (timeline/cards, multi-item)
-2. Experience section (timeline, multi-item)
-3. Additional section types: achievements, stats, reading, music, contact
-4. ~~Split/stack layout implementations~~ → **Done** (replaced by layout template engine with 3 templates)
-5. Bold/elegant/hacker themes
+**Deferred follow-up (Layout Phase 5):**
+- Heartbeat + memory integration for layout is **not** part of the current done scope.
+- It starts only **after Phase 1 closure**.
+- Planned scope: lock-safe heartbeat mutations, memory-backed layout preferences,
+  proposal-first behavior on locked sections, heartbeat-side layout validation.
+- Detailed design: `docs/ARCHITECTURE.md` §6.6.2.
+
+### Phase 1b — Extended Sections ✅
+
+All items complete. Includes:
+1. 4 new `ComponentType` values: `experience`, `education`, `languages`, `activities` (total: 18 types)
+2. 10 content type definitions with typed schemas and lenient validators
+3. 10 React components in editorial-360 theme (Experience, Education, Achievements, Stats, Reading, Music, Languages, Activities with compact variant, Contact, Custom)
+4. 5 new widgets (experience-timeline, education-cards, languages-list, activities-list, activities-compact) + layout registry accepts updated
+5. 9 builder functions in page-composer with L10N for 8 languages
+6. Feature flag: `EXTENDED_SECTIONS=true` env var (default OFF, canary rollout)
+7. Taxonomy migration (0017): 6 new categories + aliases, hobby/hobbies remapped interest→activity
+8. Contact visibility filter: only public/proposed facts compose into contact section
+9. Timeline deprecated when flag ON (experience + education generated instead)
+10. Agent tools updated with new category guidance + set_theme drift fixed
+11. 46 new tests (314 total)
+
+**Remaining from original Phase 1b scope:**
+- Bold/elegant/hacker themes (deferred to NEXT-7)
 
 ### Phase 1c — Hybrid Page Compiler
 1. Per-section LLM personalizer (rewrites content using facts + agent memory)
@@ -133,10 +152,9 @@ Layout template engine anticipated and completed ahead of Phase 1b. Includes:
 ### Later
 1. Auth + CSRF on publish endpoint (currently trusted local env only)
 2. Full builder UI persistence across browser reloads (beyond chat history)
-3. Steady-state agent mode switching
-4. Community component registry enforcement
-5. Additional connector ecosystem
-6. Multi-profile / multi-tenant model
+3. Community component registry enforcement
+4. Additional connector ecosystem
+5. Multi-profile / multi-tenant model
 
 ## 4) Layout Count (Requested Snapshot)
 
@@ -152,12 +170,12 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 268 passed / 268 total (Vitest, 22 test files)
+- Automated tests: 314 passed / 314 total (Vitest, 22 test files)
 - Covered areas:
-  1. Fact-to-section composition behavior + role casing (18 tests)
-  2. PageConfig validation behavior (15 tests)
+  1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
+  2. PageConfig validation behavior + extended section validators (28 tests)
   3. Rate-limit behavior (6 tests)
-  4. Layout and theme validation (8 tests)
+  4. Layout and theme validation + set_theme editorial-360 (9 tests)
   5. Publish flow — tool level, service level, edge cases (15 tests, mocked)
   6. Page service integration — real SQLite in-memory DB (18 tests)
   7. Translation — LLM translation + cache behavior (18 tests)
@@ -166,12 +184,13 @@ Builder interface layouts (chat experience):
   10. Memory service — CRUD, dedup, quota, cooldown, feedback (15 tests)
   11. Soul service — versioning, proposals, review, expire (12 tests)
   12. Trust ledger + conflicts + heartbeat config (15 tests)
-  13. Layout registry — template lookup, fallback, no legacy mapping (12 tests)
-  14. Layout widgets — widget compatibility, getBestWidget, resolveVariant (13 tests)
+  13. Layout registry — template lookup, fallback, no legacy mapping + new type accepts (18 tests)
+  14. Layout widgets — widget compatibility, getBestWidget, resolveVariant + new widgets + adapter legacy map (25 tests)
   15. Layout quality — severity policy, error/warning split (9 tests)
   16. Group slots — type routing, slot fallback, capacity limits (9 tests)
   17. Assign slots — assignment, locks, no-truncate, post-assign invariant (8 tests)
   18. Lock policy — canMutateSection for all actor/lock combinations (11 tests)
+  19. Publish pipeline layout gate — status mapping, adapter integration (2 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration
@@ -190,3 +209,4 @@ For a feature to move to "Done", all must be true:
 1. Update this file when implementation reality changes.
 2. Keep this file factual and short-lived (current-state truth).
 3. Do not use this file for long-term design rationale (use ADRs).
+4. Keep sequencing and priorities in `docs/ROADMAP.md`, not here.

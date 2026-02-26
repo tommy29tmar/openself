@@ -97,39 +97,39 @@ and implemented ahead of schedule as a standalone deliverable.
 - **Normalization**: `normalizeConfigForWrite()` centralizes canonicalization for all write paths
 - 62+ new layout-specific tests, 268 total (22 test files)
 
+**Layout Phase 5 (deferred):**
+- Heartbeat + memory integration for layout is intentionally postponed.
+- **Start trigger:** after Phase 1 is closed and stabilized.
+- Scope (high-level): lock-safe heartbeat mutations, preference memories for layout,
+  proposal-first flow for locked sections, heartbeat-side validation/observability.
+- Reference: `docs/ARCHITECTURE.md` §6.6.2.
+
+### Phase 1b — Extended Sections (Done)
+
+- **NEXT-5**: Education + Experience sections → Done
+  - `experience` and `education` section types with typed content schemas
+  - Timeline deprecated when `EXTENDED_SECTIONS=true` (progressive, not batch)
+  - Content type definitions, validators, composer builders, React components
+- **NEXT-6**: Additional section types → Done
+  - Implemented: achievements, stats, reading, music, contact, languages, activities (+ custom)
+  - 10 new React components in editorial-360 theme
+  - 5 new widgets (experience-timeline, education-cards, languages-list, activities-list, activities-compact)
+  - Layout registry `accepts` updated across all 3 templates
+  - Taxonomy migration (0017): 6 new categories + aliases, hobby/hobbies remapped interest→activity
+  - Contact visibility filter (only public/proposed facts), contact added to SENSITIVE_CATEGORIES
+  - Feature flag: `EXTENDED_SECTIONS=true` env var (default OFF, canary rollout)
+  - Agent tools updated with new category guidance
+  - 46 new tests (314 total)
+
 ## 4) Now (High Priority)
 
-## Phase 1: Living Agent
+### Phase 1: Living Agent
 
 Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
 then hybrid page personalization. Each sub-phase builds on the previous.
 
-### Phase 1b: Extended Sections
-
-New section types with typed content schemas, validators, and renderers.
-
-#### NEXT-5: Education + Experience sections
-
-Deliverables:
-1. `education` section type with timeline/cards variants (multi-item: degree, institution, period, description)
-2. `experience` section type with timeline variant (multi-item: role, company, period, description)
-3. Content type schemas + validators
-4. Renderer components
-5. Composer mappings from facts to sections
-
-#### NEXT-6: Additional section types
-
-Candidate scope:
-- achievements (badges/cards/timeline)
-- stats (counters/cards/inline)
-- reading (shelf/list/featured)
-- music (player-style/list/grid)
-- contact (form/links/card)
-
-Definition of done:
-1. Schema type → renderer mapping exists
-2. Basic variants implemented per section
-3. Composer can produce these sections from facts
+Phase 1a (memory/heartbeat) and Phase 1b (extended sections) are complete. Phase 1c
+(hybrid page compiler) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 
@@ -216,17 +216,33 @@ Cost risk:
 - Mitigated by: translation_cache (no repeated costs), llm_limits budget guardrails,
   hard cap on supported languages
 
-## 6) Later (Lower Priority)
+### Deferred Until Phase 1 Closure
+
+#### Layout Phase 5: Heartbeat + Memory Integration
+
+Start condition:
+1. Phase 1b, 1c, and 1d complete
+2. Phase 1 stabilization complete
+
+Scope:
+1. Lock-safe heartbeat mutations (`canMutateSection` with actor `heartbeat`)
+2. Memory-backed layout preferences (Tier 3 preference memories)
+3. Proposal-first flow for locked sections (no direct override)
+4. Heartbeat-side layout validation and dedicated observability events
+
+Reference:
+1. `docs/ARCHITECTURE.md` section 6.6.2
+
+## 5) Later (Lower Priority)
 
 1. Auth + CSRF on publish endpoint (required before public deployment)
 2. Session persistence across browser reloads
-3. Steady-state agent mode switching
-4. Community component registry enforcement with certified workflow
-5. Additional connector ecosystem
-6. Advanced theming and design packs
-7. Multi-profile / multi-tenant model if product direction requires it
+3. Community component registry enforcement with certified workflow
+4. Additional connector ecosystem
+5. Advanced theming and design packs
+6. Multi-profile / multi-tenant model if product direction requires it
 
-## 7) Milestones
+## 6) Milestones
 
 ### Milestone A — Phase 0 Gate (Dogfooding)
 
@@ -242,8 +258,8 @@ Outcome:
 ### Milestone B — Living Agent (Phase 1)
 
 Required:
-1. Phase 1a complete (memory, heartbeat, context assembly)
-2. Phase 1b complete (education + experience + at least 2 more section types)
+1. Phase 1a complete (memory, heartbeat, context assembly) ✅
+2. Phase 1b complete (education + experience + at least 2 more section types) ✅
 3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks)
 4. Phase 1d: at least avatar support + one connector
 
@@ -252,10 +268,17 @@ Outcome:
 - Pages from different users are noticeably distinct in tone and narrative
 - OpenSelf is credible as a living-page product, not just onboarding demo
 
-## 8) Tracking Process
+## 7) Tracking Process
 
 At each iteration:
 1. Pick items from `Now` first
 2. Implement + test
 3. Update `docs/STATUS.md` and this roadmap
 4. Add ADR when significant decisions are made
+
+## 8) Documentation Ownership
+
+1. `docs/ROADMAP.md` is the source of truth for sequencing and priorities.
+2. `docs/STATUS.md` is the source of truth for runtime reality.
+3. `docs/ARCHITECTURE.md` must stay focused on target architecture and stable contracts.
+4. Historical extracted planning content is preserved in `docs/archive/`.

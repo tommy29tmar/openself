@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
 // Mock the event-service before importing page-composer (which imports logEvent)
 vi.mock("@/lib/services/event-service", () => ({
@@ -232,6 +232,142 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
 
       const hero = page.sections.find((s) => s.type === "hero");
       expect(hero!.content.tagline).toBe("Ciao, sono Marco Rossi");
+    });
+  });
+
+  describe("extended sections (Phase 1b, feature flag ON)", () => {
+    const envBackup = process.env.EXTENDED_SECTIONS;
+
+    beforeAll(() => { process.env.EXTENDED_SECTIONS = "true"; });
+    afterAll(() => {
+      if (envBackup !== undefined) { process.env.EXTENDED_SECTIONS = envBackup; }
+      else { delete process.env.EXTENDED_SECTIONS; }
+    });
+
+    it("maps experience facts to experience section (not timeline)", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "experience", key: "acme", value: { role: "Engineer", company: "Acme" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "experience")).toBeDefined();
+      expect(page.sections.find((s) => s.type === "timeline")).toBeUndefined();
+    });
+
+    it("maps education facts to education section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "education", key: "mit", value: { institution: "MIT", degree: "MSc" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      const edu = page.sections.find((s) => s.type === "education");
+      expect(edu).toBeDefined();
+      const items = edu!.content.items as Array<{ institution: string }>;
+      expect(items[0].institution).toBe("MIT");
+    });
+
+    it("maps achievement facts to achievements section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "achievement", key: "award", value: { title: "Best Paper", issuer: "IEEE" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "achievements")).toBeDefined();
+    });
+
+    it("maps stat facts to stats section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "stat", key: "experience", value: { label: "Years", value: "10+" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "stats")).toBeDefined();
+    });
+
+    it("maps reading facts to reading section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "reading", key: "clean-code", value: { title: "Clean Code", author: "Robert Martin" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "reading")).toBeDefined();
+    });
+
+    it("maps music facts to music section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "music", key: "bohemian", value: { title: "Bohemian Rhapsody", artist: "Queen" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "music")).toBeDefined();
+    });
+
+    it("maps language facts to languages section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "language", key: "spanish", value: { language: "Spanish", proficiency: "fluent" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      const lang = page.sections.find((s) => s.type === "languages");
+      expect(lang).toBeDefined();
+      const items = lang!.content.items as Array<{ language: string; proficiency?: string }>;
+      expect(items[0].language).toBe("Spanish");
+      expect(items[0].proficiency).toBe("fluent");
+    });
+
+    it("maps activity facts to activities section", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "activity", key: "tennis", value: { name: "Tennis", activityType: "sport", frequency: "weekly" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "activities")).toBeDefined();
+    });
+
+    it("filters contact facts by visibility (only public/proposed)", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "contact", key: "email", value: { type: "email", value: "a@b.com" }, visibility: "public" }),
+        makeFact({ category: "contact", key: "phone", value: { type: "phone", value: "123" }, visibility: "private" }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      const contact = page.sections.find((s) => s.type === "contact");
+      expect(contact).toBeDefined();
+      const methods = contact!.content.methods as Array<{ value: string }>;
+      expect(methods).toHaveLength(1);
+      expect(methods[0].value).toBe("a@b.com");
+    });
+
+    it("returns null contact section when all facts are private", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "contact", key: "email", value: { type: "email", value: "a@b.com" }, visibility: "private" }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "contact")).toBeUndefined();
+    });
+
+    it("section IDs are stable and deterministic", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "experience", key: "acme", value: { role: "Engineer" } }),
+        makeFact({ category: "education", key: "mit", value: { institution: "MIT" } }),
+        makeFact({ category: "language", key: "en", value: { language: "English" } }),
+        makeFact({ category: "activity", key: "tennis", value: { name: "Tennis" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "experience")!.id).toBe("experience-1");
+      expect(page.sections.find((s) => s.type === "education")!.id).toBe("education-1");
+      expect(page.sections.find((s) => s.type === "languages")!.id).toBe("languages-1");
+      expect(page.sections.find((s) => s.type === "activities")!.id).toBe("activities-1");
+    });
+  });
+
+  describe("feature flag OFF → produces timeline (not experience)", () => {
+    const envBackup = process.env.EXTENDED_SECTIONS;
+
+    beforeAll(() => { delete process.env.EXTENDED_SECTIONS; });
+    afterAll(() => {
+      if (envBackup !== undefined) { process.env.EXTENDED_SECTIONS = envBackup; }
+      else { delete process.env.EXTENDED_SECTIONS; }
+    });
+
+    it("produces timeline section from experience facts when flag is off", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "experience", key: "acme", value: { role: "Engineer", company: "Acme" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+      expect(page.sections.find((s) => s.type === "timeline")).toBeDefined();
+      expect(page.sections.find((s) => s.type === "experience")).toBeUndefined();
     });
   });
 

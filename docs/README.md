@@ -1,6 +1,6 @@
 # OpenSelf Docs Guide
 
-Last updated: 2026-02-23
+Last updated: 2026-02-26
 
 Questa cartella contiene la documentazione operativa del progetto.
 Usa questo file come guida rapida su cosa aggiornare e quando.
@@ -13,6 +13,7 @@ Scopo:
 - visione del prodotto
 - architettura target
 - principi, componenti, flussi di alto livello
+- contratti runtime e invarianti stabili
 
 Quando aggiornarlo:
 - cambia il design architetturale
@@ -22,6 +23,7 @@ Quando aggiornarlo:
 Quando non aggiornarlo:
 - piccoli fix implementativi
 - stato progresso giornaliero
+- checklist di sprint / roadmap operativa
 
 ### `STATUS.md`
 
@@ -49,6 +51,16 @@ Quando aggiornarlo:
 
 Regola:
 - contiene piano e ordine di lavoro, non stato storico dettagliato
+
+### `archive/`
+
+Scopo:
+- preservare contenuto storico estratto dai documenti principali
+- evitare perdita di contesto durante refactor strutturali
+
+Regola:
+- i file in `archive/` non sono source of truth operativa
+- per lo stato corrente usa sempre `STATUS.md` e `ROADMAP.md`
 
 ### `decisions/` (ADR)
 
@@ -85,3 +97,4 @@ Quando aggiungere un ADR:
 1. Usa date assolute in formato `YYYY-MM-DD`.
 2. Mantieni i documenti brevi e operativi.
 3. Evita duplicazioni lunghe: `ARCHITECTURE` spiega il target, `STATUS` spiega il presente.
+4. Se rimuovi sezioni grandi durante un refactor docs, preservale in `docs/archive/`.

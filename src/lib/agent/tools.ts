@@ -31,7 +31,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       category: z
         .string()
         .describe(
-          "Fact category: identity, experience, project, skill, interest, achievement, activity, social, reading, or any relevant category",
+          "Fact category: identity, experience, education, project, skill, interest, achievement, stat, activity, social, reading, music, language, contact, or any relevant category",
         ),
       key: z
         .string()
@@ -42,7 +42,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         .record(z.unknown())
         .default({})
         .describe(
-          "REQUIRED. Structured value object. Examples: {name: 'TypeScript', level: 'advanced'} for skills, {full: 'Tommaso Rossi'} for identity name, {role: 'economist', company: 'Acme', status: 'current'} for experience. Use lowercase for common nouns (job titles, roles, skills) — only capitalize proper nouns (names, companies, brands). Must always be provided.",
+          "REQUIRED. Structured value object. Examples: {name: 'TypeScript', level: 'advanced'} for skills, {full: 'Tommaso Rossi'} for identity name, {role: 'economist', company: 'Acme', status: 'current'} for experience, {institution: 'MIT', degree: 'MSc', field: 'Computer Science', period: '2018-2020'} for education, {label: 'Years Experience', value: '10+'} for stat, {language: 'Spanish', proficiency: 'fluent'} for language, {type: 'email', value: 'me@example.com'} for contact, {title: 'Clean Code', author: 'Robert Martin', rating: 5} for reading, {title: 'Bohemian Rhapsody', artist: 'Queen'} for music, {name: 'Tennis', activityType: 'sport', frequency: 'weekly'} for activity. Use lowercase for common nouns (job titles, roles, skills) — only capitalize proper nouns (names, companies, brands). Must always be provided.",
         ),
       confidence: z
         .number()
@@ -202,12 +202,12 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
   set_theme: tool({
     description:
-      "Change the page theme. Available themes: minimal, warm.",
+      `Change the page theme. Available themes: ${AVAILABLE_THEMES.join(", ")}.`,
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       theme: z
         .string()
-        .describe("Theme name: minimal or warm"),
+        .describe(`Theme name: ${AVAILABLE_THEMES.join(" or ")}`),
     }),
     execute: async ({ username, theme }) => {
       try {

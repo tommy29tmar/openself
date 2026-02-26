@@ -10,6 +10,24 @@ import type {
   ProjectsContent,
   SocialLink,
   SocialContent,
+  ExperienceItem,
+  ExperienceContent,
+  EducationItem,
+  EducationContent,
+  LanguageItem,
+  LanguagesContent,
+  AchievementItem,
+  AchievementsContent,
+  StatItem,
+  StatsContent,
+  ReadingItem,
+  ReadingContent,
+  MusicItem,
+  MusicContent,
+  ContactMethod,
+  ContactContent,
+  ActivityItem,
+  ActivitiesContent,
 } from "@/lib/page-config/content-types";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
@@ -36,6 +54,14 @@ type L10nStrings = {
   skillsLabel: string;
   interestsLabel: string;
   experienceLabel: string;
+  educationLabel: string;
+  achievementsLabel: string;
+  languagesLabel: string;
+  contactLabel: string;
+  booksLabel: string;
+  musicLabel: string;
+  statsLabel: string;
+  activitiesLabel: string;
 };
 
 const L10N: Record<string, L10nStrings> = {
@@ -49,6 +75,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "Skills",
     interestsLabel: "Interests",
     experienceLabel: "Experience",
+    educationLabel: "Education",
+    achievementsLabel: "Achievements",
+    languagesLabel: "Languages",
+    contactLabel: "Contact",
+    booksLabel: "Reading",
+    musicLabel: "Music",
+    statsLabel: "Stats",
+    activitiesLabel: "Activities",
   },
   it: {
     welcomeTagline: (name) => `Ciao, sono ${name}`,
@@ -60,6 +94,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "Competenze",
     interestsLabel: "Interessi",
     experienceLabel: "Esperienza",
+    educationLabel: "Formazione",
+    achievementsLabel: "Traguardi",
+    languagesLabel: "Lingue",
+    contactLabel: "Contatti",
+    booksLabel: "Letture",
+    musicLabel: "Musica",
+    statsLabel: "Statistiche",
+    activitiesLabel: "Attività",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -71,6 +113,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "Fähigkeiten",
     interestsLabel: "Interessen",
     experienceLabel: "Erfahrung",
+    educationLabel: "Ausbildung",
+    achievementsLabel: "Erfolge",
+    languagesLabel: "Sprachen",
+    contactLabel: "Kontakt",
+    booksLabel: "Lektüre",
+    musicLabel: "Musik",
+    statsLabel: "Statistiken",
+    activitiesLabel: "Aktivitäten",
   },
   fr: {
     welcomeTagline: (name) => `Bienvenue sur la page de ${name}`,
@@ -82,6 +132,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "Compétences",
     interestsLabel: "Intérêts",
     experienceLabel: "Expérience",
+    educationLabel: "Formation",
+    achievementsLabel: "Réalisations",
+    languagesLabel: "Langues",
+    contactLabel: "Contact",
+    booksLabel: "Lectures",
+    musicLabel: "Musique",
+    statsLabel: "Statistiques",
+    activitiesLabel: "Activités",
   },
   es: {
     welcomeTagline: (name) => `Bienvenido a la página de ${name}`,
@@ -93,6 +151,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "Habilidades",
     interestsLabel: "Intereses",
     experienceLabel: "Experiencia",
+    educationLabel: "Educación",
+    achievementsLabel: "Logros",
+    languagesLabel: "Idiomas",
+    contactLabel: "Contacto",
+    booksLabel: "Lecturas",
+    musicLabel: "Música",
+    statsLabel: "Estadísticas",
+    activitiesLabel: "Actividades",
   },
   pt: {
     welcomeTagline: (name) => `Bem-vindo à página de ${name}`,
@@ -104,6 +170,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "Competências",
     interestsLabel: "Interesses",
     experienceLabel: "Experiência",
+    educationLabel: "Educação",
+    achievementsLabel: "Conquistas",
+    languagesLabel: "Idiomas",
+    contactLabel: "Contacto",
+    booksLabel: "Leituras",
+    musicLabel: "Música",
+    statsLabel: "Estatísticas",
+    activitiesLabel: "Atividades",
   },
   ja: {
     welcomeTagline: (name) => `${name}のページへようこそ`,
@@ -115,6 +189,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "スキル",
     interestsLabel: "興味",
     experienceLabel: "経歴",
+    educationLabel: "学歴",
+    achievementsLabel: "実績",
+    languagesLabel: "言語",
+    contactLabel: "連絡先",
+    booksLabel: "読書",
+    musicLabel: "音楽",
+    statsLabel: "統計",
+    activitiesLabel: "活動",
   },
   zh: {
     welcomeTagline: (name) => `欢迎来到${name}的页面`,
@@ -126,6 +208,14 @@ const L10N: Record<string, L10nStrings> = {
     skillsLabel: "技能",
     interestsLabel: "兴趣",
     experienceLabel: "经历",
+    educationLabel: "教育",
+    achievementsLabel: "成就",
+    languagesLabel: "语言",
+    contactLabel: "联系方式",
+    booksLabel: "阅读",
+    musicLabel: "音乐",
+    statsLabel: "统计",
+    activitiesLabel: "活动",
   },
 };
 
@@ -427,6 +517,252 @@ function buildTimelineSection(experienceFacts: FactRow[], language: string): Sec
   };
 }
 
+// --- Extended section builders (Phase 1b) ---
+
+function isExtendedSectionsEnabled(): boolean {
+  return process.env.EXTENDED_SECTIONS === "true";
+}
+
+function buildExperienceSection(experienceFacts: FactRow[], language: string): Section | null {
+  if (experienceFacts.length === 0) return null;
+
+  const items: ExperienceItem[] = experienceFacts.map((f) => {
+    const v = val(f);
+    const item: ExperienceItem = {
+      title: (str(v.role) ?? str(v.title) ?? beautifyKey(f.key))!,
+    };
+    const company = str(v.company) ?? str(v.organization);
+    if (company) item.company = company;
+    const period = str(v.period) ?? str(v.date);
+    if (period) item.period = period;
+    const description = str(v.description);
+    if (description) item.description = description;
+    if (v.status === "current" || v.current === true) item.current = true;
+    return item;
+  });
+
+  const content: ExperienceContent = { items, title: getL10n(language).experienceLabel };
+
+  return {
+    id: "experience-1",
+    type: "experience",
+    variant: "timeline",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildEducationSection(educationFacts: FactRow[], language: string): Section | null {
+  if (educationFacts.length === 0) return null;
+
+  const items: EducationItem[] = educationFacts.map((f) => {
+    const v = val(f);
+    const item: EducationItem = {
+      institution: (str(v.institution) ?? str(v.school) ?? str(v.name) ?? beautifyKey(f.key))!,
+    };
+    const degree = str(v.degree);
+    if (degree) item.degree = degree;
+    const field = str(v.field);
+    if (field) item.field = field;
+    const period = str(v.period) ?? str(v.date);
+    if (period) item.period = period;
+    const description = str(v.description);
+    if (description) item.description = description;
+    return item;
+  });
+
+  const content: EducationContent = { items, title: getL10n(language).educationLabel };
+
+  return {
+    id: "education-1",
+    type: "education",
+    variant: "cards",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildAchievementsSection(achievementFacts: FactRow[], language: string): Section | null {
+  if (achievementFacts.length === 0) return null;
+
+  const items: AchievementItem[] = achievementFacts.map((f) => {
+    const v = val(f);
+    const item: AchievementItem = {
+      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
+    };
+    const description = str(v.description);
+    if (description) item.description = description;
+    const date = str(v.date);
+    if (date) item.date = date;
+    const issuer = str(v.issuer) ?? str(v.organization);
+    if (issuer) item.issuer = issuer;
+    return item;
+  });
+
+  const content: AchievementsContent = { items, title: getL10n(language).achievementsLabel };
+
+  return {
+    id: "achievements-1",
+    type: "achievements",
+    variant: "list",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildStatsSection(statFacts: FactRow[], language: string): Section | null {
+  if (statFacts.length === 0) return null;
+
+  const items: StatItem[] = statFacts.map((f) => {
+    const v = val(f);
+    return {
+      label: (str(v.label) ?? str(v.name) ?? beautifyKey(f.key))!,
+      value: (str(v.value) ?? str(v.number) ?? "—")!,
+      unit: str(v.unit),
+    };
+  });
+
+  const content: StatsContent = { items, title: getL10n(language).statsLabel };
+
+  return {
+    id: "stats-1",
+    type: "stats",
+    variant: "grid",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildReadingSection(readingFacts: FactRow[], language: string): Section | null {
+  if (readingFacts.length === 0) return null;
+
+  const items: ReadingItem[] = readingFacts.map((f) => {
+    const v = val(f);
+    const item: ReadingItem = {
+      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
+    };
+    const author = str(v.author);
+    if (author) item.author = author;
+    if (typeof v.rating === "number") item.rating = v.rating;
+    const note = str(v.note) ?? str(v.description);
+    if (note) item.note = note;
+    const url = str(v.url);
+    if (url) item.url = url;
+    return item;
+  });
+
+  const content: ReadingContent = { items, title: getL10n(language).booksLabel };
+
+  return {
+    id: "reading-1",
+    type: "reading",
+    variant: "list",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildMusicSection(musicFacts: FactRow[], language: string): Section | null {
+  if (musicFacts.length === 0) return null;
+
+  const items: MusicItem[] = musicFacts.map((f) => {
+    const v = val(f);
+    const item: MusicItem = {
+      title: (str(v.title) ?? str(v.name) ?? beautifyKey(f.key))!,
+    };
+    const artist = str(v.artist);
+    if (artist) item.artist = artist;
+    const note = str(v.note) ?? str(v.description);
+    if (note) item.note = note;
+    const url = str(v.url);
+    if (url) item.url = url;
+    return item;
+  });
+
+  const content: MusicContent = { items, title: getL10n(language).musicLabel };
+
+  return {
+    id: "music-1",
+    type: "music",
+    variant: "list",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildLanguagesSection(languageFacts: FactRow[], language: string): Section | null {
+  if (languageFacts.length === 0) return null;
+
+  const items: LanguageItem[] = languageFacts.map((f) => {
+    const v = val(f);
+    const item: LanguageItem = {
+      language: (str(v.language) ?? str(v.name) ?? beautifyKey(f.key))!,
+    };
+    const proficiency = str(v.proficiency) ?? str(v.level);
+    if (proficiency) item.proficiency = proficiency as LanguageItem["proficiency"];
+    return item;
+  });
+
+  const content: LanguagesContent = { items, title: getL10n(language).languagesLabel };
+
+  return {
+    id: "languages-1",
+    type: "languages",
+    variant: "list",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildContactSection(contactFacts: FactRow[], language: string): Section | null {
+  // Only include facts with public or proposed visibility (contact is sensitive)
+  const publicFacts = contactFacts.filter(
+    (f) => f.visibility === "public" || f.visibility === "proposed",
+  );
+  if (publicFacts.length === 0) return null;
+
+  const methods: ContactMethod[] = publicFacts.map((f) => {
+    const v = val(f);
+    const method: ContactMethod = {
+      type: (str(v.type) ?? "other") as ContactMethod["type"],
+      value: (str(v.value) ?? str(v.email) ?? str(v.phone) ?? str(v.address) ?? "")!,
+    };
+    const label = str(v.label);
+    if (label) method.label = label;
+    return method;
+  });
+
+  const content: ContactContent = { methods, title: getL10n(language).contactLabel };
+
+  return {
+    id: "contact-1",
+    type: "contact",
+    variant: "card",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+function buildActivitiesSection(activityFacts: FactRow[], language: string): Section | null {
+  if (activityFacts.length === 0) return null;
+
+  const items: ActivityItem[] = activityFacts.map((f) => {
+    const v = val(f);
+    const item: ActivityItem = {
+      name: (str(v.name) ?? str(v.value) ?? beautifyKey(f.key))!,
+    };
+    const activityType = str(v.activityType) ?? str(v.type);
+    if (activityType) item.activityType = activityType as ActivityItem["activityType"];
+    const frequency = str(v.frequency);
+    if (frequency) item.frequency = frequency;
+    const description = str(v.description);
+    if (description) item.description = description;
+    return item;
+  });
+
+  const content: ActivitiesContent = { items, title: getL10n(language).activitiesLabel };
+
+  return {
+    id: "activities-1",
+    type: "activities",
+    variant: "list",
+    content: content as unknown as Record<string, unknown>,
+  };
+}
+
+// TODO(Phase-1d): global visibility filter — only compose facts with visibility IN ('public', 'proposed') for ALL categories
 export function composeOptimisticPage(
   facts: FactRow[],
   username: string,
@@ -450,10 +786,23 @@ export function composeOptimisticPage(
   const bio = buildBioSection(grouped, language, hasInterestsSection);
   if (bio) sections.push(bio);
 
+  const extended = isExtendedSectionsEnabled();
+
   // 3. Experience / Timeline
   const experienceFacts = grouped.get("experience") ?? [];
-  const timeline = buildTimelineSection(experienceFacts, language);
-  if (timeline) sections.push(timeline);
+  if (extended) {
+    const experience = buildExperienceSection(experienceFacts, language);
+    if (experience) sections.push(experience);
+  } else {
+    const timeline = buildTimelineSection(experienceFacts, language);
+    if (timeline) sections.push(timeline);
+  }
+
+  // 3b. Education (extended only)
+  if (extended) {
+    const education = buildEducationSection(grouped.get("education") ?? [], language);
+    if (education) sections.push(education);
+  }
 
   // 4. Skills
   const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
@@ -471,7 +820,31 @@ export function composeOptimisticPage(
   const social = buildSocialSection(grouped.get("social") ?? []);
   if (social) sections.push(social);
 
-  // 8. Footer — always appended
+  // Extended sections (only when flag is enabled)
+  if (extended) {
+    const achievements = buildAchievementsSection(grouped.get("achievement") ?? [], language);
+    if (achievements) sections.push(achievements);
+
+    const stats = buildStatsSection(grouped.get("stat") ?? [], language);
+    if (stats) sections.push(stats);
+
+    const reading = buildReadingSection(grouped.get("reading") ?? [], language);
+    if (reading) sections.push(reading);
+
+    const music = buildMusicSection(grouped.get("music") ?? [], language);
+    if (music) sections.push(music);
+
+    const languages = buildLanguagesSection(grouped.get("language") ?? [], language);
+    if (languages) sections.push(languages);
+
+    const contact = buildContactSection(grouped.get("contact") ?? [], language);
+    if (contact) sections.push(contact);
+
+    const activities = buildActivitiesSection(grouped.get("activity") ?? [], language);
+    if (activities) sections.push(activities);
+  }
+
+  // Footer — always appended
   sections.push(buildFooterSection());
 
   // Slot assignment: distribute sections into layout slots
@@ -622,6 +995,30 @@ function attemptRepair(config: PageConfig, errors: string[]): void {
     if (section.type === "social") {
       const c = section.content as Record<string, unknown>;
       if (!Array.isArray(c.links)) {
+        toRemove.add(i);
+      }
+    }
+
+    // New extended section types — remove if required array is missing
+    if (
+      section.type === "experience" ||
+      section.type === "education" ||
+      section.type === "languages" ||
+      section.type === "activities" ||
+      section.type === "achievements" ||
+      section.type === "stats" ||
+      section.type === "reading" ||
+      section.type === "music"
+    ) {
+      const c = section.content as Record<string, unknown>;
+      if (!Array.isArray(c.items)) {
+        toRemove.add(i);
+      }
+    }
+
+    if (section.type === "contact") {
+      const c = section.content as Record<string, unknown>;
+      if (!Array.isArray(c.methods)) {
         toRemove.add(i);
       }
     }

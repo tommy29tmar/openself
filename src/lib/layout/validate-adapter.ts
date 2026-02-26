@@ -42,6 +42,15 @@ const LEGACY_WIDGET_MAP: Record<string, string> = {
   "contact:card": "contact-card",
   "custom:default": "custom-block",
   "custom:block": "custom-block",
+  "experience:default": "experience-timeline",
+  "experience:timeline": "experience-timeline",
+  "education:default": "education-cards",
+  "education:cards": "education-cards",
+  "languages:default": "languages-list",
+  "languages:list": "languages-list",
+  "activities:default": "activities-list",
+  "activities:list": "activities-list",
+  "activities:compact": "activities-compact",
 };
 
 export type SkippedSection = {
@@ -114,6 +123,7 @@ function countItems(section: Section): number {
   if (Array.isArray(c.items)) return c.items.length;
   if (Array.isArray(c.groups)) return c.groups.length;
   if (Array.isArray(c.links)) return c.links.length;
+  if (Array.isArray(c.methods)) return c.methods.length;
   return 1;
 }
 
