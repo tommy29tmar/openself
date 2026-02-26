@@ -62,9 +62,9 @@ Positive:
 
 Negative:
 1. More complex DB model: two rows per identity instead of one, with status management.
-2. The publish endpoint (`POST /api/publish`) has no auth or CSRF protection. This is
-   acceptable in the current trusted local environment (dogfooding Phase 0) but must be
-   addressed before public deployment.
+2. ~~The publish endpoint (`POST /api/publish`) has no auth or CSRF protection.~~ Resolved
+   in ADR-0008: multi-user mode requires authentication (403 for anonymous), username is
+   enforced from auth context, and claim+publish is atomic.
 3. Single-identity assumption: `confirmPublish()` deletes all published rows with a
    different username. This must be scoped per-user if a multi-identity model is adopted.
 

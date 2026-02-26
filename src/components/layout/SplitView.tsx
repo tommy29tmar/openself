@@ -5,8 +5,10 @@ import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
 import type { LanguageCode } from "@/lib/i18n/languages";
 import type { AvailableFont } from "@/lib/page-config/fonts";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
+import type { AuthState } from "@/app/builder/page";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { SignupModal } from "@/components/auth/SignupModal";
 import { PageRenderer } from "@/components/page";
 import {
   Tabs,
@@ -19,6 +21,7 @@ type SplitViewProps = {
   language: string;
   onLanguageChange?: (lang: LanguageCode) => void;
   initialConfig?: PageConfig | null;
+  authState?: AuthState;
 };
 
 const POLL_INTERVAL = 3000; // 3 seconds
@@ -40,13 +43,18 @@ function EmptyPreview() {
 
 type PublishBarProps = {
   username: string;
+  authState?: AuthState;
 };
 
-function PublishBar({ username: initialUsername }: PublishBarProps) {
+function PublishBar({ username: initialUsername, authState }: PublishBarProps) {
   const [username, setUsername] = useState(initialUsername);
   const [publishing, setPublishing] = useState(false);
-  const [published, setPublished] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signupOpen, setSignupOpen] = useState(false);
+
+  const multiUser = authState?.multiUser ?? false;
+  const authenticated = authState?.authenticated ?? false;
+  const authUsername = authState?.username ?? null;
 
   const handlePublish = async () => {
     setPublishing(true);
@@ -55,7 +63,7 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username: authUsername ?? username }),
       });
       if (res.status === 401) {
         window.location.href = "/invite";
@@ -63,7 +71,7 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
       }
       const data = await res.json();
       if (data.success) {
-        setPublished(true);
+        window.location.href = data.url;
       } else {
         setError(data.error || "Publish failed");
       }
@@ -74,28 +82,81 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
     }
   };
 
-  if (published) {
+  // Mode 1: Single-user (no multi-user) — username input + publish (original behavior)
+  if (!multiUser) {
     return (
-      <div className="flex items-center gap-3 border-b bg-green-50 px-4 py-3 text-sm dark:bg-green-950">
-        <span className="font-medium text-green-800 dark:text-green-200">
-          Published!
+      <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
+        <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
+          Ready to publish
         </span>
-        <a
-          href={`/${username}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-green-700 underline dark:text-green-300"
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value.toLowerCase())}
+          className="w-32 rounded border px-2 py-1 text-sm"
+          placeholder="username"
+        />
+        <button
+          onClick={handlePublish}
+          disabled={publishing || !username}
+          className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
         >
-          View at /{username}
-        </a>
+          {publishing ? "Publishing..." : "Publish"}
+        </button>
+        {error && (
+          <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
+        )}
       </div>
     );
   }
 
+  // Mode 2: Multi-user, NOT authenticated — sign up to publish
+  if (!authenticated) {
+    return (
+      <>
+        <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
+          <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
+            Your page is ready!
+          </span>
+          <button
+            onClick={() => setSignupOpen(true)}
+            className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
+          >
+            Sign up to publish
+          </button>
+        </div>
+        <SignupModal open={signupOpen} onClose={() => setSignupOpen(false)} />
+      </>
+    );
+  }
+
+  // Mode 3: Multi-user, authenticated
+  // 3a: Has username — publish directly
+  if (authUsername) {
+    return (
+      <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
+        <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
+          Publish as {authUsername}
+        </span>
+        <button
+          onClick={handlePublish}
+          disabled={publishing}
+          className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          {publishing ? "Publishing..." : "Publish"}
+        </button>
+        {error && (
+          <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
+        )}
+      </div>
+    );
+  }
+
+  // 3b: Authenticated but no username (OAuth edge case) — username input + publish
   return (
     <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
       <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-        Ready to publish
+        Choose your username
       </span>
       <input
         type="text"
@@ -114,6 +175,36 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
       {error && (
         <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
       )}
+    </div>
+  );
+}
+
+function AuthIndicator({ authState }: { authState?: AuthState }) {
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  if (!authState?.authenticated || !authState?.username) return null;
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/";
+    } catch {
+      setLoggingOut(false);
+    }
+  };
+
+  return (
+    <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
+      <span className="font-medium">{authState.username}</span>
+      <span className="text-muted-foreground">·</span>
+      <button
+        onClick={handleLogout}
+        disabled={loggingOut}
+        className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+      >
+        {loggingOut ? "..." : "Log out"}
+      </button>
     </div>
   );
 }
@@ -170,7 +261,7 @@ function GearButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function SplitView({ language, onLanguageChange, initialConfig }: SplitViewProps) {
+export function SplitView({ language, onLanguageChange, initialConfig, authState }: SplitViewProps) {
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
   const [publishUsername, setPublishUsername] = useState<string>("");
@@ -354,8 +445,12 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
 
   const previewPane = displayConfig ? (
     <div className="relative h-full overflow-y-auto">
+      <AuthIndicator authState={authState} />
       {publishStatus === "approval_pending" && (
-        <PublishBar username={publishUsername !== "draft" ? publishUsername : ""} />
+        <PublishBar
+          username={publishUsername !== "draft" ? publishUsername : ""}
+          authState={authState}
+        />
       )}
       <PageRenderer config={displayConfig} />
       <GearButton onClick={() => setSettingsOpen(true)} />
@@ -363,6 +458,7 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
+      <AuthIndicator authState={authState} />
       <EmptyPreview />
       <GearButton onClick={() => setSettingsOpen(true)} />
       <SettingsPanel

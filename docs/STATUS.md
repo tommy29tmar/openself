@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,12 +12,13 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 314 automated tests passing (22 test files)
+- 340 automated tests passing (25 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
+- Signup-before-publish: anonymous users must sign up before publishing (multi-user mode), auth indicator + logout on builder and published page
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented.
 
 ## 2) Implemented Today
 
@@ -30,6 +31,8 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | `/:username` public page | Done | Renders only published `PageConfig` |
 | Not found UX | Done | Dedicated username not-found page |
 | Publish confirmation UI | Done | Publish bar appears when agent requests publish |
+| Signup-before-publish | Done | Anonymous users see signup modal; authenticated users publish directly with redirect |
+| Auth indicator + logout | Done | Builder preview shows `{username} · Log out`; OwnerBanner has logout button |
 
 ### Chat and Agent
 
@@ -85,6 +88,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Per-profile message quota | Done | Atomic counter (profile_message_usage), 200 limit for auth users |
 | Heartbeat engine | Done | Dual-loop (light daily, deep weekly), per-owner budget (DST-safe) |
 | Reserved username protection | Done | `draft`, `api`, `builder`, `admin`, `_next` blocked |
+| Publish auth gate (multi-user) | Done | Anonymous blocked (403), username enforced from auth context, atomic claim+publish |
 
 ### Media
 
@@ -150,7 +154,7 @@ All items complete. Includes:
 3. Public page auto-translation for visitors (on-demand + cached)
 
 ### Later
-1. Auth + CSRF on publish endpoint (currently trusted local env only)
+1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
 2. Full builder UI persistence across browser reloads (beyond chat history)
 3. Community component registry enforcement
 4. Additional connector ecosystem
@@ -170,7 +174,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 314 passed / 314 total (Vitest, 22 test files)
+- Automated tests: 340 passed / 340 total (Vitest, 25 test files)
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
   2. PageConfig validation behavior + extended section validators (28 tests)
@@ -191,6 +195,10 @@ Builder interface layouts (chat experience):
   17. Assign slots — assignment, locks, no-truncate, post-assign invariant (8 tests)
   18. Lock policy — canMutateSection for all actor/lock combinations (11 tests)
   19. Publish pipeline layout gate — status mapping, adapter integration (2 tests)
+  20. Auth session rotation — endpoint resolution after login rotation (20 tests)
+  21. Auth service — user creation, password hashing (3 tests)
+  22. KB session isolation — fact CRUD scoping (9 tests)
+  23. Publish auth gate — anonymous block, username resolution, atomic claim+publish (6 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration

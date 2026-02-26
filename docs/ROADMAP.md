@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -40,6 +40,10 @@ When choosing work, apply this order:
 - OAuth providers (Google, GitHub, Discord, LinkedIn, Twitter/X, Apple) implemented
 - Standalone signup page
 - Gate passed 2026-02-25
+- Signup-before-publish flow: anonymous users must sign up before publishing (multi-user mode)
+- Server-side publish auth gate: 403 for anonymous, username enforcement, atomic claim+publish
+- Auth indicator + logout on builder and published page
+- 340 automated tests (25 test files)
 
 ### Phase 1a — Agent Memory & Heartbeat (Done)
 
@@ -235,7 +239,7 @@ Reference:
 
 ## 5) Later (Lower Priority)
 
-1. Auth + CSRF on publish endpoint (required before public deployment)
+1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
 2. Session persistence across browser reloads
 3. Community component registry enforcement with certified workflow
 4. Additional connector ecosystem

@@ -392,6 +392,12 @@ vi.mock("@/lib/services/page-service", () => ({
 vi.mock("@/lib/auth/session", () => ({
   resolveOwnerScope: () => MOCK_SCOPE,
   getSessionIdFromRequest: () => SESSION_ROTATED,
+  getAuthContext: () => ({
+    sessionId: SESSION_ROTATED,
+    profileId: PROFILE_ID,
+    userId: USER_ID,
+    username: "testuser",
+  }),
   createSessionCookie: () => "",
 }));
 

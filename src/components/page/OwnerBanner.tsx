@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 
 type OwnerBannerProps = {
@@ -7,12 +8,24 @@ type OwnerBannerProps = {
 };
 
 export function OwnerBanner({ username }: OwnerBannerProps) {
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const handleShare = () => {
     const url = `${window.location.origin}/${username}`;
     if (navigator.share) {
       navigator.share({ title: "My OpenSelf page", url });
     } else {
       navigator.clipboard.writeText(url);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.reload();
+    } catch {
+      setLoggingOut(false);
     }
   };
 
@@ -29,6 +42,13 @@ export function OwnerBanner({ username }: OwnerBannerProps) {
         className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline"
       >
         Share
+      </button>
+      <button
+        onClick={handleLogout}
+        disabled={loggingOut}
+        className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+      >
+        {loggingOut ? "Logging out..." : "Log out"}
       </button>
     </div>
   );

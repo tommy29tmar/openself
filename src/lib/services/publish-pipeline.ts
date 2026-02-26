@@ -12,6 +12,8 @@ import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { translatePageContent } from "@/lib/ai/translate";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
+import { PublishError } from "@/lib/services/errors";
+import { setProfileUsername } from "@/lib/services/auth-service";
 import { resolveLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { validateLayoutComposition } from "@/lib/layout/quality";
@@ -27,6 +29,8 @@ export type PrepareAndPublishOptions = {
   mode: PublishMode;
   /** If provided and doesn't match the current draft configHash, returns 409 STALE_PREVIEW_HASH. */
   expectedHash?: string;
+  /** If set, claim profile.username inside the publish transaction (atomic). */
+  claimProfileId?: string;
 };
 
 export type PublishResult = {
@@ -36,16 +40,8 @@ export type PublishResult = {
   regenerated: boolean;
 };
 
-export class PublishError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly httpStatus: number,
-  ) {
-    super(message);
-    this.name = "PublishError";
-  }
-}
+// Re-export for backward compatibility
+export { PublishError };
 
 /**
  * Shared publish pipeline used by both /api/register and /api/publish.
@@ -182,6 +178,9 @@ export async function prepareAndPublish(
 
   // Step 5: atomic DB writes
   const txn = sqlite.transaction(() => {
+    if (opts.claimProfileId) {
+      setProfileUsername(opts.claimProfileId, username);
+    }
     if (finalConfig) {
       upsertDraft(username, finalConfig, sessionId);
     }
@@ -189,7 +188,19 @@ export async function prepareAndPublish(
     confirmPublish(username, sessionId);
   });
 
-  txn();
+  try {
+    txn();
+  } catch (err: unknown) {
+    if (
+      opts.claimProfileId &&
+      err instanceof Error &&
+      "code" in err &&
+      String((err as Record<string, unknown>).code).startsWith("SQLITE_CONSTRAINT")
+    ) {
+      throw new PublishError("Username already taken", "USERNAME_TAKEN", 409);
+    }
+    throw err;
+  }
 
   return {
     success: true,

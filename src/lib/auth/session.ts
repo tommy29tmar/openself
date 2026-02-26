@@ -78,11 +78,20 @@ export function getAuthContext(req: Request): AuthContext | null {
   const session = getSession(sessionId);
   if (!session) return null;
 
+  // Resolve username: session.username (legacy) ?? profiles.username (auth v2)
+  let username: string | null = session.username ?? null;
+  if (!username && session.profileId) {
+    const profileRow = sqlite
+      .prepare("SELECT username FROM profiles WHERE id = ?")
+      .get(session.profileId) as { username: string | null } | undefined;
+    username = profileRow?.username ?? null;
+  }
+
   return {
     sessionId,
     profileId: session.profileId ?? sessionId,
     userId: session.userId ?? null,
-    username: session.username,
+    username,
   };
 }
 

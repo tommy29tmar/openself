@@ -8,6 +8,7 @@ import {
   validatePageConfig,
 } from "@/lib/page-config/schema";
 import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
+import { PublishError } from "@/lib/services/errors";
 
 /** Compute SHA-256 hex digest of a PageConfig JSON. */
 export function computeConfigHash(config: PageConfig): string {
@@ -176,7 +177,7 @@ export function requestPublish(username: string, sessionId: string = "__default_
 export function confirmPublish(username: string, sessionId: string = "__default__"): void {
   // Guard 1: reserved usernames
   if (RESERVED_USERNAMES.has(username)) {
-    throw new Error(`Username "${username}" is reserved`);
+    throw new PublishError(`Username "${username}" is reserved`, "USERNAME_RESERVED", 400);
   }
 
   const txn = sqlite.transaction(() => {
@@ -198,7 +199,7 @@ export function confirmPublish(username: string, sessionId: string = "__default_
     if (existingPublished) {
       const existingProfile = existingPublished.profile_id ?? existingPublished.session_id;
       if (existingProfile !== profileId) {
-        throw new Error("Username already claimed by another user");
+        throw new PublishError("Username already claimed by another user", "USERNAME_TAKEN", 409);
       }
     }
 

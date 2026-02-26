@@ -43,9 +43,20 @@ async function persistLanguage(language: LanguageCode, regenerateDraft: boolean)
   }
 }
 
+export type AuthState = {
+  authenticated: boolean;
+  username: string | null;
+  multiUser: boolean;
+};
+
 export default function BuilderPage() {
   const [language, setLanguage] = useState<LanguageCode | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [authState, setAuthState] = useState<AuthState>({
+    authenticated: false,
+    username: null,
+    multiUser: false,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -63,8 +74,22 @@ export default function BuilderPage() {
           throw new Error("Failed to load preferences");
         }
 
-        const data = await res.json() as { language?: unknown; hasPage?: boolean };
+        const data = await res.json() as {
+          language?: unknown;
+          hasPage?: boolean;
+          authenticated?: boolean;
+          username?: string | null;
+          multiUser?: boolean;
+        };
         const serverLanguage = isLanguageCode(data.language) ? data.language : null;
+
+        if (!cancelled) {
+          setAuthState({
+            authenticated: !!data.authenticated,
+            username: data.username ?? null,
+            multiUser: !!data.multiUser,
+          });
+        }
 
         const resolvedLanguage = serverLanguage
           ?? (data.hasPage ? (localLanguage ?? detectBrowserLanguage()) : null);
@@ -113,5 +138,5 @@ export default function BuilderPage() {
     return <LanguagePicker onSelect={handleSelectLanguage} />;
   }
 
-  return <SplitView language={language} onLanguageChange={handleSelectLanguage} />;
+  return <SplitView language={language} onLanguageChange={handleSelectLanguage} authState={authState} />;
 }

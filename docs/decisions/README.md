@@ -21,6 +21,7 @@ Do not use ADRs for:
 5. `ADR-0005-preview-polling-over-sse.md` - Polling-based preview with simplified state machine
 6. `ADR-0006-owner-scope-and-cognitive-architecture.md` - OwnerScope design, multi-session identity, trust ledger, migration bootstrap
 7. `ADR-0007-sse-preview-upgrade.md` - SSE preview with polling fallback (supersedes ADR-0005)
+8. `ADR-0008-signup-before-publish.md` - Require signup before publish in multi-user mode (resolves ADR-0004 negative #2)
 
 ## Naming Convention
 

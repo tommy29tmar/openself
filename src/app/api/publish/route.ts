@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 import { logEvent } from "@/lib/services/event-service";
-import { resolveOwnerScope } from "@/lib/auth/session";
+import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 
 /**
@@ -10,6 +10,13 @@ import { isMultiUserEnabled } from "@/lib/services/session-service";
  * Server-side publish gate: only an explicit user action can publish a page.
  * The agent can only request_publish (mark draft as approval_pending).
  * This endpoint promotes draft → published via the shared pipeline.
+ *
+ * In multi-user mode:
+ * - Anonymous users are blocked (403 AUTH_REQUIRED) — they must sign up first.
+ * - Authenticated users with an existing username: body.username is ignored,
+ *   authCtx.username is used (prevents publishing under a different username).
+ * - Authenticated users without a username (OAuth edge case): body.username is
+ *   used and claimed atomically via claimProfileId in the pipeline transaction.
  *
  * Accepts optional `expectedHash` in body for concurrency guard.
  */
@@ -24,10 +31,24 @@ export async function POST(req: Request) {
   }
   const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
+  // Auth gate: block anonymous publish in multi-user mode
+  const authCtx = isMultiUserEnabled() ? getAuthContext(req) : null;
+  if (isMultiUserEnabled() && !authCtx?.userId) {
+    return NextResponse.json(
+      { success: false, error: "Sign up required to publish", code: "AUTH_REQUIRED" },
+      { status: 403 },
+    );
+  }
+
+  // Effective username: if user already has one, enforce it (ignore body)
+  const effectiveUsername = authCtx?.username ?? null;
+
   try {
     const body = await req.json();
-    const username = body?.username;
     const expectedHash = body?.expectedHash;
+
+    // Use effective username if set, otherwise fall back to body
+    const username = effectiveUsername ?? body?.username;
 
     if (!username || typeof username !== "string") {
       return NextResponse.json(
@@ -44,9 +65,15 @@ export async function POST(req: Request) {
       );
     }
 
+    // If authenticated user has no username yet, claim it atomically with publish
+    const claimProfileId = (isMultiUserEnabled() && !effectiveUsername && authCtx)
+      ? authCtx.profileId
+      : undefined;
+
     const result = await prepareAndPublish(username, primaryKey, {
       mode: "publish",
       expectedHash: typeof expectedHash === "string" ? expectedHash : undefined,
+      claimProfileId,
     });
 
     logEvent({

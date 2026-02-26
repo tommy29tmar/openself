@@ -143,9 +143,12 @@ are tools. OpenSelf is an identity layer.
     - Edit and approve
     - Keep as draft (nothing public)
 
-12. Choose your username → openself.com/yourname
+12. Signup modal (multi-user mode):
+    - Username (live preview: openself.dev/yourname)
+    - Email + password
+    - Single endpoint: signup + publish atomically
 
-13. Live. Done. Under 5 minutes.
+13. Redirected to openself.dev/yourname. Live. Done. Under 5 minutes.
 ```
 
 ### Returning (~2 minutes)
@@ -656,6 +659,12 @@ have multiple sessions.
 
 **Session backfill:** When a user registers or logs in via OAuth, all existing sessions
 for that profile are backfilled with the `profile_id`, enabling cross-session reads.
+
+**Username resolution:** `getAuthContext()` resolves the username through a two-step
+lookup: `session.username` (legacy) → `profiles.username` (auth v2). This is necessary
+because `createAuthSession` does not write username to the sessions table (UNIQUE
+constraint). The profiles table fallback ensures auth indicators, ownership checks,
+and publish flow all see the correct username after registration.
 
 **Message quota:**
 - Authenticated: per-profile quota via `profile_message_usage` table (200 message limit)
@@ -2868,6 +2877,41 @@ Visibility is mode-aware and enforced by `VisibilityPolicy`:
    - Archived facts are preserved in the KB for history, context, and potential reactivation
    - The agent uses archived facts for reasoning (e.g., career evolution analysis)
      but never renders them on the public page
+
+### 12.7 Publish Auth Gate (Multi-User Mode)
+
+In multi-user mode (`INVITE_CODES` set), publishing requires authentication:
+
+1. **Anonymous users blocked server-side.** `POST /api/publish` returns 403
+   `AUTH_REQUIRED` if the session has no `userId`. Direct API calls cannot bypass
+   the UI signup modal.
+
+2. **Signup-before-publish flow.** Anonymous users who build a page see "Sign up to
+   publish" instead of the publish button. The `SignupModal` component collects
+   username + email + password and POSTs to `/api/register`, which atomically creates
+   the user, links the profile, publishes the page, and rotates the session.
+
+3. **Username enforcement.** If `authCtx.username` exists (user already claimed one),
+   `POST /api/publish` ignores `body.username` and uses the authenticated username.
+   This prevents crafted API calls from publishing under a different username.
+
+4. **Atomic claim+publish (OAuth edge case).** Authenticated users without a username
+   (e.g., OAuth login without prior publish) can provide a username at publish time.
+   The pipeline claims `profile.username` inside the same SQLite transaction as
+   `requestPublish` + `confirmPublish`. If the UNIQUE constraint fails, the entire
+   transaction rolls back — no squatting, no broken ownership.
+
+5. **Auth indicator.** Builder preview shows `{username} · Log out` when authenticated.
+   Published page `OwnerBanner` includes a logout button alongside Edit and Share.
+
+6. **Single-user mode preserved.** When `INVITE_CODES` is not set, the original
+   behavior (username input + direct publish, no signup) is unchanged.
+
+Error codes:
+- `AUTH_REQUIRED` (403): Anonymous user attempted publish in multi-user mode
+- `USERNAME_TAKEN` (409): Username already claimed by another profile
+- `USERNAME_RESERVED` (400): Reserved username (draft, api, builder, admin, etc.)
+- `USERNAME_INVALID` (400): Username fails validation regex
 
 ---
 

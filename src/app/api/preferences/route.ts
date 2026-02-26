@@ -11,7 +11,7 @@ import {
 } from "@/lib/services/preferences-service";
 import { isLanguageCode } from "@/lib/i18n/languages";
 import { translatePageContent } from "@/lib/ai/translate";
-import { resolveOwnerScope } from "@/lib/auth/session";
+import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +24,14 @@ export async function GET(req: Request) {
   const primaryKey = scope?.knowledgePrimaryKey ?? "__default__";
 
   const prefs = getPreferences(primaryKey);
+  const authCtx = isMultiUserEnabled() ? getAuthContext(req) : null;
+
   return NextResponse.json({
     language: prefs.language,
     hasPage: hasAnyPage(primaryKey),
+    authenticated: !!authCtx?.userId,
+    username: authCtx?.username ?? null,
+    multiUser: isMultiUserEnabled(),
   });
 }
 
