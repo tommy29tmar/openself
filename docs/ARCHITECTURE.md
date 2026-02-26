@@ -428,9 +428,14 @@ Two mechanisms ensure the agent calls tools correctly despite the growing comple
    sees validation errors in the chat. If repair also fails, the error is logged but
    not surfaced to the user.
 
+**Type safety:** Messages passed to `streamText()` are typed as `CoreMessage[]` (from the
+Vercel AI SDK `ai` package). The role-whitelist filter produces `{ role: string }[]`, so
+the result is cast to `CoreMessage[]` after filtering to satisfy the SDK's literal-union
+type constraint.
+
 Key files:
 - `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` constant (category→value table)
-- `src/app/api/chat/route.ts` — `experimental_repairToolCall` callback in `streamText()`
+- `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback in `streamText()`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
 
@@ -1967,9 +1972,14 @@ Inside an atomic SQLite transaction, the pipeline:
 
 If the hash guard fails, none of these steps execute.
 
+**`PublishResult` type contract:**
+`prepareAndPublish()` returns `{ success: true, username: string, url: string }`.
+Both `/api/publish` and `/api/register` consume this type — callers must not access
+fields outside this contract (e.g., no `regenerated` property exists on the result).
+
 **Key files:**
 - `src/lib/services/page-projection.ts` — `filterPublishableFacts`, `projectPublishableConfig`
-- `src/lib/services/publish-pipeline.ts` — `prepareAndPublish` (hash guard + promote + publish)
+- `src/lib/services/publish-pipeline.ts` — `prepareAndPublish` (hash guard + promote + publish), `PublishResult` type
 - `src/lib/visibility/policy.ts` — `SENSITIVE_CATEGORIES` (exported `ReadonlySet<string>`)
 - `src/components/layout/SplitView.tsx` — stores `configHash` state, sends `expectedHash`
 
@@ -2710,7 +2720,7 @@ feasibility.
 |---|---|---|
 | **Framework** | Next.js 15 (App Router) | Full-stack in one project. SSR/SSG for public pages. |
 | **Language** | TypeScript | Type safety. AI coding assistants generate it well. |
-| **UI** | Tailwind CSS + shadcn/ui | Beautiful components fast. AI generates them perfectly. |
+| **UI** | Tailwind CSS + shadcn/ui + radix-ui | Beautiful components fast. AI generates them perfectly. `radix-ui` barrel import requires `optimizePackageImports` in `next.config.ts` for SSR compatibility. |
 | **Database** | SQLite (via Drizzle ORM) | Zero config. One file. Portable. |
 | **Search** | SQLite FTS5 + sqlite-vec | Full-text + vector search without external dependencies. |
 | **AI SDK** | Vercel AI SDK | BYOM out of the box: OpenAI, Anthropic, Ollama, Google. Streaming. Tool calling. |

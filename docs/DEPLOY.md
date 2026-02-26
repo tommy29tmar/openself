@@ -561,7 +561,7 @@ npm run worker:dev
 | `Dockerfile` | Multi-stage production build (3 stages: deps → build → runtime) |
 | `.dockerignore` | Excludes node_modules, .next, .env, tests, docs from Docker build context |
 | `docker-compose.yml` | For local testing with `docker compose up` (maps ./data to /app/db) |
-| `next.config.ts` | `output: "standalone"` enables minimal Docker-optimized server |
+| `next.config.ts` | `output: "standalone"` enables minimal Docker-optimized server. `optimizePackageImports: ["radix-ui"]` fixes SSR prerendering errors caused by radix-ui barrel imports. |
 | `db/migrations/*.sql` | SQL migration files, auto-applied when the app starts |
 | `src/lib/db/index.ts` | Database initialization + auto-migration on import |
 | `src/lib/db/migrate.ts` | Migration runner (reads SQL files from db/migrations/) |

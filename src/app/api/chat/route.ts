@@ -1,4 +1,4 @@
-import { streamText, generateText } from "ai";
+import { streamText, generateText, type CoreMessage } from "ai";
 import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
 import { assembleContext } from "@/lib/agent/context";
 import { createAgentTools } from "@/lib/agent/tools";
@@ -212,7 +212,7 @@ export async function POST(req: Request) {
 
   // Role whitelist: AI SDK expects only these roles
   const VALID_ROLES = new Set(["user", "assistant", "system", "tool"]);
-  const safeMessages = trimmedMessages.filter(m => VALID_ROLES.has(m.role));
+  const safeMessages = trimmedMessages.filter(m => VALID_ROLES.has(m.role)) as CoreMessage[];
 
   // Persist the latest user message
   const lastMessage = messages[messages.length - 1];

@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       logEvent({
         eventType: "user_registered",
         actor: "user",
-        payload: { username, sessionId, email: email.toLowerCase(), regenerated: result.regenerated },
+        payload: { username, sessionId, email: email.toLowerCase() },
       });
 
       const response = NextResponse.json({
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
       logEvent({
         eventType: "user_registered",
         actor: "user",
-        payload: { username, sessionId, regenerated: result.regenerated },
+        payload: { username, sessionId },
       });
 
       return NextResponse.json({

@@ -646,15 +646,14 @@ function buildAchievementsSection(achievementFacts: FactRow[], language: string)
 function buildStatsSection(statFacts: FactRow[], language: string): Section | null {
   if (statFacts.length === 0) return null;
 
-  const items: StatItem[] = statFacts
-    .map((f) => {
-      const v = val(f);
-      const label = str(v.label) ?? str(v.name);
-      const value = str(v.value) ?? str(v.number);
-      if (!label || !value) return null;
-      return { label, value, unit: str(v.unit) };
-    })
-    .filter((item): item is StatItem => item !== null);
+  const mapped = statFacts.map((f) => {
+    const v = val(f);
+    const label = str(v.label) ?? str(v.name);
+    const value = str(v.value) ?? str(v.number);
+    if (!label || !value) return null;
+    return { label, value, unit: str(v.unit) } as StatItem;
+  });
+  const items = mapped.filter((item): item is StatItem => item !== null);
 
   if (items.length === 0) return null;
 

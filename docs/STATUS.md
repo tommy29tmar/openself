@@ -78,7 +78,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 | Capability | Status | Notes |
 |---|---|---|
-| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Extended sections (experience, education, languages, activities, achievements, stats, reading, music, contact) gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
+| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Type-safe section builders with proper type guards (e.g., `StatItem[]` filtering). Extended sections (experience, education, languages, activities, achievements, stats, reading, music, contact) gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
 | Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors. Both routes use `projectPublishableConfig()` — never serve raw `draft.config` |
 | Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, CSS custom property tokens (`--theme-*`), centralized validation |
 | Shared canonical projection | Done | `projectPublishableConfig()` is single source of truth for preview + publish. `filterPublishableFacts()` shared filter. |
