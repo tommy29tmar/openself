@@ -47,6 +47,7 @@ export type AuthState = {
   authenticated: boolean;
   username: string | null;
   multiUser: boolean;
+  publishedUsername: string | null;
 };
 
 export default function BuilderPage() {
@@ -56,6 +57,7 @@ export default function BuilderPage() {
     authenticated: false,
     username: null,
     multiUser: false,
+    publishedUsername: null,
   });
 
   useEffect(() => {
@@ -80,6 +82,7 @@ export default function BuilderPage() {
           authenticated?: boolean;
           username?: string | null;
           multiUser?: boolean;
+          publishedUsername?: string | null;
         };
         const serverLanguage = isLanguageCode(data.language) ? data.language : null;
 
@@ -88,6 +91,7 @@ export default function BuilderPage() {
             authenticated: !!data.authenticated,
             username: data.username ?? null,
             multiUser: !!data.multiUser,
+            publishedUsername: data.publishedUsername ?? null,
           });
         }
 

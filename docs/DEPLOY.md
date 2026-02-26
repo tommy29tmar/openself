@@ -518,6 +518,21 @@ To run the worker as a second service in Coolify:
 5. Mount the same SQLite volume as the web service (`/data/openself/db` → `/app/db`)
 6. The worker will poll `schema_meta` until the web process runs migrations, then start processing jobs
 
+**Pre-provisioned Coolify app (not yet deployed):**
+
+| Key | Value |
+|---|---|
+| App UUID | `y4o0k84wcko0co0c0gcw84ws` |
+| Source repo | `https://github.com/tommy29tmar/openself` (public, branch: main) |
+| Port (placeholder) | 3001 |
+| Status | Created via API, needs Dockerfile + env vars + volume mount before first deploy |
+
+Remaining setup before deploy:
+- Create a dedicated `Dockerfile.worker` (or set Dockerfile path to reuse multi-stage build with worker target)
+- Set env vars via API: `DB_BOOTSTRAP_MODE=follower`, same LLM keys as web app
+- Mount shared SQLite volume (`/data/openself/db` → `/app/db`)
+- Disable domain/SSL (worker has no HTTP endpoints, only health-check)
+
 ### Local Development
 
 Run the worker alongside the dev server:

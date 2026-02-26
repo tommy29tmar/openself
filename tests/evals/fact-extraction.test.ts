@@ -46,14 +46,37 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(hero!.content.tagline).toBe("Building the future");
     });
 
-    it("generates a default tagline when none provided", () => {
+    it("generates empty tagline when only name provided (no repetition)", () => {
       const facts: FactRow[] = [
         makeFact({ category: "identity", key: "full-name", value: { full: "Alice Smith" } }),
       ];
       const page = composeOptimisticPage(facts, "alice");
 
       const hero = page.sections.find((s) => s.type === "hero");
-      expect(hero!.content.tagline).toBe("Hello, I'm Alice Smith");
+      expect(hero!.content.tagline).toBe("");
+    });
+
+    it("uses role as tagline when available", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "identity", key: "full-name", value: { full: "Alice Smith" } }),
+        makeFact({ category: "identity", key: "role", value: { role: "Software Engineer" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+
+      const hero = page.sections.find((s) => s.type === "hero");
+      expect(hero!.content.tagline).toBe("Software Engineer");
+    });
+
+    it("uses interests as tagline when no role", () => {
+      const facts: FactRow[] = [
+        makeFact({ category: "identity", key: "full-name", value: { full: "Alice Smith" } }),
+        makeFact({ category: "interest", key: "interest", value: { name: "AI" } }),
+        makeFact({ category: "interest", key: "interest", value: { name: "Design" } }),
+      ];
+      const page = composeOptimisticPage(facts, "alice");
+
+      const hero = page.sections.find((s) => s.type === "hero");
+      expect(hero!.content.tagline).toBe("AI, Design");
     });
 
     it("uses displayable username when no name fact is provided", () => {
@@ -233,14 +256,14 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(groups[0].label).toBe("Skills");
     });
 
-    it("Italian tagline is generated when no tagline fact exists", () => {
+    it("Italian: empty tagline when only name (no greeting repetition)", () => {
       const facts: FactRow[] = [
         makeFact({ category: "identity", key: "full-name", value: { full: "Marco Rossi" } }),
       ];
       const page = composeOptimisticPage(facts, "marco", "it");
 
       const hero = page.sections.find((s) => s.type === "hero");
-      expect(hero!.content.tagline).toBe("Ciao, sono Marco Rossi");
+      expect(hero!.content.tagline).toBe("");
     });
   });
 

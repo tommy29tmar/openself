@@ -3,7 +3,7 @@ import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { getDraft, computeConfigHash } from "@/lib/services/page-service";
 import { getAllFacts } from "@/lib/services/kb-service";
 import { getPreferences } from "@/lib/services/preferences-service";
-import { projectPublishableConfig } from "@/lib/services/page-projection";
+import { projectCanonicalConfig, publishableFromCanonical } from "@/lib/services/page-projection";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,10 @@ export const runtime = "nodejs";
  *
  * SSE endpoint for real-time preview updates.
  * Always composes from facts using shared projection — never serves draft.config raw.
- * Change detection uses canonical hash (not draft.configHash).
+ *
+ * Two hashes:
+ * - previewHash: detects ALL changes (including incomplete sections) for SSE invalidation
+ * - publishableHash: sent as configHash in event payload (matches publish pipeline)
  */
 export async function GET(req: Request) {
   const scope = resolveOwnerScope(req);
@@ -65,31 +68,36 @@ export async function GET(req: Request) {
               }
             : undefined;
 
-          const config = projectPublishableConfig(
+          // Canonical config: all sections for display
+          const previewConfig = projectCanonicalConfig(
             facts,
             canonicalUsername,
             factLang,
             draftMeta,
           );
-          const hash = computeConfigHash(config);
 
-          const changed = hash !== lastHash;
-          lastHash = hash;
+          // previewHash: detects ALL changes (including incomplete sections)
+          const previewHash = computeConfigHash(previewConfig);
+          // publishableHash: matches publish pipeline for hash guard
+          const publishableHash = computeConfigHash(publishableFromCanonical(previewConfig));
+
+          const changed = previewHash !== lastHash;
+          lastHash = previewHash;
 
           if (changed) {
             unchangedCount = 0;
             sendEvent({
               status: "optimistic_ready",
               publishStatus: draft?.status ?? "draft",
-              config,
-              configHash: hash,
+              config: previewConfig,
+              configHash: publishableHash,
             });
           } else {
             unchangedCount++;
             sendEvent({
               status: "keepalive",
               publishStatus: draft?.status ?? "draft",
-              configHash: hash,
+              configHash: publishableHash,
             });
           }
         } else {

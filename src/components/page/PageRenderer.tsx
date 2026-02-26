@@ -8,6 +8,7 @@ import { resolveVariant } from "@/lib/layout/widgets";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { getLayoutComponent } from "@/components/layout-templates";
 import { OwnerBanner } from "@/components/page/OwnerBanner";
+import { VisitorBanner } from "@/components/page/VisitorBanner";
 import { filterCompleteSections } from "@/lib/page-config/section-completeness";
 
 export type PageRendererProps = {
@@ -64,6 +65,7 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
   return (
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
+      {!isOwner && !previewMode && <VisitorBanner />}
       <div data-theme={themeName} data-color-scheme={colorScheme}>
         <ThemeLayout config={config} previewMode={previewMode}>
           <LayoutComponent slots={slots} renderSection={renderSection} />

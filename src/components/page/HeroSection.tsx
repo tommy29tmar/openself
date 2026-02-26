@@ -54,9 +54,11 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
           >
             {name}
           </h1>
+          {tagline && (
           <p className="mt-[var(--space-2)] text-[var(--text-lg)] text-[var(--page-fg-secondary)]">
             {tagline}
           </p>
+          )}
           {socialLinks.length > 0 && (
             <div className="mt-[var(--space-3)] flex flex-wrap gap-[var(--space-1)]">
               {socialLinks.map((link) => {
@@ -102,9 +104,11 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
             >
               {name}
             </h1>
+            {tagline && (
             <p className="mt-[var(--space-1)] text-[var(--text-base)] text-[var(--page-fg-secondary)]">
               {tagline}
             </p>
+            )}
             {socialLinks.length > 0 && (
               <div className="mt-[var(--space-2)] flex flex-wrap gap-[var(--space-1)]">
                 {socialLinks.map((link) => {
@@ -150,9 +154,11 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
         >
           {name}
         </h1>
+        {tagline && (
         <p className="mt-[var(--space-3)] max-w-lg text-[var(--text-xl)] text-[var(--page-fg-secondary)]">
           {tagline}
         </p>
+        )}
         <HeroSocialLinks links={socialLinks} />
       </div>
     </section>

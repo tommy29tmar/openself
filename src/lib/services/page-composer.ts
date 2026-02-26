@@ -258,7 +258,13 @@ function lowerRole(role: string, language: string): string {
   return role[0].toLowerCase() + role.slice(1);
 }
 
-function buildHeroSection(identityFacts: FactRow[], language: string, username: string): Section | null {
+function buildHeroSection(
+  identityFacts: FactRow[],
+  experienceFacts: FactRow[],
+  interestFacts: FactRow[],
+  language: string,
+  username: string,
+): Section | null {
   let name: string | undefined;
   let tagline: string | undefined;
 
@@ -289,20 +295,49 @@ function buildHeroSection(identityFacts: FactRow[], language: string, username: 
   const heroName = name ?? (isDisplayableUsername(username) ? username : undefined);
 
   if (!tagline) {
-    // Try to derive from identity facts (role, interests)
+    // 1. Try role from identity facts
     const roleFact = identityFacts.find((f) => f.key === "role" || f.key === "title");
     if (roleFact) {
       const rv = val(roleFact);
       const role = str(rv.role) ?? str(rv.title) ?? str(rv.value);
       if (role) {
-        tagline = l.bioRoleFirstPerson(lowerRole(role, language));
+        tagline = role;
       }
     }
   }
 
-  // If we have a name, use a personalized tagline; otherwise use neutral
+  if (!tagline) {
+    // 2. Try role from experience facts
+    for (const fact of experienceFacts) {
+      const v = val(fact);
+      const role = str(v.role) ?? str(v.title) ?? str(v.position);
+      if (role) {
+        tagline = role;
+        break;
+      }
+    }
+  }
+
+  if (!tagline && interestFacts.length > 0) {
+    // 3. Use top interests as snapshot
+    const interests: string[] = [];
+    for (const fact of interestFacts) {
+      const v = val(fact);
+      const interest = str(v.name) ?? str(v.interest) ?? str(v.value);
+      if (interest) {
+        interests.push(interest);
+        if (interests.length >= 3) break;
+      }
+    }
+    if (interests.length > 0) {
+      tagline = interests.join(", ");
+    }
+  }
+
+  // If only name and no tagline: leave empty (name is already shown in hero)
+  const finalTagline = tagline ?? "";
+
   const finalName = heroName ?? l.welcomeTagline("").replace(/,?\s*$/, "").trim();
-  const finalTagline = tagline ?? (heroName ? l.welcomeTagline(heroName) : l.welcomeTagline(finalName));
 
   const content: HeroContent = {
     name: heroName ?? finalName,
@@ -835,11 +870,12 @@ export function composeOptimisticPage(
 
   // 1. Hero — always present (uses username fallback if no identity facts)
   const identityFacts = grouped.get("identity") ?? [];
-  const hero = buildHeroSection(identityFacts, language, username);
+  const interestFacts = grouped.get("interest") ?? [];
+  const experienceFacts = grouped.get("experience") ?? [];
+  const hero = buildHeroSection(identityFacts, experienceFacts, interestFacts, language, username);
   if (hero) sections.push(hero);
 
   // Check what sections we might have to avoid redundancy
-  const interestFacts = grouped.get("interest") ?? [];
   const hasInterestsSection = interestFacts.length > 0;
 
   // 2. Bio
@@ -849,7 +885,6 @@ export function composeOptimisticPage(
   const extended = isExtendedSectionsEnabled();
 
   // 3. Experience / Timeline
-  const experienceFacts = grouped.get("experience") ?? [];
   if (extended) {
     const experience = buildExperienceSection(experienceFacts, language);
     if (experience) sections.push(experience);
@@ -940,10 +975,10 @@ export function composeOptimisticPage(
 
 const MAX_REPAIR_ATTEMPTS = 3;
 
-function buildMinimalSafeConfig(username: string, language: string): PageConfig {
+function buildMinimalSafeConfig(username: string, _language: string): PageConfig {
   const heroContent: HeroContent = {
     name: username,
-    tagline: getL10n(language).welcomeTagline(username),
+    tagline: "",
   };
   return {
     version: 1,
@@ -1019,8 +1054,8 @@ function attemptRepair(config: PageConfig, errors: string[]): void {
       if (typeof c.name !== "string" || (c.name as string).trim().length === 0) {
         c.name = "Anonymous";
       }
-      if (typeof c.tagline !== "string" || (c.tagline as string).trim().length === 0) {
-        c.tagline = `Welcome to ${c.name}'s page`;
+      if (typeof c.tagline !== "string") {
+        c.tagline = "";
       }
     }
 

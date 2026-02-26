@@ -5,14 +5,20 @@ import { useState, useEffect, useCallback } from "react";
 type SignupModalProps = {
   open: boolean;
   onClose: () => void;
+  initialUsername?: string;
 };
 
-export function SignupModal({ open, onClose }: SignupModalProps) {
-  const [username, setUsername] = useState("");
+export function SignupModal({ open, onClose, initialUsername }: SignupModalProps) {
+  const [username, setUsername] = useState(initialUsername ?? "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Sync username when initialUsername changes post-mount
+  useEffect(() => {
+    if (initialUsername) setUsername(initialUsername);
+  }, [initialUsername]);
 
   // Close on Escape
   useEffect(() => {

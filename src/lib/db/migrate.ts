@@ -38,18 +38,28 @@ export function runMigrations(sqlite: Database.Database): void {
     }
 
     const sqlContent = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
+    const usesVirtualTable = /CREATE\s+VIRTUAL\s+TABLE/i.test(sqlContent);
 
-    // Wrap migration + tracking insert in a single transaction
-    // If migration fails, nothing is recorded (rollback)
-    // If tracking insert fails, migration is rolled back
-    const applyMigration = sqlite.transaction(() => {
+    if (usesVirtualTable) {
+      // FTS/virtual-table DDL can fail when wrapped in explicit transactions.
+      // Apply directly, then track as applied.
       sqlite.exec(sqlContent);
       sqlite
         .prepare("INSERT INTO _migrations (filename) VALUES (?)")
         .run(file);
-    });
+    } else {
+      // Wrap migration + tracking insert in a single transaction
+      // If migration fails, nothing is recorded (rollback)
+      // If tracking insert fails, migration is rolled back
+      const applyMigration = sqlite.transaction(() => {
+        sqlite.exec(sqlContent);
+        sqlite
+          .prepare("INSERT INTO _migrations (filename) VALUES (?)")
+          .run(file);
+      });
 
-    applyMigration();
+      applyMigration();
+    }
     console.log(`[migrate] Applied: ${file}`);
   }
 

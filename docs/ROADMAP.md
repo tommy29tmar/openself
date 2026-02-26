@@ -43,7 +43,7 @@ When choosing work, apply this order:
 - Signup-before-publish flow: anonymous users must sign up before publishing (multi-user mode)
 - Server-side publish auth gate: 403 for anonymous, username enforcement, atomic claim+publish
 - Auth indicator + logout on builder and published page
-- 340 automated tests (25 test files) — now 603 (31 files) after quality/privacy hardening
+- 340 automated tests (25 test files) — now 617 (33 files) after quality/privacy + UAT hardening
 
 ### Phase 1a — Agent Memory & Heartbeat (Done)
 
@@ -150,6 +150,31 @@ Cross-cutting hardening pass across data quality, privacy, theming, and publish 
 7. **Draft sanitization script** — `scripts/sanitize-drafts.ts` (recompose all drafts from facts).
 8. **Legacy fact cleanup script** — `scripts/cleanup-facts.ts` (validate and remove invalid facts).
 
+### UAT Hardening — 10 Findings (Done)
+
+First UAT session revealed 10 issues across builder UX, preview rendering, chat flow, fonts, and mobile.
+All resolved. 14 new tests (617 total, 33 files).
+
+1. **Builder banner (F1)** — `BuilderBanner` replaces `AuthIndicator` for authenticated users with
+   published page. Shows "Live page" / "Share" / "Log out". `getPublishedUsername()` queries by session IDs.
+2. **Hero tagline (F2)** — `buildHeroSection()` no longer repeats the name. Priority: explicit tagline →
+   role → top interests → empty string. Hero components conditionally render tagline.
+3. **Error telemetry (F3)** — `requestId` correlation through chat route → agent tools → log events.
+   `X-Request-Id` header on all responses. Retry button in ChatPanel on stream error.
+4. **Auth-aware quota UI (F4)** — `ChatPanel` receives `authState`. `LimitReachedUI` branches:
+   published page link, publish CTA, OAuth username input, anonymous signup.
+   New `POST /api/draft/request-publish` endpoint for chat-initiated publish.
+5. **Dual-hash preview (F5)** — Split projection into `projectCanonicalConfig()` (all sections) +
+   `publishableFromCanonical()` (completeness filter). Preview shows all; hash guard uses publishable.
+6. **Agent prompt (F6)** — Publish suggestion rules + negative rule after page generation.
+7. **Username pre-fill (F7)** — `SignupModal` + `PublishBar` sync `initialUsername` via `useEffect`.
+8. **Visitor banner (F8)** — `VisitorBanner` on published pages for non-owners: "OpenSelf" + "Log in".
+9. **Font (F9)** — editorial-360 heading from "Arial Narrow" to `var(--font-sans), system-ui, sans-serif`.
+10. **Mobile sticky tabs (F10)** — `sticky top-0 z-40` on mobile TabsList.
+
+Cross-cutting: Two-layer username validation (`validateUsernameFormat` + `validateUsernameAvailability`).
+Merged `RESERVED_USERNAMES` includes `login`/`signup`.
+
 ## 4) Now (High Priority)
 
 ### Phase 1: Living Agent
@@ -158,7 +183,8 @@ Phase 1 builds in dependency order: memory/heartbeat first, then extended sectio
 then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat) and Phase 1b (extended sections) are complete.
-Quality/Privacy/Themes hardening complete. Phase 1c (hybrid page compiler) is next.
+Quality/Privacy/Themes hardening complete. UAT hardening (10 findings) complete.
+Phase 1c (hybrid page compiler) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 

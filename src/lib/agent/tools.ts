@@ -24,7 +24,7 @@ import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
 
-export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string) {
+export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
   return {
   create_fact: tool({
@@ -76,7 +76,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "create_fact", error: String(error), category, key },
+          payload: { requestId, tool: "create_fact", error: String(error), category, key },
         });
         return { success: false, error: String(error) };
       }
@@ -104,7 +104,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "update_fact", error: String(error), factId },
+          payload: { requestId, tool: "update_fact", error: String(error), factId },
         });
         return { success: false, error: String(error) };
       }
@@ -125,7 +125,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "delete_fact", error: String(error), factId },
+          payload: { requestId, tool: "delete_fact", error: String(error), factId },
         });
         return { success: false, error: String(error) };
       }
@@ -359,7 +359,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "generate_page", error: String(error) },
+          payload: { requestId, tool: "generate_page", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
@@ -405,7 +405,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "request_publish", error: String(error) },
+          payload: { requestId, tool: "request_publish", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
@@ -442,7 +442,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "propose_soul_change", error: String(error) },
+          payload: { requestId, tool: "propose_soul_change", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
@@ -481,7 +481,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "save_memory", error: String(error) },
+          payload: { requestId, tool: "save_memory", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
@@ -637,7 +637,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "resolve_conflict", error: String(error) },
+          payload: { requestId, tool: "resolve_conflict", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
@@ -668,7 +668,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { tool: "set_fact_visibility", error: String(error), factId },
+          payload: { requestId, tool: "set_fact_visibility", error: String(error), factId },
         });
         return { success: false, error: String(error) };
       }

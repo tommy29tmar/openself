@@ -160,7 +160,7 @@ function validateStyleConfig(style: unknown, errors: string[]): void {
 
 function validateHeroContent(content: Record<string, unknown>, errors: string[]): void {
   if (!isString(content.name)) errors.push("hero.content.name is required");
-  if (!isString(content.tagline)) errors.push("hero.content.tagline is required");
+  if (typeof content.tagline !== "string") errors.push("hero.content.tagline must be a string");
 }
 
 function validateBioContent(content: Record<string, unknown>, errors: string[]): void {

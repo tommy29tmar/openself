@@ -33,17 +33,10 @@ export type DraftMeta = {
 };
 
 /**
- * Project a canonical publishable config from facts.
- *
- * This is the ONLY way to get a page config for preview or publish.
- * Returns a config composed in factLanguage (no translation — canonical).
- *
- * @param facts - All facts for the profile
- * @param username - Canonical username (from draft.username or "draft")
- * @param factLanguage - Language to compose in (canonical, no translation)
- * @param draftMeta - Optional metadata from existing draft (theme, style, layout)
+ * Project a canonical config from facts — ALL sections, no completeness filter.
+ * Used by preview (builder) to show all sections including incomplete ones.
  */
-export function projectPublishableConfig(
+export function projectCanonicalConfig(
   facts: FactRow[],
   username: string,
   factLanguage: string,
@@ -96,8 +89,28 @@ export function projectPublishableConfig(
     config = { ...config, sections: ordered };
   }
 
-  // 5. Completeness filter
-  config = { ...config, sections: filterCompleteSections(config.sections) };
-
   return config;
+}
+
+/**
+ * Apply completeness filter to a canonical config.
+ * Thin wrapper — avoids double composition.
+ */
+export function publishableFromCanonical(canonical: PageConfig): PageConfig {
+  return { ...canonical, sections: filterCompleteSections(canonical.sections) };
+}
+
+/**
+ * Project a publishable config from facts (complete sections only).
+ * Used by publish pipeline. Unchanged behavior — canonical + completeness filter.
+ */
+export function projectPublishableConfig(
+  facts: FactRow[],
+  username: string,
+  factLanguage: string,
+  draftMeta?: DraftMeta,
+): PageConfig {
+  return publishableFromCanonical(
+    projectCanonicalConfig(facts, username, factLanguage, draftMeta),
+  );
 }

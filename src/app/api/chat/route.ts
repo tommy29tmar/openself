@@ -144,6 +144,7 @@ export async function POST(req: Request) {
                 "Content-Type": "application/json",
                 "X-Message-Count": String(count),
                 "X-Message-Limit": String(AUTH_MESSAGE_LIMIT),
+                "X-Auth-Status": "authenticated",
               },
             },
           );
@@ -168,6 +169,7 @@ export async function POST(req: Request) {
               "Content-Type": "application/json",
               "X-Message-Count": String(currentCount),
               "X-Message-Limit": String(limit),
+              "X-Auth-Status": "anonymous",
             },
           },
         );
@@ -190,6 +192,7 @@ export async function POST(req: Request) {
                 "Content-Type": "application/json",
                 "X-Message-Count": String(latestCount),
                 "X-Message-Limit": String(limit),
+                "X-Auth-Status": "anonymous",
               },
             },
           );
@@ -201,6 +204,7 @@ export async function POST(req: Request) {
     }
   }
 
+  const requestId = randomUUID();
   const sessionLanguage = language || "en";
 
   // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
@@ -236,7 +240,7 @@ export async function POST(req: Request) {
       model,
       system: systemPrompt,
       messages: safeMessages,
-      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey),
+      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId),
       maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
@@ -286,7 +290,7 @@ export async function POST(req: Request) {
     });
 
     return result.toDataStreamResponse({
-      headers: extraHeaders,
+      headers: { ...extraHeaders, "X-Request-Id": requestId },
       getErrorMessage: (error) => {
         console.error("[chat] Stream error:", error);
         if (error instanceof Error) return error.message;
@@ -294,10 +298,10 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
-    console.error("[chat] Error:", error);
+    console.error("[chat] Error:", error, { requestId });
     return new Response(
       JSON.stringify({ error: String(error) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      { status: 500, headers: { "Content-Type": "application/json", "X-Request-Id": requestId } },
     );
   }
 }

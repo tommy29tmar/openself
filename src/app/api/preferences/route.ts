@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { getAllFacts } from "@/lib/services/kb-service";
-import { getDraft, hasAnyPage, upsertDraft } from "@/lib/services/page-service";
+import { getDraft, hasAnyPage, upsertDraft, getPublishedUsername } from "@/lib/services/page-service";
 import { logEvent } from "@/lib/services/event-service";
 import {
   getPreferences,
@@ -25,6 +25,8 @@ export async function GET(req: Request) {
 
   const prefs = getPreferences(primaryKey);
   const authCtx = isMultiUserEnabled() ? getAuthContext(req) : null;
+  const readKeys = scope?.knowledgeReadKeys ?? [];
+  const publishedUsername = getPublishedUsername(readKeys);
 
   return NextResponse.json({
     language: prefs.language,
@@ -32,6 +34,7 @@ export async function GET(req: Request) {
     authenticated: !!authCtx?.userId,
     username: authCtx?.username ?? null,
     multiUser: isMultiUserEnabled(),
+    publishedUsername,
   });
 }
 

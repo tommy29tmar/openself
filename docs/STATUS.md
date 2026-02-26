@@ -12,11 +12,19 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 603 automated tests passing (31 test files)
+- 617 automated tests passing (33 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
-- Signup-before-publish: anonymous users must sign up before publishing (multi-user mode), auth indicator + logout on builder and published page
+- Signup-before-publish: anonymous users must sign up before publishing (multi-user mode)
+- Builder banner: authenticated users see "Live page" / "Share" / "Log out" in builder; visitors see "OpenSelf" + "Log in" on published pages
+- Dual-hash preview: builder shows all sections (including incomplete), publish hash only covers complete sections
+- Hero tagline deduplication: uses role/interests instead of repeating the name
+- Auth-aware quota UI: 4 branches (published page link, publish CTA, OAuth username input, anonymous signup)
+- Request-publish endpoint: lightweight `/api/draft/request-publish` for chat-initiated publish flow
+- Error telemetry: request correlation IDs (`X-Request-Id`) + retry button on chat stream errors
+- Mobile sticky tabs: tab bar stays fixed on scroll
+- SQLite test stability: removed flaky `database is locked` failures in parallel Vitest runs (per-worker DB isolation + FTS-safe migration runner)
 - Privacy-by-architecture: shared canonical projection ensures private facts never enter page config
 - Fact validation gate: per-category rules reject invalid/placeholder values at write time
 - Visibility controls: actor-based transition matrix with user API and agent tool
@@ -24,7 +32,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - CSS custom property theming: 3 themes powered by `--theme-*` tokens
 - Chat context integration: `assembleContext` wired with role normalization
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete.
 
 ## 2) Implemented Today
 
@@ -38,7 +46,9 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Not found UX | Done | Dedicated username not-found page |
 | Publish confirmation UI | Done | Publish bar appears when agent requests publish |
 | Signup-before-publish | Done | Anonymous users see signup modal; authenticated users publish directly with redirect |
-| Auth indicator + logout | Done | Builder preview shows `{username} · Log out`; OwnerBanner has logout button |
+| Builder banner | Done | Authenticated builder: "Live page" / "Share" / "Log out". Fallback to simple auth indicator when no published page |
+| Visitor banner | Done | Published pages show "OpenSelf" + "Log in" for non-owners (logged out and visitors) |
+| Mobile sticky tabs | Done | Chat/Preview tab bar stays fixed at top on mobile scroll |
 
 ### Chat and Agent
 
@@ -47,7 +57,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Streaming AI chat | Done | `useChat` + `/api/chat` |
 | Tool-calling agent | Done | 15 tools: Fact CRUD, set_fact_visibility, page generation, update_page_style, request_publish, reorder, theme, set_layout, propose_lock, save_memory, propose_soul_change, resolve_conflict. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
-| Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) |
+| Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) + `POST /api/draft/request-publish` (chat-initiated publish) |
 | LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
 | Translation cache | Done | Hash-based, no explicit invalidation, eliminates repeated LLM calls |
 | Steady-state mode switching | Done | Mode auto-detected via fact count + published page check |
@@ -78,10 +88,10 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 | Capability | Status | Notes |
 |---|---|---|
-| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Type-safe section builders with proper type guards (e.g., `StatItem[]` filtering). Extended sections (experience, education, languages, activities, achievements, stats, reading, music, contact) gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
-| Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors. Both routes use `projectPublishableConfig()` — never serve raw `draft.config` |
+| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Type-safe section builders with proper type guards (e.g., `StatItem[]` filtering). Hero tagline: role → interests → empty (no name repetition). Extended sections gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
+| Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors. Dual-hash: `projectCanonicalConfig()` for display (all sections), `publishableFromCanonical()` for hash guard. Never serves raw `draft.config` |
 | Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, CSS custom property tokens (`--theme-*`), centralized validation |
-| Shared canonical projection | Done | `projectPublishableConfig()` is single source of truth for preview + publish. `filterPublishableFacts()` shared filter. |
+| Shared canonical projection | Done | Three-layer projection: `projectCanonicalConfig()` (all sections), `publishableFromCanonical()` (completeness filter), `projectPublishableConfig()` (wrapper). `filterPublishableFacts()` shared privacy filter. |
 | Publish pipeline safety | Done | Hash guard (expectedHash from frontend), promote-all (proposed→public atomically), username mismatch guard (publish mode only) |
 | Section completeness filter | Done | `filterCompleteSections()` in renderer for published pages. Hero/footer always pass. |
 | Layout template engine | Done | 3 templates (vertical, sidebar-left, bento-standard) with slot-based section assignment, widget registry, validation gates. Anticipated from Phase 1b. |
@@ -97,7 +107,8 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Async worker queue | Done | Standalone worker (tsup build), 9 handlers, atomic claim, health-check |
 | Per-profile message quota | Done | Atomic counter (profile_message_usage), 200 limit for auth users |
 | Heartbeat engine | Done | Dual-loop (light daily, deep weekly), per-owner budget (DST-safe) |
-| Reserved username protection | Done | `draft`, `api`, `builder`, `admin`, `_next` blocked |
+| SQLite test stability hardening | Done | Parallel Vitest workers use isolated DB files (`openself.test-worker-<id>.db`). Migration runner applies `CREATE VIRTUAL TABLE` migrations outside explicit transactions to avoid fresh-DB failures. |
+| Reserved username protection | Done | `draft`, `api`, `builder`, `admin`, `_next`, `login`, `signup` blocked. Two-layer validation: `validateUsernameFormat()` (pure) + `validateUsernameAvailability()` (server, DB check) |
 | Publish auth gate (multi-user) | Done | Anonymous blocked (403), username enforced from auth context, atomic claim+publish |
 
 ### Media
@@ -164,6 +175,23 @@ All items complete. 8 sub-phases:
 8. **Legacy fact cleanup** — `scripts/cleanup-facts.ts` (validate all facts, remove invalid entries)
 - 263 new tests (603 total, 31 files)
 
+### UAT Hardening (10 Findings) ✅
+
+All items complete. 10 findings from first UAT session, addressing builder UX, preview rendering, chat flow, fonts, and mobile:
+
+1. **F1 Builder banner** — `BuilderBanner` replaces `AuthIndicator` for authenticated users with published page. Shows "Live page" / "Share" / "Log out". `getPublishedUsername()` in page-service queries by session IDs.
+2. **F2 Hero tagline deduplication** — `buildHeroSection()` no longer repeats the name. New priority: explicit tagline → role (identity/experience) → top interests → empty string. Hero components conditionally render tagline.
+3. **F3 Error telemetry** — `requestId` (crypto.randomUUID) in chat route, passed to `createAgentTools()`, included in all tool error logs. `X-Request-Id` header on all responses. Retry button in ChatPanel on stream error.
+4. **F4 Auth-aware quota UI** — `ChatPanel` receives `authState` prop. `LimitReachedUI` has 4 branches: published page link, publish CTA, OAuth username input, anonymous signup form. New `POST /api/draft/request-publish` endpoint.
+5. **F5 Dual-hash preview** — Split `projectPublishableConfig()` into `projectCanonicalConfig()` (all sections) + `publishableFromCanonical()` (completeness filter). Preview shows all sections; hash guard uses publishable hash. `previewMode={true}` on PageRenderer skips safety-net re-filter.
+6. **F6 Agent prompt** — Added publish suggestion rules + negative rule ("never end with 'let me know'") after page generation.
+7. **F7 Username pre-fill** — `SignupModal` and `PublishBar` sync `initialUsername` via `useEffect` (handles late updates from `request_publish`).
+8. **F8 Visitor banner** — `VisitorBanner` on published pages for non-owners: "OpenSelf" + "Log in". Shown when `!isOwner && !previewMode`.
+9. **F9 Font** — editorial-360 heading font changed from "Arial Narrow" to `var(--font-sans), system-ui, sans-serif` (rounded, still distinct CSS value from minimal).
+10. **F10 Mobile sticky tabs** — `sticky top-0 z-40` on TabsList in SplitView.
+- Two-layer username validation: `validateUsernameFormat()` (pure, in `usernames.ts`) + `validateUsernameAvailability()` (server, in `username-validation.ts`). Merged `RESERVED_USERNAMES` set includes `login`/`signup`.
+- 14 new tests (617 total, 33 files)
+
 ### Phase 1c — Hybrid Page Compiler
 1. Per-section LLM personalizer (rewrites content using facts + agent memory)
 2. Drill-down conversation pattern (agent deepens topic before section update)
@@ -197,7 +225,8 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 603 passed / 603 total (Vitest, 31 test files)
+- Automated tests: 617 passed / 617 total (Vitest, 33 test files)
+- Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
   2. PageConfig validation behavior + extended section validators (28 tests)
@@ -228,8 +257,10 @@ Builder interface layouts (chat experience):
   27. Preview privacy — private fact exclusion, sensitive category exclusion, legacy draft override, hash determinism (6 tests)
   28. Publish pipeline — always-recompose, promote-all, hash guard, username mismatch, sensitive exclusion (13 tests)
   29. Theme tokens — CSS custom property validation, ThemeProvider, 3-theme coverage (15 tests)
-  30. Fact extraction — hero fallback, empty item filtering, beautifyKey removal (24 tests)
+  30. Fact extraction — hero tagline (role/interests/empty), empty item filtering, beautifyKey removal (24 tests)
   31. Chat context — assembleContext integration, role normalization (8 tests)
+  32. Dual-hash preview — canonical vs publishable projection, section filtering, output equivalence (3 tests)
+  33. Request-publish endpoint — auth/no-auth, username resolution, reserved/invalid/taken validation (9 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration

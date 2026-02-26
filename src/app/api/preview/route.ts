@@ -4,13 +4,15 @@ import { getDraft, computeConfigHash } from "@/lib/services/page-service";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { getPreferences } from "@/lib/services/preferences-service";
-import { projectPublishableConfig } from "@/lib/services/page-projection";
+import { projectCanonicalConfig, publishableFromCanonical } from "@/lib/services/page-projection";
 
 /**
  * GET /api/preview?username=...
  *
  * Returns the current privacy-safe preview of the page.
  * Always composes from facts using shared projection — never serves draft.config raw.
+ * Returns ALL sections (including incomplete) for builder display.
+ * configHash is computed from the publishable (complete-only) config for hash guard safety.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -50,19 +52,22 @@ export async function GET(req: Request) {
       }
     : undefined;
 
-  const config = projectPublishableConfig(
+  // Canonical config: all sections for display
+  const previewConfig = projectCanonicalConfig(
     facts,
     canonicalUsername,
     factLang,
     draftMeta,
   );
 
-  const configHash = computeConfigHash(config);
+  // Publishable hash: matches publish-pipeline expectation
+  const publishableConfig = publishableFromCanonical(previewConfig);
+  const configHash = computeConfigHash(publishableConfig);
 
   return NextResponse.json({
     status: "optimistic_ready",
     publishStatus: draft?.status ?? "draft",
-    config,
+    config: previewConfig,
     configHash,
   });
 }

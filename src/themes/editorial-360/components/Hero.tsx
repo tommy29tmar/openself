@@ -26,11 +26,13 @@ export function Hero({ content }: SectionProps<HeroContent>) {
                         {name.replace(' ', '\n')}
                     </h1>
                 </div>
+                {tagline && (
                 <div className="md:text-right max-w-sm">
                     <p className="text-2xl md:text-3xl font-[var(--page-font-heading)] text-[var(--page-fg-secondary)] italic leading-snug">
                         {tagline}
                     </p>
                 </div>
+                )}
             </div>
         </header>
     );

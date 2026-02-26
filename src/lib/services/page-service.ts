@@ -69,6 +69,23 @@ export function getPublishedPage(username: string): PageConfig | null {
 }
 
 /**
+ * Look up the published username for a set of session IDs.
+ * Returns the most recently updated published page's username, or null.
+ */
+export function getPublishedUsername(sessionIds: string[]): string | null {
+  if (sessionIds.length === 0) return null;
+
+  const placeholders = sessionIds.map(() => "?").join(",");
+  const row = sqlite
+    .prepare(
+      `SELECT username FROM page WHERE session_id IN (${placeholders}) AND status = 'published' ORDER BY updated_at DESC, username ASC LIMIT 1`,
+    )
+    .get(...sessionIds) as { username: string } | undefined;
+
+  return row?.username ?? null;
+}
+
+/**
  * True when at least one page row exists for a session (draft or published).
  */
 export function hasAnyPage(sessionId: string = "__default__"): boolean {

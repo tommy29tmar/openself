@@ -53,6 +53,11 @@ function PublishBar({ username: initialUsername, configHash, authState }: Publis
   const [error, setError] = useState<string | null>(null);
   const [signupOpen, setSignupOpen] = useState(false);
 
+  // Sync username when initialUsername changes post-mount (e.g. request_publish arrives late)
+  useEffect(() => {
+    if (initialUsername) setUsername(initialUsername);
+  }, [initialUsername]);
+
   const multiUser = authState?.multiUser ?? false;
   const authenticated = authState?.authenticated ?? false;
   const authUsername = authState?.username ?? null;
@@ -126,7 +131,7 @@ function PublishBar({ username: initialUsername, configHash, authState }: Publis
             Sign up to publish
           </button>
         </div>
-        <SignupModal open={signupOpen} onClose={() => setSignupOpen(false)} />
+        <SignupModal open={signupOpen} onClose={() => setSignupOpen(false)} initialUsername={username} />
       </>
     );
   }
@@ -205,6 +210,55 @@ function AuthIndicator({ authState }: { authState?: AuthState }) {
         className="text-muted-foreground hover:text-foreground disabled:opacity-50"
       >
         {loggingOut ? "..." : "Log out"}
+      </button>
+    </div>
+  );
+}
+
+function BuilderBanner({ authState }: { authState?: AuthState }) {
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  if (!authState?.authenticated || !authState?.publishedUsername) return null;
+
+  const handleShare = () => {
+    const url = `${window.location.origin}/${authState.publishedUsername}`;
+    if (navigator.share) {
+      navigator.share({ title: "My OpenSelf page", url });
+    } else {
+      navigator.clipboard.writeText(url);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/";
+    } catch {
+      setLoggingOut(false);
+    }
+  };
+
+  return (
+    <div className="sticky top-0 z-50 flex items-center justify-center gap-4 border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <a
+        href={`/${authState.publishedUsername}`}
+        className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+      >
+        Live page
+      </a>
+      <button
+        onClick={handleShare}
+        className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline"
+      >
+        Share
+      </button>
+      <button
+        onClick={handleLogout}
+        disabled={loggingOut}
+        className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+      >
+        {loggingOut ? "Logging out..." : "Log out"}
       </button>
     </div>
   );
@@ -449,7 +503,11 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
 
   const previewPane = displayConfig ? (
     <div className="relative h-full overflow-y-auto">
-      <AuthIndicator authState={authState} />
+      {authState?.authenticated && authState?.publishedUsername ? (
+        <BuilderBanner authState={authState} />
+      ) : (
+        <AuthIndicator authState={authState} />
+      )}
       {publishStatus === "approval_pending" && (
         <PublishBar
           username={publishUsername !== "draft" ? publishUsername : ""}
@@ -457,13 +515,17 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
           authState={authState}
         />
       )}
-      <PageRenderer config={displayConfig} />
+      <PageRenderer config={displayConfig} previewMode={true} />
       <GearButton onClick={() => setSettingsOpen(true)} />
       {settingsPanel}
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
-      <AuthIndicator authState={authState} />
+      {authState?.authenticated && authState?.publishedUsername ? (
+        <BuilderBanner authState={authState} />
+      ) : (
+        <AuthIndicator authState={authState} />
+      )}
       <EmptyPreview />
       <GearButton onClick={() => setSettingsOpen(true)} />
       <SettingsPanel
@@ -492,14 +554,14 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
       {/* Desktop: side-by-side */}
       <div className="hidden h-screen md:flex">
         <div className="w-[400px] shrink-0 overflow-hidden border-r">
-          <ChatPanel language={language} />
+          <ChatPanel language={language} authState={authState} />
         </div>
         <div className="relative flex-1">{previewPane}</div>
       </div>
 
       {/* Mobile: tabs */}
       <Tabs defaultValue="chat" className="flex h-screen flex-col md:hidden">
-        <TabsList className="w-full rounded-none">
+        <TabsList className="sticky top-0 z-40 w-full rounded-none">
           <TabsTrigger value="chat" className="flex-1">
             Chat
           </TabsTrigger>
@@ -512,7 +574,7 @@ export function SplitView({ language, onLanguageChange, initialConfig, authState
           forceMount
           className="flex-1 overflow-hidden data-[state=inactive]:hidden"
         >
-          <ChatPanel language={language} />
+          <ChatPanel language={language} authState={authState} />
         </TabsContent>
         <TabsContent
           value="preview"

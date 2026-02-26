@@ -1071,6 +1071,7 @@ follows OpenSelf's visual identity.
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
 │  hero          Name, tagline, avatar                          │
+│                Tagline: role > interests > empty (no name dup)│
 │                Variants: large, compact, minimal             │
 │                                                              │
 │  bio           Narrative text about the person               │
@@ -1499,12 +1500,18 @@ polling-based approach from ADR-0005:
   to polling (`GET /api/preview`) after 5 consecutive SSE errors
 - **Payload**: Same preview data shape as the polling endpoint (config +
   publishStatus + configHash), sent as JSON in SSE `data` field
-- **Privacy**: Both SSE and polling routes serve config from `projectPublishableConfig()`
+- **Privacy**: Both SSE and polling routes serve config from `projectCanonicalConfig()`
   (see Section 6.10), never `draft.config` raw. This prevents private facts baked into
   legacy drafts from leaking to the preview.
-- **Change detection**: Uses canonical hash computed from `projectPublishableConfig()`,
-  not `draft.configHash`. This means fact-level changes (new fact, visibility toggle)
-  are detected immediately, even if the draft row hasn't been updated yet.
+- **Dual-hash model**: Preview uses two hashes for different purposes:
+  - `previewHash` = hash of `projectCanonicalConfig()` (all sections, including incomplete).
+    Used for SSE change detection — triggers updates on any section change.
+  - `publishableHash` = hash of `publishableFromCanonical()` (completeness-filtered).
+    Sent as `configHash` in the event payload — used by the publish hash guard.
+  This ensures the builder shows incomplete sections while the publish pipeline
+  only considers complete ones for its hash comparison.
+- **Builder preview mode**: `PageRenderer` receives `previewMode={true}` from SplitView,
+  which skips the safety-net `filterCompleteSections()` re-filter. All sections are visible.
 
 This reduces unnecessary network requests during idle periods while providing
 near-instant updates when the agent modifies the page.
@@ -1553,7 +1560,7 @@ profile at a glance, OpenSelf pages should be instantly recognizable.
 |---|---|---|
 | `minimal` | Clean, lots of whitespace, monochrome with one accent color | Implemented |
 | `warm` | Soft colors, rounded elements, friendly feel | Implemented |
-| `editorial-360` | Magazine-inspired editorial layout with distinct typography | Implemented |
+| `editorial-360` | Magazine-inspired editorial layout, rounded heading font (`var(--font-sans), system-ui`) | Implemented |
 
 Each theme is powered by CSS custom properties (`--theme-*` tokens) defined in
 `src/app/globals.css`. Theme tokens control colors, typography, spacing, and
@@ -1937,16 +1944,30 @@ through stale draft data.
 filterPublishableFacts(facts: FactRow[]): FactRow[]
 // Returns facts where visibility is public/proposed AND category is not sensitive
 
-// Full projection: filter → compose → preserve metadata → slot assign → completeness filter
+// Canonical projection: filter → compose → preserve metadata → slot assign (NO completeness filter)
+// Shows ALL sections including incomplete — used for builder preview display
+projectCanonicalConfig(
+  facts: FactRow[], username: string, factLanguage: string,
+  draftMeta?: DraftMeta,
+): PageConfig
+
+// Thin wrapper: applies completeness filter to canonical config
+publishableFromCanonical(canonical: PageConfig): PageConfig
+// { ...canonical, sections: filterCompleteSections(canonical.sections) }
+
+// Convenience: canonical + completeness filter in one call
 projectPublishableConfig(
   facts: FactRow[], username: string, factLanguage: string,
   draftMeta?: DraftMeta,
 ): PageConfig
+// Equivalent to: publishableFromCanonical(projectCanonicalConfig(...))
 ```
 
-**Usage:** Both `/api/preview` and `/api/preview/stream` call `projectPublishableConfig()`.
-The publish pipeline (`prepareAndPublish`) also uses it for the canonical hash check
-before any side-effects.
+**Usage:**
+- `/api/preview` and `/api/preview/stream` call `projectCanonicalConfig()` for the display
+  config (all sections visible), then `publishableFromCanonical()` for the hash guard.
+- The publish pipeline (`prepareAndPublish`) uses `projectPublishableConfig()` for the
+  canonical hash check before any side-effects.
 
 **Two configs in publish flow:**
 1. **Canonical config** — composed from publishable facts in `factLanguage`, no translation.
@@ -1978,7 +1999,7 @@ Both `/api/publish` and `/api/register` consume this type — callers must not a
 fields outside this contract (e.g., no `regenerated` property exists on the result).
 
 **Key files:**
-- `src/lib/services/page-projection.ts` — `filterPublishableFacts`, `projectPublishableConfig`
+- `src/lib/services/page-projection.ts` — `filterPublishableFacts`, `projectCanonicalConfig`, `publishableFromCanonical`, `projectPublishableConfig`
 - `src/lib/services/publish-pipeline.ts` — `prepareAndPublish` (hash guard + promote + publish), `PublishResult` type
 - `src/lib/visibility/policy.ts` — `SENSITIVE_CATEGORIES` (exported `ReadonlySet<string>`)
 - `src/components/layout/SplitView.tsx` — stores `configHash` state, sends `expectedHash`
@@ -1993,11 +2014,12 @@ types require at least one non-empty item, group, link, method, or text field.
 
 **Usage:**
 - `filterCompleteSections(sections)` — returns only complete sections
-- `PageRenderer.tsx` applies this filter in non-preview mode (published pages).
-  Preview mode shows all sections (including incomplete) so the user can see work
-  in progress.
-- The publish pipeline does NOT filter incomplete sections — it publishes whatever
-  `projectPublishableConfig()` produces. The renderer is the safety net.
+- `publishableFromCanonical()` applies this filter (see Section 6.10).
+  `projectCanonicalConfig()` does NOT filter — builder preview shows all sections.
+- `PageRenderer.tsx` applies this filter in non-preview mode (published pages) as a
+  safety net. Preview mode (`previewMode={true}`) skips the filter.
+- The publish pipeline uses `projectPublishableConfig()` which includes the completeness
+  filter via `publishableFromCanonical()`.
 
 ### 6.12 Maintenance Scripts
 
@@ -3025,17 +3047,39 @@ In multi-user mode (`INVITE_CODES` set), publishing requires authentication:
    `requestPublish` + `confirmPublish`. If the UNIQUE constraint fails, the entire
    transaction rolls back — no squatting, no broken ownership.
 
-5. **Auth indicator.** Builder preview shows `{username} · Log out` when authenticated.
-   Published page `OwnerBanner` includes a logout button alongside Edit and Share.
+5. **Builder banner.** When authenticated with a published page, the builder shows a
+   `BuilderBanner` with "Live page" (link to `/{username}`) / "Share" / "Log out".
+   Falls back to simple `AuthIndicator` when no published page exists.
+   `getPublishedUsername(sessionIds)` in `page-service.ts` queries the page table.
 
-6. **Single-user mode preserved.** When `INVITE_CODES` is not set, the original
+6. **Visitor banner.** Published pages show a `VisitorBanner` ("OpenSelf" + "Log in")
+   for non-owners. Shown when `!isOwner && !previewMode`. Published page `OwnerBanner`
+   includes Edit / Share / Logout for the page owner.
+
+7. **Request-publish endpoint.** `POST /api/draft/request-publish` allows the chat UI
+   to trigger publish flow without going through the agent tool. Validates auth context,
+   resolves username (prefers `authCtx.username`, falls back to `body.username` for
+   OAuth edge case), validates availability, and calls `requestPublish()`.
+
+8. **Single-user mode preserved.** When `INVITE_CODES` is not set, the original
    behavior (username input + direct publish, no signup) is unchanged.
 
-Error codes:
+9. **Auth-aware quota UI.** `ChatPanel` receives `authState` and branches on message
+   limit: published page → link; authenticated → publish CTA; OAuth → username input;
+   anonymous → signup form.
+
+Error codes (publish + request-publish):
 - `AUTH_REQUIRED` (403): Anonymous user attempted publish in multi-user mode
 - `USERNAME_TAKEN` (409): Username already claimed by another profile
-- `USERNAME_RESERVED` (400): Reserved username (draft, api, builder, admin, etc.)
+- `USERNAME_RESERVED` (400): Reserved username (draft, api, builder, admin, login, signup, etc.)
 - `USERNAME_INVALID` (400): Username fails validation regex
+- `NO_DRAFT` (400): No draft exists to publish (request-publish only)
+
+**Username validation** is two-layered:
+- `validateUsernameFormat()` (`src/lib/page-config/usernames.ts`): pure function,
+  checks regex + `RESERVED_USERNAMES` set. No DB dependency.
+- `validateUsernameAvailability()` (`src/lib/services/username-validation.ts`):
+  server-only, calls format check + `isUsernameTaken()` from session-service.
 
 ---
 
@@ -3713,6 +3757,17 @@ Default runtime DB settings for web+worker mode:
 5. Idempotent mutation keys for connector/worker retries
 
 `SQLITE_BUSY` incidents must be logged in `agent_events` with context (actor, job/message id).
+
+Test-mode contract (Vitest/local CI):
+
+1. Parallel test workers must not share the same SQLite file.
+2. DB path is worker-scoped (example: `db/openself.test-worker-<id>.db`), with optional explicit override via `OPENSELF_DB_PATH`.
+3. This isolation is mandatory for DB-writing suites to avoid flaky `database is locked` failures.
+
+Migration runner compatibility rule:
+
+1. Migrations that contain `CREATE VIRTUAL TABLE` (FTS5) must be executed outside explicit transaction wrappers.
+2. Non-virtual-table migrations remain transactional (atomic apply + `_migrations` insert).
 
 ### 15.16 Fact Conflict Resolution Contract (Implemented — Phase 1a)
 

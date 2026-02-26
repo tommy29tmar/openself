@@ -114,9 +114,9 @@ describe("Theme CSS tokens in globals.css", () => {
     expect(block).toMatch(/--page-font-heading:.*serif/);
   });
 
-  it("editorial-360 uses condensed heading font", () => {
+  it("editorial-360 uses rounded heading font", () => {
     const block = extractBlock(globalsCss, `[data-theme="editorial-360"][data-color-scheme="light"]`);
-    expect(block).toMatch(/--page-font-heading:.*Narrow|Condensed/i);
+    expect(block).toMatch(/--page-font-heading:.*font-sans|system-ui/i);
   });
 });
 
