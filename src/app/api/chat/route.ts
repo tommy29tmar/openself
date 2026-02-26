@@ -1,4 +1,4 @@
-import { streamText } from "ai";
+import { streamText, generateText } from "ai";
 import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
 import { getSystemPromptText } from "@/lib/agent/prompts";
 import { createAgentTools } from "@/lib/agent/tools";
@@ -243,6 +243,29 @@ export async function POST(req: Request) {
       messages,
       tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey),
       maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
+      experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
+        const schema = parameterSchema({ toolName: toolCall.toolName });
+        const { text } = await generateText({
+          model,
+          prompt: [
+            `The tool "${toolCall.toolName}" was called with invalid arguments.`,
+            `Error: ${error.message}`,
+            ``,
+            `Original arguments:`,
+            toolCall.args,
+            ``,
+            `Expected JSON Schema:`,
+            JSON.stringify(schema, null, 2),
+            ``,
+            `Produce ONLY valid JSON that satisfies the schema. No explanation, no markdown — just the JSON object.`,
+          ].join("\n"),
+        });
+        try {
+          return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: text };
+        } catch {
+          return null;
+        }
+      },
       onFinish: async ({ text, usage }) => {
         if (text) {
           db.insert(messagesTable)
