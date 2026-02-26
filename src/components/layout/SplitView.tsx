@@ -118,28 +118,30 @@ function PublishBar({ username: initialUsername }: PublishBarProps) {
   );
 }
 
-function persistStyle(patch: {
+async function persistStyle(patch: {
   theme?: string;
   style?: Partial<StyleConfig>;
   layoutTemplate?: string;
-}) {
-  fetch("/api/draft/style", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  })
-    .then((res) => {
-      if (res.status === 401) {
-        window.location.href = "/invite";
-        return;
-      }
-      if (!res.ok) {
-        console.warn("[settings] Failed to persist style:", res.status);
-      }
-    })
-    .catch((err) => {
-      console.warn("[settings] Failed to persist style:", err);
+}): Promise<boolean> {
+  try {
+    const res = await fetch("/api/draft/style", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
     });
+    if (res.status === 401) {
+      window.location.href = "/invite";
+      return false;
+    }
+    if (!res.ok) {
+      console.warn("[settings] Failed to persist style:", res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[settings] Failed to persist style:", err);
+    return false;
+  }
 }
 
 function GearButton({ onClick }: { onClick: () => void }) {
@@ -207,11 +209,26 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     persistStyle({ style: { fontFamily: f } });
   }, []);
 
-  const handleLayoutTemplateChange = useCallback((t: LayoutTemplateId) => {
+  const handleLayoutTemplateChange = useCallback(async (t: LayoutTemplateId) => {
     setLayoutTemplate(t);
     lastUserEdit.current = Date.now();
-    persistStyle({ layoutTemplate: t });
-  }, []);
+    const ok = await persistStyle({ layoutTemplate: t });
+    if (ok) {
+      // Layout changes require server-side slot reassignment.
+      // Force a refetch to get the updated sections with correct slot assignments.
+      lastUserEdit.current = 0; // Allow the refetch to update all state
+      try {
+        const res = await fetch(`/api/preview?username=draft&language=${language}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.config) {
+            setConfig(data.config);
+            if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
+          }
+        }
+      } catch { /* ignore — next poll will catch up */ }
+    }
+  }, [language]);
 
   const fetchPreview = useCallback(async () => {
     try {
