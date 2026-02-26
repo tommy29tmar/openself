@@ -390,7 +390,7 @@ export function SplitView({ language, onLanguageChange, initialConfig }: SplitVi
     <>
       {/* Desktop: side-by-side */}
       <div className="hidden h-screen md:flex">
-        <div className="w-[400px] shrink-0 border-r">
+        <div className="w-[400px] shrink-0 overflow-hidden border-r">
           <ChatPanel language={language} />
         </div>
         <div className="relative flex-1">{previewPane}</div>

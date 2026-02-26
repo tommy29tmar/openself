@@ -259,7 +259,7 @@ function ChatPanelInner({
       <div className="border-b px-4 py-3">
         <h2 className="text-sm font-semibold">Chat</h2>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-3 p-4">
           {messages.map((msg) => (
             <MessageBubble
