@@ -80,12 +80,12 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
   update_fact: tool({
     description:
-      "Update an existing fact's value. Use when information changes (e.g., user left a job, changed location).",
+      "Update an existing fact's value. Use when information changes (e.g., user left a job, changed location). ALWAYS provide the FULL new value object — partial updates are not supported. Example: update_fact({factId: 'abc-123', value: {role: 'senior economist', company: 'CDP', status: 'current'}})",
     parameters: z.object({
-      factId: z.string().describe("The ID of the fact to update"),
+      factId: z.string().describe("The ID of the fact to update (from KNOWN FACTS or search_facts results)"),
       value: z
         .record(z.unknown())
-        .describe("The new value object to replace the existing one"),
+        .describe("REQUIRED. The complete new value object that replaces the old one. Must include all fields, not just changed ones."),
     }),
     execute: async ({ factId, value }) => {
       try {

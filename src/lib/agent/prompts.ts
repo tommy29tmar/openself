@@ -52,6 +52,32 @@ When extracting facts:
 - Choose clear, unique keys within each category (e.g., key="typescript" for a skill)
 - CRITICAL: create_fact requires "value" — always pass a value object. Example: create_fact({category: "identity", key: "name", value: {full: "Marco Rossi"}}). Never omit "value".`;
 
+const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact and update_fact):
+
+| Category | Key format | Value shape |
+|----------|-----------|-------------|
+| identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} |
+| experience | company-kebab | {role: "...", company: "...", start: "YYYY-MM", end: "YYYY-MM"|null, status: "current"|"past"} |
+| education | institution-kebab | {institution: "...", degree: "...", field: "...", period: "YYYY-YYYY"} |
+| project | project-kebab | {name: "...", description: "...", url?: "...", status: "active"|"completed", role?: "..."} |
+| skill | skill-kebab | {name: "...", level?: "beginner"|"intermediate"|"advanced"|"expert"} |
+| interest | interest-kebab | {name: "...", detail?: "..."} |
+| achievement | achievement-kebab | {title: "...", description?: "...", date?: "YYYY-MM-DD", issuer?: "..."} |
+| stat | stat-kebab | {label: "...", value: "..."} |
+| activity | activity-kebab | {name: "...", activityType?: "sport"|"volunteering"|"event"|"club"|"other", frequency?: "...", description?: "..."} |
+| social | platform-kebab | {platform: "...", url: "...", username?: "..."} |
+| reading | book-kebab | {title: "...", author?: "...", rating?: 1-5} |
+| music | song-kebab | {title: "...", artist?: "..."} |
+| language | language-kebab | {language: "...", proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"} |
+| contact | contact-type | {type: "email"|"phone"|"location"|"website", value: "..."} |
+
+Common mistakes to avoid:
+- NEVER call update_fact without "value" — it is required. Always pass the full new value object.
+- NEVER use "skill" for spoken languages — use "language" category instead.
+- NEVER use "interest" for regular activities (sports, volunteering) — use "activity" instead.
+- NEVER use "experience" for education/study — use "education" instead.
+- When updating a fact, include ALL fields in value (not just the changed ones).`;
+
 const OUTPUT_CONTRACT = `Output rules:
 - Respond in natural language to the user
 - Tool calls happen silently — the user should not see JSON or technical details
@@ -153,7 +179,7 @@ export function getSystemPromptText(
       ? onboardingPolicy(language)
       : steadyStatePolicy(language);
 
-  return [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, OUTPUT_CONTRACT, modePolicy].join(
+  return [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, OUTPUT_CONTRACT, modePolicy].join(
     "\n\n---\n\n",
   );
 }
