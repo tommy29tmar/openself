@@ -349,6 +349,15 @@ function validateSection(
           errors.push(`contact.content.methods must be an array`);
         }
         break;
+      case "at-a-glance": {
+        const hasStats = Array.isArray(section.content.stats) && section.content.stats.length > 0;
+        const hasSkills = Array.isArray(section.content.skillGroups) && section.content.skillGroups.length > 0;
+        const hasInterests = Array.isArray(section.content.interests) && section.content.interests.length > 0;
+        if (!hasStats && !hasSkills && !hasInterests) {
+          errors.push(`at-a-glance.content must have at least one of stats, skillGroups, or interests`);
+        }
+        break;
+      }
       default:
         break;
     }

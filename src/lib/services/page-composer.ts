@@ -982,7 +982,7 @@ function buildAtAGlanceSection(
 
   return {
     id: "at-a-glance-1",
-    type: "at-a-glance" as any,
+    type: "at-a-glance",
     variant: "full",
     content,
   };
