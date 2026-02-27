@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -182,9 +182,9 @@ Merged `RESERVED_USERNAMES` includes `login`/`signup`.
 Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
 then hybrid page personalization. Each sub-phase builds on the previous.
 
-Phase 1a (memory/heartbeat) and Phase 1b (extended sections) are complete.
+Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings) complete.
-Phase 1c (hybrid page compiler) is next.
+Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 
@@ -203,44 +203,53 @@ Superseded by a more comprehensive slot-based template system:
 4. ~~Layout-aware component variants~~ → Widget registry with slot-size-aware widget selection
 5. **Additional**: `bento-standard` template (magazine-style 6-column grid) — not originally planned
 
-### Phase 1c: Hybrid Page Compiler
+### Phase 1c: Hybrid Page Compiler (Done)
 
 Per-section LLM personalization, powered by the agent's accumulated memory.
-This phase requires Phase 1a (memory) and Phase 1b (extended sections) to be complete.
+25 commits, 17 new source files, 21 new test files. ADR-0010. Migration 0018 (3 new tables).
+173 new tests (790 total, 54 files).
 
-#### NEXT-9: Per-section LLM personalizer
+#### NEXT-9: Per-section LLM personalizer ✅ (Done)
 
-Deliverables:
-1. LLM personalizer that rewrites section content using facts + agent memory
-2. Per-section dispatch: only regenerate sections impacted by recent fact changes
-3. Output validated against section content schema before merge
-4. Fallback: keep deterministic skeleton content on personalizer failure
-5. Personalizer budget tracking (extend `llm_usage_daily` accounting)
+Implemented:
+1. `personalizeSections()` — LLM `generateObject` rewrites section content using facts + soul + memory
+2. `detectImpactedSections()` — per-section hash comparison, only impacted sections trigger LLM calls
+3. Output validated against Zod schemas (PERSONALIZABLE_FIELDS per section type, MAX_WORDS limits)
+4. Graceful fallback: on personalizer failure, deterministic skeleton content is preserved
+5. Budget: uses existing `llm_usage_daily` accounting and `llm_limits` guardrails
+6. Three-layer data model: `section_copy_cache` (pure LLM cache), `section_copy_state` (active approved copy), `section_copy_proposals` (heartbeat proposals)
+7. `mergeActiveSectionCopy()` projection bridge applies personalized copy after canonical projection (respects ADR-0009)
+8. Fire-and-forget: `generate_page` tool triggers personalization asynchronously in `steady_state` mode only
+9. `mergePersonalized()` text-only field merge (preserves non-text fields like arrays, objects)
 
-#### NEXT-10: Drill-down conversation pattern
+#### NEXT-10: Drill-down conversation pattern ✅ (Done)
 
-Deliverables:
-1. Agent detects when a topic has insufficient depth for a rich section
-2. Agent asks follow-up questions before updating (e.g., "Tell me more about your
-   master's — what was the focus? Any highlights?")
-3. All additional facts stored in KB/memory regardless (useful for future context)
-4. Section update triggers only after sufficient fact density
+Implemented:
+1. `classifySectionRichness()` classifies sections as thin/adequate/rich based on fact count thresholds
+2. Agent context includes section richness block listing thin sections
+3. Drill-down instructions in agent prompt guide follow-up questions before section updates
+4. All additional facts stored in KB/memory regardless (useful for future context)
 
-#### NEXT-11: Section copy cache
+#### NEXT-11: Section copy cache ✅ (Done)
 
-Deliverables:
-1. Hash-based cache for personalized section content (same pattern as `translation_cache`)
-2. Cache key: `SHA-256(section facts + agent memory snapshot) + section_type`
-3. Cache hit → skip LLM call. Cache miss → personalize + store.
-4. No explicit invalidation: fact changes → hash changes → old entries unused
+Implemented:
+1. Content-addressed cache: `section_copy_cache` table with `(owner_key, section_type, facts_hash, soul_hash, language)` unique key
+2. Cache hit → skip LLM call. Cache miss → personalize + store.
+3. No explicit invalidation: fact changes → hash changes → old entries unused
+4. TTL cleanup: `cleanupExpiredCache(maxAgeDays)` called in deep heartbeat
 
-#### NEXT-12: Periodic conformity check
+#### NEXT-12: Periodic conformity check ✅ (Done)
 
-Deliverables:
-1. Heartbeat job reviews full page for cross-section style consistency
-2. Checks: tone alignment, narrative coherence, no contradictions between sections
-3. If drift detected: queue targeted section regenerations
-4. Runs via heartbeat system, not on every page update
+Implemented:
+1. Two-phase LLM: `analyzeConformity()` detects cross-section issues → `generateRewrite()` produces fix
+2. 4 issue types: `tone_mismatch`, `contradiction`, `narrative_incoherence`, `style_drift`
+3. Max 3 issues per check (cost control)
+4. Runs in deep heartbeat, not on every page update
+5. Creates proposals via `createProposal()` for user review (not auto-applied)
+6. Proposal API: `GET /api/proposals`, `POST /api/proposals/[id]/accept`, `POST /api/proposals/[id]/reject`, `POST /api/proposals/accept-all`
+7. `ProposalBanner` UI component in builder SplitView
+8. `markStaleProposals()` automatically marks proposals as stale when underlying state changes
+9. Deep heartbeat also runs `cleanupExpiredCache(30)` for cache hygiene
 
 ### Phase 1d: Other Phase 1 Items
 
@@ -315,7 +324,7 @@ Outcome:
 Required:
 1. Phase 1a complete (memory, heartbeat, context assembly) ✅
 2. Phase 1b complete (education + experience + at least 2 more section types) ✅
-3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks)
+3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks) ✅
 4. Phase 1d: at least avatar support + one connector
 
 Outcome:

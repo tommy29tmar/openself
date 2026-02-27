@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 617 automated tests passing (33 test files)
+- 790 automated tests passing (54 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -31,8 +31,12 @@ OpenSelf has a working MVP with a hardened core flow:
 - Publish safety: hash guard, promote-all (proposed→public atomically), username mismatch guard
 - CSS custom property theming: 3 themes powered by `--theme-*` tokens
 - Chat context integration: `assembleContext` wired with role normalization
+- Hybrid page compiler: per-section LLM personalizer with cache, state management, and projection bridge
+- Drill-down conversation: section richness classifier triggers agent follow-up questions before thin sections
+- Conformity checks: heartbeat-driven cross-section style consistency analysis with proposal-based rewrites
+- Proposal review system: API + UI for user acceptance/rejection of conformity proposals
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete.
 
 ## 2) Implemented Today
 
@@ -88,7 +92,11 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 | Capability | Status | Notes |
 |---|---|---|
-| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Type-safe section builders with proper type guards (e.g., `StatItem[]` filtering). Hero tagline: role → interests → empty (no name repetition). Extended sections gated by `EXTENDED_SECTIONS` env var. Hybrid LLM personalizer planned for Phase 1c. |
+| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Type-safe section builders with proper type guards (e.g., `StatItem[]` filtering). Hero tagline: role → interests → empty (no name repetition). Extended sections gated by `EXTENDED_SECTIONS` env var. |
+| Hybrid LLM personalizer | Done | Per-section LLM rewrite (facts + soul + memory → personalized copy). Three-layer data model: `section_copy_cache` (pure LLM cache), `section_copy_state` (active approved copy), `section_copy_proposals` (heartbeat proposals). `mergeActiveSectionCopy()` projection bridge. Fire-and-forget in `generate_page` (steady_state only). Hash guard (factsHash + soulHash) for staleness. |
+| Drill-down conversation | Done | `classifySectionRichness()` detects thin sections (< threshold items). Agent context includes section richness block + drill-down instructions. Agent asks follow-up questions before updating thin sections. |
+| Conformity checks | Done | `analyzeConformity()` + `generateRewrite()` two-phase LLM. Runs in deep heartbeat. Max 3 issues per check. Creates proposals for user review. |
+| Proposal review system | Done | `createProposal` / `acceptProposal` / `rejectProposal` / `markStaleProposals`. API: `GET /api/proposals`, `POST accept/reject/accept-all`. ProposalBanner UI in builder. |
 | Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors. Dual-hash: `projectCanonicalConfig()` for display (all sections), `publishableFromCanonical()` for hash guard. Never serves raw `draft.config` |
 | Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, CSS custom property tokens (`--theme-*`), centralized validation |
 | Shared canonical projection | Done | Three-layer projection: `projectCanonicalConfig()` (all sections), `publishableFromCanonical()` (completeness filter), `projectPublishableConfig()` (wrapper). `filterPublishableFacts()` shared privacy filter. |
@@ -192,12 +200,24 @@ All items complete. 10 findings from first UAT session, addressing builder UX, p
 - Two-layer username validation: `validateUsernameFormat()` (pure, in `usernames.ts`) + `validateUsernameAvailability()` (server, in `username-validation.ts`). Merged `RESERVED_USERNAMES` set includes `login`/`signup`.
 - 14 new tests (617 total, 33 files)
 
-### Phase 1c — Hybrid Page Compiler
-1. Per-section LLM personalizer (rewrites content using facts + agent memory)
-2. Drill-down conversation pattern (agent deepens topic before section update)
-3. Section copy cache (hash-based, per-section)
-4. Periodic conformity check (heartbeat job: cross-section style alignment)
-5. Personalizer budget tracking
+### Phase 1c — Hybrid Page Compiler ✅
+
+All items complete. Includes:
+1. **Per-section LLM personalizer** — `personalizeSections()` uses `generateObject` with facts + soul + memory context. Output validated against Zod schemas (PERSONALIZABLE_FIELDS per section type, MAX_WORDS limits). Fallback: deterministic skeleton on failure.
+2. **Three-layer data model** — `section_copy_cache` (pure LLM output cache, content-addressed), `section_copy_state` (active approved copy, read by projection), `section_copy_proposals` (heartbeat proposals for user review). Migration 0018.
+3. **Projection bridge** — `mergeActiveSectionCopy()` applies personalized copy AFTER `projectCanonicalConfig()`. Hash guard: factsHash + soulHash must match for personalized copy to be used; stale → deterministic fallback. Respects ADR-0009 (deterministic base is always truth).
+4. **Impact detector** — `detectImpactedSections()` compares current facts hash per section against stored state. Only impacted sections trigger LLM calls.
+5. **Fire-and-forget personalization** — `generate_page` tool triggers personalization asynchronously in steady_state mode only. No blocking of page generation.
+6. **Drill-down conversation** — `classifySectionRichness()` detects thin sections. Agent context includes richness block + drill-down instructions. Agent asks follow-up questions before updating thin sections.
+7. **Section copy cache** — Hash-based (factsHash + soulHash), per-section per-language. TTL cleanup via `cleanupExpiredCache()`.
+8. **Conformity analyzer** — Two-phase LLM: `analyzeConformity()` (detect issues) → `generateRewrite()` (produce fix). Max 3 issues per check. 4 issue types: tone_mismatch, contradiction, narrative_incoherence, style_drift.
+9. **Proposal service** — Factory pattern with CRUD + guards (STALE_PROPOSAL when state has changed, STATE_CHANGED for hash mismatch). `markStaleProposals()` for cleanup.
+10. **Proposal API** — `GET /api/proposals` (pending for owner), `POST /api/proposals/[id]/accept`, `POST /api/proposals/[id]/reject`, `POST /api/proposals/accept-all`.
+11. **Proposal UI** — `ProposalBanner` component in builder SplitView. Shows pending count, accept/reject per proposal, accept-all shortcut.
+12. **Deep heartbeat integration** — Conformity check → create proposals, `markStaleProposals()`, `cleanupExpiredCache(30)`.
+13. **Personalizer budget** — Uses existing `llm_usage_daily` accounting. LLM calls go through standard budget guardrails.
+- ADR-0010: Personalization Layer architecture decision
+- 173 new tests (790 total, 54 files)
 
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
@@ -225,7 +245,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 617 passed / 617 total (Vitest, 33 test files)
+- Automated tests: 790 passed / 790 total (Vitest, 54 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -261,6 +281,27 @@ Builder interface layouts (chat experience):
   31. Chat context — assembleContext integration, role normalization (8 tests)
   32. Dual-hash preview — canonical vs publishable projection, section filtering, output equivalence (3 tests)
   33. Request-publish endpoint — auth/no-auth, username resolution, reserved/invalid/taken validation (9 tests)
+  34. Personalizer schemas — PERSONALIZABLE_FIELDS, MAX_WORDS, Zod validation (13 tests)
+  35. Personalization hashing — computeHash, computeSectionFactsHash, SECTION_FACT_CATEGORIES (11 tests)
+  36. Section cache service — get/set/cleanup cache, TTL expiry (7 tests)
+  37. Section copy state service — CRUD, hash-guarded reads, getAllActiveCopies (10 tests)
+  38. Personalization merge — text-only field merge, non-text preservation (8 tests)
+  39. Impact detector — per-section hash comparison, selective regeneration (6 tests)
+  40. Section personalizer — LLM generateObject, cache hit/miss, fallback on failure (12 tests)
+  41. Personalization projection — mergeActiveSectionCopy, hash staleness, fallback (9 tests)
+  42. Section richness — classifySectionRichness, thin/adequate thresholds (7 tests)
+  43. Preview personalization — personalized copy in preview/stream routes (5 tests)
+  44. Conformity analyzer — analyzeConformity, generateRewrite, issue types (10 tests)
+  45. Proposal service — CRUD, staleness detection, accept with guards (12 tests)
+  46. Proposal API — GET pending, POST accept/reject/accept-all (10 tests)
+  47. Heartbeat conformity — deep heartbeat conformity check integration (14 tests)
+  48. Personalizer pipeline — full flow integration, stale hash, impact, conformity (4 tests)
+  49. Drizzle schema — section_copy tables, indexes (5 tests)
+  50. Publish personalization — mergeActiveSectionCopy in publish pipeline (5 tests)
+  51. Tool personalization — fire-and-forget in generate_page, mode gating (5 tests)
+  52. Context richness — section richness block in assembleContext (3 tests)
+  53. Agent tools mode — mode parameter widening, heartbeat compatibility (3 tests)
+  54. Personalizer budget — LLM usage accounting integration (2 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration

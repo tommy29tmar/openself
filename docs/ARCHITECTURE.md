@@ -464,6 +464,9 @@ heartbeat_deep (weekly):
   2. Conflict cleanup — dismiss old unresolved conflicts (>7 days)
   3. Soul profile review — are voice/tone still aligned with recent conversations?
   4. Full KB audit with mission filter applied
+  5. Conformity check — analyze active personalized copies for style drift (Phase 1c)
+  6. Stale proposal cleanup — mark proposals as stale when underlying state changed
+  7. Cache TTL cleanup — remove expired section_copy_cache entries (>30 days)
 ```
 
 **Per-owner daily budget (DST-safe):**
@@ -1424,10 +1427,13 @@ and `updateFact` in `kb-service.ts` enforce this gate.
 Translation to other languages is handled separately via the LLM translation pipeline
 (see Section 6.7). This keeps composition fast and predictable.
 
-#### Stage 2 — Hybrid Live Compiler (Phase 1, after memory/heartbeat)
+#### Stage 2 — Hybrid Live Compiler (Phase 1c, implemented)
 
-Once the agent has memory layers operational (Tier 1-3, see Section 4.5) and has built
-a rich understanding of the user through conversation, page composition evolves to a
+> **Status:** Implemented. Per-section LLM personalizer with three-layer data model,
+> projection bridge, conformity checks, and proposal-based review.
+
+The agent has memory layers operational (Tier 1-3, see Section 4.5) and builds
+a rich understanding of the user through conversation. Page composition uses a
 hybrid model where:
 
 1. **Structure** remains governed by schema and layout contracts (safety/maintainability)
@@ -1436,43 +1442,82 @@ hybrid model where:
 3. **The result** is more personalized — pages differ person-to-person in narrative,
    emphasis, and voice, not just in data
 
+**Three-layer data model** (migration 0018):
+- `section_copy_cache` — Pure LLM output cache, content-addressed by `(owner_key, section_type, facts_hash, soul_hash, language)`. TTL cleanup via deep heartbeat.
+- `section_copy_state` — Active approved personalized copy, read by the projection bridge. One row per `(owner_key, section_type, language)`.
+- `section_copy_proposals` — Heartbeat-generated proposals for user review. Created by conformity analyzer, accepted/rejected via API.
+
 **Pipeline:**
 ```
 1. Skeleton composer produces valid page structure (deterministic)
-2. Agent selects sections impacted by recent fact changes
+2. Impact detector selects sections where factsHash differs from stored state
 3. For each impacted section:
-   a. LLM personalizer rewrites content using facts + agent memory context
-   b. Output is parsed, validated against section content schema
-   c. On failure: keep previous section content (graceful fallback)
-4. Merge personalized sections into page config
-5. Validate full config, save draft
+   a. Check section_copy_cache (factsHash + soulHash key)
+   b. Cache miss → LLM personalizer rewrites content via generateObject
+   c. Output validated against Zod schemas (PERSONALIZABLE_FIELDS, MAX_WORDS)
+   d. On failure: keep deterministic skeleton content (graceful fallback)
+   e. Store in cache + update section_copy_state
+4. mergeActiveSectionCopy() applies personalized copy after projectCanonicalConfig()
+5. Hash guard: factsHash + soulHash must match for copy to be used; stale → fallback
 ```
+
+**Projection bridge** (`mergeActiveSectionCopy`):
+The bridge applies personalized copy AFTER `projectCanonicalConfig()` produces the
+deterministic base. This respects ADR-0009: the deterministic skeleton is always truth,
+personalization is an overlay. If the underlying facts change (hash mismatch), the
+personalized copy is discarded and the deterministic version is served until
+re-personalization occurs.
+
+**Conformity checks** (deep heartbeat):
+A two-phase LLM process runs during `heartbeat_deep`:
+1. `analyzeConformity()` — Reviews all active personalized copies against the soul profile. Detects 4 issue types: `tone_mismatch`, `contradiction`, `narrative_incoherence`, `style_drift`. Max 3 issues per check.
+2. `generateRewrite()` — Produces a fixed version for each detected issue.
+3. Results are stored as proposals via `createProposal()` — never auto-applied.
+4. User reviews proposals via `GET /api/proposals` + `ProposalBanner` UI in builder.
 
 **Key design decisions:**
 
-- **Per-section LLM calls, not whole-page**: By Phase 1 the agent has memory layers
+- **Per-section LLM calls, not whole-page**: The agent has memory layers
   that carry user tone, preferences, and behavioral observations across sessions.
   This context is injected into each per-section call, ensuring consistent voice
   without needing to regenerate every section at once.
 
-- **Drill-down before update**: The agent should deepen a topic before rewriting a
-  section. If the user mentions "I did a master's in policy", the agent asks follow-up
-  questions (institution, period, focus area, highlights) before updating the education
-  section. This produces richer content and avoids thin, generic descriptions. All
-  additional facts go into the KB/memory regardless — useful for future context.
+- **Fire-and-forget**: The `generate_page` tool triggers personalization asynchronously
+  in `steady_state` mode only. Onboarding uses only the deterministic skeleton.
+  Personalization runs after the page is already visible.
 
-- **Periodic conformity checks**: A background job periodically reviews the full page
-  for cross-section style consistency (tone alignment, narrative coherence, no
-  contradictions). If drift is detected, it queues targeted section regenerations.
-  This runs via the heartbeat system, not on every page update.
+- **Drill-down before update**: The agent deepens a topic before rewriting a
+  section. `classifySectionRichness()` detects thin sections (below item-count thresholds).
+  The agent context includes a richness block listing thin sections, plus drill-down
+  instructions that guide follow-up questions. All additional facts go into KB/memory.
+
+- **Text-only merge**: `mergePersonalized()` only replaces string fields in section
+  content. Arrays, objects, and structural fields are always preserved from the
+  deterministic skeleton. This prevents the LLM from corrupting data structures.
 
 - **Cost control**: Only impacted sections are regenerated per turn. Cache per-section
-  output (same facts hash + same memory state = cache hit). Budget guardrails from
+  output (same facts hash + same soul hash = cache hit). Budget guardrails from
   `llm_limits` apply to personalizer calls as well.
 
 - **Voice integration**: Per-user voice preferences (tone, formality, perspective) are
   part of the agent's memory/config system (Section 4.1 `page_voice`), not a separate
-  service. The personalizer reads them from agent config when generating section copy.
+  service. The personalizer reads them from the soul profile when generating section copy.
+
+**Key files:**
+- `src/lib/services/section-personalizer.ts` — Core LLM personalizer (`personalizeSections`)
+- `src/lib/services/section-cache-service.ts` — Pure LLM cache CRUD + TTL cleanup
+- `src/lib/services/section-copy-state-service.ts` — Active copy state CRUD
+- `src/lib/services/personalization-projection.ts` — `mergeActiveSectionCopy()` bridge
+- `src/lib/services/personalization-hashing.ts` — `computeHash`, `computeSectionFactsHash`
+- `src/lib/services/personalization-impact.ts` — `detectImpactedSections()`
+- `src/lib/services/personalization-merge.ts` — `mergePersonalized()` text-only merge
+- `src/lib/services/personalizer-schemas.ts` — `PERSONALIZABLE_FIELDS`, Zod schemas, `MAX_WORDS`
+- `src/lib/services/section-richness.ts` — `classifySectionRichness()` classifier
+- `src/lib/services/conformity-analyzer.ts` — `analyzeConformity()`, `generateRewrite()`
+- `src/lib/services/proposal-service.ts` — Proposal CRUD, staleness detection, accept/reject
+- `src/app/api/proposals/` — Proposal API routes (GET, accept, reject, accept-all)
+- `src/components/builder/ProposalBanner.tsx` — Proposal review UI
+- `src/lib/db/personalizer-schema.ts` — Drizzle schema for 3 new tables
 
 ### 6.3.1 Live Preview Strategy (Onboarding)
 
@@ -1965,9 +2010,17 @@ projectPublishableConfig(
 
 **Usage:**
 - `/api/preview` and `/api/preview/stream` call `projectCanonicalConfig()` for the display
-  config (all sections visible), then `publishableFromCanonical()` for the hash guard.
+  config (all sections visible), then `mergeActiveSectionCopy()` to apply personalized
+  content (Phase 1c), then `publishableFromCanonical()` for the hash guard.
 - The publish pipeline (`prepareAndPublish`) uses `projectPublishableConfig()` for the
-  canonical hash check before any side-effects.
+  canonical hash check before any side-effects, then `mergeActiveSectionCopy()` for
+  personalized content in the rendered config.
+
+**Personalization bridge** (`mergeActiveSectionCopy`, Phase 1c):
+After `projectCanonicalConfig()` produces the deterministic base, `mergeActiveSectionCopy()`
+queries `section_copy_state` for active personalized copies and overlays text-only fields.
+Hash guard: each copy's `factsHash` + `soulHash` must match the current state; stale
+entries are skipped (deterministic fallback). See Section 6.3 Stage 2 for full details.
 
 **Two configs in publish flow:**
 1. **Canonical config** — composed from publishable facts in `factLanguage`, no translation.
@@ -2482,6 +2535,62 @@ CREATE TABLE fact_conflicts (
     resolved_at DATETIME
 );
 CREATE INDEX idx_fact_conflicts_open ON fact_conflicts(owner_key, status) WHERE status = 'open';
+
+-- ============================================================
+-- Phase 1c additions (migration 0018)
+-- ============================================================
+
+-- Section copy cache (pure LLM output cache, content-addressed)
+CREATE TABLE section_copy_cache (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_key TEXT NOT NULL,
+  section_type TEXT NOT NULL,
+  facts_hash TEXT NOT NULL,
+  soul_hash TEXT NOT NULL,
+  language TEXT NOT NULL,
+  personalized_content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(owner_key, section_type, facts_hash, soul_hash, language)
+);
+CREATE INDEX idx_section_cache_lookup
+  ON section_copy_cache(owner_key, section_type, facts_hash, soul_hash, language);
+
+-- Section copy state (active approved personalized copy, read by projection)
+CREATE TABLE section_copy_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_key TEXT NOT NULL,
+  section_type TEXT NOT NULL,
+  language TEXT NOT NULL,
+  personalized_content TEXT NOT NULL,
+  facts_hash TEXT NOT NULL,
+  soul_hash TEXT NOT NULL,
+  approved_at TEXT NOT NULL DEFAULT (datetime('now')),
+  source TEXT NOT NULL DEFAULT 'live',
+  UNIQUE(owner_key, section_type, language)
+);
+CREATE INDEX idx_section_state_lookup
+  ON section_copy_state(owner_key, section_type, language);
+
+-- Section copy proposals (conformity check proposals for user review)
+CREATE TABLE section_copy_proposals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_key TEXT NOT NULL,
+  section_type TEXT NOT NULL,
+  language TEXT NOT NULL,
+  current_content TEXT NOT NULL,
+  proposed_content TEXT NOT NULL,
+  issue_type TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'low',
+  status TEXT NOT NULL DEFAULT 'pending',
+  facts_hash TEXT NOT NULL,
+  soul_hash TEXT NOT NULL,
+  baseline_state_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  reviewed_at TEXT
+);
+CREATE INDEX idx_proposals_pending
+  ON section_copy_proposals(owner_key, status);
 ```
 
 ### 8.2 Storage
@@ -3730,21 +3839,20 @@ Current baseline (implemented):
 - single-lane optimistic preview with SSE updates
 - primary UI states: `idle`, `optimistic_ready`
 
-Phase 1c target extends this to a two-lane update model:
+Phase 1c implemented a two-lane update model:
 
 - Lane A (`optimistic`): deterministic preview from extracted facts, no extra LLM call
-- Lane B (`synthesis`): async LLM narrative update for impacted sections only
+- Lane B (`personalization`): fire-and-forget LLM personalization for impacted sections only (steady_state mode)
 
-Target UI states (Phase 1c+):
-- `optimistic_ready`
-- `synthesizing`
-- `synthesis_ready`
-- `synthesis_failed` (with fallback to optimistic version)
+UI states (implemented):
+- `optimistic_ready` — deterministic preview available
+- Personalization runs asynchronously after page generation; next preview poll picks up personalized content via `mergeActiveSectionCopy()`
+- Personalization failure is transparent — deterministic fallback is always served
 
 Rules:
-- Chat response must not block on synthesis completion.
+- Chat response never blocks on personalization completion.
 - Preview always renders a valid page config.
-- Synthesis failure never clears existing preview output.
+- Personalization failure never clears existing preview output.
 
 ### 15.15 SQLite Concurrency Contract
 
