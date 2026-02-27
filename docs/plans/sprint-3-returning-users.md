@@ -114,11 +114,11 @@ npx vitest run tests/evals/returning-policies.test.ts --reporter=verbose -t "ret
 | Action | Path |
 |--------|------|
 | **modify** | `src/lib/agent/policies/draft-ready.ts` |
-| **test** | `tests/evals/returning-policies.test.ts` (already created in Task 1) |
+| **test** | `tests/evals/returning-policies.test.ts` (created in Task 6) |
 
 ### Steps
 
-1. Tests already exist from Task 1 — run to confirm draft-ready tests fail:
+1. Tests already exist from Task 6 — run to confirm draft-ready tests fail:
    ```bash
    npx vitest run tests/evals/returning-policies.test.ts --reporter=verbose -t "draftReadyPolicy"
    ```
@@ -196,7 +196,7 @@ npx vitest run tests/evals/returning-policies.test.ts --reporter=verbose -t "dra
 | Action | Path |
 |--------|------|
 | **modify** | `src/lib/agent/policies/active-fresh.ts` |
-| **test** | `tests/evals/returning-policies.test.ts` (already created in Task 1) |
+| **test** | `tests/evals/returning-policies.test.ts` (created in Task 6) |
 
 ### Steps
 
@@ -280,7 +280,7 @@ npx vitest run tests/evals/returning-policies.test.ts --reporter=verbose -t "act
 | Action | Path |
 |--------|------|
 | **modify** | `src/lib/agent/policies/active-stale.ts` |
-| **test** | `tests/evals/returning-policies.test.ts` (already created in Task 1) |
+| **test** | `tests/evals/returning-policies.test.ts` (created in Task 6) |
 
 ### Steps
 
@@ -372,7 +372,7 @@ npx vitest run tests/evals/returning-policies.test.ts --reporter=verbose -t "act
 | Action | Path |
 |--------|------|
 | **modify** | `src/lib/agent/policies/blocked.ts` |
-| **test** | `tests/evals/returning-policies.test.ts` (already created in Task 1) |
+| **test** | `tests/evals/returning-policies.test.ts` (created in Task 6) |
 
 ### Steps
 

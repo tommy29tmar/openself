@@ -1299,7 +1299,7 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
 #### Scenario 2: `translation.eval.ts`
 
 Tests: Italian-to-English translation produces valid output.
-Strategy: Call actual translation service with real LLM.
+Strategy: SDK-level eval — calls `generateText` directly with a translation prompt (not via `translatePageContent` service, to isolate cross-provider LLM quality from service-layer concerns like caching and structured output).
 
 ```typescript
 // tests/evals/cross-provider/translation.eval.ts
@@ -1308,9 +1308,9 @@ Strategy: Call actual translation service with real LLM.
  * Cross-provider eval: Translation quality
  *
  * Scenario: Italian page content → English translation.
- * Expected: Valid JSON, all text fields translated, proper nouns unchanged.
+ * Expected: Proper English output, proper nouns preserved.
  *
- * LLM usage: Real translation call via translatePageContent.
+ * LLM usage: Direct generateText with translation prompt (SDK-level, not service-level).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getTestProviders, setProvider, type TestProvider } from "./setup";
@@ -1413,7 +1413,7 @@ describe.each(providers)("translation [%s]", (provider: TestProvider) => {
 #### Scenario 3: `personalization.eval.ts`
 
 Tests: Section personalization produces schema-conformant, text-only output.
-Strategy: Call actual personalizer service with real LLM.
+Strategy: SDK-level eval — calls `generateObject` directly with personalization prompt and Zod schema (not via `personalizeSections` service, to isolate cross-provider structured output quality from service-layer orchestration).
 
 ```typescript
 // tests/evals/cross-provider/personalization.eval.ts
@@ -1422,9 +1422,9 @@ Strategy: Call actual personalizer service with real LLM.
  * Cross-provider eval: Section personalization
  *
  * Scenario: Personalize a bio section given facts + soul.
- * Expected: Conforms to PERSONALIZABLE_FIELDS, text-only, within MAX_WORDS.
+ * Expected: Conforms to schema, text-only, within word limits.
  *
- * LLM usage: Real generateObject call via the personalizer.
+ * LLM usage: Direct generateObject with Zod schema (SDK-level, not service-level).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { getTestProviders, setProvider, SEED_FACTS, type TestProvider } from "./setup";

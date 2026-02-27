@@ -1422,7 +1422,7 @@ vi.mock("@/lib/services/usage-service", () => ({
 }));
 
 vi.mock("@/lib/middleware/rate-limit", () => ({
-  checkRateLimit: vi.fn(() => null),
+  checkRateLimit: vi.fn(() => ({ allowed: true })),
 }));
 
 vi.mock("ai", () => ({
@@ -1436,8 +1436,8 @@ vi.mock("@/lib/agent/tools", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { insert: vi.fn(() => ({ values: vi.fn(() => ({ onConflictDoNothing: vi.fn(() => ({ run: vi.fn() })) })) })) },
-  sqlite: { prepare: vi.fn(() => ({ run: vi.fn(), get: vi.fn() })) },
+  db: { insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })) },
+  sqlite: { prepare: vi.fn(() => ({ run: vi.fn(), get: vi.fn(() => ({ count: 0 })) })) },
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -1467,10 +1467,12 @@ describe("POST /api/chat bootstrap wiring", () => {
     await POST(req);
 
     // Bootstrap was called with the resolved scope
+    // In single-user mode (isMultiUserEnabled=false), chatAuthCtx is null,
+    // so the authInfo ternary resolves to undefined
     expect(assembleBootstrapPayload).toHaveBeenCalledWith(
       expect.objectContaining({ cognitiveOwnerKey: "cog-1" }),
       "en",
-      expect.anything(), // authInfo or undefined
+      undefined, // single-user: no auth context
     );
 
     // assembleContext received the bootstrap payload as 5th argument
@@ -1478,7 +1480,7 @@ describe("POST /api/chat bootstrap wiring", () => {
       expect.any(Object),  // scope
       "en",                 // language
       expect.any(Array),    // messages
-      expect.anything(),    // authInfo
+      undefined,            // single-user: chatAuthCtx is null → ternary yields undefined
       expect.objectContaining({ journeyState: "first_visit" }), // bootstrap
     );
   });
@@ -1505,7 +1507,10 @@ Inside the `POST` function, after resolving `chatAuthCtx` (around line 211 in ro
 
 ```typescript
   // --- Journey Intelligence: assemble bootstrap payload ---
-  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfo);
+  const authInfoForBootstrap = chatAuthCtx
+    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
+    : undefined;
+  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
 ```
 
 Then modify the `assembleContext` call (currently at line ~214 in route.ts) to pass bootstrap as the 5th argument. Keep the existing destructuring shape `{ systemPrompt, trimmedMessages, mode }` which matches `ContextResult`:
@@ -1515,7 +1520,7 @@ Then modify the `assembleContext` call (currently at line ~214 in route.ts) to p
     effectiveScope,
     sessionLanguage,
     messages,
-    chatAuthCtx ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null } : undefined,
+    authInfoForBootstrap,
     bootstrap,
   );
 ```
