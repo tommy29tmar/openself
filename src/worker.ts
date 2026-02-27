@@ -10,6 +10,7 @@
 import { sqlite } from "@/lib/db";
 import { awaitSchema, EXPECTED_SCHEMA_VERSION } from "@/lib/db/migrate";
 import { processJobs, getHandlerCount } from "@/lib/worker/index";
+import { runSchedulerTick, SCHEDULER_INTERVAL_MS } from "@/lib/worker/scheduler";
 
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
 const EXPECTED_HANDLER_COUNT = 9;
@@ -76,6 +77,11 @@ async function main(): Promise<void> {
 
   // Periodic poll
   setInterval(poll, POLL_INTERVAL_MS);
+
+  // Scheduler: enqueue heartbeat jobs for active owners
+  console.log(`[worker] Scheduler started (interval: ${SCHEDULER_INTERVAL_MS / 1000}s)`);
+  await runSchedulerTick();
+  setInterval(runSchedulerTick, SCHEDULER_INTERVAL_MS);
 }
 
 main().catch((err) => {

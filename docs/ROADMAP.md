@@ -60,6 +60,11 @@ When choosing work, apply this order:
   - 9 job handlers, atomic claim, 3-retry backoff
   - Dual-loop heartbeat (light daily, deep weekly)
   - Per-owner budget (DST-safe via Intl.DateTimeFormat)
+  - **Heartbeat scheduler** (`src/lib/worker/scheduler.ts`): auto-enqueues heartbeat jobs
+    for all active owners every 15 min. Light: daily at 3 AM owner timezone (catch-up).
+    Deep: Sunday 3 AM (catch-up) + Monday before noon recovery if missed. Anti-overlap
+    lock. ISO week computation (`computeOwnerWeek`) for weekly dedup. Active owners
+    discovered via UNION of heartbeat_config + facts table.
   - Leader/follower bootstrap (DB_BOOTSTRAP_MODE env)
   - Soul profiles with versioned overlays and proposals
   - Trust ledger with undo_payload + transactional CAS reverse
@@ -207,7 +212,7 @@ Superseded by a more comprehensive slot-based template system:
 
 Per-section LLM personalization, powered by the agent's accumulated memory.
 25 commits, 17 new source files, 21 new test files. ADR-0010. Migration 0018 (3 new tables).
-173 new tests (790 total, 54 files).
+173 new tests (790 total, 54 files). Heartbeat scheduler adds 32 more (822 total, 55 files).
 
 #### NEXT-9: Per-section LLM personalizer ✅ (Done)
 

@@ -508,7 +508,9 @@ The heartbeat runs in a standalone worker process (`src/worker.ts`), built with
 tsup and deployed as a separate service. See Section 11 for deployment details.
 
 The worker uses a jobs table with atomic claim semantics (UPDATE WHERE status='queued')
-and 3 retry attempts with exponential backoff.
+and 3 retry attempts with exponential backoff. The **heartbeat scheduler**
+(`src/lib/worker/scheduler.ts`) auto-enqueues heartbeat jobs for all active owners
+every 15 minutes, with catch-up logic and anti-overlap protection.
 
 **9 job handlers:**
 - `page_synthesis` — Full page rebuild from facts
@@ -2981,8 +2983,20 @@ Why this split:
 - Worker execution can be bounded, retried, and monitored independently
 
 Scheduling model:
-- Human config (`interval: "24h"`) is compiled into `jobs.run_after`
-- Worker dequeues due jobs and processes them transactionally
+- The **heartbeat scheduler** (`src/lib/worker/scheduler.ts`) runs as a periodic tick
+  inside the worker process (every 15 minutes). Each tick iterates all active owners
+  and enqueues due `heartbeat_light` / `heartbeat_deep` jobs based on the owner's
+  local timezone.
+- **Light jobs**: enqueued daily when local hour >= 3 and no run recorded for today.
+- **Deep jobs**: enqueued on Sunday when local hour >= 3 and no run this ISO week.
+- **Deep recovery**: if Sunday's deep was missed, enqueued on Monday before noon.
+- **Anti-overlap**: a module-level flag prevents concurrent scheduler ticks.
+- Active owners are discovered via `getActiveOwnerKeys()`: UNION of enabled
+  `heartbeat_config` rows and distinct fact owners.
+- `hasRunToday()` / `hasRunThisWeek()` / `hasRunInWeek()` check `heartbeat_runs`
+  to prevent double-enqueue.
+- ISO week computation (`computeOwnerWeek()`) and day-of-week detection use
+  `Intl.DateTimeFormat` with the owner's timezone (DST-safe).
 - Serverless deployments use cron-triggered scheduler ticks to enqueue due work
 
 **Worker deployment:**

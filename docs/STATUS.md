@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 790 automated tests passing (54 test files)
+- 822 automated tests passing (55 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -35,6 +35,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Drill-down conversation: section richness classifier triggers agent follow-up questions before thin sections
 - Conformity checks: heartbeat-driven cross-section style consistency analysis with proposal-based rewrites
 - Proposal review system: API + UI for user acceptance/rejection of conformity proposals
+- Heartbeat scheduler: auto-enqueues daily/weekly heartbeat jobs per owner timezone with catch-up and recovery
 
 Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete.
 
@@ -112,9 +113,10 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 |---|---|---|
 | Rate limiting | Done | Per-IP + pacing constraints |
 | Usage accounting and budget guardrails | Done | Daily token/cost checks |
-| Async worker queue | Done | Standalone worker (tsup build), 9 handlers, atomic claim, health-check |
+| Async worker queue | Done | Standalone worker (tsup build), 9 handlers, atomic claim, health-check, heartbeat scheduler |
 | Per-profile message quota | Done | Atomic counter (profile_message_usage), 200 limit for auth users |
 | Heartbeat engine | Done | Dual-loop (light daily, deep weekly), per-owner budget (DST-safe) |
+| Heartbeat scheduler | Done | Auto-enqueues heartbeat jobs for active owners every 15 min. Light: daily at 3 AM owner tz (catch-up). Deep: Sunday 3 AM (catch-up) + Monday recovery. Anti-overlap lock. ISO-week DST-safe. |
 | SQLite test stability hardening | Done | Parallel Vitest workers use isolated DB files (`openself.test-worker-<id>.db`). Migration runner applies `CREATE VIRTUAL TABLE` migrations outside explicit transactions to avoid fresh-DB failures. |
 | Reserved username protection | Done | `draft`, `api`, `builder`, `admin`, `_next`, `login`, `signup` blocked. Two-layer validation: `validateUsernameFormat()` (pure) + `validateUsernameAvailability()` (server, DB check) |
 | Publish auth gate (multi-user) | Done | Anonymous blocked (403), username enforced from auth context, atomic claim+publish |
@@ -245,7 +247,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 790 passed / 790 total (Vitest, 54 test files)
+- Automated tests: 822 passed / 822 total (Vitest, 55 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -302,6 +304,7 @@ Builder interface layouts (chat experience):
   52. Context richness — section richness block in assembleContext (3 tests)
   53. Agent tools mode — mode parameter widening, heartbeat compatibility (3 tests)
   54. Personalizer budget — LLM usage accounting integration (2 tests)
+  55. Heartbeat scheduler — getActiveOwnerKeys, ISO week, hasRunToday/Week, scheduler tick enqueue/skip/recovery/anti-overlap (32 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration
