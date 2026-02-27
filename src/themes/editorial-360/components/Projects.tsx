@@ -27,7 +27,7 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
 
     if (variant === "projects-bento") {
         return (
-            <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
+            <section className="theme-reveal">
                 <h2 className="section-label">
                     {title || "Selected Works"}
                 </h2>
@@ -76,7 +76,7 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
 
     if (variant === "projects-minimal") {
         return (
-            <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
+            <section className="theme-reveal">
                 <h2 className="section-label">
                     {title || "Index"}
                 </h2>
@@ -108,34 +108,38 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
 
     // Default: projects-list (Classic Editorial)
     return (
-        <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
+        <section className="theme-reveal">
             <h2 className="section-label">
                 {title || "Projects"}
             </h2>
 
-            <div className="space-y-12">
+            <div>
                 <CollapsibleList
                     items={items.map((item, index) => (
                         <React.Fragment key={index}>
                             <article className="group relative">
-                                <div className="flex flex-col md:flex-row md:items-baseline justify-between mb-2 gap-4">
-                                    <h3 className="text-3xl md:text-4xl font-[var(--page-font-heading)] font-semibold text-[var(--page-fg)] leading-none hover:italic transition-all">
+                                <div className="flex flex-col md:flex-row md:items-baseline justify-between mb-1">
+                                    <h3 className="text-xl font-semibold tracking-[-0.01em] text-[var(--page-fg)] group-hover:text-[var(--page-accent)] transition-colors">
                                         {item.url ? (
-                                            <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+                                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="hover-underline-grow">{item.title}</a>
                                         ) : (
                                             item.title
                                         )}
                                     </h3>
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--page-fg-secondary)] md:ml-6 shrink-0">
+                                    <span className="text-sm text-[var(--page-fg-secondary)] mt-1 md:mt-0 shrink-0">
                                         {item.year || item.role}
                                     </span>
                                 </div>
                                 {item.description && (
-                                    <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-3xl text-lg font-light">
+                                    <p className="text-sm text-[var(--page-fg-secondary)] leading-relaxed max-w-prose mt-2">
                                         {item.description}
                                     </p>
                                 )}
                             </article>
+
+                            {index < items.length - 1 && (
+                                <div className="entry-dot-separator" />
+                            )}
                         </React.Fragment>
                     ))}
                     summaryLine={summaryLine}

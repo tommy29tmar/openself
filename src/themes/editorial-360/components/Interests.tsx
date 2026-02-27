@@ -17,16 +17,16 @@ export function Interests({ content }: SectionProps<InterestsContent>) {
     if (!items.length) return null;
 
     return (
-        <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4">
+        <section className="theme-reveal">
             <h2 className="section-label">
                 {title || "Interests"}
             </h2>
 
-            <div className="flex flex-wrap gap-2 mt-6">
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
                 {items.map((item, index) => (
                     <span
                         key={index}
-                        className="px-3 py-1 rounded-none border border-[var(--page-border)] text-xs font-medium text-[var(--page-fg-secondary)] hover:bg-[var(--page-fg)] hover:text-[var(--page-bg)] transition-colors cursor-default uppercase tracking-wider"
+                        className="text-sm font-medium text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors cursor-default"
                     >
                         {item.name}
                     </span>
