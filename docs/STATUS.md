@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 822 automated tests passing (55 test files)
+- 846 automated tests passing (60 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -36,8 +36,11 @@ OpenSelf has a working MVP with a hardened core flow:
 - Conformity checks: heartbeat-driven cross-section style consistency analysis with proposal-based rewrites
 - Proposal review system: API + UI for user acceptance/rejection of conformity proposals
 - Heartbeat scheduler: auto-enqueues daily/weekly heartbeat jobs per owner timezone with catch-up and recovery
+- Layout redesign: hero two-column layout with ContactBar (social, email, languages), At a Glance fused section (stats + grouped skills + interests), CollapsibleList for long sections, D5 intelligent section ordering
+- Contact user-controlled: removed from SENSITIVE_CATEGORIES, contact facts follow standard public/proposed/private transitions
+- Profile archetype detection: deterministic classification (developer/designer/executive/student/creator/generalist) injected into agent context for layout intelligence
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete.
 
 ## 2) Implemented Today
 
@@ -78,7 +81,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | SQLite schema + migrations | Done | Auto-run on DB init, `_migrations` table, transactional |
 | Two-row page model | Done | draft + published rows, DB CHECK constraints |
 | Facts KB CRUD + taxonomy normalization | Done | Alias mapping and pending categories |
-| Visibility policy engine | Done | Actor-based transition matrix (assistant: proposed/private; user: full on non-sensitive; sensitive: private only). API: `POST /api/facts/[id]/visibility`. Agent tool: `set_fact_visibility`. Audit logged. |
+| Visibility policy engine | Done | Actor-based transition matrix (assistant: proposed/private; user: full on non-sensitive; sensitive: private only). Contact category is user-controlled (removed from SENSITIVE_CATEGORIES). API: `POST /api/facts/[id]/visibility`. Agent tool: `set_fact_visibility`. Audit logged. |
 | Fact validation gate | Done | Per-category value rules, placeholder rejection, enforced at `createFact`/`updateFact` |
 | Event logging | Done | agent_events + trust_ledger (reversible audit trail) |
 | Conversation summaries (Tier 2) | Done | CAS-based rolling summaries, compound cursor, medium-tier LLM |
@@ -93,7 +96,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 | Capability | Status | Notes |
 |---|---|---|
-| Optimistic page composition from facts | Done | Deterministic skeleton: 18 section types from facts. Type-safe section builders with proper type guards (e.g., `StatItem[]` filtering). Hero tagline: role → interests → empty (no name repetition). Extended sections gated by `EXTENDED_SECTIONS` env var. |
+| Optimistic page composition from facts | Done | Deterministic skeleton: 19 section types from facts (18 original + at-a-glance). Type-safe section builders with proper type guards. Hero: two-column layout with ContactBar (social links, email, languages). At a Glance: fused stats + grouped skills + interests. D5 section ordering when `EXTENDED_SECTIONS=true`. CollapsibleList for experience, projects, achievements, education. Extended sections gated by `EXTENDED_SECTIONS` env var. |
 | Hybrid LLM personalizer | Done | Per-section LLM rewrite (facts + soul + memory → personalized copy). Three-layer data model: `section_copy_cache` (pure LLM cache), `section_copy_state` (active approved copy), `section_copy_proposals` (heartbeat proposals). `mergeActiveSectionCopy()` projection bridge. Fire-and-forget in `generate_page` (steady_state only). Hash guard (factsHash + soulHash) for staleness. |
 | Drill-down conversation | Done | `classifySectionRichness()` detects thin sections (< threshold items). Agent context includes section richness block + drill-down instructions. Agent asks follow-up questions before updating thin sections. |
 | Conformity checks | Done | `analyzeConformity()` + `generateRewrite()` two-phase LLM. Runs in deep heartbeat. Max 3 issues per check. Creates proposals for user review. |
@@ -104,7 +107,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Publish pipeline safety | Done | Hash guard (expectedHash from frontend), promote-all (proposed→public atomically), username mismatch guard (publish mode only) |
 | Section completeness filter | Done | `filterCompleteSections()` in renderer for published pages. Hero/footer always pass. |
 | Layout template engine | Done | 3 templates (vertical, sidebar-left, bento-standard) with slot-based section assignment, widget registry, validation gates. Anticipated from Phase 1b. |
-| Public page sections renderer | Done | All 18 section types rendered (hero, bio, skills, projects, timeline, interests, social, footer + experience, education, achievements, stats, reading, music, languages, activities, contact, custom) |
+| Public page sections renderer | Done | All 19 section types rendered (hero, bio, skills, projects, timeline, interests, social, footer + experience, education, achievements, stats, reading, music, languages, activities, contact, custom, at-a-glance) |
 | Mobile tab chat state retention | Done | `TabsContent` uses `forceMount` + `data-[state=inactive]:hidden` to keep `ChatPanel` mounted |
 
 ### Safety, Budget, Reliability
@@ -221,6 +224,21 @@ All items complete. Includes:
 - ADR-0010: Personalization Layer architecture decision
 - 173 new tests (790 total, 54 files)
 
+### Layout Redesign ✅
+
+All items complete. Includes:
+1. **Hero two-column layout** — `clamp(1.8rem, 4vw, 3rem)` font sizing, `md:grid-cols-2` layout, no name truncation
+2. **ContactBar in hero** — Social links, contact email (public > proposed priority), and languages absorbed into hero when `EXTENDED_SECTIONS=true`. Standalone social/contact/languages sections suppressed.
+3. **Contact user-controlled** — Removed from `SENSITIVE_CATEGORIES`, added to `PROPOSAL_ALLOWLIST`. Contact facts follow standard public/proposed/private transitions.
+4. **At a Glance section** — New `at-a-glance` ComponentType fusing stats + grouped skills + interests. `SKILL_DOMAINS` dictionary for deterministic grouping. Replaces standalone skills/stats/interests when extended.
+5. **CollapsibleList** — Reusable `"use client"` component for long sections (threshold: 3+). Integrated into experience, projects, achievements, education.
+6. **D5 section ordering** — Extended mode: hero → bio → at-a-glance → experience → projects → education → achievements → reading → music → activities → footer. Legacy order preserved when flag off.
+7. **Profile archetype detection** — `detectArchetype()` classifies developer/designer/executive/student/creator/generalist from facts. Injected into agent context as layout intelligence.
+8. **Personalization integration** — `at-a-glance` registered in `PERSONALIZABLE_FIELDS` and `SECTION_FACT_CATEGORIES`.
+9. **Bug fixes** — Proposals API 500 (`this` context loss), skills duplicate heading, social copyright double footer, bio alignment.
+10. **8-language localization** — `atAGlanceLabel` added to all 8 language L10N objects.
+- 56 new tests (846 total, 60 files)
+
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
 2. Connector MVP (GitHub)
@@ -247,7 +265,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 822 passed / 822 total (Vitest, 55 test files)
+- Automated tests: 846 passed / 846 total (Vitest, 60 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -305,6 +323,11 @@ Builder interface layouts (chat experience):
   53. Agent tools mode — mode parameter widening, heartbeat compatibility (3 tests)
   54. Personalizer budget — LLM usage accounting integration (2 tests)
   55. Heartbeat scheduler — getActiveOwnerKeys, ISO week, hasRunToday/Week, scheduler tick enqueue/skip/recovery/anti-overlap (32 tests)
+  56. At-a-glance composer — skill grouping, section fusion, label hiding (4 tests)
+  57. Hero ContactBar — social/email/language injection, section elimination, email priority (5 tests)
+  58. Section order — D5 ordering constraint verification (1 test)
+  59. Contact visibility — sensitivity removal, proposal allowlist, visibility transitions (8 tests)
+  60. At-a-glance completeness — stats/skillGroups/interests validation (5 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration

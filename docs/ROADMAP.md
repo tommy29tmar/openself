@@ -125,7 +125,7 @@ and implemented ahead of schedule as a standalone deliverable.
   - 5 new widgets (experience-timeline, education-cards, languages-list, activities-list, activities-compact)
   - Layout registry `accepts` updated across all 3 templates
   - Taxonomy migration (0017): 6 new categories + aliases, hobby/hobbies remapped interest→activity
-  - Contact visibility filter (only public/proposed facts), contact added to SENSITIVE_CATEGORIES
+  - Contact visibility filter (only public/proposed facts), contact initially added to SENSITIVE_CATEGORIES (later moved to user-controlled in Layout Redesign)
   - Feature flag: `EXTENDED_SECTIONS=true` env var (default OFF, canary rollout)
   - Agent tools updated with new category guidance
   - 46 new tests (314 total)
@@ -180,6 +180,22 @@ All resolved. 14 new tests (617 total, 33 files).
 Cross-cutting: Two-layer username validation (`validateUsernameFormat` + `validateUsernameAvailability`).
 Merged `RESERVED_USERNAMES` includes `login`/`signup`.
 
+### Layout Redesign (Done)
+
+UAT of the seed-realistic script revealed layout issues on the published page. All resolved.
+56 new tests (846 total, 60 files).
+
+1. **Hero two-column layout** — `clamp()` font sizing, `md:grid-cols-2`, no name truncation.
+2. **ContactBar in hero** — Social links, email (public > proposed priority), languages absorbed when `EXTENDED_SECTIONS=true`.
+3. **Contact user-controlled** — Removed from `SENSITIVE_CATEGORIES`, added to `PROPOSAL_ALLOWLIST`.
+4. **At a Glance** — New fused section (stats + grouped skills + interests), replaces standalone sections in extended mode.
+5. **CollapsibleList** — Reusable component for long sections (threshold 3+), integrated into experience/projects/achievements/education.
+6. **D5 section ordering** — hero → bio → at-a-glance → experience → projects → education → achievements → [personality] → footer.
+7. **Profile archetype detection** — `detectArchetype()` classifies profiles and injects layout intelligence into agent context.
+8. **Bug fixes** — proposals API 500, skills heading, social copyright, bio alignment.
+9. **8-language localization** for at-a-glance labels.
+10. **Personalization integration** — at-a-glance registered in personalizer.
+
 ## 4) Now (High Priority)
 
 ### Phase 1: Living Agent
@@ -188,7 +204,7 @@ Phase 1 builds in dependency order: memory/heartbeat first, then extended sectio
 then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
-Quality/Privacy/Themes hardening complete. UAT hardening (10 findings) complete.
+Quality/Privacy/Themes hardening complete. UAT hardening (10 findings) complete. Layout Redesign complete.
 Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
@@ -284,6 +300,26 @@ Cost risk:
 - Risk grows if supported languages expand or pages become very long
 - Mitigated by: translation_cache (no repeated costs), llm_limits budget guardrails,
   hard cap on supported languages
+
+### Cross-Cutting Program: Model-Agnostic Control Plane
+
+#### NEXT-16: Model-agnostic runtime + control plane hardening
+
+Goal:
+1. Ensure equivalent behavior quality across OpenAI, Anthropic, Google, and Ollama.
+2. Move complex mutations (layout/theme/widget and other high-risk domains) to deterministic inspect/simulate/apply flows.
+3. Keep "LLM proposes, runtime enforces" as the non-negotiable contract.
+
+Execution reference:
+1. `docs/plans/2026-02-27-model-agnostic-control-plane-implementation-plan.md`
+
+Main deliverables:
+1. AI router v2 (capability-based model selection + fallback chain)
+2. Structured output hardening (schema-first for translation/personalization/conformity)
+3. Layout control plane v1 (inspect_layout_state, simulate_layout_patch, apply_layout_patch)
+4. Domain control-plane expansion (facts, heartbeat, publish preflight)
+5. Skills package v1 for onboarding/daily/layout/publish/heartbeat/conflicts
+6. MCP connector gateway foundation with GitHub pilot
 
 ### Deferred Until Phase 1 Closure
 

@@ -367,6 +367,12 @@ Post-assembly guard: if total exceeds 7500, iteratively truncate the largest blo
 by 20% until under budget. Safety/policy blocks and the active user turn are never
 truncated.
 
+**Profile archetype detection** (steady_state only):
+`detectArchetype()` (`src/lib/agent/context.ts`) classifies the user's profile from facts:
+designer, executive, student, creator, developer, or generalist. The detected archetype
+is injected into the system prompt as a "PAGE LAYOUT INTELLIGENCE" block with per-archetype
+reordering guidance (e.g., designer = portfolio-first, student = education before experience).
+
 ### 4.3 Tool Calling (Autonomous Actions)
 
 During conversation, the agent calls tools silently to manage the knowledge base, page,
@@ -1075,8 +1081,10 @@ follows OpenSelf's visual identity.
 │  COMPONENT LIBRARY                                            │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  hero          Name, tagline, avatar                          │
+│  hero          Name, tagline, avatar, ContactBar              │
 │                Tagline: role > interests > empty (no name dup)│
+│                ContactBar: social links, email, languages     │
+│                Two-col layout (name left, tagline right) on md│
 │                Variants: large, compact, minimal             │
 │                                                              │
 │  bio           Narrative text about the person               │
@@ -1114,6 +1122,12 @@ follows OpenSelf's visual identity.
 │                e.g., "5 years experience, 12 projects,       │
 │                       1,200 km run this year"                │
 │                                                              │
+│  at-a-glance   Fused stats + grouped skills + interests       │
+│                Replaces standalone skills/stats/interests      │
+│                when EXTENDED_SECTIONS=true                     │
+│                Skills grouped by SKILL_DOMAINS dictionary     │
+│                Variants: full                                 │
+│                                                              │
 │  social        Links to other platforms                      │
 │                Variants: icons, buttons, list                │
 │                                                              │
@@ -1136,7 +1150,8 @@ follows OpenSelf's visual identity.
 │                                                              │
 │  contact       Contact information (email, phone, location)  │
 │                Variants: card                                │
-│                Sensitive: only public/proposed facts composed │
+│                User-controlled: public/proposed facts composed│
+│                (removed from SENSITIVE_CATEGORIES)            │
 │                                                              │
 │  footer        "Made with OpenSelf" + meta info        │
 │                Always present (subtle, non-intrusive)        │
@@ -1411,7 +1426,7 @@ and `updateFact` in `kb-service.ts` enforce this gate.
 
 ```
 1. Filter facts: global visibility filter (public + proposed only, exclude private)
-   Also exclude sensitive categories (contact, compensation, health, legal)
+   Also exclude sensitive categories (compensation, health, mental-health, private-contact, personal-struggle)
 2. Decide which components are relevant
    (no projects? skip the projects section)
    (user has achievements? add achievements section)
@@ -1425,6 +1440,30 @@ and `updateFact` in `kb-service.ts` enforce this gate.
 6. Save to database
 7. Renderer produces the HTML page
 ```
+
+**Section ordering (`EXTENDED_SECTIONS=true`):**
+When extended sections are enabled, `composeOptimisticPage()` follows the D5 order:
+hero → bio → at-a-glance → experience → projects → education → achievements → reading → music → activities → footer.
+Social, contact, and language facts are absorbed into the hero's ContactBar (no standalone sections).
+Legacy mode (flag off) preserves the original order: hero → bio → timeline → skills → projects → interests → social → footer.
+
+**CollapsibleList pattern:**
+Long sections (experience, projects, achievements, education) use the `CollapsibleList` wrapper
+(`src/components/page/CollapsibleList.tsx`) to show the first item fully, with a summary line
+and expand/collapse button for the rest (threshold: 3+ items). Summary construction per section:
+experience = "role @ company", projects = "title", achievements = "title", education = "institution".
+
+**ContactBar in hero:**
+When `EXTENDED_SECTIONS=true`, the hero section includes social links, a contact email, and languages
+directly in its content. Data injected by `buildHeroSection()` from social/contact/language facts.
+Email selection: visibility-priority (public > proposed), first match used. Graceful degradation
+when no facts exist.
+
+**At a Glance (fused section):**
+`buildAtAGlanceSection()` combines stats, skills, and interests into a single `at-a-glance` section.
+Skills are grouped by a deterministic `SKILL_DOMAINS` dictionary (Frontend, Backend, Infra, Languages,
+AI/ML, Design + Other fallback). Domain labels are hidden when only 1-2 groups exist. Standalone
+skills/stats/interests sections are suppressed when extended mode is on.
 
 Translation to other languages is handled separately via the LLM translation pipeline
 (see Section 6.7). This keeps composition fast and predictable.
@@ -2075,6 +2114,10 @@ types require at least one non-empty item, group, link, method, or text field.
   safety net. Preview mode (`previewMode={true}`) skips the filter.
 - The publish pipeline uses `projectPublishableConfig()` which includes the completeness
   filter via `publishableFromCanonical()`.
+
+The `at-a-glance` section type has a dedicated completeness check: it requires at least one of
+`stats` (non-empty array), `skillGroups` (non-empty array), or `interests` (non-empty array).
+Validated in both `isSectionComplete()` and `validatePageConfig()`.
 
 ### 6.12 Maintenance Scripts
 
