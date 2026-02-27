@@ -18,27 +18,27 @@ export function Stats({ content }: SectionProps<StatsContent>) {
     if (!items.length) return null;
 
     return (
-        <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
+        <section className="theme-reveal">
             <h2 className="section-label">
-                {title || "Stats"}
+                {title || "At a Glance"}
             </h2>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+            <div className="flex flex-wrap justify-between max-w-xl mx-auto md:mx-0 gap-8">
                 {items.map((item, index) => (
                     <div
                         key={index}
-                        className="text-center p-6 border border-[var(--page-card-border)] rounded-[var(--page-radius-base)] hover:border-[var(--page-fg-secondary)] transition-colors"
+                        className="text-center group"
                     >
-                        <div className="text-4xl md:text-5xl font-[var(--page-font-heading)] font-medium text-[var(--page-fg)] mb-2">
+                        <div className="text-5xl font-light tracking-[-0.02em] text-[var(--page-fg)] group-hover:text-[var(--page-accent)] transition-colors duration-200 font-[var(--page-font-heading)]">
                             {item.value}
                             {item.unit && (
-                                <span className="text-xl text-[var(--page-footer-fg)] ml-1">
+                                <span className="text-lg font-light text-[var(--page-fg-secondary)] ml-1">
                                     {item.unit}
                                 </span>
                             )}
                         </div>
-                        <div className="text-sm uppercase tracking-widest text-[var(--page-footer-fg)] font-medium">
-                            {item.label}
+                        <div className="text-xs tracking-[0.1em] text-[var(--page-fg-secondary)] mt-2">
+                            {item.label.toLowerCase()}
                         </div>
                     </div>
                 ))}
