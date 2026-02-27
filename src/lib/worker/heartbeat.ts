@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { heartbeatRuns } from "@/lib/db/schema";
 import {
   getHeartbeatConfig,
@@ -7,8 +7,13 @@ import {
   checkOwnerBudget,
 } from "@/lib/services/heartbeat-config-service";
 import { checkBudget } from "@/lib/services/usage-service";
-import { expireStaleProposals } from "@/lib/services/soul-service";
+import { expireStaleProposals, getActiveSoul } from "@/lib/services/soul-service";
 import { logEvent } from "@/lib/services/event-service";
+import { analyzeConformity, generateRewrite } from "@/lib/services/conformity-analyzer";
+import { getAllActiveCopies } from "@/lib/services/section-copy-state-service";
+import { cleanupExpiredCache } from "@/lib/services/section-cache-service";
+import { createProposal, markStaleProposals } from "@/lib/services/proposal-service";
+import { computeHash } from "@/lib/services/personalization-hashing";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -54,9 +59,10 @@ export function handleHeartbeatLight(payload: Record<string, unknown>): void {
 }
 
 /**
- * Deep heartbeat (weekly): cross-section coherence, soul review, conflict cleanup.
+ * Deep heartbeat (weekly): cross-section coherence, soul review, conflict cleanup,
+ * conformity analysis, stale proposal cleanup, and cache TTL cleanup.
  */
-export function handleHeartbeatDeep(payload: Record<string, unknown>): void {
+export async function handleHeartbeatDeep(payload: Record<string, unknown>): Promise<void> {
   const { ownerKey } = payload as HeartbeatPayload;
   if (!ownerKey) throw new Error("heartbeat_deep: missing ownerKey");
 
@@ -77,18 +83,76 @@ export function handleHeartbeatDeep(payload: Record<string, unknown>): void {
     return;
   }
 
-  // For now, deep heartbeat just expires proposals and dismisses old conflicts
+  // Expire stale soul proposals
   const expired = expireStaleProposals(48);
 
   // Dismiss conflicts older than 7 days
   const dismissed = dismissOldConflicts(ownerKey, 7);
 
-  const outcome = expired > 0 || dismissed > 0 ? "action_taken" : "ok";
+  // Phase 1c: Conformity check
+  let conformityActions = 0;
+  try {
+    const activeCopies = getAllActiveCopies(ownerKey, "en"); // TODO: get language from preferences
+    const soul = getActiveSoul(ownerKey);
+    if (activeCopies.length > 0 && soul?.compiled) {
+      const issues = await analyzeConformity(activeCopies, soul.compiled, ownerKey);
+      if (issues.length > 0) {
+        for (const issue of issues) {
+          const copy = activeCopies.find(c => c.sectionType === issue.sectionType);
+          if (!copy) continue;
+          const rewrite = await generateRewrite(
+            issue.sectionType,
+            copy.personalizedContent,
+            issue,
+            soul.compiled,
+          );
+          if (rewrite) {
+            createProposal({
+              ownerKey,
+              sectionType: issue.sectionType,
+              language: "en",
+              currentContent: copy.personalizedContent,
+              proposedContent: JSON.stringify(rewrite),
+              issueType: issue.issueType,
+              reason: issue.reason,
+              severity: issue.severity,
+              factsHash: copy.factsHash,
+              soulHash: copy.soulHash,
+              baselineStateHash: computeHash(copy.personalizedContent),
+            });
+            conformityActions++;
+          }
+        }
+        logEvent({
+          eventType: "conformity_check",
+          actor: "worker",
+          payload: { ownerKey, issues: issues.length, proposals: conformityActions },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[heartbeat] Conformity check failed:", err);
+  }
+
+  // Phase 1c: Mark stale proposals
+  try {
+    markStaleProposals(ownerKey);
+  } catch (err) {
+    console.error("[heartbeat] Stale proposal cleanup failed:", err);
+  }
+
+  // Phase 1c: Cache TTL cleanup
+  try {
+    cleanupExpiredCache(30);
+  } catch (err) {
+    console.error("[heartbeat] Cache cleanup failed:", err);
+  }
+
+  const outcome = expired > 0 || dismissed > 0 || conformityActions > 0 ? "action_taken" : "ok";
   recordHeartbeatRun(ownerKey, "deep", outcome, 0, config.timezone, startMs);
 }
 
 function dismissOldConflicts(ownerKey: string, days: number): number {
-  const { sqlite } = require("@/lib/db");
   const result = sqlite
     .prepare(
       `UPDATE fact_conflicts SET status = 'dismissed', resolved_at = datetime('now')
