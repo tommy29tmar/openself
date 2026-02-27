@@ -7,10 +7,16 @@ type FooterContent = {
 
 export function Footer({ content }: SectionProps<FooterContent>) {
     return (
-        <footer className="text-center pt-16 border-t border-[var(--page-border)] theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
-            <p className="text-sm tracking-widest uppercase text-[var(--page-footer-fg)]">
-                {content.text || `© ${new Date().getFullYear()} — Built with OpenSelf`}
-            </p>
+        <footer className="text-center py-16 theme-reveal">
+            <div className="mx-auto mb-8" style={{ width: '64px', height: '0.5px', background: 'var(--page-fg-secondary)', opacity: 0.15 }} />
+            <a
+                href="https://openself.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover-underline-grow text-xs tracking-[0.15em] uppercase text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors"
+            >
+                openself.dev
+            </a>
         </footer>
     );
 }
