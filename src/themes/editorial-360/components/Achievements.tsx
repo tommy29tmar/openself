@@ -34,7 +34,7 @@ export function Achievements({ content }: SectionProps<AchievementsContent>) {
                 <CollapsibleList
                     items={items.map((item, index) => (
                         <React.Fragment key={index}>
-                            <article className="group">
+                            <article className="group max-w-2xl">
                                 <div className="flex flex-col md:flex-row md:items-baseline justify-between mb-1">
                                     <h3 className="text-xl font-semibold tracking-[-0.01em] text-[var(--page-fg)] group-hover:text-[var(--page-accent)] transition-colors">
                                         {item.title}

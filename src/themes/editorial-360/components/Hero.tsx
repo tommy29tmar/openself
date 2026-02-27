@@ -74,23 +74,17 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
     return (
         <header className="py-24 theme-reveal">
             <div className="border-b border-[var(--page-border)] pb-10">
-                <div className="md:grid md:grid-cols-2 md:gap-8 md:items-end">
-                    <div className="min-w-0">
-                        <h1
-                            className="hero-stagger-name font-[var(--page-font-heading)] font-medium tracking-[-0.03em] leading-[0.95]"
-                            style={{ fontSize: "clamp(2.5rem, 5vw, 3.75rem)" }}
-                        >
-                            {name}
-                        </h1>
-                    </div>
-                    {tagline && (
-                        <div className="mt-4 md:mt-0 md:text-right">
-                            <p className="hero-stagger-tagline text-[var(--text-xl)] font-light text-[var(--page-fg-secondary)] leading-relaxed max-w-md md:ml-auto">
-                                {tagline}
-                            </p>
-                        </div>
-                    )}
-                </div>
+                <h1
+                    className="hero-stagger-name font-[var(--page-font-heading)] font-medium tracking-[-0.03em] leading-[0.95]"
+                    style={{ fontSize: "clamp(2.5rem, 5vw, 3.75rem)" }}
+                >
+                    {name}
+                </h1>
+                {tagline && (
+                    <p className="hero-stagger-tagline text-[var(--text-xl)] font-light text-[var(--page-fg-secondary)] leading-relaxed max-w-xl mt-4">
+                        {tagline}
+                    </p>
+                )}
             </div>
             {/* Contact bar */}
             {(content.socialLinks?.length || content.contactEmail || content.languages?.length) && (
