@@ -10,6 +10,7 @@
  *   - docs/uat/profiles/latest.md
  *   - docs/uat/profiles/<timestamp>-<tag>.json
  *   - docs/uat/profiles/<timestamp>-<tag>.md
+ *   - screenshot/uat-profiles-<timestamp>-<tag>/*.png
  */
 
 import fs from "node:fs";
@@ -1653,14 +1654,21 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
   },
 ];
 
-const BASE_URL = process.env.UAT_BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+const BASE_URL_CANDIDATES = [
+  process.env.UAT_BASE_URL,
+  process.env.NEXT_PUBLIC_BASE_URL,
+  "http://localhost:3000",
+  "http://localhost:3001",
+].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
 const OUTPUT_DIR = path.join(process.cwd(), "docs", "uat", "profiles");
+const SCREENSHOT_ROOT_DIR = path.join(process.cwd(), "screenshot");
 const MEMORY_TYPES: MemoryType[] = ["observation", "preference", "insight", "pattern", "observation"];
 
 function parseArgs() {
   const args = process.argv.slice(2);
   let count = 10;
   let tag = "";
+  let screenshots = true;
 
   for (const arg of args) {
     if (arg.startsWith("--count=")) {
@@ -1673,6 +1681,9 @@ function parseArgs() {
     if (arg.startsWith("--tag=")) {
       tag = arg.split("=")[1] ?? "";
     }
+    if (arg === "--skip-screenshots" || arg === "--no-screenshots") {
+      screenshots = false;
+    }
   }
 
   if (count > PROFILE_BLUEPRINTS.length) {
@@ -1682,7 +1693,41 @@ function parseArgs() {
   return {
     count,
     tag: sanitizeUsername(tag).slice(0, 12),
+    screenshots,
   };
+}
+
+async function isUrlReachable(url: string, timeoutMs: number = 5000): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolveBaseUrl(): Promise<string> {
+  const seen = new Set<string>();
+  const candidates = BASE_URL_CANDIDATES.filter((c) => {
+    if (seen.has(c)) return false;
+    seen.add(c);
+    return true;
+  });
+
+  for (const baseUrl of candidates) {
+    const ok = await isUrlReachable(`${baseUrl}/login`);
+    if (ok) return baseUrl;
+  }
+
+  return candidates[0] ?? "http://localhost:3000";
 }
 
 function sanitizeUsername(raw: string): string {
@@ -1915,18 +1960,18 @@ function buildFacts(
   return rows;
 }
 
-function writeCredentialFiles(runId: string, records: CreatedProfileRecord[]) {
+function writeCredentialFiles(runId: string, records: CreatedProfileRecord[], baseUrl: string) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
   const payload = {
     generatedAt: new Date().toISOString(),
-    baseUrl: BASE_URL,
+    baseUrl,
     totalProfiles: records.length,
     profiles: records,
   };
 
   const jsonText = JSON.stringify(payload, null, 2);
-  const mdText = renderMarkdown(payload.generatedAt, records);
+  const mdText = renderMarkdown(payload.generatedAt, records, baseUrl);
 
   fs.writeFileSync(path.join(OUTPUT_DIR, `${runId}.json`), jsonText, "utf8");
   fs.writeFileSync(path.join(OUTPUT_DIR, `${runId}.md`), mdText, "utf8");
@@ -1934,12 +1979,12 @@ function writeCredentialFiles(runId: string, records: CreatedProfileRecord[]) {
   fs.writeFileSync(path.join(OUTPUT_DIR, "latest.md"), mdText, "utf8");
 }
 
-function renderMarkdown(generatedAt: string, records: CreatedProfileRecord[]): string {
+function renderMarkdown(generatedAt: string, records: CreatedProfileRecord[], baseUrl: string): string {
   const lines: string[] = [];
   lines.push("# UAT Profile Batch");
   lines.push("");
   lines.push(`Generated at: ${generatedAt}`);
-  lines.push(`Base URL: ${BASE_URL}`);
+  lines.push(`Base URL: ${baseUrl}`);
   lines.push("");
   lines.push("| # | Name | Username | Email | Password | Layout | Theme | Public URL |");
   lines.push("|---|---|---|---|---|---|---|---|");
@@ -1954,16 +1999,74 @@ function renderMarkdown(generatedAt: string, records: CreatedProfileRecord[]): s
   lines.push("## Notes");
   lines.push("- All profiles are pre-published.");
   lines.push("- Use the same login page for all users.");
-  lines.push(`- Login URL: ${BASE_URL}/login`);
-  lines.push(`- Builder URL: ${BASE_URL}/builder`);
+  lines.push(`- Login URL: ${baseUrl}/login`);
+  lines.push(`- Builder URL: ${baseUrl}/builder`);
 
   return lines.join("\n");
+}
+
+async function captureProfileScreenshots(
+  runId: string,
+  records: CreatedProfileRecord[],
+): Promise<string | null> {
+  if (records.length === 0) return null;
+
+  const probeUrl = records[0].publishedUrl;
+  const reachable = await isUrlReachable(probeUrl, 7000);
+  if (!reachable) {
+    console.warn(`[seed-uat-profiles] Screenshot skipped: URL not reachable (${probeUrl})`);
+    return null;
+  }
+
+  try {
+    const { chromium } = await import("@playwright/test");
+    const outDir = path.join(SCREENSHOT_ROOT_DIR, `uat-profiles-${runId}`);
+    fs.mkdirSync(outDir, { recursive: true });
+
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 2200 },
+    });
+
+    try {
+      for (const row of records) {
+        const page = await context.newPage();
+        try {
+          await page.goto(row.publishedUrl, {
+            waitUntil: "networkidle",
+            timeout: 120_000,
+          });
+          await page.waitForTimeout(1200);
+          await page.screenshot({
+            path: path.join(outDir, `${row.username}.png`),
+            fullPage: true,
+          });
+        } finally {
+          await page.close();
+        }
+      }
+
+      const indexContent = records
+        .map((row, idx) => `${String(idx + 1).padStart(2, "0")}. ${row.username} -> ${row.publishedUrl}`)
+        .join("\n");
+      fs.writeFileSync(path.join(outDir, "index.txt"), `${indexContent}\n`, "utf8");
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+
+    return outDir;
+  } catch (err) {
+    console.warn(`[seed-uat-profiles] Screenshot failed: ${String(err)}`);
+    return null;
+  }
 }
 
 async function createProfileFromBlueprint(
   blueprint: ProfileBlueprint,
   index: number,
   tag: string,
+  baseUrl: string,
 ): Promise<CreatedProfileRecord> {
   const password = makePassword(index);
   const username = ensureUniqueUsername(blueprint.usernameBase, tag);
@@ -2034,17 +2137,19 @@ async function createProfileFromBlueprint(
     theme: blueprint.theme,
     factCount: factRows.length,
     sectionCount: config.sections.length,
-    publishedUrl: `${BASE_URL}/${username}`,
-    loginUrl: `${BASE_URL}/login`,
-    builderUrl: `${BASE_URL}/builder`,
+    publishedUrl: `${baseUrl}/${username}`,
+    loginUrl: `${baseUrl}/login`,
+    builderUrl: `${baseUrl}/builder`,
   };
 }
 
 async function main() {
-  const { count, tag } = parseArgs();
+  const { count, tag, screenshots } = parseArgs();
   const selected = PROFILE_BLUEPRINTS.slice(0, count);
+  const baseUrl = await resolveBaseUrl();
 
   console.log(`🌱 Seeding ${selected.length} UAT profiles...`);
+  console.log(`   Base URL: ${baseUrl}`);
 
   const runIdBase = new Date().toISOString().replace(/[:.]/g, "-");
   const runId = tag ? `${runIdBase}-${tag}` : runIdBase;
@@ -2054,18 +2159,28 @@ async function main() {
   for (let i = 0; i < selected.length; i += 1) {
     const blueprint = selected[i];
     console.log(`   → ${blueprint.displayName}`);
-    const result = await createProfileFromBlueprint(blueprint, i, tag);
+    const result = await createProfileFromBlueprint(blueprint, i, tag, baseUrl);
     created.push(result);
     console.log(`      created ${result.username} (${result.factCount} facts, ${result.sectionCount} sections)`);
   }
 
-  writeCredentialFiles(runId, created);
+  writeCredentialFiles(runId, created, baseUrl);
+
+  let screenshotDir: string | null = null;
+  if (screenshots) {
+    console.log("");
+    console.log("📸 Capturing screenshots...");
+    screenshotDir = await captureProfileScreenshots(runId, created);
+  }
 
   console.log("");
   console.log("✅ UAT batch completed");
   console.log(`   Profiles created: ${created.length}`);
   console.log(`   Credentials file: ${path.join(OUTPUT_DIR, "latest.md")}`);
   console.log(`   JSON file:        ${path.join(OUTPUT_DIR, "latest.json")}`);
+  if (screenshots) {
+    console.log(`   Screenshot dir:   ${screenshotDir ?? "(skipped/unavailable)"}`);
+  }
   console.log("");
   console.log("Public URLs:");
   created.forEach((row) => {

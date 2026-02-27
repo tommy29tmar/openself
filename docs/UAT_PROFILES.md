@@ -12,7 +12,7 @@ Create a batch of realistic, diverse profiles (with published pages) to stress:
 - style/theme combinations
 - long/short content density
 
-Each run also exports credentials so QA can log in quickly.
+Each run also exports credentials and captures screenshots automatically.
 
 ## Standard command
 
@@ -39,6 +39,7 @@ EXTENDED_SECTIONS=true INVITE_CODES=code1 npx tsx scripts/seed-uat-profiles.ts -
 Available flags:
 - `--count=<n>`: number of profiles (max = number of blueprints in script)
 - `--tag=<name>`: appended to username/email generation and output filenames
+- `--skip-screenshots`: create profiles but skip screenshot capture
 
 ## Output files
 
@@ -48,6 +49,7 @@ Credentials and URLs are written to:
 - `docs/uat/profiles/latest.json`
 - `docs/uat/profiles/<timestamp>-<tag>.md`
 - `docs/uat/profiles/<timestamp>-<tag>.json`
+- `screenshot/uat-profiles-<timestamp>-<tag>/` (one PNG per profile + `index.txt`)
 
 Each record contains:
 - display name
@@ -64,7 +66,8 @@ Public/login/builder links in output files use:
 
 1. `UAT_BASE_URL` (if set)
 2. `NEXT_PUBLIC_BASE_URL` (if set)
-3. fallback: `http://localhost:3000`
+3. auto-detect local app (`http://localhost:3000` then `http://localhost:3001`)
+4. fallback: first candidate (`http://localhost:3000`)
 
 Example:
 
@@ -76,4 +79,5 @@ UAT_BASE_URL=http://localhost:3001 npm run db:seed:uat
 
 - The script is additive: it creates new users/profiles and publishes pages.
 - Username/email collisions are handled automatically.
+- Screenshot capture requires a running local app on the selected base URL.
 - Generated credentials are test-only and should not be reused outside local/dev QA.
