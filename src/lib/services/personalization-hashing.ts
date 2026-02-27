@@ -26,6 +26,7 @@ export const SECTION_FACT_CATEGORIES: Record<string, string[]> = {
   education: ["education"],
   languages: ["language"],
   activities: ["activity", "hobby"],
+  "at-a-glance": ["skill", "stat", "interest"],
 };
 
 /**

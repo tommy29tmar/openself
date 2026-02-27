@@ -16,6 +16,7 @@ export const PERSONALIZABLE_FIELDS: Record<string, string[]> = {
   reading: ["description"],
   music: ["description"],
   activities: ["description"],
+  "at-a-glance": ["description"],
 };
 
 /**
@@ -33,6 +34,7 @@ export const MAX_WORDS: Record<string, number> = {
   reading: 60,
   music: 60,
   activities: 60,
+  "at-a-glance": 60,
 };
 
 /**
