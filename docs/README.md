@@ -1,6 +1,6 @@
 # OpenSelf Docs Guide
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 
 Questa cartella contiene la documentazione operativa del progetto.
 Usa questo file come guida rapida su cosa aggiornare e quando.
@@ -51,6 +51,18 @@ Quando aggiornarlo:
 
 Regola:
 - contiene piano e ordine di lavoro, non stato storico dettagliato
+
+### `UAT_PROFILES.md`
+
+Scopo:
+- processo standard per generare profili UAT variegati
+- comando unico per seed batch e pubblicazione pagine test
+- output credenziali (`docs/uat/profiles/latest.*`) per QA
+
+Quando aggiornarlo:
+- cambia il comando/script di seed UAT
+- cambiano i parametri supportati o i path output
+- cambia il formato delle credenziali esportate
 
 ### `archive/`
 

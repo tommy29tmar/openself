@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio",
     "db:init": "npx tsx scripts/migrate.ts",
     "db:seed": "npx tsx scripts/seed.ts",
+    "db:seed:uat": "EXTENDED_SECTIONS=true INVITE_CODES=code1 npx tsx scripts/seed-uat-profiles.ts",
     "worker:dev": "tsx watch src/worker.ts",
     "worker:build": "tsup src/worker.ts --format cjs --out-dir dist --external better-sqlite3",
     "worker:start": "node dist/worker.js",
