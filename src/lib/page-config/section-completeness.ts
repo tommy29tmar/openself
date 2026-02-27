@@ -21,6 +21,13 @@ export function isSectionComplete(section: Section): boolean {
   if (Array.isArray(c.links) && c.links.length > 0) return true;
   if (Array.isArray(c.methods) && c.methods.length > 0) return true;
 
+  // At a Glance: any of stats, skillGroups, or interests non-empty
+  if (section.type === "at-a-glance") {
+    if (Array.isArray(c.stats) && c.stats.length > 0) return true;
+    if (Array.isArray(c.skillGroups) && c.skillGroups.length > 0) return true;
+    if (Array.isArray(c.interests) && c.interests.length > 0) return true;
+  }
+
   // Bio: must have non-empty text
   if (section.type === "bio" && typeof c.text === "string" && c.text.trim().length > 0) return true;
 
