@@ -17,10 +17,10 @@ export function Social({ content }: SectionProps<SocialContent>) {
     if (!links.length) return null;
 
     return (
-        <footer className="text-center pt-12 border-t border-[var(--page-border)] theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4">
+        <footer className="text-center pt-12 theme-reveal">
             <h2 className="section-label">Get in touch</h2>
 
-            <div className="flex justify-center gap-6 mb-12 flex-wrap">
+            <div className="flex justify-center gap-6 flex-wrap">
                 {links.map((link, index) => (
                     <a
                         key={index}

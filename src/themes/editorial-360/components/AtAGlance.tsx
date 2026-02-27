@@ -26,7 +26,7 @@ export function AtAGlance({ content }: SectionProps<AtAGlanceContent>) {
     if (!stats?.length && !skillGroups?.length && !interests?.length) return null;
 
     return (
-        <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
+        <section className="theme-reveal">
             <h2 className="section-label">
                 {title || "At a Glance"}
             </h2>

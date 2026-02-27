@@ -21,7 +21,7 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
     const isCompact = variant === "compact";
 
     return (
-        <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
+        <section className="theme-reveal">
             <h2 className="section-label">
                 {title || "Activities"}
             </h2>
@@ -69,7 +69,7 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
                             </article>
 
                             {index < items.length - 1 && (
-                                <div className="h-px w-full bg-[var(--page-border)] my-8"></div>
+                                <div className="entry-dot-separator" />
                             )}
                         </React.Fragment>
                     ))}
