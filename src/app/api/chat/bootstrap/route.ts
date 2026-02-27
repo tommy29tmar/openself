@@ -6,8 +6,24 @@ import {
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
+import { checkRateLimit } from "@/lib/middleware/rate-limit";
 
 export async function GET(req: Request) {
+  // Rate limiting (same as POST /api/chat)
+  const rateResult = checkRateLimit(req);
+  if (!rateResult.allowed) {
+    return new Response(
+      JSON.stringify({ error: rateResult.reason }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rateResult.retryAfter ?? 1),
+        },
+      },
+    );
+  }
+
   const multiUser = isMultiUserEnabled();
   const scope = resolveOwnerScope(req);
 

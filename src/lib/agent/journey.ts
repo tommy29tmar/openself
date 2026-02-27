@@ -19,6 +19,7 @@ import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import type { OwnerScope } from "@/lib/auth/session";
 import type { AuthInfo } from "@/lib/agent/context";
+import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,7 +91,7 @@ export function detectJourneyState(
         "SELECT count FROM profile_message_usage WHERE profile_key = ?",
       )
       .get(scope.cognitiveOwnerKey) as { count: number } | undefined;
-    if (row && row.count >= 200) {
+    if (row && row.count >= AUTH_MESSAGE_LIMIT) {
       return "blocked";
     }
   }
@@ -121,13 +122,8 @@ export function detectJourneyState(
   }
 
   // Check for prior conversation (messages exist but no facts yet)
-  const hasPriorMessages = getDistinctSessionCount(readKeys) > 0;
-  if (hasPriorMessages) {
-    // Had a conversation before but no facts extracted — still returning
-    const messageCount = getTotalMessageCount(readKeys);
-    if (messageCount > 0) {
-      return "returning_no_page";
-    }
+  if (getDistinctSessionCount(readKeys) > 0) {
+    return "returning_no_page";
   }
 
   return "first_visit";
@@ -138,16 +134,16 @@ export function detectJourneyState(
 // ---------------------------------------------------------------------------
 
 export function detectSituations(
-  scope: OwnerScope,
   facts: Array<{ id: string; category: string; key: string; value: unknown; updatedAt: string | null }>,
   ownerKey: string,
+  pendingProposalCount?: number,
 ): Situation[] {
   const situations: Situation[] = [];
 
-  // Pending proposals
-  const proposalSvc = createProposalService();
-  const pendingProposals = proposalSvc.getPendingProposals(ownerKey);
-  if (pendingProposals.length > 0) {
+  // Pending proposals (accept pre-fetched count to avoid duplicate DB query)
+  const proposalCount = pendingProposalCount
+    ?? createProposalService().getPendingProposals(ownerKey).length;
+  if (proposalCount > 0) {
     situations.push("has_pending_proposals");
   }
 
@@ -225,7 +221,11 @@ export function assembleBootstrapPayload(
   const journeyState = detectJourneyState(scope, authInfo);
 
   const facts = getAllFacts(scope.knowledgePrimaryKey, readKeys);
-  const situations = detectSituations(scope, facts, ownerKey);
+
+  // Fetch proposals once — shared between detectSituations and pendingProposalCount
+  const pendingProposalCount = createProposalService().getPendingProposals(ownerKey).length;
+
+  const situations = detectSituations(facts, ownerKey, pendingProposalCount);
   const expertiseLevel = detectExpertiseLevel(readKeys);
 
   // User name from facts (legacy facts may use "full-name" instead of "name")
@@ -241,11 +241,6 @@ export function assembleBootstrapPayload(
 
   // Published username
   const publishedUsername = getPublishedUsername(readKeys);
-
-  // Pending proposal count
-  const proposalSvc = createProposalService();
-  const pendingProposals = proposalSvc.getPendingProposals(ownerKey);
-  const pendingProposalCount = pendingProposals.length;
 
   // Thin sections list
   const publishable = filterPublishableFacts(facts);
@@ -300,19 +295,7 @@ export function getDistinctSessionCount(readKeys: string[]): number {
   return row?.cnt ?? 0;
 }
 
-/**
- * Total message count across all read keys.
- */
-function getTotalMessageCount(readKeys: string[]): number {
-  if (readKeys.length === 0) return 0;
-  const placeholders = readKeys.map(() => "?").join(",");
-  const row = sqlite
-    .prepare(
-      `SELECT COUNT(*) AS cnt FROM messages WHERE session_id IN (${placeholders})`,
-    )
-    .get(...readKeys) as { cnt: number } | undefined;
-  return row?.cnt ?? 0;
-}
+
 
 /**
  * Days since the most recent message across all read keys. Returns null if no messages.

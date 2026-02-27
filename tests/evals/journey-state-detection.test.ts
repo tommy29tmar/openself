@@ -245,7 +245,7 @@ describe("detectSituations", () => {
   ];
 
   it("returns has_name when name fact exists", () => {
-    const result = detectSituations(SCOPE, baseFacts, "cog-1");
+    const result = detectSituations(baseFacts, "cog-1");
     expect(result).toContain("has_name");
   });
 
@@ -253,19 +253,19 @@ describe("detectSituations", () => {
     const legacyFacts = [
       { id: "f1", category: "identity", key: "full-name", value: { full: "Bob" }, updatedAt: new Date().toISOString() },
     ];
-    const result = detectSituations(SCOPE, legacyFacts, "cog-1");
+    const result = detectSituations(legacyFacts, "cog-1");
     expect(result).toContain("has_name");
   });
 
   it("returns has_pending_proposals when proposals exist", () => {
     mockPendingProposals(2);
-    const result = detectSituations(SCOPE, [], "cog-1");
+    const result = detectSituations([], "cog-1");
     expect(result).toContain("has_pending_proposals");
   });
 
   it("returns has_thin_sections when a section is thin", () => {
     vi.mocked(classifySectionRichness).mockReturnValue("thin");
-    const result = detectSituations(SCOPE, [], "cog-1");
+    const result = detectSituations([], "cog-1");
     expect(result).toContain("has_thin_sections");
   });
 
@@ -279,7 +279,7 @@ describe("detectSituations", () => {
       value: { name: "TypeScript" },
       updatedAt: oldDate.toISOString(),
     };
-    const result = detectSituations(SCOPE, [staleFact], "cog-1");
+    const result = detectSituations([staleFact], "cog-1");
     expect(result).toContain("has_stale_facts");
   });
 
@@ -287,18 +287,18 @@ describe("detectSituations", () => {
     vi.mocked(getOpenConflicts).mockReturnValue([
       { id: "c1", category: "skill", key: "ts", factAId: "f1", sourceA: "chat", factBId: "f2", sourceB: "chat" },
     ] as never);
-    const result = detectSituations(SCOPE, [], "cog-1");
+    const result = detectSituations([], "cog-1");
     expect(result).toContain("has_open_conflicts");
   });
 
   it("returns has_soul when active soul exists", () => {
     vi.mocked(getActiveSoul).mockReturnValue({ compiled: "test soul" } as never);
-    const result = detectSituations(SCOPE, [], "cog-1");
+    const result = detectSituations([], "cog-1");
     expect(result).toContain("has_soul");
   });
 
   it("returns empty array when nothing special is detected", () => {
-    const result = detectSituations(SCOPE, [], "cog-1");
+    const result = detectSituations([], "cog-1");
     expect(result).toEqual([]);
   });
 });

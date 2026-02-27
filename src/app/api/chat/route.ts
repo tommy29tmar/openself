@@ -17,6 +17,7 @@ import {
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 import { enqueueSummaryJob } from "@/lib/services/summary-service";
+import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 
 /**
  * Per-profile message quota for authenticated users.
@@ -46,8 +47,6 @@ function checkAndIncrementQuota(
 
   return { allowed: result.changes === 1, count: row.count };
 }
-
-const AUTH_MESSAGE_LIMIT = 200;
 
 export async function POST(req: Request) {
   // Rate limiting
@@ -212,6 +211,8 @@ export async function POST(req: Request) {
   const chatAuthCtx = multiUser ? getAuthContext(req) : null;
 
   // --- Journey Intelligence: assemble bootstrap payload ---
+  // TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
+  // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
   const authInfoForBootstrap = chatAuthCtx
     ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
     : undefined;

@@ -41,6 +41,10 @@ vi.mock("@/lib/services/session-service", () => ({
   DEFAULT_SESSION_ID: "__default__",
 }));
 
+vi.mock("@/lib/middleware/rate-limit", () => ({
+  checkRateLimit: vi.fn(() => ({ allowed: true })),
+}));
+
 import { GET } from "@/app/api/chat/bootstrap/route";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { resolveOwnerScope } from "@/lib/auth/session";
