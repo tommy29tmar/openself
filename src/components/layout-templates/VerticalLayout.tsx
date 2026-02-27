@@ -7,7 +7,7 @@ export function VerticalLayout({ slots, renderSection, className }: LayoutCompon
   const sortedSlots = [...template.slots].sort((a, b) => a.order - b.order);
 
   return (
-    <div className={`layout-vertical max-w-5xl mx-auto flex flex-col gap-32 ${className ?? ""}`}>
+    <div className={`layout-vertical max-w-5xl mx-auto flex flex-col gap-8 md:gap-12 ${className ?? ""}`}>
       {sortedSlots.map((slot) => {
         const sections = slots[slot.id];
         if (!sections?.length) return null;

@@ -2,22 +2,23 @@ import React, { useEffect } from "react";
 import type { ThemeLayoutProps } from "../types";
 
 export function EditorialLayout({ config, children }: ThemeLayoutProps) {
-    // Basic scroll reveal effect
+    // Scroll reveal using IntersectionObserver — works in any scroll container (builder preview, full page)
     useEffect(() => {
         const reveals = document.querySelectorAll('.theme-reveal');
-        const revealOnScroll = () => {
-            const windowHeight = window.innerHeight;
-            reveals.forEach(reveal => {
-                const rect = reveal.getBoundingClientRect();
-                if (rect.top < windowHeight - 100) {
-                    reveal.classList.add('opacity-100', 'translate-y-0');
-                    reveal.classList.remove('opacity-0', 'translate-y-4');
-                }
-            });
-        };
-        revealOnScroll();
-        window.addEventListener('scroll', revealOnScroll);
-        return () => window.removeEventListener('scroll', revealOnScroll);
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('opacity-100', 'translate-y-0');
+                        entry.target.classList.remove('opacity-0', 'translate-y-4', 'translate-y-8');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.05 },
+        );
+        reveals.forEach(el => observer.observe(el));
+        return () => observer.disconnect();
     }, []);
 
     return (
@@ -27,7 +28,7 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
             
             {/* ThemeLayout is a visual wrapper only — no flex/grid flow control.
                 Layout components (Vertical, Sidebar, Bento) handle structure. */}
-            <main className="px-4 md:px-8 py-16 md:py-32">
+            <main className="px-4 md:px-8 py-8 md:py-16">
                 {children}
             </main>
             

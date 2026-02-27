@@ -15,7 +15,7 @@ describe("getWidgetById", () => {
     const w = getWidgetById("skills-chips");
     expect(w).toBeDefined();
     expect(w!.sectionType).toBe("skills");
-    expect(w!.variant).toBe("chips");
+    expect(w!.variant).toBe("skills-chips");
   });
 
   it("returns undefined for unknown id", () => {
@@ -75,7 +75,7 @@ describe("resolveVariant", () => {
       variant: "list", // should be ignored
       content: {},
     };
-    expect(resolveVariant(section)).toBe("chips");
+    expect(resolveVariant(section)).toBe("skills-chips");
   });
 
   it("falls back to legacy variant when no widgetId", () => {
@@ -164,7 +164,7 @@ describe("buildWidgetMap", () => {
   it("returns a record of all widgets keyed by id", () => {
     const map = buildWidgetMap();
     expect(map["skills-chips"]).toBeDefined();
-    expect(map["hero-large"]).toBeDefined();
+    expect(map["hero-split"]).toBeDefined();
     expect(map["footer-default"]).toBeDefined();
   });
 });

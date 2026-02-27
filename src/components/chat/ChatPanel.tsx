@@ -296,7 +296,7 @@ type ChatPanelInnerProps = {
 function ChatPanelLoading() {
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b px-4 py-3">
+      <div className="flex min-h-12 items-center border-b px-4">
         <h2 className="text-sm font-semibold">Chat</h2>
       </div>
       <div className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
@@ -532,7 +532,7 @@ function ChatPanelInner({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b px-4 py-3">
+      <div className="flex min-h-12 items-center border-b px-4">
         <h2 className="text-sm font-semibold">Chat</h2>
       </div>
       <ScrollArea className="min-h-0 flex-1">

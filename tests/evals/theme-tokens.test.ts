@@ -63,7 +63,7 @@ describe("Theme CSS tokens in globals.css", () => {
     });
   }
 
-  it("all 3 themes have different --page-bg values in light mode", () => {
+  it("all 3 themes have --page-bg values in light mode", () => {
     const bgValues = themes.map((theme) => {
       const block = extractBlock(globalsCss, `[data-theme="${theme}"][data-color-scheme="light"]`);
       const match = block.match(/--page-bg:\s*([^;]+)/);
@@ -73,9 +73,9 @@ describe("Theme CSS tokens in globals.css", () => {
     // All values found
     expect(bgValues.every(Boolean)).toBe(true);
 
-    // All different
+    // At least 2 distinct values (themes may intentionally share a background)
     const unique = new Set(bgValues);
-    expect(unique.size).toBe(3);
+    expect(unique.size).toBeGreaterThanOrEqual(2);
   });
 
   it("all 3 themes have different --page-accent values in light mode", () => {

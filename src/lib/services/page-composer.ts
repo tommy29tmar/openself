@@ -36,7 +36,7 @@ import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 
 const DEFAULT_STYLE: StyleConfig = {
   colorScheme: "light",
-  primaryColor: "#6366f1",
+  primaryColor: "#111111",
   fontFamily: "inter",
   layout: "centered",
 };

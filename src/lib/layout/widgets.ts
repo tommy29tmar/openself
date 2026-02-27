@@ -15,11 +15,25 @@ export type WidgetDefinition = {
 const WIDGET_REGISTRY: WidgetDefinition[] = [
   // Hero
   {
-    id: "hero-large",
+    id: "hero-split",
     sectionType: "hero",
-    variant: "large",
+    variant: "hero-split",
     fitsIn: ["wide"],
-    label: "Hero (large)",
+    label: "Hero (split)",
+  },
+  {
+    id: "hero-centered",
+    sectionType: "hero",
+    variant: "hero-centered",
+    fitsIn: ["wide"],
+    label: "Hero (centered)",
+  },
+  {
+    id: "hero-glass",
+    sectionType: "hero",
+    variant: "hero-glass",
+    fitsIn: ["wide", "half"],
+    label: "Hero (glass)",
   },
   {
     id: "hero-compact",
@@ -31,11 +45,18 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
 
   // Bio
   {
-    id: "bio-full",
+    id: "bio-dropcap",
     sectionType: "bio",
-    variant: "full",
+    variant: "bio-dropcap",
     fitsIn: ["wide", "half"],
-    label: "Bio (full)",
+    label: "Bio (dropcap)",
+  },
+  {
+    id: "bio-elegant",
+    sectionType: "bio",
+    variant: "bio-elegant",
+    fitsIn: ["wide", "half", "third"],
+    label: "Bio (elegant)",
   },
   {
     id: "bio-tagline",
@@ -47,22 +68,22 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
 
   // Skills
   {
-    id: "skills-chips",
-    sectionType: "skills",
-    variant: "chips",
-    fitsIn: ["wide", "half", "third"],
-    minItems: 1,
-    maxItems: 30,
-    label: "Skills (chips)",
-  },
-  {
     id: "skills-list",
     sectionType: "skills",
-    variant: "list",
+    variant: "skills-list",
     fitsIn: ["wide", "half"],
     minItems: 1,
     maxItems: 50,
     label: "Skills (list)",
+  },
+  {
+    id: "skills-chips",
+    sectionType: "skills",
+    variant: "skills-chips",
+    fitsIn: ["wide", "half", "third"],
+    minItems: 1,
+    maxItems: 30,
+    label: "Skills (chips)",
   },
   {
     id: "skills-cloud",
@@ -76,31 +97,31 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
 
   // Projects
   {
-    id: "projects-grid",
-    sectionType: "projects",
-    variant: "grid",
-    fitsIn: ["wide", "half"],
-    minItems: 1,
-    maxItems: 12,
-    label: "Projects (grid)",
-  },
-  {
-    id: "projects-featured",
-    sectionType: "projects",
-    variant: "featured",
-    fitsIn: ["wide"],
-    minItems: 1,
-    maxItems: 3,
-    label: "Projects (featured)",
-  },
-  {
     id: "projects-list",
     sectionType: "projects",
-    variant: "list",
-    fitsIn: ["wide", "half", "third"],
+    variant: "projects-list",
+    fitsIn: ["wide", "half"],
     minItems: 1,
     maxItems: 20,
     label: "Projects (list)",
+  },
+  {
+    id: "projects-bento",
+    sectionType: "projects",
+    variant: "projects-bento",
+    fitsIn: ["wide"],
+    minItems: 1,
+    maxItems: 12,
+    label: "Projects (bento)",
+  },
+  {
+    id: "projects-minimal",
+    sectionType: "projects",
+    variant: "projects-minimal",
+    fitsIn: ["wide", "half", "third"],
+    minItems: 1,
+    maxItems: 20,
+    label: "Projects (minimal)",
   },
 
   // Timeline
