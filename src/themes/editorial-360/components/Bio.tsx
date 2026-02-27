@@ -32,15 +32,13 @@ export function Bio({ content, variant = "bio-dropcap" }: SectionProps<BioConten
 
     // Default: bio-dropcap
     return (
-        <section className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.15s' }}>
-            <div className="md:col-span-4">
-                <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-2">{title || "About"}</h2>
-            </div>
-            <div className="md:col-span-8 relative">
-                <p className="font-light text-xl md:text-2xl leading-relaxed text-[var(--page-fg)] relative z-10">
-                    {text}
-                </p>
-            </div>
+        <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.15s' }}>
+            <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-8 border-b border-[var(--page-border)] pb-4">
+                {title || "About"}
+            </h2>
+            <p className="font-light text-xl md:text-2xl leading-relaxed text-[var(--page-fg)]">
+                {text}
+            </p>
         </section>
     );
 }
