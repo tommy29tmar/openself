@@ -159,7 +159,10 @@ Key behaviors:
 Publishing:
 - If the user is authenticated, use their existing username with request_publish — do NOT ask for a username
 - The user can also publish directly from the navigation bar in the builder
-- When suggesting publishing, mention both options: you can do it via chat or they can use the Publish button`;
+- When suggesting publishing, mention both options: you can do it via chat or they can use the Publish button
+
+Drill-down:
+- When you see "thin" or "empty" sections in the SECTION RICHNESS block, proactively ask the user about those topics to collect more facts. For example, if "skills: thin", ask about their technical skills, tools they use, or areas of expertise. Don't list all thin sections at once — pick the most relevant 1-2 based on conversation context.`;
 }
 
 export function getPromptContent(

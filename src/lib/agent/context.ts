@@ -6,6 +6,9 @@ import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
 import { getSystemPromptText } from "@/lib/agent/prompts";
+import { classifySectionRichness } from "@/lib/services/section-richness";
+import { filterPublishableFacts } from "@/lib/services/page-projection";
+import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import type { PromptMode } from "./promptAssembler";
 
 /**
@@ -138,6 +141,23 @@ export function assembleContext(
       `The user can also publish from the navigation bar.`,
     );
   }
+
+  // Section richness block (steady_state only — drives drill-down)
+  let richnessBlock = "";
+  if (mode === "steady_state") {
+    const publishable = filterPublishableFacts(existingFacts);
+    const lines: string[] = [];
+    for (const sectionType of Object.keys(SECTION_FACT_CATEGORIES)) {
+      const level = classifySectionRichness(publishable, sectionType);
+      if (level !== "rich") {
+        lines.push(`- ${sectionType}: ${level}`);
+      }
+    }
+    if (lines.length > 0) {
+      richnessBlock = `SECTION RICHNESS (thin/empty sections need more facts):\n${lines.join("\n")}`;
+    }
+  }
+  if (richnessBlock) contextParts.push(`\n\n---\n\n${richnessBlock}`);
 
   let systemPrompt = contextParts.join("");
 

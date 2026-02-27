@@ -26,6 +26,9 @@ vi.mock("@/lib/services/soul-service", () => ({
 vi.mock("@/lib/services/conflict-service", () => ({
   getOpenConflicts: vi.fn(() => []),
 }));
+vi.mock("@/lib/services/page-projection", () => ({
+  filterPublishableFacts: vi.fn(() => []),
+}));
 vi.mock("@/lib/agent/prompts", () => ({
   getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
 }));
