@@ -61,6 +61,38 @@ function truncateToTokenBudget(text: string, budget: number): string {
  * composes the system prompt with per-block token budgets,
  * and trims client messages to fit within the total budget.
  */
+export type ProfileArchetype = "developer" | "designer" | "executive" | "student" | "creator" | "generalist";
+
+export function detectArchetype(facts: Array<{ category: string; key: string; value: unknown }>): ProfileArchetype {
+  const projectFacts = facts.filter((f) => f.category === "project");
+  const experienceFacts = facts.filter((f) => f.category === "experience");
+  const identityFacts = facts.filter((f) => f.category === "identity");
+  const skillFacts = facts.filter((f) => f.category === "skill");
+
+  // Check role/title keywords
+  const roleFact = identityFacts.find((f) => f.key === "role" || f.key === "title");
+  const roleStr = roleFact ? JSON.stringify(roleFact.value).toLowerCase() : "";
+
+  if (roleStr.includes("designer") || roleStr.includes("ux") || roleStr.includes("ui")) return "designer";
+  if (roleStr.includes("ceo") || roleStr.includes("cto") || roleStr.includes("director") || roleStr.includes("vp")) return "executive";
+  if (roleStr.includes("student") || roleStr.includes("intern")) return "student";
+
+  // 3+ projects with URL = creator
+  const projectsWithUrl = projectFacts.filter((f) => {
+    const v = typeof f.value === "object" && f.value !== null ? f.value : {};
+    return "url" in v || "link" in v;
+  });
+  if (projectsWithUrl.length >= 3) return "creator";
+
+  // Dev signals
+  if (skillFacts.length >= 3) return "developer";
+
+  // Lots of experience = executive
+  if (experienceFacts.length >= 5) return "executive";
+
+  return "generalist";
+}
+
 export type AuthInfo = {
   authenticated: boolean;
   username: string | null;
@@ -158,6 +190,25 @@ export function assembleContext(
     }
   }
   if (richnessBlock) contextParts.push(`\n\n---\n\n${richnessBlock}`);
+
+  // Layout intelligence block (steady_state only)
+  if (mode === "steady_state") {
+    const archetype = detectArchetype(existingFacts);
+    const layoutIntelligence = `PAGE LAYOUT INTELLIGENCE:
+Default order: bio → at-a-glance → experience → projects → education → achievements → [personality sections]
+
+Profile archetype: ${archetype}
+
+Consider reordering when:
+- designer: projects before experience (portfolio-first)
+- student: education before experience
+- executive: experience before everything (track record)
+- creator: projects + achievements before experience
+- User EXPLICITLY asks: put requested section right after bio
+
+Before proposing a reorder, explain reasoning and ask for confirmation.`;
+    contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+  }
 
   let systemPrompt = contextParts.join("");
 
