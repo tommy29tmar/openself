@@ -18,6 +18,7 @@ import { Languages } from "./components/Languages";
 import { Activities } from "./components/Activities";
 import { Contact } from "./components/Contact";
 import { Custom } from "./components/Custom";
+import { AtAGlance } from "./components/AtAGlance";
 
 // Components map connects schema component types to React components
 const components: Record<string, React.ComponentType<any>> = {
@@ -39,6 +40,7 @@ const components: Record<string, React.ComponentType<any>> = {
     activities: Activities,
     contact: Contact,
     custom: Custom,
+    "at-a-glance": AtAGlance,
 };
 
 export const Editorial360Theme: ThemeRegistryItem = {
