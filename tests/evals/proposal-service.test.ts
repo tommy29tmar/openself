@@ -378,4 +378,19 @@ describe("markStaleProposals", () => {
     const staleCount = svc.markStaleProposals("owner1");
     expect(staleCount).toBe(0);
   });
+
+  it("should work when methods are destructured (singleton export pattern)", () => {
+    const svc = createProposalService(testDb as any);
+    svc.createProposal(makeProposal());
+
+    // Reproduce the singleton export pattern: destructure then call
+    const { markStaleProposals, getPendingProposals } = svc;
+
+    // Before fix: this throws because this.getPendingProposals is undefined
+    expect(() => markStaleProposals("owner1")).not.toThrow();
+
+    // Verify it actually ran (no stale proposals since hashes match)
+    const pending = getPendingProposals("owner1");
+    expect(pending).toHaveLength(1);
+  });
 });

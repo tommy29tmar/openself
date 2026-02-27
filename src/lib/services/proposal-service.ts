@@ -67,7 +67,7 @@ function rowToProposal(row: Record<string, unknown>): ProposalRow {
  * Accepts an optional Drizzle DB instance for testing with in-memory SQLite.
  */
 export function createProposalService(db: typeof defaultDb = defaultDb) {
-  return {
+  const svc = {
     /**
      * Create a new conformity proposal (status: pending).
      */
@@ -128,7 +128,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
      * On success, upserts the proposed content into section_copy_state.
      */
     acceptProposal(id: number): { ok: boolean; error?: string } {
-      const proposal = this.getProposal(id);
+      const proposal = svc.getProposal(id);
       if (!proposal || proposal.status !== "pending") {
         return { ok: false, error: "PROPOSAL_NOT_FOUND" };
       }
@@ -153,7 +153,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
         proposal.factsHash !== currentFactsHash ||
         proposal.soulHash !== currentSoulHash
       ) {
-        this.markStale(id);
+        svc.markStale(id);
         return { ok: false, error: "STALE_PROPOSAL" };
       }
 
@@ -176,7 +176,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
             .personalizedContent as string,
         );
         if (currentStateHash !== proposal.baselineStateHash) {
-          this.markStale(id);
+          svc.markStale(id);
           return { ok: false, error: "STATE_CHANGED" };
         }
       }
@@ -253,7 +253,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
         ? computeHash(soul.compiled)
         : "";
 
-      const pending = this.getPendingProposals(ownerKey);
+      const pending = svc.getPendingProposals(ownerKey);
       let staleCount = 0;
 
       for (const proposal of pending) {
@@ -295,7 +295,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
         }
 
         if (isStale) {
-          this.markStale(proposal.id);
+          svc.markStale(proposal.id);
           staleCount++;
         }
       }
@@ -303,6 +303,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
       return staleCount;
     },
   };
+  return svc;
 }
 
 // Default singleton
