@@ -643,15 +643,17 @@ function acceptProposal(proposalId: string): { ok: boolean; error?: string } {
     return { ok: false, error: "STALE_PROPOSAL" };
   }
 
-  // Guard 2: STATE_CHANGED — active copy was modified after proposal was created
-  // (e.g., user triggered live synthesis in the meantime)
+  // Guard 2: STATE_CHANGED — active copy was modified or deleted after proposal was created
   const activeState = getActiveSectionCopy(proposal.ownerKey, proposal.sectionType, proposal.language);
-  if (activeState) {
-    const currentStateHash = computeHash(activeState.personalizedContent);
-    if (currentStateHash !== proposal.baselineStateHash) {
-      markProposalStale(proposalId);
-      return { ok: false, error: "STATE_CHANGED" };
-    }
+  if (!activeState) {
+    // The state the proposal was made against no longer exists
+    markProposalStale(proposalId);
+    return { ok: false, error: "STATE_CHANGED" };
+  }
+  const currentStateHash = computeHash(activeState.personalizedContent);
+  if (currentStateHash !== proposal.baselineStateHash) {
+    markProposalStale(proposalId);
+    return { ok: false, error: "STATE_CHANGED" };
   }
 
   // All guards pass → apply
@@ -685,7 +687,10 @@ function acceptAllPendingProposals(ownerKey: string): {
   let stale = 0;
   const errors: string[] = [];
 
-  // Single transaction for atomicity
+  // Single transaction for atomicity.
+  // acceptProposal() must participate in this transaction — either it receives
+  // the transaction handle or uses the same sqlite connection (SQLite serializes
+  // writes on a single connection, so BEGIN/COMMIT wraps all inner operations).
   sqlite.exec("BEGIN");
   try {
     for (const proposal of pending) {
