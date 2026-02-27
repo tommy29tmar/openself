@@ -10,6 +10,7 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { SignupModal } from "@/components/auth/SignupModal";
 import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
+import { ProposalBanner } from "@/components/builder/ProposalBanner";
 import { PageRenderer } from "@/components/page";
 import {
   Tabs,
@@ -375,6 +376,7 @@ export function SplitView({
     <div className="relative h-full overflow-y-auto">
       {navBar}
       {usernameInput}
+      <ProposalBanner />
       {/* Show PublishBar only when agent requested publish AND NavBar doesn't already show publish */}
       {publishStatus === "approval_pending" && !hasUnpublishedChanges && (
         <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
