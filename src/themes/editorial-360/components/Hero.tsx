@@ -67,21 +67,27 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
         );
     }
 
-    // Default: hero-split (Classic Editorial)
+    // Default: hero-split (Classic Editorial, two-column)
     return (
         <header className="mb-8 mt-4 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.1s' }}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[var(--page-border)] pb-8 relative overflow-hidden">
-                <div className="flex-1 min-w-0">
-                    <h1 className="font-[var(--page-font-heading)] text-5xl md:text-7xl lg:text-8xl leading-tight tracking-tighter mb-2 font-bold uppercase overflow-hidden">
+            <div className="md:grid md:grid-cols-2 md:gap-8 md:items-end border-b border-[var(--page-border)] pb-8">
+                <div className="min-w-0">
+                    <h1
+                        className="font-[var(--page-font-heading)] uppercase font-bold tracking-[0.05em] leading-tight"
+                        style={{ fontSize: "clamp(1.8rem, 4vw, 3rem)" }}
+                    >
                         {name}
                     </h1>
                 </div>
                 {tagline && (
-                <div className="md:text-right shrink-0">
-                    <p className="text-xl md:text-2xl font-[var(--page-font-heading)] text-[var(--page-fg-secondary)] tracking-widest uppercase leading-none">
-                        {tagline}
-                    </p>
-                </div>
+                    <div className="mt-4 md:mt-0 md:text-right">
+                        <p
+                            className="font-[var(--page-font-heading)] font-light text-[var(--page-fg-secondary)] leading-snug"
+                            style={{ fontSize: "clamp(1rem, 2vw, 1.25rem)" }}
+                        >
+                            {tagline}
+                        </p>
+                    </div>
                 )}
             </div>
         </header>
