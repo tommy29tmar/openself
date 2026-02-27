@@ -38,6 +38,7 @@ vi.mock("@/lib/services/memory-service", () => ({
 }));
 vi.mock("@/lib/services/soul-service", () => ({
   proposeSoulChange: vi.fn().mockReturnValue({ id: "proposal-1" }),
+  getActiveSoul: vi.fn().mockReturnValue(null),
 }));
 vi.mock("@/lib/services/conflict-service", () => ({
   resolveConflict: vi.fn().mockReturnValue({ success: true }),
@@ -56,6 +57,18 @@ vi.mock("@/lib/layout/assign-slots", () => ({
 }));
 vi.mock("@/lib/layout/lock-policy", () => ({
   extractLocks: vi.fn().mockReturnValue(new Map()),
+}));
+vi.mock("@/lib/services/section-personalizer", () => ({
+  personalizeSection: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/services/page-projection", () => ({
+  filterPublishableFacts: vi.fn().mockReturnValue([]),
+}));
+vi.mock("@/lib/services/personalization-impact", () => ({
+  detectImpactedSections: vi.fn().mockReturnValue([]),
+}));
+vi.mock("@/lib/services/personalization-hashing", () => ({
+  computeHash: vi.fn().mockReturnValue("hash"),
 }));
 
 import { createAgentTools } from "@/lib/agent/tools";

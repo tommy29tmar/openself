@@ -16,13 +16,17 @@ import { logEvent } from "@/lib/services/event-service";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
-import { proposeSoulChange, type SoulOverlay } from "@/lib/services/soul-service";
+import { proposeSoulChange, getActiveSoul, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
 import { FactValidationError } from "@/lib/services/fact-validation";
 import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
+import { personalizeSection } from "@/lib/services/section-personalizer";
+import { filterPublishableFacts } from "@/lib/services/page-projection";
+import { detectImpactedSections } from "@/lib/services/personalization-impact";
+import { computeHash } from "@/lib/services/personalization-hashing";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: "onboarding" | "steady_state") {
   const effectiveOwnerKey = ownerKey ?? sessionId;
@@ -349,6 +353,36 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
             sectionCount: config.sections.length,
           },
         });
+
+        // Fire-and-forget personalization (steady_state only)
+        if (mode === "steady_state" && ownerKey) {
+          const soul = getActiveSoul(ownerKey);
+          if (soul?.compiled) {
+            const publishable = filterPublishableFacts(facts);
+            const soulHash = computeHash(soul.compiled);
+            const impacted = detectImpactedSections(publishable, ownerKey, factLang, soulHash);
+
+            if (impacted.length > 0) {
+              // Fire-and-forget: don't await, don't block tool response
+              (async () => {
+                try {
+                  for (const sectionType of impacted) {
+                    const section = config.sections.find((s: any) => s.type === sectionType);
+                    if (!section) continue;
+                    await personalizeSection({
+                      section, ownerKey, language: factLang,
+                      publishableFacts: publishable,
+                      soulCompiled: soul.compiled, username,
+                    });
+                  }
+                } catch (err) {
+                  console.error("[generate_page] personalization error:", err);
+                }
+              })();
+            }
+          }
+        }
+
         return {
           success: true,
           username,
