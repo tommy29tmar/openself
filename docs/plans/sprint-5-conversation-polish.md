@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Vercel AI SDK, Zod, vitest
 
-**Dependencies:** Sprints 1-3 (Journey Intelligence, onboarding rewrite, returning user policies). Independent of Sprint 4.
+**Dependencies:** Sprints 1-3 (required: Journey Intelligence, onboarding rewrite, returning user policies). Sprint 4 is soft-dependency: eval scenarios use the existing `"medium"` tier if Sprint 4's `"capable"` tier is not yet available — see `getModelForTier()` fallback.
 
 **Assumptions (from Sprint 1-3 completion):**
 - `src/lib/agent/journey.ts` exists and exports `JourneyState`, `Situation`, `ExpertiseLevel`, `BootstrapPayload`, `assembleBootstrapPayload()`
@@ -16,7 +16,7 @@
 - `src/lib/agent/policies/memory-directives.ts` exports `memoryUsageDirectives()`
 - `src/lib/agent/policies/turn-management.ts` exports `turnManagementRules()`
 - `src/lib/agent/prompts.ts` exports `buildSystemPrompt(bootstrap)` which composes: `[CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration, turnManagement, memoryDirectives]`
-- `src/lib/ai/provider.ts` exports `ModelTier = "cheap" | "medium" | "capable"`, `getModel()`, `getModelForTier(tier)`, `getProviderName()`
+- `src/lib/ai/provider.ts` exports `ModelTier = "cheap" | "medium"` (or `"cheap" | "medium" | "capable"` if Sprint 4 is completed), `getModel()`, `getModelForTier(tier)`, `getProviderName()`
 
 ---
 
@@ -503,7 +503,20 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   blocks.push(actionAwarenessPolicy());   // NEW — Sprint 5
   blocks.push(undoAwarenessPolicy());     // NEW — Sprint 5
 
-  return blocks.join("\n\n---\n\n");
+  const composed = blocks.join("\n\n---\n\n");
+
+  // Budget guard: system prompt must leave room for context (facts, memory,
+  // soul, summaries, conflicts). TOTAL_TOKEN_BUDGET is 7500, reserve >= 4000.
+  const MAX_SYSTEM_PROMPT_TOKENS = 3500;
+  const estimatedTokens = Math.ceil(composed.length / 4);
+  if (estimatedTokens > MAX_SYSTEM_PROMPT_TOKENS) {
+    console.warn(
+      `[buildSystemPrompt] System prompt ~${estimatedTokens} tokens exceeds budget of ${MAX_SYSTEM_PROMPT_TOKENS}. ` +
+      `Context blocks may be squeezed. Review prompt block sizes.`
+    );
+  }
+
+  return composed;
 }
 ```
 
@@ -511,6 +524,7 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
 - Added `import { actionAwarenessPolicy }` and `import { undoAwarenessPolicy }`
 - Added `actionAwarenessPolicy()` and `undoAwarenessPolicy()` as the last two blocks in the composition
 - Action awareness comes before undo awareness (explain-before-act is the general case; undo is the exception flow)
+- Budget guard unchanged from Sprint 2/3 (MAX_SYSTEM_PROMPT_TOKENS = 3500). With 12 blocks total, monitor that the composed prompt stays within budget.
 
 ### Test modifications
 
@@ -1118,10 +1132,12 @@ npx vitest run --config vitest.config.cross-provider.ts --reporter=verbose 2>&1 
 
 ### Implementation
 
+**Pipeline-aware eval strategy:** Scenarios 1 (onboarding-flow) and 4 (layout-change) use `buildSystemPrompt(bootstrap)` to test the real prompt composition pipeline. Scenarios 2-3 and 5-8 use controlled hardcoded prompts to isolate specific behaviors (structured output, undo, expertise adaptation) independently of pipeline changes. This gives us both integration coverage and focused unit evals.
+
 #### Scenario 1: `onboarding-flow.eval.ts`
 
 Tests: 5 conversation turns with good signal → facts created, page generated, publish proposed.
-Strategy: Mock tool results, use real LLM for conversation.
+Strategy: Mock tool results, use real LLM for conversation. **Pipeline-aware**: uses `buildSystemPrompt()` with `first_visit` bootstrap.
 
 ```typescript
 // tests/evals/cross-provider/onboarding-flow.eval.ts
@@ -1137,7 +1153,8 @@ Strategy: Mock tool results, use real LLM for conversation.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai/provider";
-import { getSystemPromptText } from "@/lib/agent/prompts";
+import { buildSystemPrompt } from "@/lib/agent/prompts";
+import type { BootstrapPayload } from "@/lib/agent/journey";
 import {
   getTestProviders,
   setProvider,
@@ -1147,6 +1164,27 @@ import {
 } from "./setup";
 
 const providers = getTestProviders();
+
+/**
+ * Build a real system prompt via the pipeline for eval scenarios.
+ * This ensures evals test the actual prompt composition, not a legacy function.
+ */
+function buildOnboardingPrompt(language = "en"): string {
+  const bootstrap: BootstrapPayload = {
+    journeyState: "first_visit",
+    situations: [],
+    expertiseLevel: "novice",
+    userName: null,
+    lastSeenDaysAgo: null,
+    publishedUsername: null,
+    pendingProposalCount: 0,
+    thinSections: [],
+    staleFacts: [],
+    language,
+    conversationContext: null,
+  };
+  return buildSystemPrompt(bootstrap);
+}
 
 describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
   let cleanup: () => void;
@@ -1160,7 +1198,7 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
   });
 
   it("extracts name from first user message", async () => {
-    const systemPrompt = getSystemPromptText("onboarding", "en");
+    const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
       system: systemPrompt,
@@ -1176,7 +1214,7 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
   });
 
   it("asks about different topics across turns (breadth-first)", async () => {
-    const systemPrompt = getSystemPromptText("onboarding", "en");
+    const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
       system: systemPrompt,
@@ -1197,7 +1235,7 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
   });
 
   it("proposes page generation after sufficient signal (5 turns)", async () => {
-    const systemPrompt = getSystemPromptText("onboarding", "en");
+    const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
       system: systemPrompt,
@@ -1224,7 +1262,7 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
   });
 
   it("does not fabricate information", async () => {
-    const systemPrompt = getSystemPromptText("onboarding", "en");
+    const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
       system: systemPrompt,
@@ -1242,7 +1280,7 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
   });
 
   it("keeps responses concise (under 3 sentences for normal turns)", async () => {
-    const systemPrompt = getSystemPromptText("onboarding", "en");
+    const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
       system: systemPrompt,
@@ -1471,7 +1509,7 @@ describe.each(providers)("personalization [%s]", (provider: TestProvider) => {
 #### Scenario 4: `layout-change.eval.ts`
 
 Tests: User requests layout change → agent explains before executing.
-Strategy: Mock tool results, use real LLM for conversation.
+Strategy: Mock tool results, use real LLM for conversation. **Pipeline-aware**: uses `buildSystemPrompt()` with `active_fresh`/`familiar` bootstrap.
 
 ```typescript
 // tests/evals/cross-provider/layout-change.eval.ts
@@ -1487,6 +1525,8 @@ Strategy: Mock tool results, use real LLM for conversation.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai/provider";
+import { buildSystemPrompt } from "@/lib/agent/prompts";
+import type { BootstrapPayload } from "@/lib/agent/journey";
 import {
   getTestProviders,
   setProvider,
@@ -1496,21 +1536,26 @@ import {
 
 const providers = getTestProviders();
 
-// System prompt with action awareness policy baked in
-const SYSTEM_PROMPT = `You are the OpenSelf agent — a warm, thoughtful AI that helps people build their personal web page.
-
-ACTION AWARENESS:
-HIGH-IMPACT operations (require explain-before-act): set_layout, set_theme, reorder_sections (3+), generate_page (steady_state).
-For high-impact operations: 1. EXPLAIN what you're about to do. 2. ASK confirmation. 3. EXECUTE. 4. Point to preview.
-Exception: If user gave explicit instruction, brief confirmation and act.
-
-LOW-IMPACT operations (just do it): create_fact, update_fact, delete_fact, set_fact_visibility, update_page_style, reorder_sections (1-2).
-
-EXPERTISE CALIBRATION: familiar
-The user knows the basics. Explain only for layout/theme changes or when the action is ambiguous.
-
-Available layouts: vertical (single column, classic), sidebar-left (name sidebar + content), bento-standard (grid cards).
-The user currently has the vertical layout.`;
+/**
+ * Build a real system prompt via the pipeline for a returning user
+ * with action-awareness active (familiar expertise = explain-before-act).
+ */
+function buildFamiliarUserPrompt(): string {
+  const bootstrap: BootstrapPayload = {
+    journeyState: "active_fresh",
+    situations: [],
+    expertiseLevel: "familiar",
+    userName: "Marco",
+    lastSeenDaysAgo: 2,
+    publishedUsername: "marco",
+    pendingProposalCount: 0,
+    thinSections: [],
+    staleFacts: [],
+    language: "en",
+    conversationContext: null,
+  };
+  return buildSystemPrompt(bootstrap);
+}
 
 describe.each(providers)("layout-change [%s]", (provider: TestProvider) => {
   let cleanup: () => void;
@@ -1526,7 +1571,7 @@ describe.each(providers)("layout-change [%s]", (provider: TestProvider) => {
   it("explains the impact when user asks about layouts", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "I think my page could look better. What layout options do I have?" },
       ],
@@ -1544,7 +1589,7 @@ describe.each(providers)("layout-change [%s]", (provider: TestProvider) => {
   it("asks for confirmation before changing layout", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "I'd like to try a different layout, maybe something more modern." },
       ],
@@ -1562,7 +1607,7 @@ describe.each(providers)("layout-change [%s]", (provider: TestProvider) => {
   it("acts directly with brief confirmation when user gives explicit instruction", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Switch to the bento layout." },
       ],
@@ -1640,7 +1685,7 @@ describe.each(providers)("undo-request [%s]", (provider: TestProvider) => {
   it("identifies last action when user says 'don't like it'", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "assistant", content: "I've switched your theme to warm — check out the preview!" },
         { role: "user", content: "Hmm, I don't like it. It was better before." },
@@ -1659,7 +1704,7 @@ describe.each(providers)("undo-request [%s]", (provider: TestProvider) => {
   it("proposes reversal instead of regenerating page", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "assistant", content: "I've switched your theme to warm — check out the preview!" },
         { role: "user", content: "No, go back. I preferred the other one." },
@@ -1685,7 +1730,7 @@ describe.each(providers)("undo-request [%s]", (provider: TestProvider) => {
   it("asks for specifics when complaint is vague", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "I don't like how my page looks." },
       ],
@@ -1797,7 +1842,7 @@ describe.each(providers)("returning-stale [%s]", (provider: TestProvider) => {
   it("greets the user by name", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Hey, I'm back!" },
       ],
@@ -1815,7 +1860,7 @@ describe.each(providers)("returning-stale [%s]", (provider: TestProvider) => {
   it("does NOT ask for name or basic info", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Hey, I'm back!" },
       ],
@@ -1832,7 +1877,7 @@ describe.each(providers)("returning-stale [%s]", (provider: TestProvider) => {
   it("references known information in the greeting", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Hey!" },
       ],
@@ -1850,7 +1895,7 @@ describe.each(providers)("returning-stale [%s]", (provider: TestProvider) => {
   it("asks about what's new (not re-interviewing)", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Hi again!" },
       ],
@@ -1932,7 +1977,7 @@ describe.each(providers)("publish-incomplete [%s]", (provider: TestProvider) => 
   it("communicates preflight issues to the user", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Let's publish my page!" },
       ],
@@ -1950,7 +1995,7 @@ describe.each(providers)("publish-incomplete [%s]", (provider: TestProvider) => 
   it("offers to fix issues or publish anyway", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "I want to publish now." },
       ],
@@ -1968,7 +2013,7 @@ describe.each(providers)("publish-incomplete [%s]", (provider: TestProvider) => 
   it("prioritizes errors over warnings in explanation", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "Publish my page please." },
       ],
@@ -2039,7 +2084,7 @@ describe.each(providers)("low-signal [%s]", (provider: TestProvider) => {
   it("presents guided options after 2 low-signal replies", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "hi" },
         { role: "assistant", content: "Hey! Nice to meet you. I'd love to learn about you so I can build your personal page. What do you do?" },
@@ -2085,7 +2130,7 @@ describe.each(providers)("low-signal [%s]", (provider: TestProvider) => {
   it("never ends with passive closing during onboarding", async () => {
     const { text } = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: buildFamiliarUserPrompt(),
       messages: [
         { role: "user", content: "ok" },
       ],

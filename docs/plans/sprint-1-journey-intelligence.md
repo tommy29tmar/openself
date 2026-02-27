@@ -772,7 +772,7 @@ describe("assembleBootstrapPayload", () => {
     expect(Array.isArray(payload.situations)).toBe(true);
   });
 
-  it("includes userName when name fact exists", () => {
+  it("includes userName when name fact exists", async () => {
     const { getAllFacts } = await import("@/lib/services/kb-service");
     vi.mocked(getAllFacts).mockReturnValue([
       {
@@ -813,7 +813,7 @@ describe("assembleBootstrapPayload", () => {
     expect(payload.thinSections).toContain("hero");
   });
 
-  it("lists stale facts", () => {
+  it("lists stale facts", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
     const { getAllFacts } = await import("@/lib/services/kb-service");
@@ -1038,6 +1038,7 @@ describe("GET /api/chat/bootstrap", () => {
   });
 
   it("uses effectiveScope from resolveOwnerScope in multi-user mode", async () => {
+    const { getAuthContext } = await import("@/lib/auth/session");
     vi.mocked(isMultiUserEnabled).mockReturnValue(true);
     vi.mocked(resolveOwnerScope).mockReturnValue({
       cognitiveOwnerKey: "profile-1",
@@ -1045,6 +1046,11 @@ describe("GET /api/chat/bootstrap", () => {
       knowledgePrimaryKey: "sess-x",
       currentSessionId: "sess-y",
     });
+    vi.mocked(getAuthContext).mockReturnValue({
+      authenticated: true,
+      username: "marco",
+      profileId: "profile-1",
+    } as never);
 
     const req = new Request("http://localhost:3000/api/chat/bootstrap?language=de");
     const res = await GET(req);
@@ -1058,7 +1064,7 @@ describe("GET /api/chat/bootstrap", () => {
         currentSessionId: "sess-y",
       },
       "de",
-      expect.any(Object), // authInfo
+      expect.objectContaining({ authenticated: true }), // authInfo
     );
   });
 
@@ -1140,10 +1146,16 @@ export function assembleContext(
 ```typescript
 /**
  * Map JourneyState to PromptMode for backward compatibility.
- * first_visit → onboarding, all others → steady_state.
+ *
+ * CONTRACT (frozen — must match Sprint 2 journeyStateToPromptMode):
+ *   onboarding:    first_visit, returning_no_page
+ *   steady_state:  draft_ready, active_fresh, active_stale, blocked
+ *
+ * Rationale: returning_no_page users have no draft yet — they still
+ * need the onboarding flow to collect initial facts.
  */
 function mapJourneyStateToMode(state: JourneyState): PromptMode {
-  if (state === "first_visit") return "onboarding";
+  if (state === "first_visit" || state === "returning_no_page") return "onboarding";
   return "steady_state";
 }
 ```
@@ -1327,6 +1339,184 @@ npx vitest run tests/evals/context-assembler.test.ts --reporter=verbose
 
 ---
 
+## Task 7: Wire bootstrap into POST /api/chat route
+
+### Files
+
+| Action | Path |
+|--------|------|
+| **modify** | `src/app/api/chat/route.ts` |
+| **create** | `tests/evals/chat-route-bootstrap.test.ts` |
+
+### Context
+
+This is the critical wiring task. Tasks 1-6 create the Journey Intelligence layer and make `assembleContext()` bootstrap-aware, but the actual POST /api/chat handler still calls `assembleContext(scope, lang, messages, authInfo)` without a bootstrap payload. Without this task, the entire Sprint 1 is dead code.
+
+The fix: call `assembleBootstrapPayload()` inside the POST handler and pass the result as the 5th argument to `assembleContext()`.
+
+### Step 1: Write the failing test
+
+Create `tests/evals/chat-route-bootstrap.test.ts`:
+
+```typescript
+/**
+ * Tests that POST /api/chat wires the bootstrap payload through to assembleContext.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// --- Mocks (hoisted) ---
+
+const mockBootstrapPayload = {
+  journeyState: "first_visit" as const,
+  situations: [] as string[],
+  expertiseLevel: "novice" as const,
+  userName: null,
+  lastSeenDaysAgo: null,
+  publishedUsername: null,
+  pendingProposalCount: 0,
+  thinSections: [] as string[],
+  staleFacts: [] as string[],
+  language: "en",
+  conversationContext: null,
+};
+
+vi.mock("@/lib/agent/journey", () => ({
+  assembleBootstrapPayload: vi.fn(() => ({ ...mockBootstrapPayload })),
+}));
+
+vi.mock("@/lib/agent/context", () => ({
+  assembleContext: vi.fn(() => ({
+    mode: "onboarding",
+    systemPrompt: "test prompt",
+    contextParts: [],
+    messages: [{ role: "user", content: "hello" }],
+  })),
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  resolveOwnerScope: vi.fn(() => ({
+    cognitiveOwnerKey: "cog-1",
+    knowledgeReadKeys: ["sess-a"],
+    knowledgePrimaryKey: "sess-a",
+    currentSessionId: "sess-a",
+  })),
+  getAuthContext: vi.fn(() => null),
+}));
+
+vi.mock("@/lib/services/session-service", () => ({
+  isMultiUserEnabled: vi.fn(() => false),
+  DEFAULT_SESSION_ID: "__default__",
+  getOrCreateSession: vi.fn(() => ({ id: "sess-a", language: "en" })),
+}));
+
+vi.mock("@/lib/services/quota-service", () => ({
+  checkQuota: vi.fn(() => ({ allowed: true })),
+}));
+
+vi.mock("ai", () => ({
+  streamText: vi.fn(() => ({
+    toDataStreamResponse: vi.fn(() => new Response("ok")),
+  })),
+}));
+
+vi.mock("@/lib/agent/tools", () => ({
+  createAgentTools: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/services/event-service", () => ({
+  logEvent: vi.fn(),
+}));
+
+import { assembleBootstrapPayload } from "@/lib/agent/journey";
+import { assembleContext } from "@/lib/agent/context";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("POST /api/chat bootstrap wiring", () => {
+  it("calls assembleBootstrapPayload and passes result to assembleContext", async () => {
+    const { POST } = await import("@/app/api/chat/route");
+    const req = new Request("http://localhost:3000/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] }),
+    });
+
+    await POST(req);
+
+    // Bootstrap was called with the resolved scope
+    expect(assembleBootstrapPayload).toHaveBeenCalledWith(
+      expect.objectContaining({ cognitiveOwnerKey: "cog-1" }),
+      "en",
+      expect.anything(), // authInfo or undefined
+    );
+
+    // assembleContext received the bootstrap payload as 5th argument
+    expect(assembleContext).toHaveBeenCalledWith(
+      expect.any(Object),  // scope
+      "en",                 // language
+      expect.any(Array),    // messages
+      expect.anything(),    // authInfo
+      expect.objectContaining({ journeyState: "first_visit" }), // bootstrap
+    );
+  });
+});
+```
+
+### Step 2: Run test to verify it fails
+
+```bash
+npx vitest run tests/evals/chat-route-bootstrap.test.ts --reporter=verbose
+```
+
+Expected: FAIL — `assembleBootstrapPayload` not called, `assembleContext` called with only 4 args.
+
+### Step 3: Wire bootstrap into POST /api/chat/route.ts
+
+Add import at the top of `src/app/api/chat/route.ts`:
+
+```typescript
+import { assembleBootstrapPayload } from "@/lib/agent/journey";
+```
+
+Inside the `POST` function, after resolving `effectiveScope` and `sessionLanguage` (around line 45), add:
+
+```typescript
+  // --- Journey Intelligence: assemble bootstrap payload ---
+  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfo);
+```
+
+Then modify the `assembleContext` call to pass bootstrap as the 5th argument:
+
+```typescript
+  const { mode, systemPrompt, contextParts, messages: trimmedMessages } =
+    assembleContext(effectiveScope, sessionLanguage, messages, authInfo, bootstrap);
+```
+
+### Step 4: Run test to verify it passes
+
+```bash
+npx vitest run tests/evals/chat-route-bootstrap.test.ts --reporter=verbose
+```
+
+Expected: PASS
+
+### Step 5: Run existing chat route tests for regression
+
+```bash
+npx vitest run tests/evals/chat-route*.test.ts --reporter=verbose
+```
+
+### Step 6: Commit
+
+```bash
+git add src/app/api/chat/route.ts tests/evals/chat-route-bootstrap.test.ts
+git commit -m "feat: wire bootstrap payload into POST /api/chat route"
+```
+
+---
+
 ## Execution Order
 
 Tasks are ordered by dependency:
@@ -1335,13 +1525,14 @@ Tasks are ordered by dependency:
 Task 2 (test) + Task 1 (impl)  →  commit 1
 Task 4 (test) + Task 3 (impl)  →  commit 2
 Task 6 (test) + Task 5 (impl)  →  commit 3
+Task 7 (test + impl)           →  commit 4 (end-to-end wiring)
 ```
 
 Each pair follows TDD: write tests first, confirm red, implement, confirm green.
 
 ## Full Test Suite Validation
 
-After all 3 commits, run the entire test suite to verify no regressions:
+After all 4 commits, run the entire test suite to verify no regressions:
 
 ```bash
 npx vitest run --reporter=verbose
@@ -1357,3 +1548,5 @@ npx vitest run --reporter=verbose
 | `tests/evals/bootstrap-endpoint.test.ts` | **create** |
 | `src/lib/agent/context.ts` | **modify** (add optional `bootstrap` param) |
 | `tests/evals/context-assembler.test.ts` | **modify** (add bootstrap tests) |
+| `src/app/api/chat/route.ts` | **modify** (wire bootstrap into POST handler) |
+| `tests/evals/chat-route-bootstrap.test.ts` | **create** |

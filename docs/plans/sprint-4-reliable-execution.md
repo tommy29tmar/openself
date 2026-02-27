@@ -1719,12 +1719,15 @@ git commit -m "feat: add inspect_page_state agent tool for structured page intro
 
 ---
 
-### Task 6: Extend request_publish to call preflight internally
+### Task 6: Add username validation gate to request_publish (belt-and-suspenders)
 
 **Files:**
 - Modify: `src/lib/agent/tools.ts` (modify existing `request_publish` tool)
 
-**Context:** Belt-and-suspenders: the agent should call `publish_preflight` before `request_publish`, but if it skips the preflight, `request_publish` should still catch blocking issues. Add a lightweight gate check at the top of `request_publish.execute`. This reuses the same logic as `publish_preflight` but only checks the hard gates (hasDraft, hasUsername) — not quality metrics. The existing draft check at line 415 already handles `hasDraft`, so we only need to add a username validation check.
+**Context:** Belt-and-suspenders: the agent should call `publish_preflight` before `request_publish`, but if it skips the preflight, `request_publish` should still catch hard-gate issues. This task adds a lightweight **username format check** — not the full preflight (which includes quality metrics like thin sections). The full preflight is the `publish_preflight` tool's responsibility.
+
+Hard gates added here: hasDraft (already exists at line 415) + hasValidUsername (new).
+Quality gates (thin sections, missing facts, etc.) remain in `publish_preflight` only.
 
 **Step 1: Understand what request_publish already checks**
 

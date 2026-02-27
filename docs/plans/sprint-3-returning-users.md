@@ -1432,7 +1432,20 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   blocks.push(turnManagementRules());
   blocks.push(memoryUsageDirectives());
 
-  return blocks.join("\n\n---\n\n");
+  const composed = blocks.join("\n\n---\n\n");
+
+  // Budget guard: system prompt must leave room for context (facts, memory,
+  // soul, summaries, conflicts). TOTAL_TOKEN_BUDGET is 7500, reserve >= 4000.
+  const MAX_SYSTEM_PROMPT_TOKENS = 3500;
+  const estimatedTokens = Math.ceil(composed.length / 4);
+  if (estimatedTokens > MAX_SYSTEM_PROMPT_TOKENS) {
+    console.warn(
+      `[buildSystemPrompt] System prompt ~${estimatedTokens} tokens exceeds budget of ${MAX_SYSTEM_PROMPT_TOKENS}. ` +
+      `Context blocks may be squeezed. Review prompt block sizes.`
+    );
+  }
+
+  return composed;
 }
 ```
 
@@ -1440,6 +1453,7 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
 - Added `import { memoryUsageDirectives }` and `import { turnManagementRules }`
 - Added `turnManagementRules()` and `memoryUsageDirectives()` as the last two blocks in the composition
 - Turn management comes before memory directives (more immediately actionable)
+- Budget guard unchanged from Sprint 2 (same MAX_SYSTEM_PROMPT_TOKENS = 3500)
 
 ### Test
 
