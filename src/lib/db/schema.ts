@@ -441,3 +441,46 @@ export const profileMessageUsage = sqliteTable("profile_message_usage", {
   count: integer("count").notNull().default(0),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
+
+// --- Section Copy (Phase 1c: Personalization) ---
+
+export const sectionCopyCache = sqliteTable("section_copy_cache", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerKey: text("owner_key").notNull(),
+  sectionType: text("section_type").notNull(),
+  factsHash: text("facts_hash").notNull(),
+  soulHash: text("soul_hash").notNull(),
+  language: text("language").notNull(),
+  personalizedContent: text("personalized_content").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});
+
+export const sectionCopyState = sqliteTable("section_copy_state", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerKey: text("owner_key").notNull(),
+  sectionType: text("section_type").notNull(),
+  language: text("language").notNull(),
+  personalizedContent: text("personalized_content").notNull(),
+  factsHash: text("facts_hash").notNull(),
+  soulHash: text("soul_hash").notNull(),
+  approvedAt: text("approved_at").default(sql`(datetime('now'))`),
+  source: text("source").notNull().default("live"),
+});
+
+export const sectionCopyProposals = sqliteTable("section_copy_proposals", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerKey: text("owner_key").notNull(),
+  sectionType: text("section_type").notNull(),
+  language: text("language").notNull(),
+  currentContent: text("current_content").notNull(),
+  proposedContent: text("proposed_content").notNull(),
+  issueType: text("issue_type").notNull(),
+  reason: text("reason").notNull(),
+  severity: text("severity").notNull().default("low"),
+  status: text("status").notNull().default("pending"),
+  factsHash: text("facts_hash").notNull(),
+  soulHash: text("soul_hash").notNull(),
+  baselineStateHash: text("baseline_state_hash").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  reviewedAt: text("reviewed_at"),
+});
