@@ -162,10 +162,18 @@
   --text-3xl: 1.875rem;
   --text-4xl: 2.25rem;
   --text-5xl: 3rem;
+  --text-6xl: 3.75rem;  /* 60px */
 
   /* Content max-width */
   --page-max-width: 48rem;
   --page-wide-max-width: 64rem;
+
+  /* ─── Magazine Redesign Tokens ─── */
+
+  /* Animations */
+  --reveal-distance: 12px;
+  --reveal-duration: 600ms;
+  --reveal-easing: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ─── Minimal Theme ─── */
@@ -221,7 +229,7 @@
 [data-theme="warm"][data-color-scheme="light"] {
   --page-bg: #faf7f2;
   --page-fg: #2c2418;
-  --page-fg-secondary: #8b7e6a;
+  --page-fg-secondary: #6b5e4a;
   --page-muted: #f0ebe3;
   --page-border: #e4ddd2;
   --page-accent: var(--primary-color, #c06834);
@@ -232,7 +240,7 @@
   --page-badge-bg: #f0ebe3;
   --page-badge-fg: #5c5040;
   --page-badge-border: #e4ddd2;
-  --page-footer-fg: #b5a998;
+  --page-footer-fg: #9a8d7c;
 
   --page-font-heading: var(--font-serif, Georgia, serif);
   --page-font-body: var(--font-sans, sans-serif);
@@ -359,4 +367,137 @@
 .layout-bento-standard .slot-half .theme-reveal,
 .layout-sidebar-left .slot-half .theme-reveal {
   margin-bottom: 1.5rem;
+}
+
+/* ─── Section Label (OpenSelf signature) ─── */
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  color: var(--page-fg-secondary);
+  margin-bottom: 2rem; /* 32px */
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; /* 12px */
+  border: none;
+  padding-bottom: 0;
+}
+
+.section-label::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: var(--page-accent);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+/* ─── Middle Dot Separator ─── */
+
+.entry-dot-separator {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0; /* my-8 */
+}
+
+.entry-dot-separator::after {
+  content: '\00B7';
+  font-size: 1.125rem; /* text-lg */
+  color: var(--page-fg-secondary);
+  opacity: 0.3;
+}
+
+/* ─── Scroll Reveal (updated timing) ─── */
+
+.theme-reveal {
+  opacity: 0;
+  transform: translateY(var(--reveal-distance, 12px));
+  transition:
+    opacity var(--reveal-duration, 600ms) var(--reveal-easing, cubic-bezier(0.16, 1, 0.3, 1)),
+    transform var(--reveal-duration, 600ms) var(--reveal-easing, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.theme-reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Hero Stagger Animation ─── */
+
+@keyframes hero-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-fade-in-simple {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hero-stagger-name {
+  opacity: 0;
+  animation: hero-fade-in 600ms var(--reveal-easing) 100ms forwards;
+}
+
+.hero-stagger-tagline {
+  opacity: 0;
+  animation: hero-fade-in 600ms var(--reveal-easing) 250ms forwards;
+}
+
+.hero-stagger-social {
+  opacity: 0;
+  animation: hero-fade-in-simple 400ms var(--reveal-easing) 450ms forwards;
+}
+
+/* ─── Hover Underline (left-to-right grow) ─── */
+
+.hover-underline-grow {
+  position: relative;
+  text-decoration: none;
+}
+
+.hover-underline-grow::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  background: var(--page-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 300ms var(--reveal-easing);
+}
+
+.hover-underline-grow:hover::after {
+  transform: scaleX(1);
+}
+
+/* ─── Reduced Motion ─── */
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .hero-stagger-name,
+  .hero-stagger-tagline,
+  .hero-stagger-social {
+    opacity: 1;
+    animation: none;
+  }
+
+  .hover-underline-grow::after {
+    transition: none;
+  }
 }

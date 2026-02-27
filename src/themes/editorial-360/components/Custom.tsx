@@ -13,9 +13,9 @@ export function Custom({ content }: SectionProps<CustomContent>) {
     if (!title && !body && !items.length) return null;
 
     return (
-        <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
+        <section className="theme-reveal">
             {title && (
-                <h2 className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium mb-12 border-b border-[var(--page-border)] pb-4">
+                <h2 className="section-label">
                     {title}
                 </h2>
             )}

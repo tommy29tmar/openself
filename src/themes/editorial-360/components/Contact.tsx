@@ -18,8 +18,8 @@ export function Contact({ content }: SectionProps<ContactContent>) {
     if (!methods.length) return null;
 
     return (
-        <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-[var(--page-footer-fg)] font-medium mb-12 border-b border-[var(--page-border)] pb-4">
+        <section className="theme-reveal">
+            <h2 className="section-label">
                 {title || "Contact"}
             </h2>
 

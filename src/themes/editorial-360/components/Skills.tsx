@@ -20,27 +20,27 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
 
     if (variant === "skills-chips") {
         return (
-            <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.25s' }}>
-                <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-8 border-b border-[var(--page-border)] pb-4">
+            <section className="theme-reveal">
+                <h2 className="section-label">
                     {title || "Capabilities"}
                 </h2>
 
-                <div className="flex flex-col gap-10">
+                <div className="flex flex-col gap-8">
                     {groups.map((group, i) => (
-                        <div key={i} className="flex flex-col md:flex-row gap-4 items-baseline">
+                        <div key={i}>
                             {groups.length > 1 && (
-                                <h3 className="text-[10px] uppercase tracking-wider md:w-1/4 shrink-0 font-bold text-[var(--page-fg)]">{group.label || group.name}</h3>
+                                <h3 className="text-xs uppercase tracking-[0.1em] font-medium text-[var(--page-fg-secondary)] mb-3">{group.label || group.name}</h3>
                             )}
-                            <ul className="flex flex-wrap gap-2 md:w-3/4">
+                            <div className="flex flex-wrap gap-2">
                                 {(group.items || group.skills || []).map((item, j) => {
                                     const name = typeof item === 'string' ? item : item.name;
                                     return (
-                                        <li key={j} className="px-3 py-1 rounded-full border border-[var(--page-border)] bg-[var(--page-bg)] hover:bg-[var(--page-fg)] hover:text-[var(--page-bg)] transition-colors duration-300 text-xs cursor-default">
+                                        <span key={j} className="px-3 py-1 rounded-md border border-[var(--page-border)] text-xs font-medium text-[var(--page-fg-secondary)] hover:border-[var(--page-accent)] hover:text-[var(--page-fg)] hover:-translate-y-px transition-all duration-200 cursor-default">
                                             {name}
-                                        </li>
+                                        </span>
                                     );
                                 })}
-                            </ul>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -48,33 +48,29 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
         );
     }
 
-    // Default: skills-list
+    // Default: skills-list — text-only editorial
     return (
-        <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.25s' }}>
-            <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-12 border-b border-[var(--page-border)] pb-4">
+        <section className="theme-reveal">
+            <h2 className="section-label">
                 {title || groups[0]?.label || groups[0]?.name || "Expertise"}
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
+            <div className="flex flex-col gap-8">
                 {groups.map((group, i) => (
-                    <div key={i} className="group">
+                    <div key={i}>
                         {groups.length > 1 && (
-                            <h3 className="text-xl font-bold mb-4 text-[var(--page-fg)] leading-tight relative inline-block">
-                                {group.label || group.name}
-                                <span className="absolute -bottom-1 left-0 w-8 h-px bg-[var(--page-accent)] group-hover:w-full transition-all duration-500"></span>
-                            </h3>
+                            <h3 className="text-xs uppercase tracking-[0.1em] font-medium text-[var(--page-fg-secondary)] mb-3">{group.label || group.name}</h3>
                         )}
-                        <ul className="space-y-2 text-sm font-light">
+                        <div className="flex flex-wrap gap-x-6 gap-y-3">
                             {(group.items || group.skills || []).map((item, j) => {
                                 const name = typeof item === 'string' ? item : item.name;
                                 return (
-                                    <li key={j} className="flex items-center gap-3 text-[var(--page-fg-secondary)]">
-                                        <span className="w-1 h-1 rounded-none rotate-45 bg-[var(--page-border)] group-hover:bg-[var(--page-accent)] transition-colors duration-500"></span>
-                                        <span className="hover:text-[var(--page-fg)] transition-colors duration-300 cursor-default">{name}</span>
-                                    </li>
+                                    <span key={j} className="hover-underline-grow text-sm font-medium text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] hover:-translate-y-px transition-all duration-200 cursor-default">
+                                        {name}
+                                    </span>
                                 );
                             })}
-                        </ul>
+                        </div>
                     </div>
                 ))}
             </div>

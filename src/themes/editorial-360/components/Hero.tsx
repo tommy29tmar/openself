@@ -17,7 +17,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
 
     if (variant === "hero-centered") {
         return (
-            <header className="mb-32 mt-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-8 flex flex-col items-center text-center relative" style={{ transitionDelay: '0.1s' }}>
+            <header className="mb-32 mt-16 theme-reveal flex flex-col items-center text-center relative">
                 {avatarUrl ? (
                     <img src={avatarUrl} alt={name} className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover mb-8 shadow-2xl border-4 border-[var(--page-bg)] z-10" />
                 ) : (
@@ -40,7 +40,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
 
     if (variant === "hero-glass") {
         return (
-            <header className="mb-32 mt-8 theme-reveal transition-all duration-1000 ease-out opacity-0" style={{ transitionDelay: '0.1s' }}>
+            <header className="mb-32 mt-8 theme-reveal">
                 <div className="relative overflow-hidden rounded-[2rem] p-8 md:p-16 border border-[var(--page-border)] bg-[var(--page-bg)]/40 backdrop-blur-xl shadow-sm">
                     {/* Abstract background shapes */}
                     <div className="absolute -top-24 -right-24 w-96 h-96 bg-[var(--page-accent)]/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -70,58 +70,59 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
         );
     }
 
-    // Default: hero-split (Classic Editorial, two-column)
+    // Default: hero-split — Magazine editorial
     return (
-        <header className="mb-8 mt-4 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.1s' }}>
-            <div className="md:grid md:grid-cols-2 md:gap-8 md:items-end border-b border-[var(--page-border)] pb-8">
-                <div className="min-w-0">
-                    <h1
-                        className="font-[var(--page-font-heading)] uppercase font-bold tracking-[0.05em] leading-tight"
-                        style={{ fontSize: "clamp(1.8rem, 4vw, 3rem)" }}
-                    >
-                        {name}
-                    </h1>
-                </div>
+        <header className="py-24 theme-reveal">
+            <div className="border-b border-[var(--page-border)] pb-10">
+                <h1
+                    className="hero-stagger-name font-[var(--page-font-heading)] font-medium tracking-[-0.03em] leading-[0.95]"
+                    style={{ fontSize: "clamp(2.5rem, 5vw, 3.75rem)" }}
+                >
+                    {name}
+                </h1>
                 {tagline && (
-                    <div className="mt-4 md:mt-0 md:text-right">
-                        <p
-                            className="font-[var(--page-font-heading)] font-light text-[var(--page-fg-secondary)] leading-snug"
-                            style={{ fontSize: "clamp(1rem, 2vw, 1.25rem)" }}
-                        >
-                            {tagline}
-                        </p>
-                    </div>
+                    <p className="hero-stagger-tagline text-[var(--text-xl)] font-light text-[var(--page-fg-secondary)] leading-relaxed max-w-xl mt-4">
+                        {tagline}
+                    </p>
                 )}
             </div>
-            {/* ContactBar */}
+            {/* Contact bar */}
             {(content.socialLinks?.length || content.contactEmail || content.languages?.length) && (
-                <div className="mt-6 space-y-2 text-sm">
+                <div className="hero-stagger-social mt-6 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
                     {content.socialLinks && content.socialLinks.length > 0 && (
-                        <div className="flex flex-wrap gap-4">
+                        <>
                             {content.socialLinks.map((link, i) => (
-                                <a
-                                    key={i}
-                                    href={link.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors uppercase tracking-widest text-xs font-medium border-b border-transparent hover:border-[var(--page-fg)] pb-0.5"
-                                >
-                                    {link.platform}
-                                </a>
+                                <React.Fragment key={i}>
+                                    {i > 0 && <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span>}
+                                    <a
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover-underline-grow text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors uppercase tracking-[0.05em] text-xs font-medium"
+                                    >
+                                        {link.platform}
+                                    </a>
+                                </React.Fragment>
                             ))}
-                        </div>
+                        </>
                     )}
                     {content.contactEmail && (
-                        <p className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
-                            {content.contactEmail}
-                        </p>
+                        <>
+                            {content.socialLinks?.length ? <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span> : null}
+                            <span className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
+                                {content.contactEmail}
+                            </span>
+                        </>
                     )}
                     {content.languages && content.languages.length > 0 && (
-                        <p className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
-                            {content.languages
-                                .map((l) => `${l.language}${l.proficiency ? ` ${l.proficiency}` : ""}`)
-                                .join(" · ")}
-                        </p>
+                        <>
+                            <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span>
+                            <span className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
+                                {content.languages
+                                    .map((l) => `${l.language}${l.proficiency ? ` (${l.proficiency})` : ""}`)
+                                    .join(" · ")}
+                            </span>
+                        </>
                     )}
                 </div>
             )}
