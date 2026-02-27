@@ -33,10 +33,6 @@ export function Social({ content }: SectionProps<SocialContent>) {
                     </a>
                 ))}
             </div>
-
-            <p className="text-[9px] tracking-[0.4em] uppercase text-[var(--page-footer-fg)] opacity-60">
-                © {new Date().getFullYear()} OpenSelf. Precision Built.
-            </p>
         </footer>
     );
 }
