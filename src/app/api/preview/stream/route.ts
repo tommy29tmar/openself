@@ -4,6 +4,7 @@ import { getDraft, computeConfigHash } from "@/lib/services/page-service";
 import { getAllFacts } from "@/lib/services/kb-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { projectCanonicalConfig, publishableFromCanonical } from "@/lib/services/page-projection";
+import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
 
 export const runtime = "nodejs";
 
@@ -76,7 +77,12 @@ export async function GET(req: Request) {
             draftMeta,
           );
 
+          // Merge personalized copy (hash-guarded, stale → deterministic fallback)
+          const ownerKey = writeSessionId;
+          const personalizedConfig = mergeActiveSectionCopy(previewConfig, ownerKey, factLang);
+
           // previewHash: detects ALL changes (including incomplete sections)
+          // Use ORIGINAL previewConfig for hash computation (publish path does its own merge)
           const previewHash = computeConfigHash(previewConfig);
           // publishableHash: matches publish pipeline for hash guard
           const publishableHash = computeConfigHash(publishableFromCanonical(previewConfig));
@@ -89,7 +95,7 @@ export async function GET(req: Request) {
             sendEvent({
               status: "optimistic_ready",
               publishStatus: draft?.status ?? "draft",
-              config: previewConfig,
+              config: personalizedConfig,
               configHash: publishableHash,
             });
           } else {

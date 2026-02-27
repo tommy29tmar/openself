@@ -5,6 +5,7 @@ import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { projectCanonicalConfig, publishableFromCanonical } from "@/lib/services/page-projection";
+import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
 
 /**
  * GET /api/preview?username=...
@@ -60,14 +61,19 @@ export async function GET(req: Request) {
     draftMeta,
   );
 
+  // Merge personalized copy (hash-guarded, stale → deterministic fallback)
+  const ownerKey = primaryKey;
+  const personalizedConfig = mergeActiveSectionCopy(previewConfig, ownerKey, factLang);
+
   // Publishable hash: matches publish-pipeline expectation
+  // Use ORIGINAL previewConfig for hash computation (publish path does its own merge)
   const publishableConfig = publishableFromCanonical(previewConfig);
   const configHash = computeConfigHash(publishableConfig);
 
   return NextResponse.json({
     status: "optimistic_ready",
     publishStatus: draft?.status ?? "draft",
-    config: previewConfig,
+    config: personalizedConfig,
     configHash,
   });
 }
