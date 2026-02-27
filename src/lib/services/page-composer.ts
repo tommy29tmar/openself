@@ -1016,51 +1016,16 @@ export function composeOptimisticPage(
   // Check what sections we might have to avoid redundancy
   const hasInterestsSection = interestFacts.length > 0;
 
-  // 2. Bio
+  // Bio — built once, pushed in appropriate order below
   const bio = buildBioSection(grouped, language, hasInterestsSection);
-  if (bio) sections.push(bio);
 
-  // 3. Experience / Timeline
   if (extended) {
-    const experience = buildExperienceSection(experienceFacts, language);
-    if (experience) sections.push(experience);
-  } else {
-    const timeline = buildTimelineSection(experienceFacts, language);
-    if (timeline) sections.push(timeline);
-  }
+    // D5 order: bio → at-a-glance → experience → projects → education →
+    //           achievements → reading → music → activities
+    // Social/contact/languages absorbed into hero (Tasks 6-8)
 
-  // 3b. Education (extended only)
-  if (extended) {
-    const education = buildEducationSection(grouped.get("education") ?? [], language);
-    if (education) sections.push(education);
-  }
+    if (bio) sections.push(bio);
 
-  // 4. Skills (standalone only when NOT extended — fused into at-a-glance otherwise)
-  if (!extended) {
-    const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
-    if (skills) sections.push(skills);
-  }
-
-  // 5. Projects
-  const projects = buildProjectsSection(grouped.get("project") ?? []);
-  if (projects) sections.push(projects);
-
-  // 6. Interests (standalone only when NOT extended — fused into at-a-glance otherwise)
-  if (!extended) {
-    const interests = buildInterestsSection(interestFacts, language);
-    if (interests) sections.push(interests);
-  }
-
-  // 7. Social — standalone only when NOT extended (absorbed into hero ContactBar)
-  if (!extended) {
-    const social = buildSocialSection(socialFacts);
-    if (social) sections.push(social);
-  }
-
-  // Extended sections (only when flag is enabled)
-  // Note: social, contact, and languages are absorbed into the hero ContactBar
-  // Note: stats, skills, interests are fused into at-a-glance
-  if (extended) {
     const atAGlance = buildAtAGlanceSection(
       grouped.get("skill") ?? [],
       grouped.get("stat") ?? [],
@@ -1068,6 +1033,15 @@ export function composeOptimisticPage(
       language,
     );
     if (atAGlance) sections.push(atAGlance);
+
+    const experience = buildExperienceSection(experienceFacts, language);
+    if (experience) sections.push(experience);
+
+    const projects = buildProjectsSection(grouped.get("project") ?? []);
+    if (projects) sections.push(projects);
+
+    const education = buildEducationSection(grouped.get("education") ?? [], language);
+    if (education) sections.push(education);
 
     const achievements = buildAchievementsSection(grouped.get("achievement") ?? [], language);
     if (achievements) sections.push(achievements);
@@ -1080,6 +1054,24 @@ export function composeOptimisticPage(
 
     const activities = buildActivitiesSection(grouped.get("activity") ?? [], language);
     if (activities) sections.push(activities);
+  } else {
+    // Legacy order (unchanged)
+    if (bio) sections.push(bio);
+
+    const timeline = buildTimelineSection(experienceFacts, language);
+    if (timeline) sections.push(timeline);
+
+    const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
+    if (skills) sections.push(skills);
+
+    const projects = buildProjectsSection(grouped.get("project") ?? []);
+    if (projects) sections.push(projects);
+
+    const interests = buildInterestsSection(interestFacts, language);
+    if (interests) sections.push(interests);
+
+    const social = buildSocialSection(socialFacts);
+    if (social) sections.push(social);
   }
 
   // Footer — always appended
