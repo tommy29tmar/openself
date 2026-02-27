@@ -78,6 +78,10 @@ vi.mock("@/lib/layout/quality", () => ({
   })),
 }));
 
+vi.mock("@/lib/services/personalization-projection", () => ({
+  mergeActiveSectionCopy: vi.fn((config: unknown) => config),
+}));
+
 import { getAllFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";

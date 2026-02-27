@@ -80,6 +80,10 @@ vi.mock("@/lib/page-config/normalize", () => ({
   normalizeConfigForWrite: vi.fn((config: any) => config),
 }));
 
+vi.mock("@/lib/services/personalization-projection", () => ({
+  mergeActiveSectionCopy: vi.fn((config: any) => config),
+}));
+
 vi.mock("@/lib/flags", () => ({
   PROFILE_ID_CANONICAL: false,
 }));

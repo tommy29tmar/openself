@@ -25,6 +25,7 @@ import {
   filterPublishableFacts,
   projectPublishableConfig,
 } from "@/lib/services/page-projection";
+import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
 
 export type PublishMode = "register" | "publish";
 
@@ -168,9 +169,13 @@ export async function prepareAndPublish(
     );
   }
 
+  // Merge personalized copy (hash-guarded, stale → deterministic fallback)
+  const ownerKey = sessionId;
+  const personalizedConfig = mergeActiveSectionCopy(canonicalConfig, ownerKey, factLang);
+
   // Step C: Translate (async, OUTSIDE transaction — LLM call can't be in SQLite txn)
   const renderedConfig = normalizeConfigForWrite(
-    await translatePageContent(canonicalConfig, targetLang, factLang),
+    await translatePageContent(personalizedConfig, targetLang, factLang),
   );
 
   // Step D: Atomic transaction — promote proposed→public, persist, publish
