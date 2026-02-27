@@ -17,7 +17,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
 
     if (variant === "hero-centered") {
         return (
-            <header className="mb-32 mt-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-8 flex flex-col items-center text-center relative" style={{ transitionDelay: '0.1s' }}>
+            <header className="mb-32 mt-16 theme-reveal flex flex-col items-center text-center relative">
                 {avatarUrl ? (
                     <img src={avatarUrl} alt={name} className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover mb-8 shadow-2xl border-4 border-[var(--page-bg)] z-10" />
                 ) : (
@@ -40,7 +40,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
 
     if (variant === "hero-glass") {
         return (
-            <header className="mb-32 mt-8 theme-reveal transition-all duration-1000 ease-out opacity-0" style={{ transitionDelay: '0.1s' }}>
+            <header className="mb-32 mt-8 theme-reveal">
                 <div className="relative overflow-hidden rounded-[2rem] p-8 md:p-16 border border-[var(--page-border)] bg-[var(--page-bg)]/40 backdrop-blur-xl shadow-sm">
                     {/* Abstract background shapes */}
                     <div className="absolute -top-24 -right-24 w-96 h-96 bg-[var(--page-accent)]/10 rounded-full blur-3xl pointer-events-none"></div>
