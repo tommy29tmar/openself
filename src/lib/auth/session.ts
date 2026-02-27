@@ -100,7 +100,7 @@ export function getAuthContext(req: Request): AuthContext | null {
  * The anchor is the stable key for writes to existing tables (facts, page, agent_config).
  * Fallback to currentSessionId if no sessions have profileId.
  */
-function anchorSessionId(profileId: string, currentSessionId: string): string {
+export function anchorSessionId(profileId: string, currentSessionId: string): string {
   const row = sqlite
     .prepare(
       "SELECT id FROM sessions WHERE profile_id = ? ORDER BY created_at ASC LIMIT 1",
@@ -112,7 +112,7 @@ function anchorSessionId(profileId: string, currentSessionId: string): string {
 /**
  * Get all session IDs linked to a profile.
  */
-function allSessionIdsForProfile(profileId: string): string[] {
+export function allSessionIdsForProfile(profileId: string): string[] {
   const rows = sqlite
     .prepare("SELECT id FROM sessions WHERE profile_id = ?")
     .all(profileId) as { id: string }[];
@@ -165,5 +165,29 @@ export function resolveOwnerScope(req: Request): OwnerScope | null {
     knowledgeReadKeys: [sessionId],
     knowledgePrimaryKey: sessionId,
     currentSessionId: sessionId,
+  };
+}
+
+/**
+ * Resolve OwnerScope from ownerKey alone (for worker context where no HTTP request exists).
+ * ownerKey is profileId for authenticated users, sessionId for anonymous.
+ */
+export function resolveOwnerScopeForWorker(ownerKey: string): OwnerScope {
+  const sessionIds = allSessionIdsForProfile(ownerKey);
+  if (sessionIds.length > 0) {
+    const anchor = anchorSessionId(ownerKey, sessionIds[0]);
+    return {
+      cognitiveOwnerKey: ownerKey,
+      knowledgeReadKeys: sessionIds,
+      knowledgePrimaryKey: anchor,
+      currentSessionId: sessionIds[0],
+    };
+  }
+  // Anonymous: ownerKey is the sessionId itself
+  return {
+    cognitiveOwnerKey: ownerKey,
+    knowledgeReadKeys: [ownerKey],
+    knowledgePrimaryKey: ownerKey,
+    currentSessionId: ownerKey,
   };
 }
