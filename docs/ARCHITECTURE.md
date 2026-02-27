@@ -1646,12 +1646,19 @@ profile at a glance, OpenSelf pages should be instantly recognizable.
 |---|---|---|
 | `minimal` | Clean, lots of whitespace, monochrome with one accent color | Implemented |
 | `warm` | Soft colors, rounded elements, friendly feel | Implemented |
-| `editorial-360` | Magazine-inspired editorial layout, rounded heading font (`var(--font-sans), system-ui`) | Implemented |
+| `editorial-360` | Luxury digital magazine aesthetic (Stripe/Linear-inspired). Unified `.section-label` headers with accent bar, scroll reveal animations, variable vertical rhythm (hero 80px, narrative 48px, dense 32px), dot separators, hero stagger animations, hover-underline-grow links. Heading font: `var(--font-sans), system-ui` | Implemented |
 
 Each theme is powered by CSS custom properties (`--theme-*` tokens) defined in
 `src/app/globals.css`. Theme tokens control colors, typography, spacing, and
 decorative elements. The `ThemeProvider` in `PageRenderer.tsx` applies the correct
 token set based on `config.theme`. All three themes support light/dark color schemes.
+
+**Shared CSS utility classes** (defined in `globals.css`, used by all themes):
+- `.section-label` — Unified section header (11px uppercase, `letter-spacing: 0.2em`, accent bar via `::before`)
+- `.entry-dot-separator` — Middle-dot separator between list entries
+- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver
+- `.hover-underline-grow` — Left-to-right underline animation on hover (`scaleX(0)` → `scaleX(1)`)
+- `prefers-reduced-motion` overrides disable all animations for accessibility
 
 **Aspirational themes (not yet implemented):**
 

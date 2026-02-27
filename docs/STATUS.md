@@ -39,8 +39,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - Layout redesign: hero two-column layout with ContactBar (social, email, languages), At a Glance fused section (stats + grouped skills + interests), CollapsibleList for long sections, D5 intelligent section ordering
 - Contact user-controlled: removed from SENSITIVE_CATEGORIES, contact facts follow standard public/proposed/private transitions
 - Profile archetype detection: deterministic classification (developer/designer/executive/student/creator/generalist) injected into agent context for layout intelligence
+- Vertical magazine redesign: luxury digital magazine aesthetic for vertical layout — unified `.section-label` headers with accent bar, scroll reveal animations, variable vertical rhythm, dot separators, hover-underline-grow links, warm theme WCAG AA contrast fix
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete.
 
 ## 2) Implemented Today
 
@@ -238,6 +239,21 @@ All items complete. Includes:
 9. **Bug fixes** — Proposals API 500 (`this` context loss), skills duplicate heading, social copyright double footer, bio alignment.
 10. **8-language localization** — `atAGlanceLabel` added to all 8 language L10N objects.
 - 56 new tests (846 total, 60 files)
+
+### Vertical Magazine Redesign ✅
+
+All items complete. Transforms the vertical layout template from document-style resume into a luxury digital magazine experience (Stripe/Linear aesthetics). 15 tasks, 22 files modified, CSS-first approach.
+
+1. **CSS foundation** — New design tokens (`--reveal-distance`, `--reveal-duration`, `--reveal-easing`), `.section-label` class with accent bar `::before`, `.entry-dot-separator`, `.theme-reveal`/`.revealed` scroll animations, hero stagger keyframes, `.hover-underline-grow`, `prefers-reduced-motion` overrides
+2. **Hero redesign** — Magazine typography (`clamp(2.5rem, 5vw, 3.75rem)`, `tracking-[-0.03em]`), tagline below name, social links with dot separators and `hover-underline-grow`, stagger animations
+3. **Unified section headers** — 20 h2 elements across 17 components replaced with `.section-label` (11px uppercase, `letter-spacing: 0.2em`, accent bar)
+4. **Variable vertical rhythm** — VerticalLayout rewritten with section-type-aware spacing: hero 80px, narrative 48px, dense 32px. Uses `findLastIndex` for last-before-footer detection
+5. **Component redesigns** — Stats (large light numbers, no borders), Skills (text-only with hover-underline, rounded-md chips variant), Experience/Education/Achievements (typographic hierarchy, dot separators, `max-w-2xl` entries), Bio (xl text, leading-loose, typographic quotes variant), Footer (centered 64px rule, colophon), Interests (text-only), Projects (compact with dot separators)
+6. **Scroll reveal** — IntersectionObserver adds `revealed` class (CSS-driven transitions), inline transition classes removed from all components
+7. **Warm theme contrast** — `--page-fg-secondary` adjusted from `#8b7e6a` to `#6b5e4a`, `--page-footer-fg` from `#b5a998` to `#9a8d7c` (WCAG AA compliance)
+- Design doc: `docs/plans/2026-02-27-vertical-template-magazine-redesign.md`
+- Implementation plan: `docs/plans/2026-02-27-vertical-template-magazine-implementation.md`
+- No new tests (visual-only changes, 846 existing tests pass)
 
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
