@@ -105,10 +105,16 @@ describe("setFactVisibility — transition matrix", () => {
     });
 
     it("CANNOT set sensitive fact to proposed", () => {
-      mockGet.mockReturnValue(makeMockFact({ category: "contact", visibility: "private" }));
+      mockGet.mockReturnValue(makeMockFact({ category: "compensation", visibility: "private" }));
       expect(() =>
         setFactVisibility("f1", "proposed", "assistant", "sess1"),
       ).toThrow(VisibilityTransitionError);
+    });
+
+    it("CAN set contact fact to proposed (contact is user-controlled)", () => {
+      mockGet.mockReturnValue(makeMockFact({ category: "contact", visibility: "private" }));
+      const result = setFactVisibility("f1", "proposed", "assistant", "sess1");
+      expect(result.visibility).toBe("proposed");
     });
   });
 
@@ -132,16 +138,22 @@ describe("setFactVisibility — transition matrix", () => {
     });
 
     it("can set sensitive fact to private (retract for cleanup)", () => {
-      mockGet.mockReturnValue(makeMockFact({ category: "contact", visibility: "private" }));
+      mockGet.mockReturnValue(makeMockFact({ category: "compensation", visibility: "private" }));
       const result = setFactVisibility("f1", "private", "user", "sess1");
       expect(result.visibility).toBe("private");
     });
 
     it("CANNOT set sensitive fact to public", () => {
-      mockGet.mockReturnValue(makeMockFact({ category: "contact", visibility: "private" }));
+      mockGet.mockReturnValue(makeMockFact({ category: "compensation", visibility: "private" }));
       expect(() =>
         setFactVisibility("f1", "public", "user", "sess1"),
       ).toThrow(VisibilityTransitionError);
+    });
+
+    it("CAN set contact fact to public (contact is user-controlled)", () => {
+      mockGet.mockReturnValue(makeMockFact({ category: "contact", visibility: "proposed" }));
+      const result = setFactVisibility("f1", "public", "user", "sess1");
+      expect(result.visibility).toBe("public");
     });
 
     it("CANNOT set sensitive fact to proposed", () => {
@@ -204,7 +216,7 @@ describe("setFactVisibility — transition matrix", () => {
       "mental-health",
       "private-contact",
       "personal-struggle",
-      "contact",
+      // "contact" removed — now user-controlled (not sensitive)
     ];
 
     for (const cat of sensitiveCats) {

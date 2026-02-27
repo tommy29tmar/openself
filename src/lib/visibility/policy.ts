@@ -23,6 +23,7 @@ const PROPOSAL_ALLOWLIST = new Set([
   "music",
   "language",
   "activity",
+  "contact",
 ]);
 
 export const SENSITIVE_CATEGORIES: ReadonlySet<string> = new Set([
@@ -32,7 +33,8 @@ export const SENSITIVE_CATEGORIES: ReadonlySet<string> = new Set([
   "mental-health",
   "private-contact",
   "personal-struggle",
-  "contact",
+  // "contact" removed — user-controlled, not inherently sensitive.
+  // Use "private-contact" for truly private contact info.
 ]);
 
 export function isSensitiveCategory(category: string): boolean {

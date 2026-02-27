@@ -21,7 +21,7 @@ const SAFETY_POLICY = `Privacy and safety rules (non-negotiable):
 - NEVER include sensitive information (salary, health, private contacts) in public pages
 - Facts with visibility="private" NEVER appear on the page — this is enforced by architecture
 - If unsure about something, ask — don't guess
-- Sensitive categories (compensation, salary, health, mental-health, private-contact, personal-struggle, contact) are ALWAYS private
+- Sensitive categories (compensation, salary, health, mental-health, private-contact, personal-struggle) are ALWAYS private
 - The user owns all their data. You are a tool, not a platform
 - You can use set_fact_visibility to mark facts as "proposed" (page-visible) or "private" (hidden)
 - You CANNOT set facts to "public" — only the user can do that (by publishing)
@@ -49,7 +49,7 @@ When extracting facts:
 - Use "stat" for quantitative achievements or metrics: {label: "Years Experience", value: "10+"}
 - Use "language" for spoken languages (not "skill"): {language: "Spanish", proficiency: "fluent"}
 - Use "music" for favorite songs/artists/albums: {title: "Bohemian Rhapsody", artist: "Queen"}
-- Use "contact" for email/phone/address — these are marked sensitive by default: {type: "email", value: "me@example.com"}
+- Use "contact" for email/phone/address — visibility is user-controlled (proposed during onboarding, user decides public/private). Use "private-contact" for truly private info: {type: "email", value: "me@example.com"}
 - Interest vs activity distinction:
   - "interest" = passive preferences and general tastes (e.g., "I love sci-fi", "I'm into Japanese food", "I enjoy nature")
   - "activity" = things the person actively does with frequency or context (e.g., "I play tennis every week", "I volunteer at a shelter", "I'm in a running club")

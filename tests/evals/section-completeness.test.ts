@@ -251,7 +251,7 @@ describe("filterPublishableFacts", () => {
 
   it("excludes sensitive categories even if public", () => {
     const facts = [
-      makeFact({ category: "contact", key: "email", visibility: "public" }),
+      makeFact({ category: "health", key: "condition", visibility: "public" }),
     ];
     expect(filterPublishableFacts(facts)).toHaveLength(0);
   });
@@ -267,12 +267,12 @@ describe("filterPublishableFacts", () => {
     const facts = [
       makeFact({ category: "skill", key: "js", visibility: "public" }),
       makeFact({ category: "skill", key: "ts", visibility: "private" }),
-      makeFact({ category: "contact", key: "email", visibility: "proposed" }),
+      makeFact({ category: "contact", key: "email", visibility: "proposed" }), // contact is user-controlled, passes through
       makeFact({ category: "project", key: "app", visibility: "proposed" }),
     ];
     const result = filterPublishableFacts(facts);
-    expect(result).toHaveLength(2);
-    expect(result.map((f) => f.key)).toEqual(["js", "app"]);
+    expect(result).toHaveLength(3);
+    expect(result.map((f) => f.key)).toEqual(["js", "email", "app"]);
   });
 
   it("legacy sensitive+proposed fact excluded (regression guard)", () => {
@@ -325,7 +325,7 @@ describe("projectPublishableConfig", () => {
   it("filters sensitive facts before composing", () => {
     const facts = [
       makeFact({ category: "skill", key: "js", visibility: "proposed" }),
-      makeFact({ category: "contact", key: "email", visibility: "proposed" }),
+      makeFact({ category: "compensation", key: "salary", visibility: "proposed" }), // truly sensitive
     ];
     const config = projectPublishableConfig(facts, "alice", "en");
     expect(config.sections).toHaveLength(1);

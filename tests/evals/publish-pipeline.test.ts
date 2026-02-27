@@ -371,7 +371,7 @@ describe("prepareAndPublish", () => {
 
   it("sensitive+proposed facts excluded from both projection and promote loop", async () => {
     const facts = [
-      makeFact({ category: "contact", key: "email", visibility: "proposed" }), // sensitive
+      makeFact({ category: "compensation", key: "salary", visibility: "proposed" }), // sensitive
       makeFact({ category: "skill", key: "js", visibility: "proposed" }), // non-sensitive
     ];
     mockGetAllFacts.mockReturnValue(facts);
@@ -379,7 +379,7 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "register" });
 
-    // Only the skill fact should be promoted (contact is sensitive, excluded by filterPublishableFacts)
+    // Only the skill fact should be promoted (compensation is sensitive, excluded by filterPublishableFacts)
     expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
     expect(mockSetFactVisibility).toHaveBeenCalledWith(
       facts[1].id, "public", "user", "session-1",

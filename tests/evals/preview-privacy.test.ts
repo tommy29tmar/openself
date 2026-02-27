@@ -71,15 +71,16 @@ describe("Preview privacy — projectPublishableConfig", () => {
   it("never includes sensitive category facts even if public", () => {
     const facts = [
       makeFact({ category: "skill", key: "js", visibility: "public" }),
-      makeFact({ category: "contact", key: "email", visibility: "public" }),
+      makeFact({ category: "contact", key: "email", visibility: "public", value: { type: "email", value: "me@example.com" } }),
       makeFact({ category: "compensation", key: "salary", visibility: "public" }),
       makeFact({ category: "health", key: "condition", visibility: "proposed" }),
     ];
     const config = projectPublishableConfig(facts, "alice", "en");
 
-    // Only 1 non-sensitive public fact
     const sectionJson = JSON.stringify(config.sections);
-    expect(sectionJson).not.toContain("email");
+    // contact is user-controlled (not sensitive) — should appear in published page
+    expect(sectionJson).toContain("email");
+    // truly sensitive categories are still stripped
     expect(sectionJson).not.toContain("salary");
     expect(sectionJson).not.toContain("condition");
     expect(sectionJson).toContain("js");
