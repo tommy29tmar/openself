@@ -63,7 +63,7 @@ type L10nStrings = {
   musicLabel: string;
   statsLabel: string;
   activitiesLabel: string;
-  atAGlanceLabel?: string;
+  atAGlanceLabel: string;
 };
 
 const L10N: Record<string, L10nStrings> = {
@@ -105,6 +105,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "Musica",
     statsLabel: "Statistiche",
     activitiesLabel: "Attività",
+    atAGlanceLabel: "Colpo d'Occhio",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -124,6 +125,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "Musik",
     statsLabel: "Statistiken",
     activitiesLabel: "Aktivitäten",
+    atAGlanceLabel: "Auf einen Blick",
   },
   fr: {
     welcomeTagline: (name) => `Bienvenue sur la page de ${name}`,
@@ -143,6 +145,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "Musique",
     statsLabel: "Statistiques",
     activitiesLabel: "Activités",
+    atAGlanceLabel: "En un Coup d'Œil",
   },
   es: {
     welcomeTagline: (name) => `Bienvenido a la página de ${name}`,
@@ -162,6 +165,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "Música",
     statsLabel: "Estadísticas",
     activitiesLabel: "Actividades",
+    atAGlanceLabel: "De un Vistazo",
   },
   pt: {
     welcomeTagline: (name) => `Bem-vindo à página de ${name}`,
@@ -181,6 +185,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "Música",
     statsLabel: "Estatísticas",
     activitiesLabel: "Atividades",
+    atAGlanceLabel: "Num Relance",
   },
   ja: {
     welcomeTagline: (name) => `${name}のページへようこそ`,
@@ -200,6 +205,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "音楽",
     statsLabel: "統計",
     activitiesLabel: "活動",
+    atAGlanceLabel: "概要",
   },
   zh: {
     welcomeTagline: (name) => `欢迎来到${name}的页面`,
@@ -219,6 +225,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "音乐",
     statsLabel: "统计",
     activitiesLabel: "活动",
+    atAGlanceLabel: "一览",
   },
 };
 
@@ -967,7 +974,7 @@ function buildAtAGlanceSection(
 
   const l = getL10n(language);
   const content: Record<string, unknown> = {
-    title: l.atAGlanceLabel ?? "At a Glance",
+    title: l.atAGlanceLabel,
   };
   if (stats.length > 0) content.stats = stats;
   if (skillGroups) content.skillGroups = skillGroups;
