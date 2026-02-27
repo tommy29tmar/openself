@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-02-27T16:07:39.943Z",
+  "baseUrl": "http://localhost:3001",
+  "totalProfiles": 1,
+  "profiles": [
+    {
+      "id": "ava-engineer",
+      "displayName": "Ava Stone",
+      "username": "uat-ava-stone-autoshot",
+      "email": "ava.stone.autoshot@uat.openself.dev",
+      "password": "UatDemo2026!01",
+      "language": "en",
+      "layoutTemplate": "bento-standard",
+      "theme": "editorial-360",
+      "factCount": 42,
+      "sectionCount": 11,
+      "publishedUrl": "http://localhost:3001/uat-ava-stone-autoshot",
+      "loginUrl": "http://localhost:3001/login",
+      "builderUrl": "http://localhost:3001/builder"
+    }
+  ]
+}

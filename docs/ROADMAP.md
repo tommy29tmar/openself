@@ -314,12 +314,13 @@ Execution reference:
 1. `docs/plans/2026-02-27-model-agnostic-control-plane-implementation-plan.md`
 
 Main deliverables:
-1. AI router v2 (capability-based model selection + fallback chain)
-2. Structured output hardening (schema-first for translation/personalization/conformity)
-3. Layout control plane v1 (inspect_layout_state, simulate_layout_patch, apply_layout_patch)
-4. Domain control-plane expansion (facts, heartbeat, publish preflight)
-5. Skills package v1 for onboarding/daily/layout/publish/heartbeat/conflicts
-6. MCP connector gateway foundation with GitHub pilot
+1. User journey state engine + contextual bootstrap messages (no generic welcome for known users)
+2. AI router v2 (capability-based model selection + fallback chain)
+3. Structured output hardening (schema-first for translation/personalization/conformity)
+4. Layout control plane v1 (inspect_layout_state, simulate_layout_patch, apply_layout_patch)
+5. Domain control-plane expansion (facts, heartbeat, publish preflight)
+6. Skills package v1 aligned to journey states (onboarding/returning/layout/publish/heartbeat/conflicts)
+7. MCP connector gateway foundation with GitHub pilot
 
 ### Deferred Until Phase 1 Closure
 
