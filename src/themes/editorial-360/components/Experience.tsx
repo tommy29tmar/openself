@@ -33,21 +33,21 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
         .join(", ");
 
     return (
-        <section className="mb-12 theme-reveal transition-all duration-700 ease-out opacity-0 translate-y-4">
+        <section className="theme-reveal">
             <h2 className="section-label">
                 {title || "Experience"}
             </h2>
 
-            <div className="space-y-12">
+            <div>
                 <CollapsibleList
                     items={sortedItems.map((item, index) => (
                         <React.Fragment key={index}>
                             <article className="group">
-                                <div className="flex flex-col md:flex-row md:items-baseline justify-between mb-2">
-                                    <h3 className="text-2xl md:text-3xl font-[var(--page-font-heading)] font-medium group-hover:text-[var(--page-accent)] transition-colors">
+                                <div className="flex flex-col md:flex-row md:items-baseline justify-between mb-1">
+                                    <h3 className="text-xl font-semibold tracking-[-0.01em] text-[var(--page-fg)] group-hover:text-[var(--page-accent)] transition-colors">
                                         {item.title}
                                     </h3>
-                                    <span className="text-sm font-mono tracking-tight text-[var(--page-fg-secondary)] mt-2 md:mt-0">
+                                    <span className="text-sm text-[var(--page-fg-secondary)] mt-1 md:mt-0 shrink-0">
                                         {item.period}
                                         {item.current && (
                                             <span className="ml-2 text-xs uppercase tracking-widest text-[var(--page-accent)]">
@@ -57,19 +57,19 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
                                     </span>
                                 </div>
                                 {item.company && (
-                                    <div className="text-lg font-medium text-[var(--page-fg)] mt-1">
+                                    <div className="text-sm text-[var(--page-fg-secondary)] mt-1">
                                         {item.company}
                                     </div>
                                 )}
                                 {item.description && (
-                                    <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-2xl text-lg mt-3">
+                                    <p className="text-sm text-[var(--page-fg-secondary)] leading-relaxed max-w-prose mt-2">
                                         {item.description}
                                     </p>
                                 )}
                             </article>
 
                             {index < sortedItems.length - 1 && (
-                                <div className="h-px w-full bg-[var(--page-border)] my-8"></div>
+                                <div className="entry-dot-separator" />
                             )}
                         </React.Fragment>
                     ))}
