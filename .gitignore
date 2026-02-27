@@ -43,3 +43,18 @@ npm-debug.log*
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.playwright-mcp/
+
+# Screenshots (debug)
+*.png
+
+# Claude Code local
+.claude/settings.local.json
+
+# Serena
+.serena/
+
+# Scratch files
+dev_server.log
+query_db.js
+screenshot/
