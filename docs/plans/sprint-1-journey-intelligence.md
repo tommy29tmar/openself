@@ -1425,10 +1425,17 @@ vi.mock("@/lib/middleware/rate-limit", () => ({
   checkRateLimit: vi.fn(() => ({ allowed: true })),
 }));
 
+vi.mock("@/lib/ai/provider", () => ({
+  getModel: vi.fn(() => "mock-model"),
+  getProviderName: vi.fn(() => "anthropic"),
+  getModelId: vi.fn(() => "mock-model-id"),
+}));
+
 vi.mock("ai", () => ({
   streamText: vi.fn(() => ({
     toDataStreamResponse: vi.fn(() => new Response("ok")),
   })),
+  generateText: vi.fn(() => ({ text: "" })),
 }));
 
 vi.mock("@/lib/agent/tools", () => ({
