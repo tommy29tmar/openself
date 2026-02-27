@@ -32,6 +32,9 @@ vi.mock("@/lib/services/page-projection", () => ({
 vi.mock("@/lib/agent/prompts", () => ({
   getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
 }));
+vi.mock("@/lib/agent/journey", () => ({
+  // Module exists but we only import types — no runtime mock needed
+}));
 
 import { estimateTokens, detectMode, assembleContext } from "@/lib/agent/context";
 import type { OwnerScope } from "@/lib/auth/session";
@@ -269,5 +272,132 @@ describe("message trimming", () => {
 
     const result = assembleContext(SCOPE, "en", msgs);
     expect(result.trimmedMessages.length).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assembleContext with BootstrapPayload
+// ---------------------------------------------------------------------------
+describe("assembleContext with bootstrap", () => {
+  it("uses onboarding mode when bootstrap.journeyState is first_visit", () => {
+    const bootstrap = {
+      journeyState: "first_visit" as const,
+      situations: [],
+      expertiseLevel: "novice" as const,
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [],
+      staleFacts: [],
+      language: "en",
+      conversationContext: null,
+    };
+
+    const result = assembleContext(
+      SCOPE,
+      "en",
+      [{ role: "user", content: "hello" }],
+      undefined,
+      bootstrap,
+    );
+
+    expect(result.mode).toBe("onboarding");
+    // detectMode should NOT have been called
+    expect(countFacts).not.toHaveBeenCalled();
+    expect(hasAnyPublishedPage).not.toHaveBeenCalled();
+  });
+
+  it("uses steady_state mode when bootstrap.journeyState is active_fresh", () => {
+    const bootstrap = {
+      journeyState: "active_fresh" as const,
+      situations: [],
+      expertiseLevel: "familiar" as const,
+      userName: "Alice",
+      lastSeenDaysAgo: 2,
+      publishedUsername: "alice",
+      pendingProposalCount: 0,
+      thinSections: [],
+      staleFacts: [],
+      language: "en",
+      conversationContext: null,
+    };
+
+    const result = assembleContext(
+      SCOPE,
+      "en",
+      [{ role: "user", content: "hello" }],
+      undefined,
+      bootstrap,
+    );
+
+    expect(result.mode).toBe("steady_state");
+  });
+
+  it("uses steady_state mode when bootstrap.journeyState is draft_ready", () => {
+    const bootstrap = {
+      journeyState: "draft_ready" as const,
+      situations: [],
+      expertiseLevel: "novice" as const,
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [],
+      staleFacts: [],
+      language: "en",
+      conversationContext: null,
+    };
+
+    const result = assembleContext(
+      SCOPE,
+      "en",
+      [{ role: "user", content: "hello" }],
+      undefined,
+      bootstrap,
+    );
+
+    expect(result.mode).toBe("steady_state");
+  });
+
+  it("uses steady_state mode when bootstrap.journeyState is blocked", () => {
+    const bootstrap = {
+      journeyState: "blocked" as const,
+      situations: [],
+      expertiseLevel: "expert" as const,
+      userName: "Bob",
+      lastSeenDaysAgo: 0,
+      publishedUsername: "bob",
+      pendingProposalCount: 0,
+      thinSections: [],
+      staleFacts: [],
+      language: "en",
+      conversationContext: null,
+    };
+
+    const result = assembleContext(
+      SCOPE,
+      "en",
+      [{ role: "user", content: "hello" }],
+      undefined,
+      bootstrap,
+    );
+
+    expect(result.mode).toBe("steady_state");
+  });
+
+  it("falls back to detectMode when no bootstrap provided (backward compat)", () => {
+    vi.mocked(countFacts).mockReturnValue(0);
+    vi.mocked(hasAnyPublishedPage).mockReturnValue(false);
+
+    const result = assembleContext(
+      SCOPE,
+      "en",
+      [{ role: "user", content: "hello" }],
+    );
+
+    expect(result.mode).toBe("onboarding");
+    // detectMode WAS called (countFacts or hasAnyPublishedPage invoked)
+    expect(countFacts).toHaveBeenCalled();
   });
 });
