@@ -248,6 +248,11 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         });
         return { success: true, theme };
       } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "set_theme", error: String(error), username, theme },
+        });
         return { success: false, error: String(error) };
       }
     },

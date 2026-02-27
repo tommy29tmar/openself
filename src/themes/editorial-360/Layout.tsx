@@ -1,10 +1,29 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import type { ThemeLayoutProps } from "../types";
 
+/** Walk up the DOM to find the nearest scrollable ancestor (overflow-y: auto|scroll). */
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+    let node = el.parentElement;
+    while (node && node !== document.documentElement) {
+        const overflow = getComputedStyle(node).overflowY;
+        if (overflow === "auto" || overflow === "scroll") return node;
+        node = node.parentElement;
+    }
+    return null; // viewport
+}
+
 export function EditorialLayout({ config, children }: ThemeLayoutProps) {
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
     // Scroll reveal using IntersectionObserver — works in any scroll container (builder preview, full page)
     useEffect(() => {
-        const reveals = document.querySelectorAll('.theme-reveal');
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        // Use nearest scrollable ancestor as root so sections inside builder
+        // preview (overflow-y: auto div) trigger correctly instead of never
+        // intersecting the viewport.
+        const scrollParent = findScrollParent(wrapper);
+        const reveals = wrapper.querySelectorAll('.theme-reveal');
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach(entry => {
@@ -14,14 +33,14 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
                     }
                 });
             },
-            { threshold: 0.08 },
+            { threshold: 0.08, root: scrollParent },
         );
         reveals.forEach(el => observer.observe(el));
         return () => observer.disconnect();
     }, []);
 
     return (
-        <div className="min-h-screen bg-[var(--page-bg)] text-[var(--page-fg)] font-light antialiased selection:bg-[var(--page-fg)] selection:text-[var(--page-bg)] relative overflow-x-hidden">
+        <div ref={wrapperRef} className="min-h-screen bg-[var(--page-bg)] text-[var(--page-fg)] font-light antialiased selection:bg-[var(--page-fg)] selection:text-[var(--page-bg)] relative overflow-x-hidden">
             {/* Subtle grain texture overlay */}
             <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-50 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
             

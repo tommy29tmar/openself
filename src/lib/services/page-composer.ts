@@ -62,7 +62,9 @@ type L10nStrings = {
   booksLabel: string;
   musicLabel: string;
   statsLabel: string;
+  projectsLabel: string;
   activitiesLabel: string;
+  currentLabel: string;
   atAGlanceLabel: string;
 };
 
@@ -84,7 +86,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "Reading",
     musicLabel: "Music",
     statsLabel: "Stats",
+    projectsLabel: "Projects",
     activitiesLabel: "Activities",
+    currentLabel: "Current",
     atAGlanceLabel: "At a Glance",
   },
   it: {
@@ -104,7 +108,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "Letture",
     musicLabel: "Musica",
     statsLabel: "Statistiche",
+    projectsLabel: "Progetti",
     activitiesLabel: "Attività",
+    currentLabel: "Attuale",
     atAGlanceLabel: "Colpo d'Occhio",
   },
   de: {
@@ -124,7 +130,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "Lektüre",
     musicLabel: "Musik",
     statsLabel: "Statistiken",
+    projectsLabel: "Projekte",
     activitiesLabel: "Aktivitäten",
+    currentLabel: "Aktuell",
     atAGlanceLabel: "Auf einen Blick",
   },
   fr: {
@@ -144,7 +152,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "Lectures",
     musicLabel: "Musique",
     statsLabel: "Statistiques",
+    projectsLabel: "Projets",
     activitiesLabel: "Activités",
+    currentLabel: "En cours",
     atAGlanceLabel: "En un Coup d'Œil",
   },
   es: {
@@ -164,7 +174,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "Lecturas",
     musicLabel: "Música",
     statsLabel: "Estadísticas",
+    projectsLabel: "Proyectos",
     activitiesLabel: "Actividades",
+    currentLabel: "Actual",
     atAGlanceLabel: "De un Vistazo",
   },
   pt: {
@@ -184,7 +196,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "Leituras",
     musicLabel: "Música",
     statsLabel: "Estatísticas",
+    projectsLabel: "Projetos",
     activitiesLabel: "Atividades",
+    currentLabel: "Atual",
     atAGlanceLabel: "Num Relance",
   },
   ja: {
@@ -204,7 +218,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "読書",
     musicLabel: "音楽",
     statsLabel: "統計",
+    projectsLabel: "プロジェクト",
     activitiesLabel: "活動",
+    currentLabel: "現在",
     atAGlanceLabel: "概要",
   },
   zh: {
@@ -224,7 +240,9 @@ const L10N: Record<string, L10nStrings> = {
     booksLabel: "阅读",
     musicLabel: "音乐",
     statsLabel: "统计",
+    projectsLabel: "项目",
     activitiesLabel: "活动",
+    currentLabel: "当前",
     atAGlanceLabel: "一览",
   },
 };
@@ -505,7 +523,7 @@ function buildSkillsSection(skillFacts: FactRow[], language: string): Section | 
   };
 }
 
-function buildProjectsSection(projectFacts: FactRow[]): Section | null {
+function buildProjectsSection(projectFacts: FactRow[], language: string): Section | null {
   if (projectFacts.length === 0) return null;
 
   const items: ProjectItem[] = projectFacts
@@ -527,7 +545,7 @@ function buildProjectsSection(projectFacts: FactRow[]): Section | null {
 
   if (items.length === 0) return null;
 
-  const content: ProjectsContent = { items };
+  const content: ProjectsContent = { items, title: getL10n(language).projectsLabel };
 
   return {
     id: "projects-1",
@@ -658,7 +676,8 @@ function buildExperienceSection(experienceFacts: FactRow[], language: string): S
 
   if (items.length === 0) return null;
 
-  const content: ExperienceContent = { items, title: getL10n(language).experienceLabel };
+  const l10n = getL10n(language);
+  const content: ExperienceContent = { items, title: l10n.experienceLabel, currentLabel: l10n.currentLabel };
 
   return {
     id: "experience-1",
@@ -1044,7 +1063,7 @@ export function composeOptimisticPage(
     const experience = buildExperienceSection(experienceFacts, language);
     if (experience) sections.push(experience);
 
-    const projects = buildProjectsSection(grouped.get("project") ?? []);
+    const projects = buildProjectsSection(grouped.get("project") ?? [], language);
     if (projects) sections.push(projects);
 
     const education = buildEducationSection(grouped.get("education") ?? [], language);
@@ -1071,7 +1090,7 @@ export function composeOptimisticPage(
     const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
     if (skills) sections.push(skills);
 
-    const projects = buildProjectsSection(grouped.get("project") ?? []);
+    const projects = buildProjectsSection(grouped.get("project") ?? [], language);
     if (projects) sections.push(projects);
 
     const interests = buildInterestsSection(interestFacts, language);

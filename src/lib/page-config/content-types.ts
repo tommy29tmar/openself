@@ -29,6 +29,7 @@ export type ProjectItem = {
 
 export type ProjectsContent = {
   items: ProjectItem[];
+  title?: string;
 };
 
 export type SocialLink = {
@@ -49,7 +50,7 @@ export type ExperienceItem = {
   description?: string;
   current?: boolean;
 };
-export type ExperienceContent = { items: ExperienceItem[]; title?: string };
+export type ExperienceContent = { items: ExperienceItem[]; title?: string; currentLabel?: string };
 
 // Education
 export type EducationItem = {

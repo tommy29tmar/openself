@@ -13,10 +13,11 @@ type ExperienceItem = {
 type ExperienceContent = {
     items: ExperienceItem[];
     title?: string;
+    currentLabel?: string;
 };
 
 export function Experience({ content }: SectionProps<ExperienceContent>) {
-    const { items = [], title } = content;
+    const { items = [], title, currentLabel } = content;
 
     if (!items.length) return null;
 
@@ -51,7 +52,7 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
                                         {item.period}
                                         {item.current && (
                                             <span className="ml-2 text-xs uppercase tracking-widest text-[var(--page-accent)]">
-                                                Current
+                                                {currentLabel || "Current"}
                                             </span>
                                         )}
                                     </span>

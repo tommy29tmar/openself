@@ -190,7 +190,18 @@ export function validateFactValue(
     }
   }
 
-  // Rule 5: all string values must not be placeholders (generic fallback)
+  // Rule 5: reject date-placeholder patterns like YYYY-YYYY in period fields
+  const PERIOD_PLACEHOLDER_RE = /^[XY]{2,4}\s*[-–]\s*[XY]{2,4}$/i;
+  const periodValue = value.period;
+  if (typeof periodValue === "string" && PERIOD_PLACEHOLDER_RE.test(periodValue.trim())) {
+    throw new FactValidationError(
+      `Fact field "period" contains a placeholder date pattern ("${periodValue}"). Use real years (e.g. "2018-2022") or omit.`,
+      category,
+      key,
+    );
+  }
+
+  // Rule 6: all string values must not be placeholders (generic fallback)
   // Only check the "primary" value fields — not metadata like type, activityType, etc.
   const PRIMARY_VALUE_FIELDS = new Set([
     "full", "name", "value", "full_name", "title", "role", "company",

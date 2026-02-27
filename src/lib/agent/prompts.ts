@@ -84,6 +84,31 @@ Common mistakes to avoid:
 - NEVER use "experience" for education/study — use "education" instead.
 - When updating a fact, include ALL fields in value (not just the changed ones).`;
 
+const DATA_MODEL_REFERENCE = `Data model quick reference:
+- Sections are AUTO-COMPOSED from facts. You never edit sections directly.
+- The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
+- Available themes: ${"`"}minimal${"`"}, ${"`"}warm${"`"}, ${"`"}editorial-360${"`"}. Use set_theme with the exact name.
+
+Workflows:
+- To MODIFY content: search_facts(category) → find the factId → update_fact(factId, FULL new value object)
+- To REMOVE a section: search_facts(category) → delete_fact for each fact → generate_page
+- To ADD content: create_fact(category, value) → generate_page
+- Always call generate_page after bulk fact changes to rebuild the page.
+- Track your commitments: if you promise to add something, do it before ending the conversation.
+
+Value object schemas (must pass the FULL object, not partial):
+- experience: { role, company, period?, description?, status?: "current"|"past" }
+- education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders
+- identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }
+- project: { name, description?, url?, status?: "active"|"completed" }
+- skill: { name, level?: "beginner"|"intermediate"|"advanced"|"expert" }
+- stat: { label, value }
+- language: { language, proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner" }
+- contact: { type: "email"|"phone"|"location"|"website", value }
+- music: { title, artist? }
+- reading: { title, author?, rating? }
+- activity: { name, activityType?, frequency?, description? }`;
+
 const OUTPUT_CONTRACT = `Output rules:
 - Respond in natural language to the user
 - Tool calls happen silently — the user should not see JSON or technical details
@@ -198,7 +223,7 @@ export function getSystemPromptText(
       ? onboardingPolicy(language)
       : steadyStatePolicy(language);
 
-  return [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, OUTPUT_CONTRACT, modePolicy].join(
+  return [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE, OUTPUT_CONTRACT, modePolicy].join(
     "\n\n---\n\n",
   );
 }

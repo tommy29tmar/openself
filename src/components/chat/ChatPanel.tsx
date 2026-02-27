@@ -406,7 +406,7 @@ function ChatPanelInner({
   // Username for OAuth edge case (authenticated but no username)
   const [oauthUsername, setOauthUsername] = useState("");
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload } =
+  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } =
     useChat({
       api: "/api/chat",
       body: { language },
@@ -440,6 +440,37 @@ function ChatPanelInner({
         setChatError(error.message || "Unable to generate a response right now.");
       },
     });
+
+  // Re-sync messages from the server DB to recover from stream errors
+  const refreshChat = useCallback(async () => {
+    try {
+      const res = await fetch("/api/messages", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as MessagesResponse;
+      if (!data.success || !Array.isArray(data.messages)) return;
+      const restored: StoredMessage[] = data.messages
+        .filter(
+          (m): m is { id: string; role: string; content: string } =>
+            typeof m.id === "string" &&
+            typeof m.role === "string" &&
+            typeof m.content === "string",
+        )
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({
+          id: m.id,
+          role: m.role as StoredMessage["role"],
+          content: m.content,
+        }));
+      const welcome = getWelcomeMessage(language);
+      const welcomeAlreadyStored = restored.some(
+        (msg) => msg.role === "assistant" && msg.content === welcome.content,
+      );
+      setMessages(welcomeAlreadyStored ? restored : [welcome, ...restored]);
+      setChatError(null);
+    } catch {
+      // Keep current state if refresh fails
+    }
+  }, [language, setMessages]);
 
   const handleChatSubmit = useCallback(
     (e: FormEvent<HTMLFormElement>) => {
@@ -600,6 +631,12 @@ function ChatPanelInner({
                 className="shrink-0 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700"
               >
                 {language === "it" ? "Riprova" : "Retry"}
+              </button>
+              <button
+                onClick={refreshChat}
+                className="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900"
+              >
+                {language === "it" ? "Aggiorna chat" : "Refresh chat"}
               </button>
             </div>
           )}
