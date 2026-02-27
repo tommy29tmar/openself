@@ -1,6 +1,7 @@
 import { streamText, generateText, type CoreMessage } from "ai";
 import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
 import { assembleContext } from "@/lib/agent/context";
+import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { createAgentTools } from "@/lib/agent/tools";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
@@ -210,12 +211,19 @@ export async function POST(req: Request) {
   // Resolve auth for context injection
   const chatAuthCtx = multiUser ? getAuthContext(req) : null;
 
+  // --- Journey Intelligence: assemble bootstrap payload ---
+  const authInfoForBootstrap = chatAuthCtx
+    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
+    : undefined;
+  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+
   // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
   const { systemPrompt, trimmedMessages, mode } = assembleContext(
     effectiveScope,
     sessionLanguage,
     messages,
-    chatAuthCtx ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null } : undefined,
+    authInfoForBootstrap,
+    bootstrap,
   );
 
   // Role whitelist: AI SDK expects only these roles
