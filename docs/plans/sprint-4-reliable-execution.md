@@ -1849,8 +1849,8 @@ git commit -m "test: fix any mock additions needed for new tool imports"
 | 1 | `src/lib/ai/provider.ts` | Add `capable` tier, `CAPABLE_MODELS`, `AI_MODEL_CAPABLE` env |
 | 2 | `src/lib/services/summary-service.ts` | Fix hardcoded `"anthropic"` → `getProviderName()` |
 | 3 | `src/lib/ai/translate.ts` | Replace `generateText`+`stripCodeFences`+`JSON.parse` with `generateObject`+Zod |
-| 4 | `src/lib/agent/tools.ts` | Add `publish_preflight` tool (17th tool) |
-| 5 | `src/lib/agent/tools.ts` | Add `inspect_page_state` tool (18th tool) |
+| 4 | `src/lib/agent/tools.ts` | Add `publish_preflight` tool (16th tool) |
+| 5 | `src/lib/agent/tools.ts` | Add `inspect_page_state` tool (17th tool) |
 | 6 | `src/lib/agent/tools.ts` | Add username validation guard to `request_publish` |
 | 7 | `tests/evals/*.test.ts` | Full suite verification + mock fixes |
 

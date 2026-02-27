@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Vercel AI SDK, Zod, vitest
 
-**Dependencies:** Sprints 1-3 (required: Journey Intelligence, onboarding rewrite, returning user policies). Sprint 4 is soft-dependency: eval scenarios use the existing `"medium"` tier if Sprint 4's `"capable"` tier is not yet available — see `getModelForTier()` fallback.
+**Dependencies:** Sprints 1-3 (required: Journey Intelligence, onboarding rewrite, returning user policies). Sprint 4 is soft-dependency: if Sprint 4 is not completed, `ModelTier` stays `"cheap" | "medium"` — this sprint only adds prompt policy blocks and evals, which use `getModel()` (default chat model) and don't depend on the `"capable"` tier.
 
 **Assumptions (from Sprint 1-3 completion):**
 - `src/lib/agent/journey.ts` exists and exports `JourneyState`, `Situation`, `ExpertiseLevel`, `BootstrapPayload`, `assembleBootstrapPayload()`
@@ -2211,7 +2211,7 @@ npx vitest run tests/evals/action-awareness.test.ts tests/evals/undo-awareness.t
 
 ## Summary
 
-### Files to create (12)
+### Files to create (15)
 
 | Path | Task |
 |------|------|

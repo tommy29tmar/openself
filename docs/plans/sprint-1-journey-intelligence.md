@@ -1361,10 +1361,16 @@ Create `tests/evals/chat-route-bootstrap.test.ts`:
 ```typescript
 /**
  * Tests that POST /api/chat wires the bootstrap payload through to assembleContext.
+ *
+ * NOTE: Mocks must match the real route.ts imports:
+ *   - usage-service (checkBudget, recordUsage) — NOT quota-service
+ *   - session-service (isMultiUserEnabled, tryIncrementMessageCount, getMessageLimit,
+ *     getMessageCount, DEFAULT_SESSION_ID) — NOT getOrCreateSession
+ *   - assembleContext returns { systemPrompt, trimmedMessages, mode } — NOT contextParts/messages
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// --- Mocks (hoisted) ---
+// --- Mocks (hoisted, matching real route.ts imports) ---
 
 const mockBootstrapPayload = {
   journeyState: "first_visit" as const,
@@ -1386,10 +1392,9 @@ vi.mock("@/lib/agent/journey", () => ({
 
 vi.mock("@/lib/agent/context", () => ({
   assembleContext: vi.fn(() => ({
-    mode: "onboarding",
     systemPrompt: "test prompt",
-    contextParts: [],
-    messages: [{ role: "user", content: "hello" }],
+    trimmedMessages: [{ role: "user", content: "hello" }],
+    mode: "onboarding",
   })),
 }));
 
@@ -1405,12 +1410,19 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/services/session-service", () => ({
   isMultiUserEnabled: vi.fn(() => false),
+  tryIncrementMessageCount: vi.fn(() => true),
+  getMessageLimit: vi.fn(() => 50),
+  getMessageCount: vi.fn(() => 0),
   DEFAULT_SESSION_ID: "__default__",
-  getOrCreateSession: vi.fn(() => ({ id: "sess-a", language: "en" })),
 }));
 
-vi.mock("@/lib/services/quota-service", () => ({
-  checkQuota: vi.fn(() => ({ allowed: true })),
+vi.mock("@/lib/services/usage-service", () => ({
+  checkBudget: vi.fn(() => ({ allowed: true })),
+  recordUsage: vi.fn(),
+}));
+
+vi.mock("@/lib/middleware/rate-limit", () => ({
+  checkRateLimit: vi.fn(() => null),
 }));
 
 vi.mock("ai", () => ({
@@ -1423,8 +1435,17 @@ vi.mock("@/lib/agent/tools", () => ({
   createAgentTools: vi.fn(() => ({})),
 }));
 
-vi.mock("@/lib/services/event-service", () => ({
-  logEvent: vi.fn(),
+vi.mock("@/lib/db", () => ({
+  db: { insert: vi.fn(() => ({ values: vi.fn(() => ({ onConflictDoNothing: vi.fn(() => ({ run: vi.fn() })) })) })) },
+  sqlite: { prepare: vi.fn(() => ({ run: vi.fn(), get: vi.fn() })) },
+}));
+
+vi.mock("@/lib/db/schema", () => ({
+  messages: {},
+}));
+
+vi.mock("@/lib/services/summary-service", () => ({
+  enqueueSummaryJob: vi.fn(),
 }));
 
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
@@ -1480,18 +1501,23 @@ Add import at the top of `src/app/api/chat/route.ts`:
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 ```
 
-Inside the `POST` function, after resolving `effectiveScope` and `sessionLanguage` (around line 45), add:
+Inside the `POST` function, after resolving `chatAuthCtx` (around line 211 in route.ts), add:
 
 ```typescript
   // --- Journey Intelligence: assemble bootstrap payload ---
   const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfo);
 ```
 
-Then modify the `assembleContext` call to pass bootstrap as the 5th argument:
+Then modify the `assembleContext` call (currently at line ~214 in route.ts) to pass bootstrap as the 5th argument. Keep the existing destructuring shape `{ systemPrompt, trimmedMessages, mode }` which matches `ContextResult`:
 
 ```typescript
-  const { mode, systemPrompt, contextParts, messages: trimmedMessages } =
-    assembleContext(effectiveScope, sessionLanguage, messages, authInfo, bootstrap);
+  const { systemPrompt, trimmedMessages, mode } = assembleContext(
+    effectiveScope,
+    sessionLanguage,
+    messages,
+    chatAuthCtx ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null } : undefined,
+    bootstrap,
+  );
 ```
 
 ### Step 4: Run test to verify it passes

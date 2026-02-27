@@ -28,7 +28,7 @@
 
 ### Steps
 
-1. Write failing test (the test file is shared across Tasks 1-5; create it now with all returning policy tests)
+1. The shared test file `tests/evals/returning-policies.test.ts` is created in **Task 6** (before this task in execution order). Write the `returningNoPagePolicy` tests there if not already present.
 2. Run tests — confirm they fail:
    ```bash
    npx vitest run tests/evals/returning-policies.test.ts --reporter=verbose

@@ -1568,20 +1568,26 @@ export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPa
     const load = async () => {
       // Fetch bootstrap and history in parallel
       let bootstrap: BootstrapResponse | null = null;
+      let historyRes: Response | null = null;
+
       try {
-        const bootstrapRes = await fetch("/api/chat/bootstrap", { cache: "no-store" });
+        const [bootstrapRes, messagesRes] = await Promise.all([
+          fetch("/api/chat/bootstrap", { cache: "no-store" }),
+          fetch("/api/messages", { cache: "no-store" }),
+        ]);
         if (bootstrapRes.ok) {
           bootstrap = await bootstrapRes.json();
         }
+        historyRes = messagesRes;
       } catch {
-        // Bootstrap fetch failed — will use static fallback
+        // Fetch failed — will use static fallback for bootstrap, no history
       }
 
       // Compute smart welcome based on bootstrap
       const smartWelcome = getSmartWelcomeMessage(language, bootstrap);
 
       try {
-        const res = await fetch("/api/messages", { cache: "no-store" });
+        const res = historyRes ?? await fetch("/api/messages", { cache: "no-store" });
         if (res.status === 401) {
           window.location.href = "/invite";
           return;
