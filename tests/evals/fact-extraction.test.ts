@@ -304,12 +304,16 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(page.sections.find((s) => s.type === "achievements")).toBeDefined();
     });
 
-    it("maps stat facts to stats section", () => {
+    it("maps stat facts to at-a-glance section (fused)", () => {
       const facts: FactRow[] = [
         makeFact({ category: "stat", key: "experience", value: { label: "Years", value: "10+" } }),
       ];
       const page = composeOptimisticPage(facts, "alice");
-      expect(page.sections.find((s) => s.type === "stats")).toBeDefined();
+      // Stats are fused into at-a-glance when EXTENDED_SECTIONS=true
+      const aag = page.sections.find((s) => s.type === "at-a-glance");
+      expect(aag).toBeDefined();
+      const content = aag!.content as Record<string, unknown>;
+      expect(content.stats).toBeDefined();
     });
 
     it("maps reading facts to reading section", () => {

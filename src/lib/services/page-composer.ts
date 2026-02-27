@@ -63,6 +63,7 @@ type L10nStrings = {
   musicLabel: string;
   statsLabel: string;
   activitiesLabel: string;
+  atAGlanceLabel?: string;
 };
 
 const L10N: Record<string, L10nStrings> = {
@@ -84,6 +85,7 @@ const L10N: Record<string, L10nStrings> = {
     musicLabel: "Music",
     statsLabel: "Stats",
     activitiesLabel: "Activities",
+    atAGlanceLabel: "At a Glance",
   },
   it: {
     welcomeTagline: (name) => `Ciao, sono ${name}`,
@@ -899,6 +901,86 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
   };
 }
 
+// --- At a Glance: fused stats + grouped skills + interests ---
+
+const SKILL_DOMAINS: Record<string, string[]> = {
+  "Frontend":  ["React", "Next.js", "Tailwind CSS", "Vue", "Angular", "Svelte", "CSS", "HTML"],
+  "Backend":   ["Node.js", "Python", "Go", "Java", "Ruby", "PHP", "SQLite", "PostgreSQL", "Express", "FastAPI", "Django", "Spring"],
+  "Infra":     ["Docker", "Kubernetes", "AWS", "GCP", "Git", "CI/CD", "Terraform", "Linux", "Nginx", "Vercel"],
+  "Languages": ["TypeScript", "JavaScript", "Rust", "C++", "C#", "Swift", "Kotlin", "Scala"],
+  "AI/ML":     ["PyTorch", "TensorFlow", "LangChain", "OpenAI", "Hugging Face"],
+  "Design":    ["Figma", "Sketch", "Adobe XD"],
+};
+
+function groupSkillsByDomain(skillNames: string[]): { domain: string; skills: string[]; showLabel: boolean }[] {
+  const groups: Record<string, string[]> = {};
+  const assigned = new Set<string>();
+
+  for (const [domain, domainSkills] of Object.entries(SKILL_DOMAINS)) {
+    const matched = skillNames.filter(
+      (s) => domainSkills.some((ds) => ds.toLowerCase() === s.toLowerCase()) && !assigned.has(s),
+    );
+    if (matched.length > 0) {
+      groups[domain] = matched;
+      matched.forEach((s) => assigned.add(s));
+    }
+  }
+
+  const unmatched = skillNames.filter((s) => !assigned.has(s));
+  if (unmatched.length > 0) groups["Other"] = unmatched;
+
+  const result = Object.entries(groups).map(([domain, skills]) => ({ domain, skills, showLabel: true }));
+  if (result.length <= 2) {
+    for (const g of result) g.showLabel = false;
+  }
+  return result;
+}
+
+function buildAtAGlanceSection(
+  skillFacts: FactRow[],
+  statFacts: FactRow[],
+  interestFacts: FactRow[],
+  language: string,
+): Section | null {
+  const skills = skillFacts
+    .map((f) => { const v = val(f); return str(v.name) ?? str(v.value); })
+    .filter((s): s is string => s !== undefined);
+
+  const stats = statFacts.map((f) => {
+    const v = val(f);
+    const label = str(v.label) ?? str(v.name);
+    const value = str(v.value) ?? str(v.number);
+    if (!label || !value) return null;
+    return { label, value, unit: str(v.unit) };
+  }).filter((s): s is { label: string; value: string; unit?: string } => s !== null);
+
+  const interests = interestFacts.map((f) => {
+    const v = val(f);
+    const name = str(v.name) ?? str(v.value);
+    if (!name) return null;
+    return { name };
+  }).filter((i): i is { name: string } => i !== null);
+
+  if (skills.length === 0 && stats.length === 0 && interests.length === 0) return null;
+
+  const skillGroups = skills.length > 0 ? groupSkillsByDomain(skills) : undefined;
+
+  const l = getL10n(language);
+  const content: Record<string, unknown> = {
+    title: l.atAGlanceLabel ?? "At a Glance",
+  };
+  if (stats.length > 0) content.stats = stats;
+  if (skillGroups) content.skillGroups = skillGroups;
+  if (interests.length > 0) content.interests = interests;
+
+  return {
+    id: "at-a-glance-1",
+    type: "at-a-glance" as any,
+    variant: "full",
+    content,
+  };
+}
+
 export function composeOptimisticPage(
   facts: FactRow[],
   username: string,
@@ -953,17 +1035,21 @@ export function composeOptimisticPage(
     if (education) sections.push(education);
   }
 
-  // 4. Skills
-  const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
-  if (skills) sections.push(skills);
+  // 4. Skills (standalone only when NOT extended — fused into at-a-glance otherwise)
+  if (!extended) {
+    const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
+    if (skills) sections.push(skills);
+  }
 
   // 5. Projects
   const projects = buildProjectsSection(grouped.get("project") ?? []);
   if (projects) sections.push(projects);
 
-  // 6. Interests
-  const interests = buildInterestsSection(interestFacts, language);
-  if (interests) sections.push(interests);
+  // 6. Interests (standalone only when NOT extended — fused into at-a-glance otherwise)
+  if (!extended) {
+    const interests = buildInterestsSection(interestFacts, language);
+    if (interests) sections.push(interests);
+  }
 
   // 7. Social — standalone only when NOT extended (absorbed into hero ContactBar)
   if (!extended) {
@@ -973,12 +1059,18 @@ export function composeOptimisticPage(
 
   // Extended sections (only when flag is enabled)
   // Note: social, contact, and languages are absorbed into the hero ContactBar
+  // Note: stats, skills, interests are fused into at-a-glance
   if (extended) {
+    const atAGlance = buildAtAGlanceSection(
+      grouped.get("skill") ?? [],
+      grouped.get("stat") ?? [],
+      interestFacts,
+      language,
+    );
+    if (atAGlance) sections.push(atAGlance);
+
     const achievements = buildAchievementsSection(grouped.get("achievement") ?? [], language);
     if (achievements) sections.push(achievements);
-
-    const stats = buildStatsSection(grouped.get("stat") ?? [], language);
-    if (stats) sections.push(stats);
 
     const reading = buildReadingSection(grouped.get("reading") ?? [], language);
     if (reading) sections.push(reading);
