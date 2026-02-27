@@ -12,11 +12,13 @@ function findScrollParent(el: HTMLElement): HTMLElement | null {
     return null; // viewport
 }
 
-export function EditorialLayout({ config, children }: ThemeLayoutProps) {
+export function EditorialLayout({ config, children, previewMode }: ThemeLayoutProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
 
-    // Scroll reveal using IntersectionObserver — works in any scroll container (builder preview, full page)
+    // Scroll reveal using IntersectionObserver — skip entirely in builder preview
+    // where sections must be immediately visible for content review.
     useEffect(() => {
+        if (previewMode) return;
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
         // Use nearest scrollable ancestor as root so sections inside builder
@@ -37,10 +39,10 @@ export function EditorialLayout({ config, children }: ThemeLayoutProps) {
         );
         reveals.forEach(el => observer.observe(el));
         return () => observer.disconnect();
-    }, []);
+    }, [previewMode]);
 
     return (
-        <div ref={wrapperRef} className="min-h-screen bg-[var(--page-bg)] text-[var(--page-fg)] font-light antialiased selection:bg-[var(--page-fg)] selection:text-[var(--page-bg)] relative overflow-x-hidden">
+        <div ref={wrapperRef} className={`min-h-screen bg-[var(--page-bg)] text-[var(--page-fg)] font-light antialiased selection:bg-[var(--page-fg)] selection:text-[var(--page-bg)] relative overflow-x-hidden${previewMode ? " preview-mode" : ""}`}>
             {/* Subtle grain texture overlay */}
             <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-50 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
             

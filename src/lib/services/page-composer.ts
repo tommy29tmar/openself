@@ -66,6 +66,11 @@ type L10nStrings = {
   activitiesLabel: string;
   currentLabel: string;
   atAGlanceLabel: string;
+  profNative: string;
+  profFluent: string;
+  profAdvanced: string;
+  profIntermediate: string;
+  profBeginner: string;
 };
 
 const L10N: Record<string, L10nStrings> = {
@@ -90,6 +95,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "Activities",
     currentLabel: "Current",
     atAGlanceLabel: "At a Glance",
+    profNative: "native",
+    profFluent: "fluent",
+    profAdvanced: "advanced",
+    profIntermediate: "intermediate",
+    profBeginner: "beginner",
   },
   it: {
     welcomeTagline: (name) => `Ciao, sono ${name}`,
@@ -112,6 +122,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "Attività",
     currentLabel: "Attuale",
     atAGlanceLabel: "Colpo d'Occhio",
+    profNative: "madrelingua",
+    profFluent: "fluente",
+    profAdvanced: "avanzato",
+    profIntermediate: "intermedio",
+    profBeginner: "principiante",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -134,6 +149,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "Aktivitäten",
     currentLabel: "Aktuell",
     atAGlanceLabel: "Auf einen Blick",
+    profNative: "Muttersprache",
+    profFluent: "fließend",
+    profAdvanced: "fortgeschritten",
+    profIntermediate: "Mittelstufe",
+    profBeginner: "Anfänger",
   },
   fr: {
     welcomeTagline: (name) => `Bienvenue sur la page de ${name}`,
@@ -156,6 +176,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "Activités",
     currentLabel: "En cours",
     atAGlanceLabel: "En un Coup d'Œil",
+    profNative: "natif",
+    profFluent: "courant",
+    profAdvanced: "avancé",
+    profIntermediate: "intermédiaire",
+    profBeginner: "débutant",
   },
   es: {
     welcomeTagline: (name) => `Bienvenido a la página de ${name}`,
@@ -178,6 +203,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "Actividades",
     currentLabel: "Actual",
     atAGlanceLabel: "De un Vistazo",
+    profNative: "nativo",
+    profFluent: "fluido",
+    profAdvanced: "avanzado",
+    profIntermediate: "intermedio",
+    profBeginner: "principiante",
   },
   pt: {
     welcomeTagline: (name) => `Bem-vindo à página de ${name}`,
@@ -200,6 +230,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "Atividades",
     currentLabel: "Atual",
     atAGlanceLabel: "Num Relance",
+    profNative: "nativo",
+    profFluent: "fluente",
+    profAdvanced: "avançado",
+    profIntermediate: "intermediário",
+    profBeginner: "iniciante",
   },
   ja: {
     welcomeTagline: (name) => `${name}のページへようこそ`,
@@ -222,6 +257,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "活動",
     currentLabel: "現在",
     atAGlanceLabel: "概要",
+    profNative: "ネイティブ",
+    profFluent: "流暢",
+    profAdvanced: "上級",
+    profIntermediate: "中級",
+    profBeginner: "初級",
   },
   zh: {
     welcomeTagline: (name) => `欢迎来到${name}的页面`,
@@ -244,6 +284,11 @@ const L10N: Record<string, L10nStrings> = {
     activitiesLabel: "活动",
     currentLabel: "当前",
     atAGlanceLabel: "一览",
+    profNative: "母语",
+    profFluent: "流利",
+    profAdvanced: "高级",
+    profIntermediate: "中级",
+    profBeginner: "初级",
   },
 };
 
@@ -838,17 +883,26 @@ function buildMusicSection(musicFacts: FactRow[], language: string): Section | n
   };
 }
 
+const PROF_KEYS: Record<string, keyof L10nStrings> = {
+  native: "profNative", fluent: "profFluent", advanced: "profAdvanced",
+  intermediate: "profIntermediate", beginner: "profBeginner",
+};
+
 function buildLanguagesSection(languageFacts: FactRow[], language: string): Section | null {
   if (languageFacts.length === 0) return null;
 
+  const l = getL10n(language);
   const items: LanguageItem[] = languageFacts
     .map((f) => {
       const v = val(f);
       const lang = str(v.language) ?? str(v.name);
       if (!lang) return null;
       const item: LanguageItem = { language: lang };
-      const proficiency = str(v.proficiency) ?? str(v.level);
-      if (proficiency) item.proficiency = proficiency as LanguageItem["proficiency"];
+      const rawProf = str(v.proficiency) ?? str(v.level);
+      if (rawProf) {
+        const profLookupKey = PROF_KEYS[rawProf.toLowerCase()];
+        item.proficiency = profLookupKey ? l[profLookupKey] as string : rawProf;
+      }
       return item;
     })
     .filter((item): item is LanguageItem => item !== null);

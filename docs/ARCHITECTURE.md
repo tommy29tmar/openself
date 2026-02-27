@@ -256,6 +256,9 @@ To avoid chat resets and keep behavior consistent across devices:
 - **Error recovery**: On stream error, the error banner offers two actions: "Retry"
   (retries last AI request via `reload()`) and "Refresh chat" (re-syncs all messages
   from `/api/messages` via `refreshChat()` to restore DB-consistent state).
+- **Markdown rendering**: Assistant messages are rendered as HTML via `markdown-it`
+  (`breaks: true`, `linkify: true`, `html: false`). User messages remain plain text.
+  The `html: false` default is a security invariant — prevents XSS from AI content.
 
 This contract guarantees:
 - no reset on mobile tab switch (same mounted component instance)
@@ -443,8 +446,13 @@ Vercel AI SDK `ai` package). The role-whitelist filter produces `{ role: string 
 the result is cast to `CoreMessage[]` after filtering to satisfy the SDK's literal-union
 type constraint.
 
+**Auto-draft for style tools:** The `set_theme`, `update_page_style`, `set_layout`, and
+`reorder_sections` tools use a shared `ensureDraft()` helper that auto-composes a draft
+from facts if none exists. This lets users request style changes before explicitly
+generating the page — the draft is created on-demand from the knowledge base.
+
 Key files:
-- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas)
+- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas, role/title priority)
 - `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback in `streamText()`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
@@ -1145,6 +1153,7 @@ follows OpenSelf's visual identity.
 │                Variants: player-style, list, grid            │
 │                                                              │
 │  languages     Spoken languages with proficiency levels       │
+│                Proficiency localized via L10N (8 langs × 5)  │
 │                Variants: list                                │
 │                Phase 1b (gated by EXTENDED_SECTIONS flag)    │
 │                                                              │
@@ -1661,7 +1670,7 @@ token set based on `config.theme`. All three themes support light/dark color sch
 **Shared CSS utility classes** (defined in `globals.css`, used by all themes):
 - `.section-label` — Unified section header (11px uppercase, `letter-spacing: 0.2em`, accent bar via `::before`)
 - `.entry-dot-separator` — Middle-dot separator between list entries
-- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver. `EditorialLayout` uses `findScrollParent()` to detect the nearest scrollable ancestor as `root`, so sections inside the builder preview (an `overflow-y: auto` div) trigger correctly instead of never intersecting the viewport
+- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver. `EditorialLayout` uses `findScrollParent()` to detect the nearest scrollable ancestor as `root`. **Builder preview bypass**: when `previewMode` is true, the observer is skipped entirely and `.preview-mode .theme-reveal` CSS forces `opacity: 1` — sections must be immediately visible for content review. Published pages retain the full scroll-reveal animation
 - `.hover-underline-grow` — Left-to-right underline animation on hover (`scaleX(0)` → `scaleX(1)`)
 - `prefers-reduced-motion` overrides disable all animations for accessibility
 
@@ -3932,6 +3941,9 @@ Default runtime DB settings for web+worker mode:
 3. Single-writer serialization per user for mutating workflows
 4. Retry with jitter/backoff on lock contention (`SQLITE_BUSY`)
 5. Idempotent mutation keys for connector/worker retries
+6. **Targeted WAL checkpoint** after critical multi-write operations (e.g., user registration)
+   via `sqlite.pragma("wal_checkpoint(PASSIVE)")`. This ensures data survives process kill
+   between writes and the next auto-checkpoint. PASSIVE mode does not block readers/writers.
 
 `SQLITE_BUSY` incidents must be logged in `agent_events` with context (actor, job/message id).
 

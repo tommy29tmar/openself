@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-27
+Last updated: 2026-02-28
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 846 automated tests passing (60 test files)
+- 846 automated tests passing (60 test files) — unchanged count, review fixes only
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -40,8 +40,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - Contact user-controlled: removed from SENSITIVE_CATEGORIES, contact facts follow standard public/proposed/private transitions
 - Profile archetype detection: deterministic classification (developer/designer/executive/student/creator/generalist) injected into agent context for layout intelligence
 - Vertical magazine redesign: luxury digital magazine aesthetic for vertical layout — unified `.section-label` headers with accent bar, scroll reveal animations, variable vertical rhythm, dot separators, hover-underline-grow links, warm theme WCAG AA contrast fix
+- UAT Round 3 (8 fixes): scroll-reveal bypass in builder preview, auto-draft for style tools, agent role prompt guidance, language proficiency L10N (8 languages × 5 levels), chat markdown rendering (markdown-it), favicon, dot separator polish, WAL checkpoint on registration
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete.
 
 ## 2) Implemented Today
 
@@ -63,7 +64,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 
 | Capability | Status | Notes |
 |---|---|---|
-| Streaming AI chat | Done | `useChat` + `/api/chat` |
+| Streaming AI chat | Done | `useChat` + `/api/chat`. Assistant messages rendered as markdown via `markdown-it` (bold, lists, links). User messages plain text. |
 | Tool-calling agent | Done | 15 tools: Fact CRUD, set_fact_visibility, page generation, update_page_style, request_publish, reorder, theme, set_layout, propose_lock, save_memory, propose_soul_change, resolve_conflict. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) + `POST /api/draft/request-publish` (chat-initiated publish) |
@@ -254,6 +255,21 @@ All items complete. Transforms the vertical layout template from document-style 
 - Design doc: `docs/plans/2026-02-27-vertical-template-magazine-redesign.md`
 - Implementation plan: `docs/plans/2026-02-27-vertical-template-magazine-implementation.md`
 - No new tests (visual-only changes, 846 existing tests pass)
+
+### UAT Hardening Round 3 (8 Findings) ✅
+
+Third E2E UAT as "Marco Bellini" (clean DB, fresh start, 6 messages, publish, signup, return to builder, stress test). 8 real bugs fixed, 5 verified as not-a-bug. No new tests (all fixes verified by existing 846-test suite + manual UAT).
+
+1. **Scroll-reveal bypass (F1, Critical)** — Builder preview sections were invisible (`opacity: 0`) because IntersectionObserver couldn't re-observe new sections added via SSE. Fix: `previewMode` prop disables observer entirely + `.preview-mode .theme-reveal` CSS forces `opacity: 1`. Published page retains full scroll animation.
+2. **Auto-draft for style tools (F2, High)** — `set_theme`, `update_page_style`, `set_layout`, `reorder_sections` returned "Page not found" when no draft existed. Fix: shared `ensureDraft()` helper inside `createAgentTools()` auto-composes draft from facts if none exists.
+3. **Agent role prompt (F3, High)** — Agent sometimes created experience facts instead of updating identity facts for role changes. Fix: added ROLE/TITLE priority guidance + sequential processing instruction to DATA_MODEL_REFERENCE in prompts.
+4. **Language proficiency L10N (F4, Medium)** — Proficiency labels ("fluent", "native") displayed in English regardless of page language. Fix: 5 new L10N keys × 8 languages (40 entries), `PROF_KEYS` lookup map in `buildLanguagesSection()`. `LanguageItem["proficiency"]` type widened to `string`.
+5. **Chat markdown rendering (F5, Medium)** — Assistant messages rendered as plain text, losing formatting. Fix: `markdown-it` v14 (CJS-compatible, zero deps). Only assistant messages use `dangerouslySetInnerHTML`; user messages remain plain text. `html: false` (default) prevents XSS.
+6. **Favicon (F6, Low)** — No favicon → browser default. Fix: `src/app/icon.svg` (simple circle, auto-discovered by Next.js App Router).
+7. **Dot separator polish (F7, Low)** — `.entry-dot-separator::after` opacity bumped from 0.3 → 0.4 for better readability.
+8. **WAL checkpoint on registration (F8, Low)** — Registration spans multiple DB writes; process kill before WAL auto-checkpoint could lose auth session. Fix: `sqlite.pragma("wal_checkpoint(PASSIVE)")` after last critical write in both AUTH_V2 and legacy paths.
+
+Verified not-a-bug: M4 (webpack HMR hang), M5 (18 theme-reveal elements — expected conditional variants), L2 ("Colpo d'Occhio" intentional fusion), L4 (_next/static dev noise), M3 (empty assistant response — model behavior).
 
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support

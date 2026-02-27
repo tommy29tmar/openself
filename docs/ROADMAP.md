@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-27
+Last updated: 2026-02-28
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -196,6 +196,20 @@ UAT of the seed-realistic script revealed layout issues on the published page. A
 9. **8-language localization** for at-a-glance labels.
 10. **Personalization integration** — at-a-glance registered in personalizer.
 
+### UAT Hardening Round 3 — 8 Findings (Done)
+
+Third E2E UAT session. 8 bug fixes across builder preview, agent tools, prompts, L10N, chat UX,
+favicon, CSS, and DB safety. No new tests (all fixes covered by existing 846-test suite).
+
+1. **Scroll-reveal bypass** — `previewMode` disables IntersectionObserver + CSS `.preview-mode .theme-reveal` forces visibility.
+2. **Auto-draft for style tools** — `ensureDraft()` helper auto-composes draft from facts for `set_theme`/`update_page_style`/`set_layout`/`reorder_sections`.
+3. **Agent role prompt** — ROLE/TITLE priority guidance + sequential processing in DATA_MODEL_REFERENCE.
+4. **Language proficiency L10N** — 5 proficiency keys × 8 languages. `LanguageItem["proficiency"]` widened to `string`.
+5. **Chat markdown rendering** — `markdown-it` v14 for assistant messages (`dangerouslySetInnerHTML`, `html: false`).
+6. **Favicon** — `src/app/icon.svg` (auto-discovered by Next.js App Router).
+7. **Dot separator polish** — opacity 0.3 → 0.4.
+8. **WAL checkpoint on registration** — `PASSIVE` checkpoint after last critical DB write.
+
 ## 4) Now (High Priority)
 
 ### Phase 1: Living Agent
@@ -204,7 +218,7 @@ Phase 1 builds in dependency order: memory/heartbeat first, then extended sectio
 then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
-Quality/Privacy/Themes hardening complete. UAT hardening (10 findings) complete. Layout Redesign complete.
+Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
 Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker

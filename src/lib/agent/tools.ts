@@ -30,6 +30,19 @@ import { computeHash } from "@/lib/services/personalization-hashing";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
+
+  /** Auto-compose draft from facts if none exists yet. */
+  function ensureDraft(): PageConfig {
+    const existing = getDraft(sessionId);
+    if (existing) return existing.config;
+    const allFacts = getAllFacts(sessionId, readKeys);
+    if (allFacts.length === 0) throw new Error("No facts yet — ask the user for information first");
+    const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
+    const composed = composeOptimisticPage(allFacts, "draft", factLang);
+    upsertDraft("draft", composed, sessionId);
+    return composed;
+  }
+
   return {
   create_fact: tool({
     description:
@@ -177,12 +190,8 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ username, theme, style, layoutTemplate }) => {
       try {
-        const currentDraft = getDraft(sessionId);
-        if (!currentDraft) {
-          return { success: false, error: "No draft page exists. Generate a page first." };
-        }
-
-        const updated: PageConfig = { ...currentDraft.config };
+        const config = ensureDraft();
+        const updated: PageConfig = { ...config };
 
         if (theme !== undefined) {
           if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
@@ -192,7 +201,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         }
 
         if (style !== undefined) {
-          updated.style = { ...currentDraft.config.style, ...style } as PageConfig["style"];
+          updated.style = { ...config.style, ...style } as PageConfig["style"];
         }
 
         if (layoutTemplate !== undefined) {
@@ -235,11 +244,8 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
           return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
         }
-        const draft = getDraft(sessionId);
-        if (!draft) {
-          return { success: false, error: "Page not found" };
-        }
-        const updated: PageConfig = { ...draft.config, theme };
+        const config = ensureDraft();
+        const updated: PageConfig = { ...config, theme };
         upsertDraft(username, updated, sessionId);
         logEvent({
           eventType: "page_config_updated",
@@ -269,11 +275,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ username, sectionOrder }) => {
       try {
-        const draft = getDraft(sessionId);
-        if (!draft) {
-          return { success: false, error: "Page not found" };
-        }
-        const existing = draft.config;
+        const existing = ensureDraft();
         const sectionMap = new Map(
           existing.sections.map((s) => [s.id, s]),
         );
@@ -538,16 +540,13 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ username, layoutTemplate }) => {
       try {
-        const draft = getDraft(sessionId);
-        if (!draft) {
-          return { success: false, error: "Page not found" };
-        }
+        const config = ensureDraft();
 
         const template = getLayoutTemplate(layoutTemplate);
-        const locks = extractLocks(draft.config.sections);
+        const locks = extractLocks(config.sections);
         const { sections, issues } = assignSlotsFromFacts(
           template,
-          draft.config.sections,
+          config.sections,
           locks,
         );
 
@@ -561,7 +560,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         }
 
         const updated: PageConfig = {
-          ...draft.config,
+          ...config,
           layoutTemplate,
           sections,
         };

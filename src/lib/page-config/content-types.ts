@@ -65,7 +65,7 @@ export type EducationContent = { items: EducationItem[]; title?: string };
 // Languages
 export type LanguageItem = {
   language: string;
-  proficiency?: "native" | "fluent" | "advanced" | "intermediate" | "beginner";
+  proficiency?: string; // English keys: native/fluent/advanced/intermediate/beginner — localized at composition time
 };
 export type LanguagesContent = { items: LanguageItem[]; title?: string };
 

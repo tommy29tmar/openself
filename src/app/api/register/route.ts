@@ -128,6 +128,10 @@ export async function POST(req: Request) {
       // Session rotation: new session linked to user + profile
       const newSessionId = createAuthSession(user.id, profileId);
 
+      // Flush WAL to disk — registration spans multiple writes and a process
+      // kill before WAL checkpoint would lose the auth session.
+      sqlite.pragma("wal_checkpoint(PASSIVE)");
+
       logEvent({
         eventType: "user_registered",
         actor: "user",
@@ -148,6 +152,9 @@ export async function POST(req: Request) {
       registerUsername(sessionId, username);
 
       const result = await prepareAndPublish(username, sessionId, { mode: "register" });
+
+      // Flush WAL to disk — registration writes must survive process kill.
+      sqlite.pragma("wal_checkpoint(PASSIVE)");
 
       logEvent({
         eventType: "user_registered",

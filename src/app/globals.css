@@ -406,7 +406,7 @@
   content: '\00B7';
   font-size: 1.125rem; /* text-lg */
   color: var(--page-fg-secondary);
-  opacity: 0.3;
+  opacity: 0.4;
 }
 
 /* ─── Scroll Reveal (updated timing) ─── */
@@ -422,6 +422,12 @@
 .theme-reveal.revealed {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Builder preview: show all sections immediately (no scroll-reveal) */
+.preview-mode .theme-reveal {
+  opacity: 1;
+  transform: none;
 }
 
 /* ─── Hero Stagger Animation ─── */
