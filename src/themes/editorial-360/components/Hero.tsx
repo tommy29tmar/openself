@@ -5,6 +5,9 @@ type HeroContent = {
     name: string;
     tagline: string;
     avatarUrl?: string;
+    socialLinks?: { platform: string; url: string }[];
+    contactEmail?: string;
+    languages?: { language: string; proficiency?: string }[];
 };
 
 export function Hero({ content, variant = "hero-split" }: SectionProps<HeroContent>) {
@@ -90,6 +93,38 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
                     </div>
                 )}
             </div>
+            {/* ContactBar */}
+            {(content.socialLinks?.length || content.contactEmail || content.languages?.length) && (
+                <div className="mt-6 space-y-2 text-sm">
+                    {content.socialLinks && content.socialLinks.length > 0 && (
+                        <div className="flex flex-wrap gap-4">
+                            {content.socialLinks.map((link, i) => (
+                                <a
+                                    key={i}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors uppercase tracking-widest text-xs font-medium border-b border-transparent hover:border-[var(--page-fg)] pb-0.5"
+                                >
+                                    {link.platform}
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                    {content.contactEmail && (
+                        <p className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
+                            {content.contactEmail}
+                        </p>
+                    )}
+                    {content.languages && content.languages.length > 0 && (
+                        <p className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
+                            {content.languages
+                                .map((l) => `${l.language}${l.proficiency ? ` ${l.proficiency}` : ""}`)
+                                .join(" · ")}
+                        </p>
+                    )}
+                </div>
+            )}
         </header>
     );
 }
