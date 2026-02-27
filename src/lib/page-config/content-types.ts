@@ -3,6 +3,8 @@ export type HeroContent = {
   tagline: string;
   avatarUrl?: string;
   socialLinks?: SocialLink[];
+  contactEmail?: string;
+  languages?: { language: string; proficiency?: string }[];
 };
 
 export type BioContent = {

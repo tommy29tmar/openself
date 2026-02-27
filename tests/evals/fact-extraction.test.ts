@@ -328,16 +328,20 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(page.sections.find((s) => s.type === "music")).toBeDefined();
     });
 
-    it("maps language facts to languages section", () => {
+    it("maps language facts into hero content (absorbed into ContactBar)", () => {
       const facts: FactRow[] = [
+        makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
         makeFact({ category: "language", key: "spanish", value: { language: "Spanish", proficiency: "fluent" } }),
       ];
       const page = composeOptimisticPage(facts, "alice");
-      const lang = page.sections.find((s) => s.type === "languages");
-      expect(lang).toBeDefined();
-      const items = lang!.content.items as Array<{ language: string; proficiency?: string }>;
-      expect(items[0].language).toBe("Spanish");
-      expect(items[0].proficiency).toBe("fluent");
+      // Languages are absorbed into hero, no standalone section
+      expect(page.sections.find((s) => s.type === "languages")).toBeUndefined();
+      const hero = page.sections.find((s) => s.type === "hero");
+      expect(hero).toBeDefined();
+      const languages = (hero!.content as Record<string, unknown>).languages as Array<{ language: string; proficiency?: string }>;
+      expect(languages).toHaveLength(1);
+      expect(languages[0].language).toBe("Spanish");
+      expect(languages[0].proficiency).toBe("fluent");
     });
 
     it("maps activity facts to activities section", () => {
@@ -348,17 +352,20 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       expect(page.sections.find((s) => s.type === "activities")).toBeDefined();
     });
 
-    it("filters contact facts by visibility (only public/proposed)", () => {
+    it("filters contact facts by visibility and absorbs email into hero (only public/proposed)", () => {
       const facts: FactRow[] = [
-        makeFact({ category: "contact", key: "email", value: { type: "email", value: "a@b.com" }, visibility: "public" }),
+        makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
+        makeFact({ category: "contact", key: "email", value: { type: "email", email: "a@b.com" }, visibility: "public" }),
         makeFact({ category: "contact", key: "phone", value: { type: "phone", value: "123" }, visibility: "private" }),
       ];
       const page = composeOptimisticPage(facts, "alice");
-      const contact = page.sections.find((s) => s.type === "contact");
-      expect(contact).toBeDefined();
-      const methods = contact!.content.methods as Array<{ value: string }>;
-      expect(methods).toHaveLength(1);
-      expect(methods[0].value).toBe("a@b.com");
+      // Contact is absorbed into hero, no standalone section
+      expect(page.sections.find((s) => s.type === "contact")).toBeUndefined();
+      const hero = page.sections.find((s) => s.type === "hero");
+      expect(hero).toBeDefined();
+      const content = hero!.content as Record<string, unknown>;
+      // Only the public email should appear (private is filtered by global privacy gate)
+      expect(content.contactEmail).toBe("a@b.com");
     });
 
     it("returns null contact section when all facts are private", () => {
@@ -373,13 +380,11 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       const facts: FactRow[] = [
         makeFact({ category: "experience", key: "acme", value: { role: "Engineer" } }),
         makeFact({ category: "education", key: "mit", value: { institution: "MIT" } }),
-        makeFact({ category: "language", key: "en", value: { language: "English" } }),
         makeFact({ category: "activity", key: "tennis", value: { name: "Tennis" } }),
       ];
       const page = composeOptimisticPage(facts, "alice");
       expect(page.sections.find((s) => s.type === "experience")!.id).toBe("experience-1");
       expect(page.sections.find((s) => s.type === "education")!.id).toBe("education-1");
-      expect(page.sections.find((s) => s.type === "languages")!.id).toBe("languages-1");
       expect(page.sections.find((s) => s.type === "activities")!.id).toBe("activities-1");
     });
   });

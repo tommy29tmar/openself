@@ -264,6 +264,9 @@ function buildHeroSection(
   interestFacts: FactRow[],
   language: string,
   username: string,
+  socialFacts?: FactRow[],
+  contactFacts?: FactRow[],
+  languageFacts?: FactRow[],
 ): Section | null {
   let name: string | undefined;
   let tagline: string | undefined;
@@ -339,10 +342,52 @@ function buildHeroSection(
 
   const finalName = heroName ?? l.welcomeTagline("").replace(/,?\s*$/, "").trim();
 
+  // ContactBar data (injected from social, contact, language facts)
+  const socialLinks: { platform: string; url: string }[] = [];
+  for (const f of socialFacts ?? []) {
+    const v = val(f);
+    const platform = str(v.platform) ?? str(v.name) ?? f.key;
+    const url = str(v.url) ?? str(v.link);
+    if (platform && url) socialLinks.push({ platform, url });
+  }
+
+  // Email selection: visibility controls which emails appear.
+  // Priority: "public" > "proposed" (user explicitly approved > auto-proposed).
+  const emailFacts = (contactFacts ?? []).filter((f) => {
+    const v = val(f);
+    const t = str(v.type);
+    return t === "email" || (!t && (str(v.email) || str(v.value)?.includes("@")));
+  });
+  // Sort: public first, then proposed
+  emailFacts.sort((a, b) => {
+    if (a.visibility === "public" && b.visibility !== "public") return -1;
+    if (b.visibility === "public" && a.visibility !== "public") return 1;
+    return 0;
+  });
+  const contactEmail =
+    emailFacts.length > 0
+      ? str(val(emailFacts[0]).email) ?? str(val(emailFacts[0]).value)
+      : undefined;
+
+  const languageItems: { language: string; proficiency?: string }[] = [];
+  for (const f of languageFacts ?? []) {
+    const v = val(f);
+    const lang = str(v.language) ?? str(v.name) ?? str(v.value);
+    if (lang) {
+      languageItems.push({
+        language: lang,
+        proficiency: str(v.proficiency) ?? str(v.level),
+      });
+    }
+  }
+
   const content: HeroContent = {
     name: heroName ?? finalName,
     tagline: finalTagline,
   };
+  if (socialLinks.length > 0) content.socialLinks = socialLinks;
+  if (contactEmail) content.contactEmail = contactEmail;
+  if (languageItems.length > 0) content.languages = languageItems;
 
   return {
     id: "hero-1",
@@ -872,7 +917,18 @@ export function composeOptimisticPage(
   const identityFacts = grouped.get("identity") ?? [];
   const interestFacts = grouped.get("interest") ?? [];
   const experienceFacts = grouped.get("experience") ?? [];
-  const hero = buildHeroSection(identityFacts, experienceFacts, interestFacts, language, username);
+  const socialFacts = grouped.get("social") ?? [];
+  const contactFacts = grouped.get("contact") ?? [];
+  const languageFacts = grouped.get("language") ?? [];
+
+  const extended = isExtendedSectionsEnabled();
+
+  const hero = buildHeroSection(
+    identityFacts, experienceFacts, interestFacts, language, username,
+    extended ? socialFacts : undefined,
+    extended ? contactFacts : undefined,
+    extended ? languageFacts : undefined,
+  );
   if (hero) sections.push(hero);
 
   // Check what sections we might have to avoid redundancy
@@ -881,8 +937,6 @@ export function composeOptimisticPage(
   // 2. Bio
   const bio = buildBioSection(grouped, language, hasInterestsSection);
   if (bio) sections.push(bio);
-
-  const extended = isExtendedSectionsEnabled();
 
   // 3. Experience / Timeline
   if (extended) {
@@ -911,11 +965,14 @@ export function composeOptimisticPage(
   const interests = buildInterestsSection(interestFacts, language);
   if (interests) sections.push(interests);
 
-  // 7. Social
-  const social = buildSocialSection(grouped.get("social") ?? []);
-  if (social) sections.push(social);
+  // 7. Social — standalone only when NOT extended (absorbed into hero ContactBar)
+  if (!extended) {
+    const social = buildSocialSection(socialFacts);
+    if (social) sections.push(social);
+  }
 
   // Extended sections (only when flag is enabled)
+  // Note: social, contact, and languages are absorbed into the hero ContactBar
   if (extended) {
     const achievements = buildAchievementsSection(grouped.get("achievement") ?? [], language);
     if (achievements) sections.push(achievements);
@@ -928,12 +985,6 @@ export function composeOptimisticPage(
 
     const music = buildMusicSection(grouped.get("music") ?? [], language);
     if (music) sections.push(music);
-
-    const languages = buildLanguagesSection(grouped.get("language") ?? [], language);
-    if (languages) sections.push(languages);
-
-    const contact = buildContactSection(grouped.get("contact") ?? [], language);
-    if (contact) sections.push(contact);
 
     const activities = buildActivitiesSection(grouped.get("activity") ?? [], language);
     if (activities) sections.push(activities);
