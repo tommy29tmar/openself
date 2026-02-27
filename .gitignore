@@ -58,3 +58,4 @@ npm-debug.log*
 dev_server.log
 query_db.js
 screenshot/
+.worktrees/
