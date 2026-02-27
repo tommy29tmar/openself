@@ -178,9 +178,9 @@ export function detectSituations(
     situations.push("has_open_conflicts");
   }
 
-  // Has name
+  // Has name (legacy facts may use "full-name" instead of "name")
   const hasName = facts.some(
-    (f) => f.category === "identity" && f.key === "name",
+    (f) => f.category === "identity" && (f.key === "name" || f.key === "full-name"),
   );
   if (hasName) {
     situations.push("has_name");
@@ -228,9 +228,9 @@ export function assembleBootstrapPayload(
   const situations = detectSituations(scope, facts, ownerKey);
   const expertiseLevel = detectExpertiseLevel(readKeys);
 
-  // User name from facts
+  // User name from facts (legacy facts may use "full-name" instead of "name")
   const nameFact = facts.find(
-    (f) => f.category === "identity" && f.key === "name",
+    (f) => f.category === "identity" && (f.key === "name" || f.key === "full-name"),
   );
   const userName = nameFact
     ? extractNameString(nameFact.value)

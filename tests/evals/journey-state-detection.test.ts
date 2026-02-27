@@ -249,6 +249,14 @@ describe("detectSituations", () => {
     expect(result).toContain("has_name");
   });
 
+  it("returns has_name when legacy full-name fact exists", () => {
+    const legacyFacts = [
+      { id: "f1", category: "identity", key: "full-name", value: { full: "Bob" }, updatedAt: new Date().toISOString() },
+    ];
+    const result = detectSituations(SCOPE, legacyFacts, "cog-1");
+    expect(result).toContain("has_name");
+  });
+
   it("returns has_pending_proposals when proposals exist", () => {
     mockPendingProposals(2);
     const result = detectSituations(SCOPE, [], "cog-1");
@@ -372,6 +380,26 @@ describe("assembleBootstrapPayload", () => {
 
     const payload = assembleBootstrapPayload(SCOPE, "it");
     expect(payload.userName).toBe("Marco Rossi");
+  });
+
+  it("includes userName from legacy full-name fact", async () => {
+    const { getAllFacts } = await import("@/lib/services/kb-service");
+    vi.mocked(getAllFacts).mockReturnValue([
+      {
+        id: "f1",
+        category: "identity",
+        key: "full-name",
+        value: { full: "Legacy User" },
+        source: "chat",
+        confidence: 1.0,
+        visibility: "proposed",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ] as never);
+
+    const payload = assembleBootstrapPayload(SCOPE, "en");
+    expect(payload.userName).toBe("Legacy User");
   });
 
   it("includes publishedUsername when page is published", () => {
