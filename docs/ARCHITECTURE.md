@@ -253,6 +253,9 @@ To avoid chat resets and keep behavior consistent across devices:
 - The localized welcome message is a fallback for empty history, and must not be
   duplicated if the same assistant message already exists in stored history.
 - In multi-user mode, a `401` on history fetch redirects to `/invite`.
+- **Error recovery**: On stream error, the error banner offers two actions: "Retry"
+  (retries last AI request via `reload()`) and "Refresh chat" (re-syncs all messages
+  from `/api/messages` via `refreshChat()` to restore DB-consistent state).
 
 This contract guarantees:
 - no reset on mobile tab switch (same mounted component instance)
@@ -333,13 +336,14 @@ The system prompt is assembled by `src/lib/agent/context.ts` from deterministic 
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
 3. **Tool policy** — 15 tools (see Section 4.3), when to call, required arguments, retry/error behavior
 4. **Fact schema reference** — Structured category→value shape table for all 14 fact categories + common mistakes to avoid
-5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
-6. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
-7. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
-8. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
-9. **Conversation summary** — Tier 2 rolling summary, 800 token budget
-10. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
-11. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
+5. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
+6. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
+7. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
+8. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
+9. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
+10. **Conversation summary** — Tier 2 rolling summary, 800 token budget
+11. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
+12. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
 
 Total context budget: 7500 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
@@ -440,7 +444,7 @@ the result is cast to `CoreMessage[]` after filtering to satisfy the SDK's liter
 type constraint.
 
 Key files:
-- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` constant (category→value table)
+- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas)
 - `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback in `streamText()`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
@@ -1420,7 +1424,8 @@ excluded before any section building begins. This is enforced at the top of
 
 **Fact validation gate**: All facts are validated at write time by `validateFactValue()`
 (`src/lib/services/fact-validation.ts`). Per-category rules enforce value shapes,
-reject placeholders (e.g., "N/A", "example.com"), and ensure URLs/emails are strings.
+reject placeholders (e.g., "N/A", "example.com"), reject date-placeholder patterns in
+period fields (e.g., "YYYY-YYYY"), and ensure URLs/emails are strings.
 Invalid facts throw `FactValidationError` and are never persisted. Both `createFact`
 and `updateFact` in `kb-service.ts` enforce this gate.
 
@@ -1656,7 +1661,7 @@ token set based on `config.theme`. All three themes support light/dark color sch
 **Shared CSS utility classes** (defined in `globals.css`, used by all themes):
 - `.section-label` — Unified section header (11px uppercase, `letter-spacing: 0.2em`, accent bar via `::before`)
 - `.entry-dot-separator` — Middle-dot separator between list entries
-- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver
+- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver. `EditorialLayout` uses `findScrollParent()` to detect the nearest scrollable ancestor as `root`, so sections inside the builder preview (an `overflow-y: auto` div) trigger correctly instead of never intersecting the viewport
 - `.hover-underline-grow` — Left-to-right underline animation on hover (`scaleX(0)` → `scaleX(1)`)
 - `prefers-reduced-motion` overrides disable all animations for accessibility
 
