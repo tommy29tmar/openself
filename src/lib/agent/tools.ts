@@ -28,7 +28,7 @@ import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash } from "@/lib/services/personalization-hashing";
 
-export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: "onboarding" | "steady_state") {
+export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
   return {
   create_fact: tool({

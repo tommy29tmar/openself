@@ -3,79 +3,90 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Hoisted mocks ───────────────────────────────────────────────────────────
 
 const heartbeatRunValues: Record<string, unknown>[] = [];
-const mockDbInsert = vi.fn().mockImplementation(() => ({
+
+const {
+  mockDbInsert,
+  mockGetHeartbeatConfig,
+  mockComputeOwnerDay,
+  mockCheckOwnerBudget,
+  mockCheckBudget,
+  mockExpireStaleProposals,
+  mockGetActiveSoul,
+  mockLogEvent,
+  mockGetAllActiveCopies,
+  mockAnalyzeConformity,
+  mockGenerateRewrite,
+  mockCreateProposal,
+  mockMarkStaleProposals,
+  mockCleanupExpiredCache,
+  mockComputeHash,
+} = vi.hoisted(() => ({
+  mockDbInsert: vi.fn(),
+  mockGetHeartbeatConfig: vi.fn(),
+  mockComputeOwnerDay: vi.fn(),
+  mockCheckOwnerBudget: vi.fn(),
+  mockCheckBudget: vi.fn(),
+  mockExpireStaleProposals: vi.fn(),
+  mockGetActiveSoul: vi.fn(),
+  mockLogEvent: vi.fn(),
+  mockGetAllActiveCopies: vi.fn(),
+  mockAnalyzeConformity: vi.fn(),
+  mockGenerateRewrite: vi.fn(),
+  mockCreateProposal: vi.fn(),
+  mockMarkStaleProposals: vi.fn(),
+  mockCleanupExpiredCache: vi.fn(),
+  mockComputeHash: vi.fn(),
+}));
+
+mockDbInsert.mockImplementation(() => ({
   values: vi.fn().mockImplementation((vals: Record<string, unknown>) => {
     heartbeatRunValues.push(vals);
     return { run: vi.fn() };
   }),
 }));
+
 vi.mock("@/lib/db", () => ({
-  db: { insert: (...args: unknown[]) => mockDbInsert(...args) },
+  db: { insert: mockDbInsert },
   sqlite: {
     prepare: vi.fn().mockReturnValue({
       run: vi.fn().mockReturnValue({ changes: 0 }),
     }),
   },
 }));
-
-const mockGetHeartbeatConfig = vi.fn(() => ({
-  timezone: "UTC",
-  lightPerDay: 1,
-  deepPerWeek: 1,
-  llmBudgetPerMonth: 10,
+vi.mock("@/lib/db/schema", () => ({
+  heartbeatRuns: "heartbeatRuns",
 }));
-const mockComputeOwnerDay = vi.fn(() => "2026-01-01");
-const mockCheckOwnerBudget = vi.fn(() => ({ allowed: true }));
 vi.mock("@/lib/services/heartbeat-config-service", () => ({
-  getHeartbeatConfig: (...args: unknown[]) => mockGetHeartbeatConfig(...args),
-  computeOwnerDay: (...args: unknown[]) => mockComputeOwnerDay(...args),
-  checkOwnerBudget: (...args: unknown[]) => mockCheckOwnerBudget(...args),
+  getHeartbeatConfig: mockGetHeartbeatConfig,
+  computeOwnerDay: mockComputeOwnerDay,
+  checkOwnerBudget: mockCheckOwnerBudget,
 }));
-
-const mockCheckBudget = vi.fn(() => ({ allowed: true }));
 vi.mock("@/lib/services/usage-service", () => ({
-  checkBudget: (...args: unknown[]) => mockCheckBudget(...args),
+  checkBudget: mockCheckBudget,
 }));
-
-const mockExpireStaleProposals = vi.fn(() => 0);
-const mockGetActiveSoul = vi.fn();
 vi.mock("@/lib/services/soul-service", () => ({
-  expireStaleProposals: (...args: unknown[]) => mockExpireStaleProposals(...args),
-  getActiveSoul: (...args: unknown[]) => mockGetActiveSoul(...args),
+  expireStaleProposals: mockExpireStaleProposals,
+  getActiveSoul: mockGetActiveSoul,
 }));
-
-const mockLogEvent = vi.fn();
 vi.mock("@/lib/services/event-service", () => ({
-  logEvent: (...args: unknown[]) => mockLogEvent(...args),
+  logEvent: mockLogEvent,
 }));
-
-const mockGetAllActiveCopies = vi.fn();
 vi.mock("@/lib/services/section-copy-state-service", () => ({
-  getAllActiveCopies: (...args: unknown[]) => mockGetAllActiveCopies(...args),
+  getAllActiveCopies: mockGetAllActiveCopies,
 }));
-
-const mockAnalyzeConformity = vi.fn();
-const mockGenerateRewrite = vi.fn();
 vi.mock("@/lib/services/conformity-analyzer", () => ({
-  analyzeConformity: (...args: unknown[]) => mockAnalyzeConformity(...args),
-  generateRewrite: (...args: unknown[]) => mockGenerateRewrite(...args),
+  analyzeConformity: mockAnalyzeConformity,
+  generateRewrite: mockGenerateRewrite,
 }));
-
-const mockCreateProposal = vi.fn();
-const mockMarkStaleProposals = vi.fn();
 vi.mock("@/lib/services/proposal-service", () => ({
-  createProposal: (...args: unknown[]) => mockCreateProposal(...args),
-  markStaleProposals: (...args: unknown[]) => mockMarkStaleProposals(...args),
+  createProposal: mockCreateProposal,
+  markStaleProposals: mockMarkStaleProposals,
 }));
-
-const mockCleanupExpiredCache = vi.fn();
 vi.mock("@/lib/services/section-cache-service", () => ({
-  cleanupExpiredCache: (...args: unknown[]) => mockCleanupExpiredCache(...args),
+  cleanupExpiredCache: mockCleanupExpiredCache,
 }));
-
-const mockComputeHash = vi.fn((s: string) => `hash-of-${s.slice(0, 10)}`);
 vi.mock("@/lib/services/personalization-hashing", () => ({
-  computeHash: (...args: unknown[]) => mockComputeHash(...args),
+  computeHash: mockComputeHash,
 }));
 
 // ── Import under test (after all mocks) ─────────────────────────────────────
@@ -104,6 +115,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   heartbeatRunValues.length = 0;
   // Reset defaults
+  mockDbInsert.mockImplementation(() => ({
+    values: vi.fn().mockImplementation((vals: Record<string, unknown>) => {
+      heartbeatRunValues.push(vals);
+      return { run: vi.fn() };
+    }),
+  }));
+  mockGetHeartbeatConfig.mockReturnValue({
+    timezone: "UTC",
+    lightPerDay: 1,
+    deepPerWeek: 1,
+    llmBudgetPerMonth: 10,
+  });
+  mockComputeOwnerDay.mockReturnValue("2026-01-01");
   mockCheckBudget.mockReturnValue({ allowed: true });
   mockCheckOwnerBudget.mockReturnValue({ allowed: true });
   mockExpireStaleProposals.mockReturnValue(0);
@@ -113,6 +137,7 @@ beforeEach(() => {
   mockGenerateRewrite.mockResolvedValue(null);
   mockMarkStaleProposals.mockReturnValue(0);
   mockCleanupExpiredCache.mockReturnValue(0);
+  mockComputeHash.mockImplementation((s: string) => `hash-of-${s.slice(0, 10)}`);
 });
 
 describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {

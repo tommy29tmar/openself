@@ -61,7 +61,7 @@ describe("mergeActiveSectionCopy importability", () => {
       version: 1,
       username: "test",
       theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
+      style: { colorScheme: "light" as const, primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" as const },
       sections: [],
     };
 
