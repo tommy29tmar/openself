@@ -229,7 +229,7 @@
 [data-theme="warm"][data-color-scheme="light"] {
   --page-bg: #faf7f2;
   --page-fg: #2c2418;
-  --page-fg-secondary: #8b7e6a;
+  --page-fg-secondary: #6b5e4a;
   --page-muted: #f0ebe3;
   --page-border: #e4ddd2;
   --page-accent: var(--primary-color, #c06834);
@@ -240,7 +240,7 @@
   --page-badge-bg: #f0ebe3;
   --page-badge-fg: #5c5040;
   --page-badge-border: #e4ddd2;
-  --page-footer-fg: #b5a998;
+  --page-footer-fg: #9a8d7c;
 
   --page-font-heading: var(--font-serif, Georgia, serif);
   --page-font-body: var(--font-sans, sans-serif);
