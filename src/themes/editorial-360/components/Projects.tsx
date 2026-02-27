@@ -28,9 +28,8 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
     if (variant === "projects-bento") {
         return (
             <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
-                <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-8 flex items-center gap-4">
-                    <span>{title || "Selected Works"}</span>
-                    <div className="h-px bg-[var(--page-border)] flex-1"></div>
+                <h2 className="section-label">
+                    {title || "Selected Works"}
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -78,7 +77,7 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
     if (variant === "projects-minimal") {
         return (
             <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
-                <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-6">
+                <h2 className="section-label">
                     {title || "Index"}
                 </h2>
 
@@ -110,9 +109,8 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
     // Default: projects-list (Classic Editorial)
     return (
         <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.2s' }}>
-            <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-12 border-b border-[var(--page-border)] pb-4 flex justify-between items-end">
-                <span>{title || "Projects"}</span>
-                <span className="text-[9px] opacity-50">{items.length} Works</span>
+            <h2 className="section-label">
+                {title || "Projects"}
             </h2>
 
             <div className="space-y-12">

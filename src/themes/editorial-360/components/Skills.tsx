@@ -21,7 +21,7 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
     if (variant === "skills-chips") {
         return (
             <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.25s' }}>
-                <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-8 border-b border-[var(--page-border)] pb-4">
+                <h2 className="section-label">
                     {title || "Capabilities"}
                 </h2>
 
@@ -51,7 +51,7 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
     // Default: skills-list
     return (
         <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4" style={{ transitionDelay: '0.25s' }}>
-            <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-12 border-b border-[var(--page-border)] pb-4">
+            <h2 className="section-label">
                 {title || groups[0]?.label || groups[0]?.name || "Expertise"}
             </h2>
 

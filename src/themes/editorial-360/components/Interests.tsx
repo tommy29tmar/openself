@@ -18,7 +18,7 @@ export function Interests({ content }: SectionProps<InterestsContent>) {
 
     return (
         <section className="mb-16 theme-reveal transition-all duration-1000 ease-out opacity-0 translate-y-4">
-            <h2 className="text-[10px] uppercase tracking-[0.3em] text-[var(--page-footer-fg)] font-semibold mb-8 border-b border-[var(--page-border)] pb-4">
+            <h2 className="section-label">
                 {title || "Interests"}
             </h2>
 
