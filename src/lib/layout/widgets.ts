@@ -186,6 +186,15 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
     label: "Achievements (list)",
   },
 
+  // At a Glance
+  {
+    id: "at-a-glance-full",
+    sectionType: "at-a-glance",
+    variant: "full",
+    fitsIn: ["wide", "half"],
+    label: "At a Glance (full)",
+  },
+
   // Stats
   {
     id: "stats-grid",

@@ -9,6 +9,7 @@ export type ComponentType =
   | "interests"
   | "achievements"
   | "stats"
+  | "at-a-glance"
   | "social"
   | "custom"
   | "reading"
@@ -105,6 +106,7 @@ const COMPONENT_TYPES: ReadonlySet<string> = new Set([
   "interests",
   "achievements",
   "stats",
+  "at-a-glance",
   "social",
   "custom",
   "reading",
