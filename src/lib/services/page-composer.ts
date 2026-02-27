@@ -959,7 +959,7 @@ function buildAtAGlanceSection(
     const value = str(v.value) ?? str(v.number);
     if (!label || !value) return null;
     return { label, value, unit: str(v.unit) };
-  }).filter((s): s is { label: string; value: string; unit?: string } => s !== null);
+  }).filter((s) => s !== null);
 
   const interests = interestFacts.map((f) => {
     const v = val(f);

@@ -33,7 +33,7 @@ describe("Section order in extended mode", () => {
     const config = composeOptimisticPage(facts as any, "alice", "en");
     delete process.env.EXTENDED_SECTIONS;
 
-    const types = config.sections.map((s) => s.type);
+    const types = config.sections.map((s) => s.type as string);
 
     const expectedOrder = [
       "hero",
