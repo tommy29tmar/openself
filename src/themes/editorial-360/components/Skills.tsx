@@ -28,7 +28,9 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
                 <div className="flex flex-col gap-10">
                     {groups.map((group, i) => (
                         <div key={i} className="flex flex-col md:flex-row gap-4 items-baseline">
-                            <h3 className="text-[10px] uppercase tracking-wider md:w-1/4 shrink-0 font-bold text-[var(--page-fg)]">{group.label || group.name}</h3>
+                            {groups.length > 1 && (
+                                <h3 className="text-[10px] uppercase tracking-wider md:w-1/4 shrink-0 font-bold text-[var(--page-fg)]">{group.label || group.name}</h3>
+                            )}
                             <ul className="flex flex-wrap gap-2 md:w-3/4">
                                 {(group.items || group.skills || []).map((item, j) => {
                                     const name = typeof item === 'string' ? item : item.name;
@@ -56,10 +58,12 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
                 {groups.map((group, i) => (
                     <div key={i} className="group">
-                        <h3 className="text-xl font-bold mb-4 text-[var(--page-fg)] leading-tight relative inline-block">
-                            {group.label || group.name}
-                            <span className="absolute -bottom-1 left-0 w-8 h-px bg-[var(--page-accent)] group-hover:w-full transition-all duration-500"></span>
-                        </h3>
+                        {groups.length > 1 && (
+                            <h3 className="text-xl font-bold mb-4 text-[var(--page-fg)] leading-tight relative inline-block">
+                                {group.label || group.name}
+                                <span className="absolute -bottom-1 left-0 w-8 h-px bg-[var(--page-accent)] group-hover:w-full transition-all duration-500"></span>
+                            </h3>
+                        )}
                         <ul className="space-y-2 text-sm font-light">
                             {(group.items || group.skills || []).map((item, j) => {
                                 const name = typeof item === 'string' ? item : item.name;
