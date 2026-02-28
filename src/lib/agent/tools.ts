@@ -20,13 +20,18 @@ import { proposeSoulChange, getActiveSoul, type SoulOverlay } from "@/lib/servic
 import { resolveConflict } from "@/lib/services/conflict-service";
 import { FactValidationError } from "@/lib/services/fact-validation";
 import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
-import { getLayoutTemplate } from "@/lib/layout/registry";
+import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
+import { groupSectionsBySlot } from "@/lib/layout/group-slots";
+import { isSectionComplete } from "@/lib/page-config/section-completeness";
+import { classifySectionRichness } from "@/lib/services/section-richness";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
+import { validateUsernameFormat } from "@/lib/page-config/usernames";
 import { personalizeSection } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
-import { computeHash } from "@/lib/services/personalization-hashing";
+import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
@@ -424,6 +429,15 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           return { success: false, error: "No draft page to publish. Generate a page first." };
         }
 
+        // Username format validation (belt-and-suspenders with publish_preflight)
+        if (!username || username.length === 0) {
+          return { success: false, error: "Username is required for publishing." };
+        }
+        const usernameCheck = validateUsernameFormat(username);
+        if (!usernameCheck.ok) {
+          return { success: false, error: usernameCheck.message };
+        }
+
         // Mark the existing draft as pending approval — no recomposition,
         // so manual changes (theme, section order, content edits) are preserved.
         requestPublish(username, sessionId);
@@ -709,6 +723,172 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           payload: { requestId, tool: "set_fact_visibility", error: String(error), factId },
         });
         return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  publish_preflight: tool({
+    description:
+      "Check if the page is ready to publish. Returns gate checks (blocking) and quality checks (advisory). Call this before request_publish to give the user useful feedback.",
+    parameters: z.object({
+      username: z
+        .string()
+        .describe("The username to check publish readiness for"),
+    }),
+    execute: async ({ username }) => {
+      try {
+        // 1. Draft check
+        const draft = getDraft(sessionId);
+        if (!draft) {
+          return {
+            readyToPublish: false,
+            summary: "No draft found. Generate a page first.",
+            gates: { hasDraft: false, hasAuth: false, hasUsername: false },
+            quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
+            info: { sectionCount: 0, factCount: 0 },
+          };
+        }
+
+        // 2. Gate checks
+        const multiUser = isMultiUserEnabled();
+        const hasAuth = !multiUser || !!ownerKey;
+        const hasUsername = username.length > 0;
+
+        // 3. Quality checks
+        const allFacts = getAllFacts(sessionId, readKeys);
+        const publishableFacts = filterPublishableFacts(allFacts);
+        const proposedCount = allFacts.filter((f: any) => f.visibility === "proposed").length;
+
+        // Section completeness
+        const config = draft.config;
+        const incompleteSections = config.sections
+          .filter((s: any) => !isSectionComplete(s))
+          .map((s: any) => s.type);
+
+        // Thin sections from richness
+        const thinSections = Object.keys(SECTION_FACT_CATEGORIES)
+          .filter((type) => classifySectionRichness(publishableFacts, type) === "thin");
+
+        // Missing contact
+        const hasContact = allFacts.some(
+          (f: any) => f.category === "contact" && f.visibility !== "private",
+        );
+
+        const gates = { hasDraft: true, hasAuth, hasUsername };
+        const readyToPublish = Object.values(gates).every(Boolean);
+
+        return {
+          readyToPublish,
+          gates,
+          quality: {
+            incompleteSections,
+            proposedFacts: proposedCount,
+            thinSections,
+            missingContact: !hasContact,
+          },
+          info: {
+            sectionCount: config.sections.length,
+            factCount: allFacts.length,
+          },
+          summary: readyToPublish
+            ? `Page ready to publish with ${config.sections.length} sections.`
+            : `Cannot publish: ${Object.entries(gates).filter(([, v]) => !v).map(([k]) => k).join(", ")}.`,
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "publish_preflight", error: String(error) },
+        });
+        return {
+          readyToPublish: false,
+          summary: `Preflight error: ${String(error)}`,
+          gates: { hasDraft: false, hasAuth: false, hasUsername: false },
+          quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
+          info: { sectionCount: 0, factCount: 0 },
+        };
+      }
+    },
+  }),
+
+  inspect_page_state: tool({
+    description:
+      "Get a structured view of the current page state including layout, sections, slot assignments, and warnings. Use this to understand what the page looks like before making changes.",
+    parameters: z.object({
+      username: z
+        .string()
+        .describe("The username for the page to inspect"),
+    }),
+    execute: async ({ username: _username }) => {
+      const emptyResult = (error: string) => ({
+        error,
+        layout: { template: "unknown", theme: "unknown", style: {} },
+        sections: [] as { id: string; type: string; slot: string; widget: string; locked: boolean; complete: boolean; richness: string }[],
+        availableSlots: [] as string[],
+        warnings: [] as string[],
+      });
+
+      try {
+        const draft = getDraft(sessionId);
+        if (!draft) return emptyResult("No draft found");
+
+        const config = draft.config;
+        const template = resolveLayoutTemplate(config);
+        const slotGroups = groupSectionsBySlot(config.sections, template);
+        const allFacts = getAllFacts(sessionId, readKeys);
+        const publishable = filterPublishableFacts(allFacts);
+
+        const sections = config.sections.map((s: any) => {
+          let slot = "unknown";
+          for (const [slotId, slotSections] of Object.entries(slotGroups)) {
+            if ((slotSections as any[]).some((ss: any) => ss.id === s.id)) {
+              slot = slotId;
+              break;
+            }
+          }
+          return {
+            id: s.id,
+            type: s.type,
+            slot,
+            widget: s.widget ?? "default",
+            locked: !!s.lock,
+            complete: isSectionComplete(s),
+            richness: classifySectionRichness(publishable, s.type),
+          };
+        });
+
+        const warnings: string[] = [];
+        sections
+          .filter((s) => s.richness === "thin")
+          .forEach((s) => warnings.push(`${s.type} section is thin`));
+        sections
+          .filter((s) => !s.complete)
+          .forEach((s) => warnings.push(`${s.type} section is incomplete`));
+        if (
+          !allFacts.some(
+            (f: any) => f.category === "contact" && f.visibility !== "private",
+          )
+        ) {
+          warnings.push("No public contact information");
+        }
+
+        return {
+          layout: {
+            template: config.layoutTemplate ?? "vertical",
+            theme: config.theme ?? "minimal",
+            style: config.style ?? {},
+          },
+          sections,
+          availableSlots: template.slots.map((s: any) => s.id),
+          warnings,
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "inspect_page_state", error: String(error) },
+        });
+        return emptyResult(String(error));
       }
     },
   }),

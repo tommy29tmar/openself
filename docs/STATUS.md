@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 959 automated tests passing (66 test files)
+- 1140 automated tests passing (74 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -43,8 +43,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - UAT Round 3 (8 fixes): scroll-reveal bypass in builder preview, auto-draft for style tools, agent role prompt guidance, language proficiency L10N (8 languages × 5 levels), chat markdown rendering (markdown-it), favicon, dot separator polish, WAL checkpoint on registration
 - Sprint 2 — Onboarding Rewrite: composable policy system replacing monolithic onboarding/steady-state prompts, per-journey-state policies (6 states), situation directives (4 situations), expertise calibration (3 levels), `buildSystemPrompt()` composable prompt builder, dynamic welcome messages from bootstrap payload (3 maps × 8 languages)
 - Sprint 3 — Returning User Policies + Strategic Memory: 5 stub policies replaced with detailed prompt content (returning-no-page, draft-ready, active-fresh, active-stale, blocked). Memory usage directives (3-tier strategic memory: facts=WHAT, summary=CONTEXT, memories=HOW). Turn management rules (R1-R5: breadth, max 6 exchanges, banned closings, stall recovery, proportional response). Wired into `buildSystemPrompt()`. 142 new tests (1101 total, 70 files)
+- Sprint 4 — Reliable Execution: `capable` model tier, provider name fix, structured output for translation (generateObject + Zod), `publish_preflight` + `inspect_page_state` agent tools (17 total), username validation in `request_publish`. 39 new tests (1140 total, 74 files)
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete.
 
 ## 2) Implemented Today
 
@@ -67,10 +68,10 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Streaming AI chat | Done | `useChat` + `/api/chat`. Assistant messages rendered as markdown via `markdown-it` (bold, lists, links). User messages plain text. |
-| Tool-calling agent | Done | 15 tools: Fact CRUD, set_fact_visibility, page generation, update_page_style, request_publish, reorder, theme, set_layout, propose_lock, save_memory, propose_soul_change, resolve_conflict. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
+| Tool-calling agent | Done | 17 tools: Fact CRUD, set_fact_visibility, page generation, update_page_style, request_publish, reorder, theme, set_layout, propose_lock, save_memory, propose_soul_change, resolve_conflict, inspect_page_state, publish_preflight. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
 | Language-aware onboarding prompt | Done | Language propagated to prompt and composer. Composable policy system: per-journey-state policies, situation directives, expertise calibration via `buildSystemPrompt()` |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) + `POST /api/draft/request-publish` (chat-initiated publish) |
-| LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
+| LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateObject (structured output), cached in translation_cache |
 | Translation cache | Done | Hash-based, no explicit invalidation, eliminates repeated LLM calls |
 | Steady-state mode switching | Done | Mode auto-detected via fact count + published page check |
 | Context assembly + token budgets | Done | 7500-token budget, per-block allocation, post-assembly guard |
@@ -300,6 +301,18 @@ All 5 stub policies replaced with detailed prompt content. Two cross-cutting pro
 7. **Turn management rules** — Fixed block for all prompts. R1: no consecutive same-area questions. R2: max 6 fact-gathering exchanges. R3: banned passive closings (6 phrases). R4: stall detection (options → fill-in-blank → generate page). R5: proportional response length.
 8. **buildSystemPrompt wiring** — Turn management + memory directives appended as last two blocks after expertise calibration.
 
+### NEXT-16 Sprint 4 — Reliable Execution ✅
+
+All items complete. 39 new tests (1140 total, 74 files).
+
+1. **Capable model tier** — Extended `ModelTier` type with `"capable"` tier in `provider.ts`. `CAPABLE_MODELS` map (Google Gemini 2.5 Pro, OpenAI GPT-4o, Anthropic Claude Sonnet 4.6, Ollama LLaMA 3.3). Env override: `AI_MODEL_CAPABLE`. Generalized `getModelForTier`/`getModelIdForTier` with `tierMap`/`envKey` pattern.
+2. **Provider name fix** — `summary-service.ts` used hardcoded `"anthropic"` in `recordUsage()`, now uses `getProviderName()` for correct multi-provider accounting.
+3. **Structured output for translation** — `translatePageContent()` migrated from `generateText` + `stripCodeFences` + `JSON.parse` to `generateObject` with Zod schema (`TranslationResultSchema`). Eliminates code fence stripping and JSON parse failures.
+4. **`publish_preflight` tool** — Pre-publish gate with structured checks: `gates` (hasDraft, hasAuth, hasUsername), `quality` (incompleteSections, proposedFacts, thinSections, missingContact), `info` (sectionCount, factCount), `summary` (human-readable).
+5. **`inspect_page_state` tool** — Structured page introspection: `layout` (template, theme, style), per-section details (id, type, slot, widget, locked, complete, richness), `availableSlots`, `warnings`.
+6. **Username validation in `request_publish`** — Belt-and-suspenders guard: validates username format even if agent skips `publish_preflight`. Rejects empty, invalid, or reserved usernames.
+7. **TOOL_POLICY update** — Added `publish_preflight` and `inspect_page_state` guidance to agent system prompt for tool discoverability.
+
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
 2. Connector MVP (GitHub)
@@ -326,7 +339,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 959 passed / 959 total (Vitest, 66 test files)
+- Automated tests: 1140 passed / 1140 total (Vitest, 74 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -393,6 +406,10 @@ Builder interface layouts (chat experience):
   62. Situation directives — pending proposals, thin sections, stale facts, open conflicts, guards (22 tests)
   63. Policy registry — journey state mapping, situation composition, expertise calibration, backward compat (18 tests)
   64. Context assembler bootstrap — buildSystemPrompt wiring, mode mapping from journey state (2 tests)
+  65. Provider tiers — ModelTier capable, getModelIdForTier all providers + env override, getModelForTier, getProviderName (13 tests)
+  66. Translate structured output — generateObject usage, Zod schema, merge, fallback, cache (6 tests)
+  67. Publish preflight — gates (draft/auth/username), quality (incomplete/thin/proposed/contact), info counts (10 tests)
+  68. Inspect page state — layout info, slot assignment, locked sections, completeness/richness, warnings (10 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration

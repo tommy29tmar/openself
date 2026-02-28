@@ -45,6 +45,8 @@ const TOOL_POLICY = `Tool usage rules:
 - Use set_theme or update_page_style when the user requests visual changes (theme, colors, font)
 - Use reorder_sections when the user wants to rearrange their page
 - NEVER directly edit section content — always use generate_page to rebuild from facts
+- Before publishing, call publish_preflight to check readiness (draft exists, username valid, sections complete). Share any issues with the user before proceeding
+- Use inspect_page_state to understand the current page layout, section slots, and quality before making changes
 - Use request_publish when the user approves their page and chooses a username. This proposes publishing — the user will see a confirmation button
 - Use save_memory for meta-observations about the user (communication style, preferences, behavioral patterns) — not individual facts
 - Use propose_soul_change when you notice consistent patterns in voice/tone/values — the user must approve soul changes

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { generateText } from "ai";
+import { generateObject } from "ai";
+import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { getModel, getModelId } from "@/lib/ai/provider";
 import { db } from "@/lib/db";
@@ -18,21 +19,14 @@ type SectionPayload = {
   content: Record<string, unknown>;
 };
 
-/**
- * Strip markdown code fences from an LLM response so we can JSON.parse it.
- * Handles ```json ... ``` and ``` ... ```.
- */
-function stripCodeFences(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("```")) {
-    // Remove opening fence (with optional language tag) and closing fence
-    return trimmed
-      .replace(/^```(?:json)?\s*\n?/, "")
-      .replace(/\n?```\s*$/, "")
-      .trim();
-  }
-  return trimmed;
-}
+/** Zod schema for structured translation output. */
+const TranslationResultSchema = z.array(
+  z.object({
+    sectionId: z.string(),
+    type: z.string(),
+    content: z.record(z.unknown()),
+  }),
+);
 
 /** Compute SHA-256 hex digest of the translatable sections JSON. */
 function computeContentHash(sections: SectionPayload[]): string {
@@ -159,19 +153,18 @@ export async function translatePageContent(
 - When in doubt whether a term is a proper noun, keep it unchanged.
 
 ## Output format
-- Return ONLY the JSON array — no markdown fences, no commentary, no explanation.
 - Preserve the exact JSON structure: same keys, same nesting, same array order.
 
 ${JSON.stringify(toTranslate, null, 2)}`;
 
   try {
-    const result = await generateText({
+    const result = await generateObject({
       model: getModel(),
+      schema: TranslationResultSchema,
       prompt,
     });
 
-    const cleaned = stripCodeFences(result.text);
-    const translated: SectionPayload[] = JSON.parse(cleaned);
+    const translated: SectionPayload[] = result.object;
 
     // Store in cache (best-effort, don't fail translation on cache write error)
     try {
