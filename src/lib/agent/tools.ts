@@ -20,13 +20,17 @@ import { proposeSoulChange, getActiveSoul, type SoulOverlay } from "@/lib/servic
 import { resolveConflict } from "@/lib/services/conflict-service";
 import { FactValidationError } from "@/lib/services/fact-validation";
 import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
-import { getLayoutTemplate } from "@/lib/layout/registry";
+import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
+import { groupSectionsBySlot } from "@/lib/layout/group-slots";
+import { isSectionComplete } from "@/lib/page-config/section-completeness";
+import { classifySectionRichness } from "@/lib/services/section-richness";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { personalizeSection } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
-import { computeHash } from "@/lib/services/personalization-hashing";
+import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
@@ -709,6 +713,90 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           payload: { requestId, tool: "set_fact_visibility", error: String(error), factId },
         });
         return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  publish_preflight: tool({
+    description:
+      "Check if the page is ready to publish. Returns gate checks (blocking) and quality checks (advisory). Call this before request_publish to give the user useful feedback.",
+    parameters: z.object({
+      username: z
+        .string()
+        .describe("The username to check publish readiness for"),
+    }),
+    execute: async ({ username }) => {
+      try {
+        // 1. Draft check
+        const draft = getDraft(sessionId);
+        if (!draft) {
+          return {
+            readyToPublish: false,
+            summary: "No draft found. Generate a page first.",
+            gates: { hasDraft: false, hasAuth: false, hasUsername: false },
+            quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
+            info: { sectionCount: 0, factCount: 0 },
+          };
+        }
+
+        // 2. Gate checks
+        const multiUser = isMultiUserEnabled();
+        const hasAuth = !multiUser || !!ownerKey;
+        const hasUsername = username.length > 0;
+
+        // 3. Quality checks
+        const allFacts = getAllFacts(sessionId, readKeys);
+        const publishableFacts = filterPublishableFacts(allFacts);
+        const proposedCount = allFacts.filter((f: any) => f.visibility === "proposed").length;
+
+        // Section completeness
+        const config = draft.config;
+        const incompleteSections = config.sections
+          .filter((s: any) => !isSectionComplete(s))
+          .map((s: any) => s.type);
+
+        // Thin sections from richness
+        const thinSections = Object.keys(SECTION_FACT_CATEGORIES)
+          .filter((type) => classifySectionRichness(publishableFacts, type) === "thin");
+
+        // Missing contact
+        const hasContact = allFacts.some(
+          (f: any) => f.category === "contact" && f.visibility !== "private",
+        );
+
+        const gates = { hasDraft: true, hasAuth, hasUsername };
+        const readyToPublish = Object.values(gates).every(Boolean);
+
+        return {
+          readyToPublish,
+          gates,
+          quality: {
+            incompleteSections,
+            proposedFacts: proposedCount,
+            thinSections,
+            missingContact: !hasContact,
+          },
+          info: {
+            sectionCount: config.sections.length,
+            factCount: allFacts.length,
+          },
+          summary: readyToPublish
+            ? `Page ready to publish with ${config.sections.length} sections.`
+            : `Cannot publish: ${Object.entries(gates).filter(([, v]) => !v).map(([k]) => k).join(", ")}.`,
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "publish_preflight", error: String(error) },
+        });
+        return {
+          readyToPublish: false,
+          summary: `Preflight error: ${String(error)}`,
+          gates: { hasDraft: false, hasAuth: false, hasUsername: false },
+          quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
+          info: { sectionCount: 0, factCount: 0 },
+        };
       }
     },
   }),
