@@ -333,7 +333,10 @@ System prompt (agent identity + instructions)
 
 ### 4.2.1 System Prompt Architecture
 
-The system prompt is assembled by `src/lib/agent/context.ts` from deterministic blocks:
+The system prompt is assembled by `src/lib/agent/context.ts` from deterministic blocks.
+Two prompt-building paths exist:
+
+**Legacy path** (`getSystemPromptText`) — used when no bootstrap payload is available (backward compat):
 
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
@@ -342,11 +345,30 @@ The system prompt is assembled by `src/lib/agent/context.ts` from deterministic 
 5. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
 6. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
 7. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
-8. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
-9. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
-10. **Conversation summary** — Tier 2 rolling summary, 800 token budget
-11. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
-12. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
+
+**Composable path** (`buildSystemPrompt`) — used when bootstrap payload is available (Sprint 2+):
+
+1. **Core charter** — Same as legacy
+2. **Safety & privacy policy** — Same as legacy
+3. **Tool policy** — Same as legacy
+4. **Fact schema reference** — Same as legacy
+5. **Data model reference** — Same as legacy
+6. **Output contracts** — Same as legacy
+7. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4)
+8. **Situation directives** — Contextual instructions based on detected situations (optional, only when situations are active)
+9. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
+
+The composable path replaces the monolithic `onboardingPolicy`/`steadyStatePolicy` functions
+with fine-grained, per-journey-state policies composed from the bootstrap payload.
+Token budget guard: the journey policy + directives + calibration block is capped at 3500 tokens.
+
+Both paths then have dynamic context blocks appended by `assembleContext()`:
+
+8/10. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
+9/11. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
+10/12. **Conversation summary** — Tier 2 rolling summary, 800 token budget
+11/13. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
+12/14. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
 
 Total context budget: 7500 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
@@ -432,6 +454,51 @@ consistent behavior: the same detection that drives the UI also drives the promp
 
 **Shared constant:** `AUTH_MESSAGE_LIMIT` lives in `src/lib/constants.ts` and is
 imported by both the chat route (quota enforcement) and journey detection (blocked state).
+
+### 4.2.4 Composable Policy System (Sprint 2)
+
+The legacy monolithic `onboardingPolicy()`/`steadyStatePolicy()` functions are replaced
+by a composable policy registry that maps journey states to fine-grained prompt policies.
+
+**Implementation:** `src/lib/agent/policies/`
+
+**Policy Registry** (`src/lib/agent/policies/index.ts`):
+- `getJourneyPolicy(state, language)` — maps journey state to per-state policy text
+- `getSituationDirectives(situations, context)` — composes contextual directives from active situations
+- `getExpertiseCalibration(level)` — returns verbosity/depth calibration text
+
+**Per-Journey-State Policies:**
+
+| State | File | Key Behaviors |
+|---|---|---|
+| `first_visit` | `first-visit.ts` | 3-phase onboarding (A: identity, B: breadth-first, C: generate+publish), low-signal handling with 3-step escalation |
+| `returning_no_page` | `returning-no-page.ts` | "Welcome back" + gather remaining info + generate page |
+| `draft_ready` | `draft-ready.ts` | Review draft + suggest improvements + publish CTA |
+| `active_fresh` | `active-fresh.ts` | Brief check-in + targeted updates |
+| `active_stale` | `active-stale.ts` | "It's been a while" + review stale facts |
+| `blocked` | `blocked.ts` | At quota limit + suggest publishing/signing up |
+
+**Situation Directives** (`src/lib/agent/policies/situations.ts`):
+When situations are detected by the bootstrap layer, targeted directives are injected:
+- `has_pending_proposals` — Mention pending proposals, suggest reviewing
+- `has_thin_sections` — List thin sections, probe for more detail
+- `has_stale_facts` — List stale facts (capped at 5), verify still current
+- `has_open_conflicts` — Mention conflicts, offer to resolve
+
+**Expertise Calibration:**
+- `novice` — Explain features, use step-by-step guidance
+- `familiar` — Normal conversation depth
+- `expert` — Be concise, skip explanations, power-user mode
+
+**Dynamic Welcome Messages** (`ChatPanel.tsx`):
+The ChatPanel fetches the bootstrap payload on mount and selects a journey-aware welcome
+message instead of the static language-only welcome. Three message maps (8 languages each):
+- `FIRST_VISIT_WELCOME` — "Tell me about yourself" (identity-gathering)
+- `RETURNING_WELCOME` — "Let's pick up where we left off" (resumption)
+- `DRAFT_READY_WELCOME` — "Your page is ready, let's review it" (publish push)
+
+For `active_fresh`/`active_stale`, the welcome is personalized with the user's name
+(from bootstrap payload). Fallback: generic steady-state greeting.
 
 ### 4.3 Tool Calling (Autonomous Actions)
 

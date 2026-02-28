@@ -219,7 +219,8 @@ then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
-NEXT-16 Sprint 1 (Journey Intelligence) complete. Phase 1d (media/connectors/translation) is next.
+NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete.
+Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 
@@ -352,6 +353,21 @@ Branch: `feature/sprint-1-journey-intelligence`. 7 commits, 70 new tests (892 to
 - `assembleContext()` extended with optional bootstrap param (backward-compatible)
 - `AUTH_MESSAGE_LIMIT` extracted to shared `src/lib/constants.ts`
 - Legacy `identity/full-name` fact key supported alongside `identity/name`
+
+**Sprint 2 — Onboarding Rewrite (Done):**
+
+Composable policy system replacing monolithic `onboardingPolicy()`/`steadyStatePolicy()`.
+Per-journey-state policies, situation directives, expertise calibration, and dynamic
+welcome messages. Branch: `feature/sprint-2-onboarding-rewrite`. 8 commits, 67 new tests
+(959 total, 66 files).
+
+- Policy registry (`src/lib/agent/policies/index.ts`): `getJourneyPolicy()`, `getSituationDirectives()`, `getExpertiseCalibration()`
+- 6 per-state policies: `first-visit` (3-phase onboarding), `returning-no-page`, `draft-ready`, `active-fresh`, `active-stale`, `blocked`
+- Situation directives: `pendingProposalsDirective`, `thinSectionsDirective`, `staleFactsDirective`, `openConflictsDirective`
+- `buildSystemPrompt(bootstrap)` — composable prompt builder (charter + safety + tools + schema + data model + output + journey policy + directives + calibration)
+- `assembleContext()` uses `buildSystemPrompt` when bootstrap available, falls back to legacy `getSystemPromptText`
+- Dynamic welcome: ChatPanel fetches bootstrap, selects from 3 welcome maps × 8 languages (first_visit/returning/draft_ready)
+- Active users get personalized "Hey {name}!" greetings from bootstrap payload
 
 ### Deferred Until Phase 1 Closure
 
