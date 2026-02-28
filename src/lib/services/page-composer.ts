@@ -137,7 +137,7 @@ const L10N: Record<string, L10nStrings> = {
     profIntermediate: "intermedio",
     profBeginner: "principiante",
     aboutLabel: "Chi Sono",
-    interestsInto: "Appassionata di",
+    interestsInto: "Appassionato/a di",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -145,7 +145,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} ist ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Ich bin ${role} bei ${company}.`,
     bioRoleFirstPerson: (role) => `Ich bin ${role}.`,
-    bioRoleFreelanceFirstPerson: (role) => `Ich bin freiberufliche/r ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `Ich arbeite freiberuflich als ${role}.`,
     passionateAbout: (items) => `Begeistert von ${items}.`,
     skillsLabel: "Fähigkeiten",
     interestsLabel: "Interessen",
@@ -356,7 +356,10 @@ const CAPITALIZE_NOUNS_LANGUAGES = new Set(["de"]);
 function lowerRole(role: string, language: string): string {
   if (CAPITALIZE_NOUNS_LANGUAGES.has(language)) return role;
   if (role.length === 0) return role;
-  return role.toLowerCase();
+  return role
+    .split(/\s+/)
+    .map((w) => (w === w.toUpperCase() && w.length > 1 ? w : w.toLowerCase()))
+    .join(" ");
 }
 
 const FREELANCE_MARKERS = new Set([

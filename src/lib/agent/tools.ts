@@ -128,7 +128,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           value,
           confidence,
         }, sessionId);
-        recomposeAfterMutation();
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
         return {
           success: true,
           factId: fact.id,
@@ -162,7 +164,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       try {
         const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
-        recomposeAfterMutation();
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
         return { success: true, factId: fact.id };
       } catch (error) {
         if (error instanceof FactValidationError) {
@@ -187,7 +191,11 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     execute: async ({ factId }) => {
       try {
         const deleted = deleteFact(factId, sessionId, readKeys);
-        if (deleted) recomposeAfterMutation();
+        if (deleted) {
+          try { recomposeAfterMutation(); } catch (e) {
+            console.warn("[tools] recomposeAfterMutation failed:", e);
+          }
+        }
         return { success: deleted };
       } catch (error) {
         logEvent({

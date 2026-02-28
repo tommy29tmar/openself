@@ -28,6 +28,18 @@ describe("role casing in bio", () => {
     expect(text).not.toContain("graphic Designer");
   });
 
+  it("preserves acronyms like UX in role", () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", value: { name: "Elena Rossi" } }),
+      makeFact({ category: "identity", key: "role", value: { role: "UX Designer" } }),
+    ];
+    const page = composeOptimisticPage(facts, "draft", "it");
+    const bio = page.sections.find((s) => s.type === "bio");
+    const text = (bio!.content as { text: string }).text;
+    expect(text).toContain("UX designer");
+    expect(text).not.toContain("ux designer");
+  });
+
   it("preserves capitalization in German", () => {
     const facts = [
       makeFact({ category: "identity", key: "name", value: { name: "Elena Rossi" } }),
