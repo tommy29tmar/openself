@@ -430,6 +430,14 @@
   transform: none;
 }
 
+/* Fallback: if JS scroll-reveal hasn't fired after 1.5s, reveal everything */
+@keyframes reveal-fallback {
+  to { opacity: 1; transform: none; }
+}
+.theme-reveal:not(.revealed) {
+  animation: reveal-fallback 0.6s ease 1.5s forwards;
+}
+
 /* ─── Hero Stagger Animation ─── */
 
 @keyframes hero-fade-in {
@@ -494,6 +502,7 @@
     opacity: 1;
     transform: none;
     transition: none;
+    animation: none;
   }
 
   .hero-stagger-name,

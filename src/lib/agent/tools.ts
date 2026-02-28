@@ -9,7 +9,7 @@ import {
   setFactVisibility,
   VisibilityTransitionError,
 } from "@/lib/services/kb-service";
-import { getDraft, upsertDraft, requestPublish } from "@/lib/services/page-service";
+import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
@@ -19,7 +19,7 @@ import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
 import { proposeSoulChange, getActiveSoul, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
 import { FactValidationError } from "@/lib/services/fact-validation";
-import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
+import { LAYOUT_TEMPLATES, resolveLayoutAlias } from "@/lib/layout/contracts";
 import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
@@ -29,7 +29,7 @@ import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { validateUsernameFormat } from "@/lib/page-config/usernames";
 import { personalizeSection } from "@/lib/services/section-personalizer";
-import { filterPublishableFacts } from "@/lib/services/page-projection";
+import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 
@@ -46,6 +46,54 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     const composed = composeOptimisticPage(allFacts, "draft", factLang);
     upsertDraft("draft", composed, sessionId);
     return composed;
+  }
+
+  /**
+   * Recompose draft after fact mutations to keep preview in sync.
+   *
+   * Uses projectCanonicalConfig() — the same function used by preview/stream —
+   * which handles: section order preservation, lock metadata merging,
+   * theme/style/layoutTemplate carry-over from existing draft.
+   *
+   * Anti-loop: _recomposing flag prevents re-entry.
+   * Idempotency: computeConfigHash(composed) compared to draft.configHash
+   * (both are SHA-256 of full config JSON). Skip upsertDraft on match.
+   */
+  let _recomposing = false;
+  function recomposeAfterMutation(): void {
+    if (_recomposing) return;
+    _recomposing = true;
+    try {
+      const allFacts = getAllFacts(sessionId, readKeys);
+      if (allFacts.length === 0) return;
+      const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
+      const currentDraft = getDraft(sessionId);
+
+      // Build DraftMeta for order/lock/style preservation
+      const draftMeta: DraftMeta | undefined = currentDraft
+        ? {
+            theme: currentDraft.config.theme,
+            style: currentDraft.config.style,
+            layoutTemplate: currentDraft.config.layoutTemplate,
+            sections: currentDraft.config.sections,
+          }
+        : undefined;
+
+      const composed = projectCanonicalConfig(
+        allFacts,
+        currentDraft?.username ?? "draft",
+        factLang,
+        draftMeta,
+      );
+
+      // Idempotency: skip write if hash matches
+      const composedHash = computeConfigHash(composed);
+      if (composedHash === currentDraft?.configHash) return;
+
+      upsertDraft(currentDraft?.username ?? "draft", composed, sessionId);
+    } finally {
+      _recomposing = false;
+    }
   }
 
   return {
@@ -85,6 +133,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           value,
           confidence,
         }, sessionId);
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
         return {
           success: true,
           factId: fact.id,
@@ -118,6 +169,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       try {
         const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
         return { success: true, factId: fact.id };
       } catch (error) {
         if (error instanceof FactValidationError) {
@@ -142,6 +196,11 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     execute: async ({ factId }) => {
       try {
         const deleted = deleteFact(factId, sessionId, readKeys);
+        if (deleted) {
+          try { recomposeAfterMutation(); } catch (e) {
+            console.warn("[tools] recomposeAfterMutation failed:", e);
+          }
+        }
         return { success: deleted };
       } catch (error) {
         logEvent({
@@ -545,18 +604,22 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
   set_layout: tool({
     description:
-      "Change the page layout template. Available: vertical, sidebar-left, bento-standard.",
+      "Change the page layout template. Available: vertical, sidebar-left (or \"sidebar\"), bento-standard (or \"bento\").",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       layoutTemplate: z
-        .enum(LAYOUT_TEMPLATES)
-        .describe("Layout template to use"),
+        .string()
+        .describe("Layout template: vertical, sidebar-left (or 'sidebar'), bento-standard (or 'bento')"),
     }),
     execute: async ({ username, layoutTemplate }) => {
       try {
+        const resolved = resolveLayoutAlias(layoutTemplate);
+        if (!(LAYOUT_TEMPLATES as readonly string[]).includes(resolved)) {
+          return { success: false, error: `Invalid layout '${layoutTemplate}'. Valid: ${LAYOUT_TEMPLATES.join(", ")}` };
+        }
         const config = ensureDraft();
 
-        const template = getLayoutTemplate(layoutTemplate);
+        const template = getLayoutTemplate(resolved as any);
         const locks = extractLocks(config.sections);
         const { sections, issues } = assignSlotsFromFacts(
           template,
@@ -575,7 +638,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
         const updated: PageConfig = {
           ...config,
-          layoutTemplate,
+          layoutTemplate: resolved as any,
           sections,
         };
         upsertDraft(username, updated, sessionId);
@@ -584,9 +647,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
-          payload: { username, change: "layout", layoutTemplate },
+          payload: { username, change: "layout", layoutTemplate: resolved },
         });
-        return { success: true, layoutTemplate, warnings };
+        return { success: true, layoutTemplate: resolved, warnings };
       } catch (error) {
         return { success: false, error: String(error) };
       }

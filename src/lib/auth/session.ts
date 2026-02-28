@@ -46,7 +46,8 @@ export function getSessionIdFromRequest(req: Request): string {
  * Build a Set-Cookie header value for the session cookie.
  */
 export function createSessionCookie(sessionId: string): string {
-  return `${COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}${secure}`;
 }
 
 /**

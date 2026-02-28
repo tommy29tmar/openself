@@ -5,7 +5,7 @@ import { isAvailableFont } from "@/lib/page-config/fonts";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
-import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
+import { LAYOUT_TEMPLATES, type LayoutTemplateId, resolveLayoutAlias } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
@@ -64,12 +64,13 @@ export async function POST(req: Request) {
       config.style = style;
     }
 
-    // Merge layoutTemplate if provided
+    // Merge layoutTemplate if provided (resolve aliases like "bento" → "bento-standard")
+    const resolvedLayout = typeof body.layoutTemplate === "string" ? resolveLayoutAlias(body.layoutTemplate) : undefined;
     if (
-      typeof body.layoutTemplate === "string" &&
-      (LAYOUT_TEMPLATES as readonly string[]).includes(body.layoutTemplate)
+      resolvedLayout &&
+      (LAYOUT_TEMPLATES as readonly string[]).includes(resolvedLayout)
     ) {
-      config.layoutTemplate = body.layoutTemplate as LayoutTemplateId;
+      config.layoutTemplate = resolvedLayout as LayoutTemplateId;
 
       // Re-assign slots for the new template
       const template = getLayoutTemplate(config.layoutTemplate);
