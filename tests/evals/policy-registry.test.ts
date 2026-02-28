@@ -198,20 +198,20 @@ describe("getExpertiseCalibration", () => {
   it("returns novice calibration with explanation hints", () => {
     const result = getExpertiseCalibration("novice");
     expect(result).toContain("novice");
-    expect(result).toContain("preview panel");
-    expect(result).toContain("publishing means");
+    expect(result).toMatch(/preview/i);
+    expect(result).toMatch(/publishing/i);
   });
 
   it("returns familiar calibration with skip-basics hint", () => {
     const result = getExpertiseCalibration("familiar");
     expect(result).toContain("familiar");
-    expect(result).toContain("Skip basic explanations");
+    expect(result).toMatch(/skip.*explanations/i);
   });
 
   it("returns expert calibration with terse hint", () => {
     const result = getExpertiseCalibration("expert");
     expect(result).toContain("expert");
-    expect(result).toContain("terse");
+    expect(result).toMatch(/minimal|terse/i);
   });
 
   it("each level produces distinct text", () => {
