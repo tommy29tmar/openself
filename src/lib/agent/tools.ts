@@ -8,6 +8,7 @@ import {
   getAllFacts,
   setFactVisibility,
   VisibilityTransitionError,
+  updateFactSortOrder,
 } from "@/lib/services/kb-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
@@ -32,6 +33,7 @@ import { personalizeSection } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
+import { updateJourneyStatePin } from "@/lib/agent/journey";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
@@ -133,7 +135,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           value,
           confidence,
         }, sessionId);
+        let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
         return {
@@ -141,6 +145,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           factId: fact.id,
           category: fact.category,
           key: fact.key,
+          visibility: fact.visibility,
+          pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
+          recomposeOk,
         };
       } catch (error) {
         if (error instanceof FactValidationError) {
@@ -153,6 +160,42 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         });
         return { success: false, error: String(error) };
       }
+    },
+  }),
+
+  create_facts: tool({
+    description:
+      "Store multiple facts at once. Use when the user shares several pieces of information in one message.",
+    parameters: z.object({
+      facts: z.array(z.object({
+        category: z.string(),
+        key: z.string(),
+        value: z.record(z.unknown()),
+        confidence: z.number().optional().default(1.0),
+      })),
+    }),
+    execute: async ({ facts: inputs }) => {
+      const results = [];
+      for (const input of inputs) {
+        try {
+          const fact = await createFact(input, sessionId);
+          results.push({
+            success: true,
+            factId: fact.id,
+            key: input.key,
+            visibility: fact.visibility,
+            pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
+          });
+        } catch (error) {
+          results.push({ success: false, key: input.key, error: String(error) });
+          logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "create_facts", key: input.key, error: String(error) } });
+        }
+      }
+      // Single recomposition at end
+      try { recomposeAfterMutation(); } catch (e) {
+        console.warn("[tools] recomposeAfterMutation after batch create failed:", e);
+      }
+      return { results, totalCreated: results.filter(r => r.success).length };
     },
   }),
 
@@ -169,10 +212,18 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       try {
         const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
+        let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
-        return { success: true, factId: fact.id };
+        return {
+          success: true,
+          factId: fact.id,
+          visibility: fact.visibility,
+          pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
+          recomposeOk,
+        };
       } catch (error) {
         if (error instanceof FactValidationError) {
           return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
@@ -196,12 +247,14 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     execute: async ({ factId }) => {
       try {
         const deleted = deleteFact(factId, sessionId, readKeys);
+        let recomposeOk = true;
         if (deleted) {
           try { recomposeAfterMutation(); } catch (e) {
+            recomposeOk = false;
             console.warn("[tools] recomposeAfterMutation failed:", e);
           }
         }
-        return { success: deleted };
+        return { success: deleted, recomposeOk };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",
@@ -415,6 +468,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const config = await translatePageContent(styled, targetLang, factLang);
 
         upsertDraft(username, config, sessionId);
+        updateJourneyStatePin(sessionId, "draft_ready");
         logEvent({
           eventType: "page_generated",
           actor: "assistant",
@@ -500,6 +554,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         // Mark the existing draft as pending approval — no recomposition,
         // so manual changes (theme, section order, content edits) are preserved.
         requestPublish(username, sessionId);
+        updateJourneyStatePin(sessionId, "active_fresh");
 
         logEvent({
           eventType: "page_publish_requested",
@@ -771,7 +826,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId, visibility }) => {
       try {
-        const fact = setFactVisibility(factId, visibility, "assistant", sessionId);
+        const fact = setFactVisibility(factId, visibility, "assistant", sessionId, readKeys);
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation after visibility change failed:", e);
+        }
         return {
           success: true,
           factId: fact.id,
@@ -873,6 +931,47 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
           info: { sectionCount: 0, factCount: 0 },
         };
+      }
+    },
+  }),
+
+  reorder_section_items: tool({
+    description:
+      "Reorder items within a section (e.g., skills, experiences, interests). Provide the fact keys in the desired order. Do NOT use reorder_sections for this — that tool reorders sections on the page, not items within a section.",
+    parameters: z.object({
+      category: z
+        .string()
+        .describe("The fact category whose items to reorder (e.g., 'skill', 'experience', 'interest')"),
+      orderedKeys: z
+        .array(z.string())
+        .describe("Array of fact keys in the desired display order"),
+    }),
+    execute: async ({ category, orderedKeys }) => {
+      try {
+        const notFound: string[] = [];
+        for (let i = 0; i < orderedKeys.length; i++) {
+          const changes = updateFactSortOrder(sessionId, category, orderedKeys[i], i);
+          if (changes === 0) notFound.push(orderedKeys[i]);
+        }
+        let recomposeOk = true;
+        try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
+        return {
+          success: true,
+          category,
+          orderedKeys,
+          recomposeOk,
+          ...(notFound.length > 0 && { warning: `Keys not found: ${notFound.join(", ")}` }),
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "reorder_section_items", error: String(error), category },
+        });
+        return { success: false, error: String(error) };
       }
     },
   }),

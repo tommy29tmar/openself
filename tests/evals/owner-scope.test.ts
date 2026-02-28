@@ -53,6 +53,7 @@ testSqlite.exec(`
     source TEXT DEFAULT 'chat',
     confidence REAL DEFAULT 1.0,
     visibility TEXT DEFAULT 'private',
+    sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );

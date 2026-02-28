@@ -256,7 +256,7 @@ export async function POST(req: Request) {
       system: systemPrompt,
       messages: safeMessages,
       tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode),
-      maxSteps: 5, // Allow up to 5 tool-calling rounds per turn
+      maxSteps: 10, // Allow up to 10 tool-calling rounds per turn
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
         const { text } = await generateText({

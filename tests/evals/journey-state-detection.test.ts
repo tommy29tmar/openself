@@ -13,6 +13,7 @@ vi.mock("@/lib/db", () => ({
   sqlite: {
     prepare: vi.fn(() => ({
       get: vi.fn(() => undefined),
+      run: vi.fn(),
     })),
   },
   db: {},
@@ -92,11 +93,12 @@ function mockSqliteQuery(pattern: RegExp, result: unknown) {
   const originalPrepare = vi.mocked(sqlite.prepare);
   originalPrepare.mockImplementation((sql: string) => {
     if (pattern.test(sql)) {
-      return { get: getMock } as unknown as ReturnType<typeof sqlite.prepare>;
+      return { get: getMock, run: vi.fn() } as unknown as ReturnType<typeof sqlite.prepare>;
     }
     // Default: return undefined
     return {
       get: vi.fn(() => undefined),
+      run: vi.fn(),
     } as unknown as ReturnType<typeof sqlite.prepare>;
   });
   return getMock;
@@ -133,6 +135,7 @@ beforeEach(() => {
   // Default sqlite mock: all queries return undefined
   vi.mocked(sqlite.prepare).mockImplementation(() => ({
     get: vi.fn(() => undefined),
+    run: vi.fn(),
   }) as unknown as ReturnType<typeof sqlite.prepare>);
 });
 
