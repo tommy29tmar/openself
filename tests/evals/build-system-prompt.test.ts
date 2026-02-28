@@ -1,0 +1,200 @@
+/**
+ * Tests for buildSystemPrompt composition.
+ * Validates that the prompt includes all expected blocks in the right order,
+ * including the new memory directives and turn management rules.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock all policy modules
+vi.mock("@/lib/agent/policies/first-visit", () => ({
+  firstVisitPolicy: vi.fn((lang: string) => `FIRST_VISIT_POLICY_${lang}`),
+}));
+vi.mock("@/lib/agent/policies/returning-no-page", () => ({
+  returningNoPagePolicy: vi.fn((lang: string) => `RETURNING_NO_PAGE_${lang}`),
+}));
+vi.mock("@/lib/agent/policies/draft-ready", () => ({
+  draftReadyPolicy: vi.fn((lang: string) => `DRAFT_READY_${lang}`),
+}));
+vi.mock("@/lib/agent/policies/active-fresh", () => ({
+  activeFreshPolicy: vi.fn((lang: string) => `ACTIVE_FRESH_${lang}`),
+}));
+vi.mock("@/lib/agent/policies/active-stale", () => ({
+  activeStalePolicy: vi.fn((lang: string) => `ACTIVE_STALE_${lang}`),
+}));
+vi.mock("@/lib/agent/policies/blocked", () => ({
+  blockedPolicy: vi.fn((lang: string) => `BLOCKED_${lang}`),
+}));
+vi.mock("@/lib/agent/policies/situations", () => ({
+  pendingProposalsDirective: vi.fn(
+    (count: number, sections: string[]) =>
+      `PROPOSALS: ${count} pending in [${sections.join(", ")}]`,
+  ),
+  thinSectionsDirective: vi.fn(
+    (sections: string[]) => `THIN: [${sections.join(", ")}]`,
+  ),
+  staleFactsDirective: vi.fn(
+    (facts: string[]) => `STALE: [${facts.join(", ")}]`,
+  ),
+  openConflictsDirective: vi.fn(
+    (conflicts: string[]) => `CONFLICTS: [${conflicts.join(", ")}]`,
+  ),
+}));
+vi.mock("@/lib/agent/policies/memory-directives", () => ({
+  memoryUsageDirectives: vi.fn(() => "MEMORY_USAGE_DIRECTIVES_BLOCK"),
+}));
+vi.mock("@/lib/agent/policies/turn-management", () => ({
+  turnManagementRules: vi.fn(() => "TURN_MANAGEMENT_RULES_BLOCK"),
+}));
+
+import { buildSystemPrompt } from "@/lib/agent/prompts";
+import type { BootstrapPayload } from "@/lib/agent/journey";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+const makeBootstrap = (overrides?: Partial<BootstrapPayload>): BootstrapPayload => ({
+  journeyState: "first_visit",
+  situations: [],
+  expertiseLevel: "novice",
+  userName: null,
+  lastSeenDaysAgo: null,
+  publishedUsername: null,
+  pendingProposalCount: 0,
+  thinSections: [],
+  staleFacts: [],
+  language: "en",
+  conversationContext: null,
+  ...overrides,
+});
+
+describe("buildSystemPrompt", () => {
+  describe("composition", () => {
+    it("includes core charter block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("OpenSelf agent");
+    });
+
+    it("includes safety policy block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toMatch(/privacy|safety/i);
+    });
+
+    it("includes tool policy block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("create_fact");
+    });
+
+    it("includes fact schema reference block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toMatch(/fact.*schema|category/i);
+    });
+
+    it("includes output contract block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toMatch(/output.*rule/i);
+    });
+
+    it("includes the journey policy block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("FIRST_VISIT_POLICY_en");
+    });
+
+    it("includes expertise calibration block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toMatch(/EXPERTISE\s*CALIBRATION|novice/i);
+    });
+
+    it("includes turn management rules block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("TURN_MANAGEMENT_RULES_BLOCK");
+    });
+
+    it("includes memory usage directives block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("MEMORY_USAGE_DIRECTIVES_BLOCK");
+    });
+  });
+
+  describe("block ordering", () => {
+    it("journey policy comes after output contract", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const outputIdx = result.indexOf("Output rules");
+      const policyIdx = result.indexOf("FIRST_VISIT_POLICY_en");
+      expect(outputIdx).toBeGreaterThan(-1);
+      expect(policyIdx).toBeGreaterThan(outputIdx);
+    });
+
+    it("turn management comes after expertise calibration", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const expertiseIdx = result.indexOf("EXPERTISE CALIBRATION");
+      const turnIdx = result.indexOf("TURN_MANAGEMENT_RULES_BLOCK");
+      expect(expertiseIdx).toBeGreaterThan(-1);
+      expect(turnIdx).toBeGreaterThan(expertiseIdx);
+    });
+
+    it("memory directives come after turn management", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const turnIdx = result.indexOf("TURN_MANAGEMENT_RULES_BLOCK");
+      const memoryIdx = result.indexOf("MEMORY_USAGE_DIRECTIVES_BLOCK");
+      expect(turnIdx).toBeGreaterThan(-1);
+      expect(memoryIdx).toBeGreaterThan(turnIdx);
+    });
+  });
+
+  describe("situation directives", () => {
+    it("omits situation directives when no situations are active", () => {
+      const result = buildSystemPrompt(makeBootstrap({ situations: [] }));
+      expect(result).not.toContain("SITUATION DIRECTIVES:");
+    });
+
+    it("includes situation directives when situations are active", () => {
+      const result = buildSystemPrompt(
+        makeBootstrap({
+          situations: ["has_thin_sections"],
+          thinSections: ["skills", "projects"],
+        }),
+      );
+      expect(result).toContain("THIN:");
+    });
+  });
+
+  describe("journey state routing", () => {
+    it("routes first_visit to firstVisitPolicy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ journeyState: "first_visit" }));
+      expect(result).toContain("FIRST_VISIT_POLICY_en");
+    });
+
+    it("routes returning_no_page to returningNoPagePolicy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ journeyState: "returning_no_page" }));
+      expect(result).toContain("RETURNING_NO_PAGE_en");
+    });
+
+    it("routes draft_ready to draftReadyPolicy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ journeyState: "draft_ready" }));
+      expect(result).toContain("DRAFT_READY_en");
+    });
+
+    it("routes active_fresh to activeFreshPolicy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ journeyState: "active_fresh" }));
+      expect(result).toContain("ACTIVE_FRESH_en");
+    });
+
+    it("routes active_stale to activeStalePolicy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ journeyState: "active_stale" }));
+      expect(result).toContain("ACTIVE_STALE_en");
+    });
+
+    it("routes blocked to blockedPolicy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ journeyState: "blocked" }));
+      expect(result).toContain("BLOCKED_en");
+    });
+  });
+
+  describe("language passthrough", () => {
+    it("passes language to journey policy", () => {
+      const result = buildSystemPrompt(makeBootstrap({ language: "it" }));
+      expect(result).toContain("FIRST_VISIT_POLICY_it");
+    });
+  });
+});

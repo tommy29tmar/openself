@@ -1,0 +1,102 @@
+/**
+ * Tests for the memory usage directives.
+ * Validates that all three tiers are documented, the golden rule is present,
+ * and cross-tier rules are defined.
+ */
+import { describe, it, expect } from "vitest";
+import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
+
+describe("memoryUsageDirectives", () => {
+  const directives = memoryUsageDirectives();
+
+  describe("structure", () => {
+    it("returns a non-empty string", () => {
+      expect(typeof directives).toBe("string");
+      expect(directives.length).toBeGreaterThan(200);
+    });
+
+    it("contains a MEMORY USAGE header", () => {
+      expect(directives).toMatch(/MEMORY\s*USAGE/i);
+    });
+  });
+
+  describe("Tier 1 — Facts", () => {
+    it("references Tier 1 or facts as source of truth", () => {
+      expect(directives).toMatch(/tier\s*1|facts.*source\s*of\s*truth/i);
+    });
+
+    it("instructs to use search_facts before asking questions", () => {
+      expect(directives).toContain("search_facts");
+      expect(directives).toMatch(/search_facts.*before.*ask|before.*question.*search_facts/i);
+    });
+
+    it("instructs to use name from facts on first response", () => {
+      expect(directives).toMatch(/name\s*from\s*facts|identity\/name/i);
+    });
+
+    it("references create_fact for new info", () => {
+      expect(directives).toContain("create_fact");
+    });
+
+    it("references update_fact for changes", () => {
+      expect(directives).toContain("update_fact");
+    });
+
+    it("references delete_fact for removals", () => {
+      expect(directives).toContain("delete_fact");
+    });
+  });
+
+  describe("Tier 2 — Summary", () => {
+    it("references Tier 2 or conversation summary", () => {
+      expect(directives).toMatch(/tier\s*2|conversation\s*summary/i);
+    });
+
+    it("instructs to use summary for continuity", () => {
+      expect(directives).toMatch(/continuity|last\s*time/i);
+    });
+
+    it("instructs not to recite the summary", () => {
+      expect(directives).toMatch(/not.*recite|do\s*not.*recite/i);
+    });
+  });
+
+  describe("Tier 3 — Meta-Memories", () => {
+    it("references Tier 3 or meta-memories", () => {
+      expect(directives).toMatch(/tier\s*3|meta.?memor/i);
+    });
+
+    it("references save_memory tool", () => {
+      expect(directives).toContain("save_memory");
+    });
+
+    it("contains the golden rule about saving at end of significant sessions", () => {
+      expect(directives).toMatch(/golden\s*rule/i);
+      expect(directives).toMatch(/save_memory.*session|session.*save_memory/i);
+    });
+
+    it("gives examples of good meta-memories", () => {
+      expect(directives).toMatch(/good\s*meta.?memor/i);
+    });
+
+    it("gives examples of bad meta-memories", () => {
+      expect(directives).toMatch(/bad\s*meta.?memor/i);
+    });
+
+    it("references memoryType values", () => {
+      expect(directives).toContain("preference");
+      expect(directives).toContain("insight");
+      expect(directives).toContain("observation");
+    });
+  });
+
+  describe("cross-tier rules", () => {
+    it("contains cross-tier rules section", () => {
+      expect(directives).toMatch(/cross.?tier/i);
+    });
+
+    it("distinguishes WHAT (facts) from HOW (memories)", () => {
+      expect(directives).toMatch(/what.*know.*how.*behave|tier\s*1.*what.*tier\s*3.*how/i);
+    });
+  });
+});

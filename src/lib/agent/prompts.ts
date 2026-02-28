@@ -6,6 +6,8 @@ import {
   getExpertiseCalibration,
 } from "@/lib/agent/policies/index";
 import type { SituationContext } from "@/lib/agent/policies/index";
+import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
+import { turnManagementRules } from "@/lib/agent/policies/turn-management";
 
 const CORE_CHARTER = `You are the OpenSelf agent — a warm, thoughtful AI that helps people build their personal web page through natural conversation.
 
@@ -288,6 +290,8 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   }
 
   blocks.push(expertiseCalibration);
+  blocks.push(turnManagementRules());
+  blocks.push(memoryUsageDirectives());
 
   const composed = blocks.join("\n\n---\n\n");
 
