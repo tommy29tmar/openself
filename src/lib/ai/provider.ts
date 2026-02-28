@@ -10,8 +10,9 @@ type Provider = "google" | "openai" | "anthropic" | "ollama";
  * Model tier for cost-aware routing.
  * - "cheap": fast, low-cost (default for chat, translations)
  * - "medium": higher quality for summaries, soul proposals
+ * - "capable": complex reasoning (conformity analysis, advanced personalization)
  */
-export type ModelTier = "cheap" | "medium";
+export type ModelTier = "cheap" | "medium" | "capable";
 
 const MEDIUM_MODELS: Record<Provider, string> = {
   google: "gemini-2.5-flash",
@@ -20,12 +21,28 @@ const MEDIUM_MODELS: Record<Provider, string> = {
   ollama: "llama3.3",
 };
 
+const CAPABLE_MODELS: Record<Provider, string> = {
+  google: "gemini-2.5-pro",
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-6",
+  ollama: "llama3.3",
+};
+
 export function getModelForTier(tier: ModelTier): LanguageModel {
   if (tier === "cheap") return getModel();
 
   const provider = getProvider();
-  const modelId =
-    process.env.AI_MODEL_MEDIUM ?? MEDIUM_MODELS[provider];
+
+  const tierMap: Record<Exclude<ModelTier, "cheap">, Record<Provider, string>> = {
+    medium: MEDIUM_MODELS,
+    capable: CAPABLE_MODELS,
+  };
+  const envKey: Record<Exclude<ModelTier, "cheap">, string> = {
+    medium: "AI_MODEL_MEDIUM",
+    capable: "AI_MODEL_CAPABLE",
+  };
+
+  const modelId = process.env[envKey[tier]] ?? tierMap[tier][provider];
 
   switch (provider) {
     case "google": {
@@ -50,7 +67,15 @@ export function getModelForTier(tier: ModelTier): LanguageModel {
 export function getModelIdForTier(tier: ModelTier): string {
   if (tier === "cheap") return getModelId();
   const provider = getProvider();
-  return process.env.AI_MODEL_MEDIUM ?? MEDIUM_MODELS[provider];
+  const tierMap: Record<Exclude<ModelTier, "cheap">, Record<Provider, string>> = {
+    medium: MEDIUM_MODELS,
+    capable: CAPABLE_MODELS,
+  };
+  const envKey: Record<Exclude<ModelTier, "cheap">, string> = {
+    medium: "AI_MODEL_MEDIUM",
+    capable: "AI_MODEL_CAPABLE",
+  };
+  return process.env[envKey[tier]] ?? tierMap[tier][provider];
 }
 
 const DEFAULT_MODELS: Record<Provider, string> = {
