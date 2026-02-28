@@ -31,6 +31,7 @@ import type {
   ActivitiesContent,
 } from "@/lib/page-config/content-types";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
+import { formatFactDate } from "@/lib/i18n/format-date";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 
@@ -72,6 +73,8 @@ type L10nStrings = {
   profAdvanced: string;
   profIntermediate: string;
   profBeginner: string;
+  aboutLabel: string;
+  interestsInto: string;
 };
 
 const L10N: Record<string, L10nStrings> = {
@@ -102,6 +105,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "advanced",
     profIntermediate: "intermediate",
     profBeginner: "beginner",
+    aboutLabel: "About",
+    interestsInto: "Into",
   },
   it: {
     welcomeTagline: (name) => `Ciao, sono ${name}`,
@@ -130,6 +135,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "avanzato",
     profIntermediate: "intermedio",
     profBeginner: "principiante",
+    aboutLabel: "Chi Sono",
+    interestsInto: "Appassionata di",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -158,6 +165,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "fortgeschritten",
     profIntermediate: "Mittelstufe",
     profBeginner: "Anfänger",
+    aboutLabel: "Über Mich",
+    interestsInto: "Begeistert von",
   },
   fr: {
     welcomeTagline: (name) => `Bienvenue sur la page de ${name}`,
@@ -186,6 +195,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "avancé",
     profIntermediate: "intermédiaire",
     profBeginner: "débutant",
+    aboutLabel: "À Propos",
+    interestsInto: "Passionné(e) de",
   },
   es: {
     welcomeTagline: (name) => `Bienvenido a la página de ${name}`,
@@ -214,6 +225,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "avanzado",
     profIntermediate: "intermedio",
     profBeginner: "principiante",
+    aboutLabel: "Sobre Mí",
+    interestsInto: "Apasionado/a de",
   },
   pt: {
     welcomeTagline: (name) => `Bem-vindo à página de ${name}`,
@@ -242,6 +255,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "avançado",
     profIntermediate: "intermediário",
     profBeginner: "iniciante",
+    aboutLabel: "Sobre Mim",
+    interestsInto: "Apaixonado/a por",
   },
   ja: {
     welcomeTagline: (name) => `${name}のページへようこそ`,
@@ -270,6 +285,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "上級",
     profIntermediate: "中級",
     profBeginner: "初級",
+    aboutLabel: "自己紹介",
+    interestsInto: "興味",
   },
   zh: {
     welcomeTagline: (name) => `欢迎来到${name}的页面`,
@@ -298,6 +315,8 @@ const L10N: Record<string, L10nStrings> = {
     profAdvanced: "高级",
     profIntermediate: "中级",
     profBeginner: "初级",
+    aboutLabel: "关于我",
+    interestsInto: "热爱",
   },
 };
 
@@ -463,7 +482,7 @@ function buildHeroSection(
     if (lang) {
       languageItems.push({
         language: lang,
-        proficiency: str(v.proficiency) ?? str(v.level),
+        proficiency: localizeProficiency(str(v.proficiency) ?? str(v.level), language),
       });
     }
   }
@@ -553,7 +572,7 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
 
   if (parts.length === 0) return null;
 
-  const content: BioContent = { text: parts.join(" ") };
+  const content: BioContent = { text: parts.join(" "), title: l.aboutLabel };
 
   return {
     id: "bio-1",
@@ -821,7 +840,7 @@ function buildAchievementsSection(achievementFacts: FactRow[], language: string)
       const description = str(v.description);
       if (description) item.description = description;
       const date = str(v.date);
-      if (date) item.date = date;
+      if (date) item.date = formatFactDate(date, language);
       const issuer = str(v.issuer) ?? str(v.organization);
       if (issuer) item.issuer = issuer;
       return item;
@@ -932,6 +951,13 @@ const PROF_KEYS: Record<string, keyof L10nStrings> = {
   intermediate: "profIntermediate", beginner: "profBeginner",
 };
 
+function localizeProficiency(rawProf: string | undefined, language: string): string | undefined {
+  if (!rawProf) return undefined;
+  const key = PROF_KEYS[rawProf.toLowerCase()];
+  if (!key) return rawProf;
+  return getL10n(language)[key] as string;
+}
+
 function buildLanguagesSection(languageFacts: FactRow[], language: string): Section | null {
   if (languageFacts.length === 0) return null;
 
@@ -944,8 +970,7 @@ function buildLanguagesSection(languageFacts: FactRow[], language: string): Sect
       const item: LanguageItem = { language: lang };
       const rawProf = str(v.proficiency) ?? str(v.level);
       if (rawProf) {
-        const profLookupKey = PROF_KEYS[rawProf.toLowerCase()];
-        item.proficiency = profLookupKey ? l[profLookupKey] as string : rawProf;
+        item.proficiency = localizeProficiency(rawProf, language);
       }
       return item;
     })
@@ -1092,6 +1117,7 @@ function buildAtAGlanceSection(
   const l = getL10n(language);
   const content: Record<string, unknown> = {
     title: l.atAGlanceLabel,
+    interestsInto: l.interestsInto,
   };
   if (stats.length > 0) content.stats = stats;
   if (skillGroups) content.skillGroups = skillGroups;
