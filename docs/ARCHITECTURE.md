@@ -357,10 +357,12 @@ Two prompt-building paths exist:
 7. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4)
 8. **Situation directives** — Contextual instructions based on detected situations (optional, only when situations are active)
 9. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
+10. **Turn management rules** — 5 rules (R1-R5) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length (see Section 4.2.5)
+11. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence (see Section 4.2.5)
 
 The composable path replaces the monolithic `onboardingPolicy`/`steadyStatePolicy` functions
 with fine-grained, per-journey-state policies composed from the bootstrap payload.
-Token budget guard: the journey policy + directives + calibration block is capped at 3500 tokens.
+Token budget guard: the journey policy + directives + calibration + turn management + memory directives block is capped at 3500 tokens.
 
 Both paths then have dynamic context blocks appended by `assembleContext()`:
 
@@ -472,11 +474,11 @@ by a composable policy registry that maps journey states to fine-grained prompt 
 | State | File | Key Behaviors |
 |---|---|---|
 | `first_visit` | `first-visit.ts` | 3-phase onboarding (A: identity, B: breadth-first, C: generate+publish), low-signal handling with 3-step escalation |
-| `returning_no_page` | `returning-no-page.ts` | "Welcome back" + gather remaining info + generate page |
-| `draft_ready` | `draft-ready.ts` | Review draft + suggest improvements + publish CTA |
-| `active_fresh` | `active-fresh.ts` | Brief check-in + targeted updates |
-| `active_stale` | `active-stale.ts` | "It's been a while" + review stale facts |
-| `blocked` | `blocked.ts` | At quota limit + suggest publishing/signing up |
+| `returning_no_page` | `returning-no-page.ts` | Greet by name, summarize known info, ask what changed, fast-path to page (5+ facts = skip to generate), respect prior investment |
+| `draft_ready` | `draft-ready.ts` | Lead with page preview, review-and-publish fast path, max 2 edit rounds, no interview reopening |
+| `active_fresh` | `active-fresh.ts` | Brief operational greeting, quick-update session, proportional responses, immediate regenerate+publish on "that's all" |
+| `active_stale` | `active-stale.ts` | Warm re-engagement, acknowledge time gap, targeted updates (2-3 areas max), max 6 exchanges rule |
+| `blocked` | `blocked.ts` | Exactly 2 sentences: explain block + give solution. No questions, no apologies, specific "come back tomorrow" |
 
 **Situation Directives** (`src/lib/agent/policies/situations.ts`):
 When situations are detected by the bootstrap layer, targeted directives are injected:
@@ -499,6 +501,24 @@ message instead of the static language-only welcome. Three message maps (8 langu
 
 For `active_fresh`/`active_stale`, the welcome is personalized with the user's name
 (from bootstrap payload). Fallback: generic steady-state greeting.
+
+### 4.2.5 Cross-Cutting Prompt Blocks (Sprint 3)
+
+Two fixed prompt blocks are injected into every system prompt regardless of journey state:
+
+**Turn Management Rules** (`src/lib/agent/policies/turn-management.ts`):
+- R1: No consecutive same-area questions (ensures breadth)
+- R2: Max 6 fact-gathering exchanges before proposing action
+- R3: No passive closings (banned phrases list, must end with specific next step)
+- R4: Stall detection and recovery (options → fill-in-the-blank → generate page)
+- R5: Proportional response length (match user message length)
+
+**Memory Usage Directives** (`src/lib/agent/policies/memory-directives.ts`):
+- Tier 1 (Facts) = WHAT you know — search before asking, record immediately
+- Tier 2 (Summary) = CONTEXT of past conversations — use for continuity, never recite
+- Tier 3 (Meta-Memories) = HOW to behave — communication patterns, tone preferences
+- Golden rule: call `save_memory` with at least one meta-observation per significant session
+- Cross-tier discipline: factual info in facts, interaction patterns in memories
 
 ### 4.3 Tool Calling (Autonomous Actions)
 

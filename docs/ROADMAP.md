@@ -219,7 +219,7 @@ then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
-NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete.
+NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete.
 Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
@@ -368,6 +368,16 @@ welcome messages. Branch: `feature/sprint-2-onboarding-rewrite`. 8 commits, 67 n
 - `assembleContext()` uses `buildSystemPrompt` when bootstrap available, falls back to legacy `getSystemPromptText`
 - Dynamic welcome: ChatPanel fetches bootstrap, selects from 3 welcome maps × 8 languages (first_visit/returning/draft_ready)
 - Active users get personalized "Hey {name}!" greetings from bootstrap payload
+
+**Sprint 3 — Returning User Policies + Strategic Memory (Done):**
+
+All 5 stub policies replaced with detailed prompt content. Two cross-cutting prompt blocks
+added to all system prompts. 142 new tests (1101 total, 70 files).
+
+- 5 fleshed-out policies: `returning-no-page` (continuity + fast-path), `draft-ready` (review + publish), `active-fresh` (quick update), `active-stale` (re-engagement + targeted updates), `blocked` (2-sentence explanation + solution)
+- Memory usage directives (`memory-directives.ts`): 3-tier strategic memory guide (facts=WHAT, summary=CONTEXT, memories=HOW), golden rule for meta-observation persistence
+- Turn management rules (`turn-management.ts`): R1 (breadth), R2 (max 6 exchanges), R3 (banned closings), R4 (stall recovery), R5 (proportional response)
+- `buildSystemPrompt` extended with `turnManagementRules()` + `memoryUsageDirectives()` after expertise calibration
 
 ### Deferred Until Phase 1 Closure
 

@@ -42,8 +42,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - Vertical magazine redesign: luxury digital magazine aesthetic for vertical layout — unified `.section-label` headers with accent bar, scroll reveal animations, variable vertical rhythm, dot separators, hover-underline-grow links, warm theme WCAG AA contrast fix
 - UAT Round 3 (8 fixes): scroll-reveal bypass in builder preview, auto-draft for style tools, agent role prompt guidance, language proficiency L10N (8 languages × 5 levels), chat markdown rendering (markdown-it), favicon, dot separator polish, WAL checkpoint on registration
 - Sprint 2 — Onboarding Rewrite: composable policy system replacing monolithic onboarding/steady-state prompts, per-journey-state policies (6 states), situation directives (4 situations), expertise calibration (3 levels), `buildSystemPrompt()` composable prompt builder, dynamic welcome messages from bootstrap payload (3 maps × 8 languages)
+- Sprint 3 — Returning User Policies + Strategic Memory: 5 stub policies replaced with detailed prompt content (returning-no-page, draft-ready, active-fresh, active-stale, blocked). Memory usage directives (3-tier strategic memory: facts=WHAT, summary=CONTEXT, memories=HOW). Turn management rules (R1-R5: breadth, max 6 exchanges, banned closings, stall recovery, proportional response). Wired into `buildSystemPrompt()`. 142 new tests (1101 total, 70 files)
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete.
 
 ## 2) Implemented Today
 
@@ -285,6 +286,19 @@ Composable policy system replacing monolithic prompt functions. All items comple
 5. **`buildSystemPrompt()`** — New composable prompt builder in `prompts.ts`. Composes [charter, safety, tools, schema ref, data model ref, output contract, journey policy, situation directives, expertise calibration]. 3500-token budget for policy+directives. Legacy `getSystemPromptText()` marked `@deprecated`.
 6. **Context wiring** — `assembleContext()` uses `buildSystemPrompt(bootstrap)` when bootstrap payload available, falls back to legacy `getSystemPromptText()`.
 7. **Dynamic welcome messages** — `ChatPanel` fetches bootstrap on mount, selects from 3 welcome maps (8 languages each): `FIRST_VISIT_WELCOME`, `RETURNING_WELCOME`, `DRAFT_READY_WELCOME`. Active users get personalized "Hey {name}!" greetings.
+
+### NEXT-16 Sprint 3 — Returning User Policies + Strategic Memory ✅
+
+All 5 stub policies replaced with detailed prompt content. Two cross-cutting prompt blocks added. All items complete. 142 new tests (1101 total, 70 files).
+
+1. **returning-no-page policy** — Continuity greeting (name from facts, summarize 2-3 defining facts), fact hygiene (search before asking, never re-ask), fast-path to page (5+ facts = skip to generate+publish).
+2. **draft-ready policy** — Review-first approach (lead with preview), single-question opener ("change or publish?"), max 2 edit rounds, immediate publish on "looks good".
+3. **active-fresh policy** — Operational quick-update session ("Hey [name], what to update?"), proportional response length, existing username for authenticated users, navigation bar alternative.
+4. **active-stale policy** — Warm re-engagement (acknowledge time gap), targeted updates (2-3 areas max, prioritize work > projects > interests), max 6 exchanges rule, stop if user says "nothing changed".
+5. **blocked policy** — Exactly 2 parts: explain block + give solution. No questions, no apologies. Specific "come back tomorrow" (never vague).
+6. **Memory usage directives** — Fixed block for all prompts. 3-tier strategic memory: Tier 1 (facts = WHAT, search_facts before asking), Tier 2 (summary = CONTEXT, use for continuity), Tier 3 (meta-memories = HOW, save_memory golden rule). Cross-tier discipline.
+7. **Turn management rules** — Fixed block for all prompts. R1: no consecutive same-area questions. R2: max 6 fact-gathering exchanges. R3: banned passive closings (6 phrases). R4: stall detection (options → fill-in-blank → generate page). R5: proportional response length.
+8. **buildSystemPrompt wiring** — Turn management + memory directives appended as last two blocks after expertise calibration.
 
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
