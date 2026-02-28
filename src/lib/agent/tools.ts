@@ -820,7 +820,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId, visibility }) => {
       try {
-        const fact = setFactVisibility(factId, visibility, "assistant", sessionId);
+        const fact = setFactVisibility(factId, visibility, "assistant", sessionId, readKeys);
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation after visibility change failed:", e);
+        }
         return {
           success: true,
           factId: fact.id,
