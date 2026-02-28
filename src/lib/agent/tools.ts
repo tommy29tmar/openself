@@ -9,7 +9,7 @@ import {
   setFactVisibility,
   VisibilityTransitionError,
 } from "@/lib/services/kb-service";
-import { getDraft, upsertDraft, requestPublish } from "@/lib/services/page-service";
+import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { logEvent } from "@/lib/services/event-service";
@@ -24,7 +24,7 @@ import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
 import { personalizeSection } from "@/lib/services/section-personalizer";
-import { filterPublishableFacts } from "@/lib/services/page-projection";
+import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash } from "@/lib/services/personalization-hashing";
 
@@ -41,6 +41,54 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     const composed = composeOptimisticPage(allFacts, "draft", factLang);
     upsertDraft("draft", composed, sessionId);
     return composed;
+  }
+
+  /**
+   * Recompose draft after fact mutations to keep preview in sync.
+   *
+   * Uses projectCanonicalConfig() — the same function used by preview/stream —
+   * which handles: section order preservation, lock metadata merging,
+   * theme/style/layoutTemplate carry-over from existing draft.
+   *
+   * Anti-loop: _recomposing flag prevents re-entry.
+   * Idempotency: computeConfigHash(composed) compared to draft.configHash
+   * (both are SHA-256 of full config JSON). Skip upsertDraft on match.
+   */
+  let _recomposing = false;
+  function recomposeAfterMutation(): void {
+    if (_recomposing) return;
+    _recomposing = true;
+    try {
+      const allFacts = getAllFacts(sessionId, readKeys);
+      if (allFacts.length === 0) return;
+      const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
+      const currentDraft = getDraft(sessionId);
+
+      // Build DraftMeta for order/lock/style preservation
+      const draftMeta: DraftMeta | undefined = currentDraft
+        ? {
+            theme: currentDraft.config.theme,
+            style: currentDraft.config.style,
+            layoutTemplate: currentDraft.config.layoutTemplate,
+            sections: currentDraft.config.sections,
+          }
+        : undefined;
+
+      const composed = projectCanonicalConfig(
+        allFacts,
+        currentDraft?.username ?? "draft",
+        factLang,
+        draftMeta,
+      );
+
+      // Idempotency: skip write if hash matches
+      const composedHash = computeConfigHash(composed);
+      if (composedHash === currentDraft?.configHash) return;
+
+      upsertDraft(currentDraft?.username ?? "draft", composed, sessionId);
+    } finally {
+      _recomposing = false;
+    }
   }
 
   return {
@@ -80,6 +128,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           value,
           confidence,
         }, sessionId);
+        recomposeAfterMutation();
         return {
           success: true,
           factId: fact.id,
@@ -113,6 +162,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       try {
         const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
+        recomposeAfterMutation();
         return { success: true, factId: fact.id };
       } catch (error) {
         if (error instanceof FactValidationError) {
@@ -137,6 +187,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     execute: async ({ factId }) => {
       try {
         const deleted = deleteFact(factId, sessionId, readKeys);
+        if (deleted) recomposeAfterMutation();
         return { success: deleted };
       } catch (error) {
         logEvent({
