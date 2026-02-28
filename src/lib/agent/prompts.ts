@@ -4,8 +4,8 @@ import {
   getJourneyPolicy,
   getSituationDirectives,
   getExpertiseCalibration,
-} from "@/lib/agent/policies/index";
-import type { SituationContext } from "@/lib/agent/policies/index";
+} from "@/lib/agent/policies";
+import type { SituationContext } from "@/lib/agent/policies";
 import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
 import { turnManagementRules } from "@/lib/agent/policies/turn-management";
 
