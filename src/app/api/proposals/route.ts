@@ -18,7 +18,11 @@ export async function GET(req: Request) {
   }
 
   // Mark stale before returning so the user sees only actionable proposals
-  markStaleProposals(auth.profileId);
+  try {
+    markStaleProposals(auth.profileId);
+  } catch (err) {
+    console.warn("[proposals] markStaleProposals failed (best-effort):", err);
+  }
 
   const proposals = getPendingProposals(auth.profileId);
   return NextResponse.json({ proposals });
