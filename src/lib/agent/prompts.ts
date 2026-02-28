@@ -1,4 +1,11 @@
 import type { PromptMode, PromptContext } from "./promptAssembler";
+import type { BootstrapPayload } from "@/lib/agent/journey";
+import {
+  getJourneyPolicy,
+  getSituationDirectives,
+  getExpertiseCalibration,
+} from "@/lib/agent/policies/index";
+import type { SituationContext } from "@/lib/agent/policies/index";
 
 const CORE_CHARTER = `You are the OpenSelf agent — a warm, thoughtful AI that helps people build their personal web page through natural conversation.
 
@@ -219,6 +226,10 @@ export function getPromptContent(
   };
 }
 
+/**
+ * @deprecated Use buildSystemPrompt(bootstrap) instead. Kept for backward compatibility
+ * during the transition period (Sprint 2).
+ */
 export function getSystemPromptText(
   mode: PromptMode,
   language: string = "en",
@@ -231,4 +242,66 @@ export function getSystemPromptText(
   return [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE, OUTPUT_CONTRACT, modePolicy].join(
     "\n\n---\n\n",
   );
+}
+
+/**
+ * Build the full system prompt from a BootstrapPayload.
+ *
+ * This is the new composable prompt builder that replaces the monolithic
+ * getSystemPromptText for bootstrap-aware code paths.
+ *
+ * Composition order:
+ * [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE,
+ *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration]
+ */
+export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
+  const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
+
+  // Build situation context from bootstrap data
+  const situationContext: SituationContext = {
+    pendingProposalCount: bootstrap.pendingProposalCount,
+    pendingProposalSections: [], // Will be populated when proposals carry section info
+    thinSections: bootstrap.thinSections,
+    staleFacts: bootstrap.staleFacts,
+    openConflicts: [], // Will be populated from conflict service in context assembler
+  };
+
+  const situationDirectives = getSituationDirectives(
+    bootstrap.situations,
+    situationContext,
+  );
+
+  const expertiseCalibration = getExpertiseCalibration(bootstrap.expertiseLevel);
+
+  const blocks = [
+    CORE_CHARTER,
+    SAFETY_POLICY,
+    TOOL_POLICY,
+    FACT_SCHEMA_REFERENCE,
+    DATA_MODEL_REFERENCE,
+    OUTPUT_CONTRACT,
+    journeyPolicy,
+  ];
+
+  if (situationDirectives) {
+    blocks.push(situationDirectives);
+  }
+
+  blocks.push(expertiseCalibration);
+
+  const composed = blocks.join("\n\n---\n\n");
+
+  // Budget guard: the system prompt must leave room for context (facts, memory,
+  // soul, summaries, conflicts) which lives in contextParts assembled separately.
+  // TOTAL_TOKEN_BUDGET in context.ts is 7500. Reserve at least 4000 for context.
+  const MAX_SYSTEM_PROMPT_TOKENS = 3500;
+  const estimatedTokens = Math.ceil(composed.length / 4);
+  if (estimatedTokens > MAX_SYSTEM_PROMPT_TOKENS) {
+    console.warn(
+      `[buildSystemPrompt] System prompt ~${estimatedTokens} tokens exceeds budget of ${MAX_SYSTEM_PROMPT_TOKENS}. ` +
+      `Context blocks may be squeezed. Review prompt block sizes.`
+    );
+  }
+
+  return composed;
 }
