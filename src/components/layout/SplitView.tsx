@@ -119,6 +119,11 @@ export function SplitView({
           fetch("/api/messages", { cache: "no-store" }),
         ]);
         if (cancelled) return;
+        // Redirect to invite page on 401 (unauthenticated)
+        if (bRes.status === 401 || mRes.status === 401) {
+          window.location.href = "/invite";
+          return;
+        }
         const bootstrap = bRes.ok ? await bRes.json() : null;
         let msgs: Array<{id: string; role: string; content: string}> = [];
         if (mRes.ok) {

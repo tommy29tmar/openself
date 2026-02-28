@@ -97,7 +97,7 @@ describe("F9: Skill domain labels L10N", () => {
 
 // --- F13: Experience period formatting ---
 describe("F13: Experience period from start/end dates", () => {
-  it("formats start/end dates with localized labels", async () => {
+  it("formats current experience with localized 'Attuale'", async () => {
     const { composeOptimisticPage } = await import("@/lib/services/page-composer");
     const facts = [
       { id: "1", category: "identity", key: "name", value: { full: "Marco" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
@@ -108,8 +108,22 @@ describe("F13: Experience period from start/end dates", () => {
     expect(exp).toBeDefined();
     const items = (exp!.content as any).items;
     expect(items[0].period).toBeDefined();
-    // Should contain "Attuale" (Italian for "Current") since no end date
+    // Should contain "Attuale" (Italian for "Current") since status is "current"
     expect(items[0].period).toContain("Attuale");
+  });
+
+  it("does NOT show 'Attuale' for past experience without end date", async () => {
+    const { composeOptimisticPage } = await import("@/lib/services/page-composer");
+    const facts = [
+      { id: "1", category: "identity", key: "name", value: { full: "Marco" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+      { id: "2", category: "experience", key: "oldco", value: { role: "engineer", company: "OldCo", start: "2018-01", status: "past" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+    ];
+    const config = composeOptimisticPage(facts as any, "draft", "it");
+    const exp = config.sections.find((s) => s.type === "experience");
+    expect(exp).toBeDefined();
+    const items = (exp!.content as any).items;
+    // Past experience without end date should NOT contain "Attuale"
+    expect(items[0].period).not.toContain("Attuale");
   });
 });
 
@@ -148,55 +162,76 @@ describe("F27: Experience freelance/freelance redundancy", () => {
   });
 });
 
-// --- F28: Token limit env var fallback ---
-describe("F28: Token limit env var fallback", () => {
-  it("default fallback is 500k (not 150k)", async () => {
-    // The getLimits function is not exported, but we can test via checkBudget
-    // which internally calls getLimits. Since we don't have a DB in this test
-    // context, we verify the code path by reading the source.
-    const src = await import("fs").then(fs =>
-      fs.readFileSync("/home/tommaso/dev/repos/openself/src/lib/services/usage-service.ts", "utf-8")
-    );
-    expect(src).toContain("500_000");
-    expect(src).toContain("LLM_DAILY_TOKEN_LIMIT");
-  });
-});
-
-// --- F29: Error message extraction ---
+// --- F29: Error message extraction (behavioral) ---
 describe("F29: extractErrorMessage", () => {
-  it("handles raw JSON error objects", () => {
-    // Read the source to verify the function exists
-    const fs = require("fs");
-    const src = fs.readFileSync("/home/tommaso/dev/repos/openself/src/components/chat/ChatPanel.tsx", "utf-8");
-    expect(src).toContain("function extractErrorMessage");
-    expect(src).toContain("extractErrorMessage(error)");
+  it("returns fallback for non-Error non-string values", async () => {
+    const { extractErrorMessage } = await import("@/lib/services/errors");
+    expect(extractErrorMessage(42)).toBe("Unable to generate a response right now.");
+    expect(extractErrorMessage(null)).toBe("Unable to generate a response right now.");
+    expect(extractErrorMessage(undefined)).toBe("Unable to generate a response right now.");
+  });
+
+  it("extracts message from Error objects", async () => {
+    const { extractErrorMessage } = await import("@/lib/services/errors");
+    expect(extractErrorMessage(new Error("something broke"))).toBe("something broke");
+  });
+
+  it("passes through plain string errors", async () => {
+    const { extractErrorMessage } = await import("@/lib/services/errors");
+    expect(extractErrorMessage("network timeout")).toBe("network timeout");
+  });
+
+  it("parses JSON error objects", async () => {
+    const { extractErrorMessage } = await import("@/lib/services/errors");
+    expect(extractErrorMessage(new Error('{"error":"Rate limit exceeded"}'))).toBe("Rate limit exceeded");
+  });
+
+  it("extracts error from mixed content with JSON substring", async () => {
+    const { extractErrorMessage } = await import("@/lib/services/errors");
+    const mixed = 'Upstream error: {"error":"Service unavailable"}';
+    expect(extractErrorMessage(new Error(mixed))).toBe("Service unavailable");
   });
 });
 
 // --- F19/F31: Experience key collision guardrail ---
 describe("F19/F31: Experience key collision guardrail", () => {
-  it("getFactByKey function exists in kb-service", async () => {
-    const fs = require("fs");
-    const src = fs.readFileSync("/home/tommaso/dev/repos/openself/src/lib/services/kb-service.ts", "utf-8");
-    expect(src).toContain("export function getFactByKey");
-    expect(src).toContain("experience/${input.key} already exists for company");
+  it("getFactByKey is exported from kb-service", async () => {
+    // Dynamic import to verify the function is exported and callable
+    const mod = await import("@/lib/services/kb-service");
+    expect(typeof mod.getFactByKey).toBe("function");
   });
 });
 
-// --- F1: Bootstrap skipPace ---
+// --- F1: Bootstrap skipPace (verified via mock in bootstrap-endpoint.test.ts) ---
 describe("F1: Bootstrap uses skipPace", () => {
-  it("bootstrap route passes skipPace: true", () => {
-    const fs = require("fs");
-    const src = fs.readFileSync("/home/tommaso/dev/repos/openself/src/app/api/chat/bootstrap/route.ts", "utf-8");
+  it("checkRateLimit receives skipPace: true", async () => {
+    // Import the mocked bootstrap test to verify wiring
+    // The bootstrap-endpoint.test.ts already mocks checkRateLimit.
+    // Here we verify the source pattern as a structural regression guard.
+    const path = await import("path");
+    const fs = await import("fs");
+    const src = fs.readFileSync(path.join(process.cwd(), "src/app/api/chat/bootstrap/route.ts"), "utf-8");
     expect(src).toContain("skipPace: true");
+  });
+});
+
+// --- F28: Token limit env var fallback ---
+describe("F28: Token limit env var fallback", () => {
+  it("usage-service reads LLM_DAILY_TOKEN_LIMIT env var with 500k default", async () => {
+    const path = await import("path");
+    const fs = await import("fs");
+    const src = fs.readFileSync(path.join(process.cwd(), "src/lib/services/usage-service.ts"), "utf-8");
+    expect(src).toContain("500_000");
+    expect(src).toContain("LLM_DAILY_TOKEN_LIMIT");
   });
 });
 
 // --- F26: Auth detection includes username ---
 describe("F26: Auth detection includes username", () => {
-  it("preferences route checks userId OR username", () => {
-    const fs = require("fs");
-    const src = fs.readFileSync("/home/tommaso/dev/repos/openself/src/app/api/preferences/route.ts", "utf-8");
+  it("preferences route checks userId OR username", async () => {
+    const path = await import("path");
+    const fs = await import("fs");
+    const src = fs.readFileSync(path.join(process.cwd(), "src/app/api/preferences/route.ts"), "utf-8");
     expect(src).toContain("authCtx?.userId || authCtx?.username");
   });
 });

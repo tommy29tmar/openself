@@ -811,10 +811,11 @@ function buildExperienceSection(experienceFacts: FactRow[], language: string): S
       const start = str(v.start);
       const end = str(v.end);
       const l10n = getL10n(language);
+      const isCurrent = v.status === "current" || v.current === true;
       if (start) {
         const startFormatted = formatFactDate(start, language);
-        const endFormatted = end ? formatFactDate(end, language) : l10n.currentLabel;
-        item.period = `${startFormatted} – ${endFormatted}`;
+        const endFormatted = end ? formatFactDate(end, language) : (isCurrent ? l10n.currentLabel : null);
+        item.period = endFormatted ? `${startFormatted} – ${endFormatted}` : startFormatted;
       } else if (rawPeriod) {
         item.period = rawPeriod;
       }

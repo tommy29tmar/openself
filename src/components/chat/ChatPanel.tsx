@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import type { AuthState } from "@/app/builder/page";
+import { extractErrorMessage } from "@/lib/services/errors";
 
 /**
  * Welcome messages for first-time visitors.
@@ -565,19 +566,6 @@ export function ChatPanel({ language = "en", authV2 = false, authState, initialB
       authState={authState}
     />
   );
-}
-
-function extractErrorMessage(error: unknown): string {
-  const fallback = "Unable to generate a response right now.";
-  const raw = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed?.error === "string") return parsed.error;
-  } catch { /* not JSON */ }
-  const jsonMatch = raw.match(/\{[^}]*"error"\s*:\s*"([^"]+)"/);
-  if (jsonMatch?.[1]) return jsonMatch[1];
-  return raw;
 }
 
 function ChatPanelInner({
