@@ -22,6 +22,22 @@ describe("F24: stripFreelanceFromRole", () => {
     const matches = text.toLowerCase().match(/freelance/g);
     expect(matches?.length).toBe(1);
   });
+
+  it("handles role that is purely 'freelance' without malformed output", async () => {
+    const mod = await import("@/lib/services/page-composer");
+    const facts = [
+      { id: "1", category: "identity", key: "name", value: { full: "Marco" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+      { id: "2", category: "identity", key: "role", value: { role: "freelance" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+      { id: "3", category: "identity", key: "company", value: { company: "Freelance" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+    ];
+    const config = mod.composeOptimisticPage(facts as any, "draft", "en");
+    const bio = config.sections.find((s) => s.type === "bio");
+    expect(bio).toBeDefined();
+    const text = (bio!.content as any).text as string;
+    // Should not have trailing space before period or double spaces
+    expect(text).not.toMatch(/\s\./);
+    expect(text).not.toMatch(/  /);
+  });
 });
 
 // --- F3 + F16: Italian passionateAbout ---
@@ -141,7 +157,9 @@ describe("F17/F22: Website platform localized", () => {
     const links = (hero!.content as any).socialLinks ?? [];
     const websiteLink = links.find((l: any) => l.url?.includes("marco.dev"));
     expect(websiteLink).toBeDefined();
-    expect(websiteLink.platform).toBe("Sito Web");
+    // Platform stays canonical for icon lookup; label is localized for display
+    expect(websiteLink.platform).toBe("website");
+    expect(websiteLink.label).toBe("Sito Web");
   });
 
   it("localizes 'website' from social facts too", async () => {
@@ -156,7 +174,8 @@ describe("F17/F22: Website platform localized", () => {
     const links = (hero!.content as any).socialLinks ?? [];
     const websiteLink = links.find((l: any) => l.url?.includes("marco.dev"));
     expect(websiteLink).toBeDefined();
-    expect(websiteLink.platform).toBe("Sito Web");
+    expect(websiteLink.platform).toBe("website");
+    expect(websiteLink.label).toBe("Sito Web");
   });
 });
 

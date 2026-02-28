@@ -462,15 +462,15 @@ function buildHeroSection(
   const finalName = heroName ?? l.welcomeTagline("").replace(/,?\s*$/, "").trim();
 
   // ContactBar data (injected from social, contact, language facts)
-  const socialLinks: { platform: string; url: string }[] = [];
+  const socialLinks: { platform: string; url: string; label?: string }[] = [];
   const t = getUiL10n(language);
   for (const f of socialFacts ?? []) {
     const v = val(f);
-    let platform = str(v.platform) ?? str(v.name) ?? f.key;
+    const platform = str(v.platform) ?? str(v.name) ?? f.key;
     const url = str(v.url) ?? str(v.link);
-    // Localize "website" platform label from social facts (same as contact branch)
-    if (platform && /^website$/i.test(platform)) platform = t.platformWebsite;
-    if (platform && url) socialLinks.push({ platform, url });
+    // Localize "website" display label; keep platform canonical for icon lookup
+    const label = platform && /^website$/i.test(platform) ? t.platformWebsite : undefined;
+    if (platform && url) socialLinks.push({ platform, url, ...(label && { label }) });
   }
 
   // Include website-type contact facts in hero social links
@@ -479,7 +479,7 @@ function buildHeroSection(
     if (str(v.type) === "website") {
       const url = str(v.value) ?? str(v.url);
       if (url) {
-        socialLinks.push({ platform: t.platformWebsite, url: url.startsWith("http") ? url : `https://${url}` });
+        socialLinks.push({ platform: "website", label: t.platformWebsite, url: url.startsWith("http") ? url : `https://${url}` });
       }
     }
   }
@@ -573,7 +573,13 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
   const isFreelance = company ? FREELANCE_MARKERS.has(company.toLowerCase()) : false;
 
   if (role && isFreelance) {
-    parts.push(l.bioRoleFreelanceFirstPerson(lowerRole(stripFreelanceFromRole(role), language)));
+    const stripped = stripFreelanceFromRole(role);
+    if (stripped) {
+      parts.push(l.bioRoleFreelanceFirstPerson(lowerRole(stripped, language)));
+    } else {
+      // Role was purely a freelance marker (e.g. "freelance") — use generic freelance bio
+      parts.push(l.bioRoleFirstPerson(lowerRole(role, language)));
+    }
   } else if (role && company) {
     parts.push(l.bioRoleAtFirstPerson(lowerRole(role, language), company));
   } else if (role) {
@@ -1148,7 +1154,7 @@ function groupSkillsByDomain(skillNames: string[], language: string): { domain: 
   };
 
   const result = Object.entries(groups).map(([domain, skills]) => ({
-    domain: (t as any)[DOMAIN_L10N_KEY[domain] ?? "domainOther"] ?? domain,
+    domain: t[DOMAIN_L10N_KEY[domain] ?? "domainOther"] ?? domain,
     skills,
     showLabel: true,
   }));

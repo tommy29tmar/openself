@@ -138,14 +138,14 @@ export function SplitView({
           setBootstrapData(bootstrap);
           setChatInitialMessages(msgs);
         }
-      } catch {
-        // defaults remain: null bootstrap, empty messages
+      } catch (err) {
+        console.warn("[SplitView] chat data prefetch failed:", err);
       } finally {
         if (!cancelled) setChatDataReady(true);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [language]);
 
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
   const [configHash, setConfigHash] = useState<string | null>(null);
