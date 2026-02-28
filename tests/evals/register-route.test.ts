@@ -50,6 +50,12 @@ vi.mock("@/lib/flags", () => ({
   AUTH_V2: true,
 }));
 
+const { MockProfileAlreadyLinkedError } = vi.hoisted(() => ({
+  MockProfileAlreadyLinkedError: class ProfileAlreadyLinkedError extends Error {
+    constructor() { super("Profile already linked to a different user"); }
+  },
+}));
+
 vi.mock("@/lib/services/auth-service", () => ({
   getUserByEmail: (email: string) => mockUsers[email.toLowerCase()] ?? null,
   verifyPassword: async (hash: string, password: string) => hash === `hash:${password}`,
@@ -57,17 +63,13 @@ vi.mock("@/lib/services/auth-service", () => ({
   linkProfileToUser: (profileId: string, userId: string) => {
     const profile = mockProfiles[profileId];
     if (profile && profile.userId !== null && profile.userId !== userId) {
-      const err = new Error("Profile already linked to a different user");
-      err.name = "ProfileAlreadyLinkedError";
-      throw err;
+      throw new MockProfileAlreadyLinkedError();
     }
     if (profile) profile.userId = userId;
   },
   getProfileById: (id: string) => mockProfiles[id] ?? null,
   createAuthSession: () => "new-sess-1",
-  ProfileAlreadyLinkedError: class ProfileAlreadyLinkedError extends Error {
-    constructor() { super("Profile already linked to a different user"); }
-  },
+  ProfileAlreadyLinkedError: MockProfileAlreadyLinkedError,
 }));
 
 vi.mock("@/lib/middleware/rate-limit", () => ({

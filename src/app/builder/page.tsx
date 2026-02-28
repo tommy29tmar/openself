@@ -113,6 +113,7 @@ export default function BuilderPage() {
             username: data.username ?? null,
             multiUser: !!data.multiUser,
             publishedUsername: data.publishedUsername ?? null,
+            authV2: !!data.authV2,
           });
           setPublishedConfigHash(data.publishedConfigHash ?? null);
         }

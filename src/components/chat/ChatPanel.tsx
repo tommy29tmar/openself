@@ -424,7 +424,7 @@ function ChatPanelLoading() {
   );
 }
 
-export function ChatPanel({ language = "en", authV2 = false, authState, initialBootstrap, initialMessages: propMessages, disableInitialFetch }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = true, authState, initialBootstrap, initialMessages: propMessages, disableInitialFetch }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
     getWelcomeMessage(language),
   ]);
