@@ -51,6 +51,7 @@ type L10nStrings = {
   bioRole: (name: string, role: string) => string;
   bioRoleAtFirstPerson: (role: string, company: string) => string;
   bioRoleFirstPerson: (role: string) => string;
+  bioRoleFreelanceFirstPerson: (role: string) => string;
   passionateAbout: (items: string) => string;
   skillsLabel: string;
   interestsLabel: string;
@@ -80,6 +81,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} is a ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `I am a ${role} at ${company}.`,
     bioRoleFirstPerson: (role) => `I am a ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `I am a freelance ${role}.`,
     passionateAbout: (items) => `Passionate about ${items}.`,
     skillsLabel: "Skills",
     interestsLabel: "Interests",
@@ -107,6 +109,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} è ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Sono ${role} presso ${company}.`,
     bioRoleFirstPerson: (role) => `Sono ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `Sono ${role} freelance.`,
     passionateAbout: (items) => `Mi occupo di ${items}.`,
     skillsLabel: "Competenze",
     interestsLabel: "Interessi",
@@ -134,6 +137,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} ist ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Ich bin ${role} bei ${company}.`,
     bioRoleFirstPerson: (role) => `Ich bin ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `Ich bin freiberufliche/r ${role}.`,
     passionateAbout: (items) => `Begeistert von ${items}.`,
     skillsLabel: "Fähigkeiten",
     interestsLabel: "Interessen",
@@ -161,6 +165,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} est ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Je suis ${role} chez ${company}.`,
     bioRoleFirstPerson: (role) => `Je suis ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `Je suis ${role} freelance.`,
     passionateAbout: (items) => `Passionné(e) par ${items}.`,
     skillsLabel: "Compétences",
     interestsLabel: "Intérêts",
@@ -188,6 +193,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} es ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Soy ${role} en ${company}.`,
     bioRoleFirstPerson: (role) => `Soy ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `Soy ${role} freelance.`,
     passionateAbout: (items) => `Apasionado/a por ${items}.`,
     skillsLabel: "Habilidades",
     interestsLabel: "Intereses",
@@ -215,6 +221,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name} é ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Sou ${role} na ${company}.`,
     bioRoleFirstPerson: (role) => `Sou ${role}.`,
+    bioRoleFreelanceFirstPerson: (role) => `Sou ${role} freelancer.`,
     passionateAbout: (items) => `Apaixonado/a por ${items}.`,
     skillsLabel: "Competências",
     interestsLabel: "Interesses",
@@ -242,6 +249,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name}は${role}です。`,
     bioRoleAtFirstPerson: (role, company) => `${company}で${role}をしています。`,
     bioRoleFirstPerson: (role) => `${role}をしています。`,
+    bioRoleFreelanceFirstPerson: (role) => `フリーランスの${role}です。`,
     passionateAbout: (items) => `${items}に情熱を注いでいます。`,
     skillsLabel: "スキル",
     interestsLabel: "興味",
@@ -269,6 +277,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRole: (name, role) => `${name}是${role}。`,
     bioRoleAtFirstPerson: (role, company) => `我是${company}的${role}。`,
     bioRoleFirstPerson: (role) => `我是${role}。`,
+    bioRoleFreelanceFirstPerson: (role) => `我是自由职业${role}。`,
     passionateAbout: (items) => `热衷于${items}。`,
     skillsLabel: "技能",
     interestsLabel: "兴趣",
@@ -329,6 +338,12 @@ function lowerRole(role: string, language: string): string {
   if (role.length === 0) return role;
   return role[0].toLowerCase() + role.slice(1);
 }
+
+const FREELANCE_MARKERS = new Set([
+  "freelance", "self-employed", "independent", "freelancer",
+  "indépendant", "selbstständig", "autónomo", "libero professionista",
+  "autonomo", "indipendente",
+]);
 
 function buildHeroSection(
   identityFacts: FactRow[],
@@ -509,7 +524,11 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
   const parts: string[] = [];
   
   // Try first-person if name is already in Hero
-  if (role && company) {
+  const isFreelance = company ? FREELANCE_MARKERS.has(company.toLowerCase()) : false;
+
+  if (role && isFreelance) {
+    parts.push(l.bioRoleFreelanceFirstPerson(lowerRole(role, language)));
+  } else if (role && company) {
     parts.push(l.bioRoleAtFirstPerson(lowerRole(role, language), company));
   } else if (role) {
     parts.push(l.bioRoleFirstPerson(lowerRole(role, language)));
