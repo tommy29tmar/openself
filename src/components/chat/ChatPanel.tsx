@@ -713,7 +713,7 @@ function ChatPanelInner({
     } finally {
       setRegistering(false);
     }
-  }, [registerUsername, registerEmail, registerPassword, authV2]);
+  }, [registerUsername, registerEmail, registerPassword, authV2, t]);
 
   const handleRequestPublish = useCallback(async (usernameOverride?: string) => {
     setRequestingPublish(true);
@@ -737,7 +737,7 @@ function ChatPanelInner({
     } finally {
       setRequestingPublish(false);
     }
-  }, []);
+  }, [t]);
 
   return (
     <div className="flex h-full flex-col">

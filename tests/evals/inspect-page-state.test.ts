@@ -158,7 +158,7 @@ function makeDraft(overrides?: any) {
       sections: [
         { id: "hero-1", type: "hero", content: { name: "Test" } },
         { id: "bio-1", type: "bio", content: { text: "Hello" } },
-        { id: "skills-1", type: "skills", widget: "skills-chips", content: { groups: [] } },
+        { id: "skills-1", type: "skills", widgetId: "skills-chips", content: { groups: [] } },
         { id: "footer-1", type: "footer", content: {} },
       ],
       ...overrides?.config,

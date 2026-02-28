@@ -190,4 +190,15 @@ describe("register route", () => {
     expect(mockRegisterCalled).toBe(true);
     expect(mockRegisterCalledWith).toContain("test-user");
   });
+
+  it("returns EMAIL_TAKEN when linkProfileToUser throws ProfileAlreadyLinkedError", async () => {
+    // New user (not in mockUsers), but profile already linked to a different user.
+    // linkProfileToUser is called inside the transaction and throws.
+    mockProfiles["prof-1"] = { id: "prof-1", userId: "user-other", username: null };
+
+    const res = await POST(makeRequest({ username: "test-user", email: "brand-new@b.com", password: "12345678" }));
+    const data = await res.json();
+    expect(res.status).toBe(409);
+    expect(data.code).toBe("EMAIL_TAKEN");
+  });
 });
