@@ -147,7 +147,7 @@ describe("auto-recompose after fact mutations", () => {
   });
 
   it("recomposes draft after create_fact using projectCanonicalConfig", async () => {
-    mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma" });
+    mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma", visibility: "proposed" });
     const tools = createAgentTools("it", "sess1");
     const result = await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },
@@ -160,7 +160,7 @@ describe("auto-recompose after fact mutations", () => {
   });
 
   it("passes DraftMeta to projectCanonicalConfig for order/lock preservation", async () => {
-    mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma" });
+    mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma", visibility: "proposed" });
     const tools = createAgentTools("it", "sess1");
     await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },
@@ -177,7 +177,7 @@ describe("auto-recompose after fact mutations", () => {
   });
 
   it("recomposes draft after update_fact", async () => {
-    mockUpdateFact.mockReturnValue(true);
+    mockUpdateFact.mockReturnValue({ id: "f1", category: "identity", key: "name", visibility: "public" });
     const tools = createAgentTools("it", "sess1");
     const result = await tools.update_fact.execute(
       { factId: "f1", value: { name: "Elena Rossi" } },
@@ -214,7 +214,7 @@ describe("auto-recompose after fact mutations", () => {
   it("skips upsertDraft when computeConfigHash matches draft.configHash", async () => {
     // Make computeConfigHash return the SAME hash as the existing draft
     vi.mocked(computeConfigHash).mockReturnValue("old-hash");
-    mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma" });
+    mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma", visibility: "proposed" });
     const tools = createAgentTools("it", "sess1");
     await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },

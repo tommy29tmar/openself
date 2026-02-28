@@ -134,7 +134,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           value,
           confidence,
         }, sessionId);
+        let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
         return {
@@ -142,6 +144,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           factId: fact.id,
           category: fact.category,
           key: fact.key,
+          visibility: fact.visibility,
+          pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
+          recomposeOk,
         };
       } catch (error) {
         if (error instanceof FactValidationError) {
@@ -170,10 +175,18 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       try {
         const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
+        let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
-        return { success: true, factId: fact.id };
+        return {
+          success: true,
+          factId: fact.id,
+          visibility: fact.visibility,
+          pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
+          recomposeOk,
+        };
       } catch (error) {
         if (error instanceof FactValidationError) {
           return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
@@ -197,12 +210,14 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     execute: async ({ factId }) => {
       try {
         const deleted = deleteFact(factId, sessionId, readKeys);
+        let recomposeOk = true;
         if (deleted) {
           try { recomposeAfterMutation(); } catch (e) {
+            recomposeOk = false;
             console.warn("[tools] recomposeAfterMutation failed:", e);
           }
         }
-        return { success: deleted };
+        return { success: deleted, recomposeOk };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",

@@ -70,7 +70,9 @@ When extracting facts:
   - Rule of thumb: if the user describes *doing* something regularly → activity. If they describe *liking* something → interest
 - Set confidence based on how explicit the information was (1.0 = stated directly, 0.7 = implied, 0.5 = vague mention)
 - Choose clear, unique keys within each category (e.g., key="typescript" for a skill)
-- CRITICAL: create_fact requires "value" — always pass a value object. Example: create_fact({category: "identity", key: "name", value: {full: "Marco Rossi"}}). Never omit "value".`;
+- CRITICAL: create_fact requires "value" — always pass a value object. Example: create_fact({category: "identity", key: "name", value: {full: "Marco Rossi"}}). Never omit "value".
+- When create_fact returns pageVisible: false, inform the user the fact is saved but not yet visible on the page. Use set_fact_visibility(factId, "proposed") to make it visible.
+- When recomposeOk: false is returned, tell the user there was an issue refreshing the preview and suggest calling generate_page to rebuild.`;
 
 const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact and update_fact):
 
