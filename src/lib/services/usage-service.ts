@@ -112,9 +112,12 @@ function getLimits() {
     .where(eq(llmLimits.id, "main"))
     .get();
 
+  const envRaw = process.env.LLM_DAILY_TOKEN_LIMIT;
+  const envLimit = envRaw && /^\d+$/.test(envRaw) ? parseInt(envRaw, 10) : undefined;
+
   // Return defaults if no row exists
   return {
-    dailyTokenLimit: row?.dailyTokenLimit ?? 150_000,
+    dailyTokenLimit: row?.dailyTokenLimit ?? envLimit ?? 500_000,
     dailyCostWarningUsd: row?.dailyCostWarningUsd ?? 1.0,
     dailyCostHardLimitUsd: row?.dailyCostHardLimitUsd ?? 2.0,
     hardStop: row?.hardStop ?? true,

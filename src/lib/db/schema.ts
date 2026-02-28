@@ -333,7 +333,7 @@ export const llmUsageDaily = sqliteTable(
 
 export const llmLimits = sqliteTable("llm_limits", {
   id: text("id").primaryKey().default("main"),
-  dailyTokenLimit: integer("daily_token_limit").default(150000),
+  dailyTokenLimit: integer("daily_token_limit").default(500000),
   monthlyCostLimitUsd: real("monthly_cost_limit_usd").default(25.0),
   dailyCostWarningUsd: real("daily_cost_warning_usd").default(1.0),
   dailyCostHardLimitUsd: real("daily_cost_hard_limit_usd").default(2.0),

@@ -70,6 +70,27 @@ export interface UiStrings {
   accept: string;
   reject: string;
   acceptAll: string;
+
+  // Activity frequencies
+  freqDaily: string;
+  freqWeekly: string;
+  freqMonthly: string;
+  freqBiweekly: string;
+  freqFrequent: string;
+  freqRegularly: string;
+  freqOccasionally: string;
+
+  // Skill domains
+  domainFrontend: string;
+  domainBackend: string;
+  domainInfra: string;
+  domainLanguages: string;
+  domainAiMl: string;
+  domainDesign: string;
+  domainOther: string;
+
+  // Platform labels
+  platformWebsite: string;
 }
 
 const en: UiStrings = {
@@ -122,6 +143,21 @@ const en: UiStrings = {
   accept: "Accept",
   reject: "Reject",
   acceptAll: "Accept all",
+  freqDaily: "daily",
+  freqWeekly: "weekly",
+  freqMonthly: "monthly",
+  freqBiweekly: "biweekly",
+  freqFrequent: "frequently",
+  freqRegularly: "regularly",
+  freqOccasionally: "occasionally",
+  domainFrontend: "Frontend",
+  domainBackend: "Backend",
+  domainInfra: "Infra",
+  domainLanguages: "Languages",
+  domainAiMl: "AI/ML",
+  domainDesign: "Design",
+  domainOther: "Other",
+  platformWebsite: "Website",
 };
 
 const it: UiStrings = {
@@ -174,6 +210,21 @@ const it: UiStrings = {
   accept: "Accetta",
   reject: "Rifiuta",
   acceptAll: "Accetta tutti",
+  freqDaily: "giornalmente",
+  freqWeekly: "settimanalmente",
+  freqMonthly: "mensilmente",
+  freqBiweekly: "bisettimanalmente",
+  freqFrequent: "frequentemente",
+  freqRegularly: "regolarmente",
+  freqOccasionally: "occasionalmente",
+  domainFrontend: "Frontend",
+  domainBackend: "Backend",
+  domainInfra: "Infra",
+  domainLanguages: "Linguaggi",
+  domainAiMl: "AI/ML",
+  domainDesign: "Design",
+  domainOther: "Altro",
+  platformWebsite: "Sito Web",
 };
 
 const de: UiStrings = {
@@ -226,6 +277,21 @@ const de: UiStrings = {
   accept: "Annehmen",
   reject: "Ablehnen",
   acceptAll: "Alle annehmen",
+  freqDaily: "täglich",
+  freqWeekly: "wöchentlich",
+  freqMonthly: "monatlich",
+  freqBiweekly: "zweiwöchentlich",
+  freqFrequent: "häufig",
+  freqRegularly: "regelmäßig",
+  freqOccasionally: "gelegentlich",
+  domainFrontend: "Frontend",
+  domainBackend: "Backend",
+  domainInfra: "Infra",
+  domainLanguages: "Sprachen",
+  domainAiMl: "KI/ML",
+  domainDesign: "Design",
+  domainOther: "Sonstige",
+  platformWebsite: "Webseite",
 };
 
 const fr: UiStrings = {
@@ -278,6 +344,21 @@ const fr: UiStrings = {
   accept: "Accepter",
   reject: "Rejeter",
   acceptAll: "Tout accepter",
+  freqDaily: "quotidiennement",
+  freqWeekly: "hebdomadaire",
+  freqMonthly: "mensuel",
+  freqBiweekly: "bimensuel",
+  freqFrequent: "fréquemment",
+  freqRegularly: "régulièrement",
+  freqOccasionally: "occasionnellement",
+  domainFrontend: "Frontend",
+  domainBackend: "Backend",
+  domainInfra: "Infra",
+  domainLanguages: "Langages",
+  domainAiMl: "IA/ML",
+  domainDesign: "Design",
+  domainOther: "Autre",
+  platformWebsite: "Site Web",
 };
 
 const es: UiStrings = {
@@ -330,6 +411,21 @@ const es: UiStrings = {
   accept: "Aceptar",
   reject: "Rechazar",
   acceptAll: "Aceptar todo",
+  freqDaily: "diariamente",
+  freqWeekly: "semanalmente",
+  freqMonthly: "mensualmente",
+  freqBiweekly: "quincenal",
+  freqFrequent: "frecuentemente",
+  freqRegularly: "regularmente",
+  freqOccasionally: "ocasionalmente",
+  domainFrontend: "Frontend",
+  domainBackend: "Backend",
+  domainInfra: "Infra",
+  domainLanguages: "Lenguajes",
+  domainAiMl: "IA/ML",
+  domainDesign: "Diseño",
+  domainOther: "Otros",
+  platformWebsite: "Sitio Web",
 };
 
 const pt: UiStrings = {
@@ -382,6 +478,21 @@ const pt: UiStrings = {
   accept: "Aceitar",
   reject: "Rejeitar",
   acceptAll: "Aceitar tudo",
+  freqDaily: "diariamente",
+  freqWeekly: "semanalmente",
+  freqMonthly: "mensalmente",
+  freqBiweekly: "quinzenalmente",
+  freqFrequent: "frequentemente",
+  freqRegularly: "regularmente",
+  freqOccasionally: "ocasionalmente",
+  domainFrontend: "Frontend",
+  domainBackend: "Backend",
+  domainInfra: "Infra",
+  domainLanguages: "Linguagens",
+  domainAiMl: "IA/ML",
+  domainDesign: "Design",
+  domainOther: "Outros",
+  platformWebsite: "Site",
 };
 
 const ja: UiStrings = {
@@ -434,6 +545,21 @@ const ja: UiStrings = {
   accept: "承認",
   reject: "却下",
   acceptAll: "すべて承認",
+  freqDaily: "毎日",
+  freqWeekly: "毎週",
+  freqMonthly: "毎月",
+  freqBiweekly: "隔週",
+  freqFrequent: "頻繁に",
+  freqRegularly: "定期的に",
+  freqOccasionally: "時々",
+  domainFrontend: "フロントエンド",
+  domainBackend: "バックエンド",
+  domainInfra: "インフラ",
+  domainLanguages: "言語",
+  domainAiMl: "AI/ML",
+  domainDesign: "デザイン",
+  domainOther: "その他",
+  platformWebsite: "ウェブサイト",
 };
 
 const zh: UiStrings = {
@@ -486,6 +612,21 @@ const zh: UiStrings = {
   accept: "接受",
   reject: "拒绝",
   acceptAll: "全部接受",
+  freqDaily: "每天",
+  freqWeekly: "每周",
+  freqMonthly: "每月",
+  freqBiweekly: "每两周",
+  freqFrequent: "频繁",
+  freqRegularly: "定期",
+  freqOccasionally: "偶尔",
+  domainFrontend: "前端",
+  domainBackend: "后端",
+  domainInfra: "基础设施",
+  domainLanguages: "编程语言",
+  domainAiMl: "AI/ML",
+  domainDesign: "设计",
+  domainOther: "其他",
+  platformWebsite: "网站",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };

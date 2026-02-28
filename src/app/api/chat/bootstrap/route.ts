@@ -10,7 +10,7 @@ import { checkRateLimit } from "@/lib/middleware/rate-limit";
 
 export async function GET(req: Request) {
   // Rate limiting (same as POST /api/chat)
-  const rateResult = checkRateLimit(req);
+  const rateResult = checkRateLimit(req, { skipPace: true });
   if (!rateResult.allowed) {
     return new Response(
       JSON.stringify({ error: rateResult.reason }),

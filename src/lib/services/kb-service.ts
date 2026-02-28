@@ -84,6 +84,36 @@ export async function createFact(
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
 
+  // Experience key collision guardrail: prevent accidental data loss
+  if (normalized.canonical === "experience") {
+    const existing = getFactByKey(sessionId, normalized.canonical, input.key);
+    if (existing) {
+      let existingVal: Record<string, unknown> | null = null;
+      let newVal: Record<string, unknown> | null = null;
+      try {
+        existingVal = typeof existing.value === "string" ? JSON.parse(existing.value) : (existing.value as Record<string, unknown>);
+      } catch { /* corrupt stored value */ }
+      try {
+        newVal = typeof input.value === "string" ? JSON.parse(input.value as string) : (input.value as Record<string, unknown>);
+      } catch { /* invalid input */ }
+
+      if (!existingVal || !newVal) {
+        throw new Error(
+          `Fact experience/${input.key} already exists but value could not be compared. ` +
+          `Use update_fact to modify the existing entry, or use a different key.`
+        );
+      }
+      const existingCompany = String(existingVal.company ?? "").toLowerCase();
+      const newCompany = String(newVal.company ?? "").toLowerCase();
+      if (existingCompany && newCompany && existingCompany !== newCompany) {
+        throw new Error(
+          `Fact experience/${input.key} already exists for company '${existingVal.company}'. ` +
+          `Use a different key or use update_fact to modify the existing entry.`
+        );
+      }
+    }
+  }
+
   const visibility = initialVisibility({
     mode: "onboarding",
     category: normalized.canonical,
@@ -276,6 +306,15 @@ export function getFactsByCategory(category: string, sessionId: string = "__defa
     .from(facts)
     .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
     .all() as FactRow[];
+}
+
+/** Exact lookup by session + category + key triple. */
+export function getFactByKey(sessionId: string, category: string, key: string): FactRow | undefined {
+  return db
+    .select()
+    .from(facts)
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
+    .get() as FactRow | undefined;
 }
 
 /**

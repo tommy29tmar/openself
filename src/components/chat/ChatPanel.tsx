@@ -381,6 +381,9 @@ type ChatPanelProps = {
   /** When true, show email + password fields in the signup form */
   authV2?: boolean;
   authState?: AuthState;
+  initialBootstrap?: Record<string, unknown> | null;
+  initialMessages?: Array<{id: string; role: string; content: string}>;
+  disableInitialFetch?: boolean;
 };
 
 type StoredMessage = {
@@ -418,13 +421,37 @@ function ChatPanelLoading() {
   );
 }
 
-export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = false, authState, initialBootstrap, initialMessages: propMessages, disableInitialFetch }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
     getWelcomeMessage(language),
   ]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   useEffect(() => {
+    if (disableInitialFetch) {
+      // Use pre-fetched data from parent
+      const bootstrap = initialBootstrap as BootstrapResponse | null;
+      const smartWelcome = getSmartWelcomeMessage(language, bootstrap);
+
+      const restoredMessages: StoredMessage[] = (propMessages ?? [])
+        .filter((m): m is {id: string; role: string; content: string} =>
+          (m.role === "user" || m.role === "assistant"))
+        .map((m) => ({ id: m.id, role: m.role as StoredMessage["role"], content: m.content }));
+
+      if (restoredMessages.length === 0) {
+        setInitialMessages([smartWelcome]);
+      } else {
+        const allWelcomes = new Set([
+          ...Object.values(WELCOME_MESSAGES), ...Object.values(FIRST_VISIT_WELCOME),
+          ...Object.values(RETURNING_WELCOME), ...Object.values(DRAFT_READY_WELCOME),
+        ]);
+        const hasWelcome = restoredMessages.some(m => m.role === "assistant" && allWelcomes.has(m.content));
+        setInitialMessages(hasWelcome ? restoredMessages : [smartWelcome, ...restoredMessages]);
+      }
+      setHistoryLoaded(true);
+      return;
+    }
+
     let cancelled = false;
 
     const load = async () => {
@@ -524,7 +551,7 @@ export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPa
     return () => {
       cancelled = true;
     };
-  }, [language]);
+  }, [language, disableInitialFetch, initialBootstrap, propMessages]);
 
   if (!historyLoaded) {
     return <ChatPanelLoading />;
@@ -538,6 +565,19 @@ export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPa
       authState={authState}
     />
   );
+}
+
+function extractErrorMessage(error: unknown): string {
+  const fallback = "Unable to generate a response right now.";
+  const raw = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.error === "string") return parsed.error;
+  } catch { /* not JSON */ }
+  const jsonMatch = raw.match(/\{[^}]*"error"\s*:\s*"([^"]+)"/);
+  if (jsonMatch?.[1]) return jsonMatch[1];
+  return raw;
 }
 
 function ChatPanelInner({
@@ -592,7 +632,7 @@ function ChatPanelInner({
           return;
         }
 
-        setChatError(error.message || "Unable to generate a response right now.");
+        setChatError(extractErrorMessage(error));
       },
     });
 

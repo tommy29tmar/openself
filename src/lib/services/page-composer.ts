@@ -116,7 +116,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRoleAtFirstPerson: (role, company) => `Sono ${role} presso ${company}.`,
     bioRoleFirstPerson: (role) => `Sono ${role}.`,
     bioRoleFreelanceFirstPerson: (role) => `Sono ${role} freelance.`,
-    passionateAbout: (items) => `Mi occupo di ${items}.`,
+    passionateAbout: (items) => `Appassionato di ${items}.`,
     skillsLabel: "Competenze",
     interestsLabel: "Interessi",
     experienceLabel: "Esperienza",
@@ -137,7 +137,7 @@ const L10N: Record<string, L10nStrings> = {
     profIntermediate: "intermedio",
     profBeginner: "principiante",
     aboutLabel: "Chi Sono",
-    interestsInto: "Appassionato/a di",
+    interestsInto: "Appassionato di",
   },
   de: {
     welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
@@ -176,7 +176,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRoleAtFirstPerson: (role, company) => `Je suis ${role} chez ${company}.`,
     bioRoleFirstPerson: (role) => `Je suis ${role}.`,
     bioRoleFreelanceFirstPerson: (role) => `Je suis ${role} freelance.`,
-    passionateAbout: (items) => `Passionné(e) par ${items}.`,
+    passionateAbout: (items) => `Passionné par ${items}.`,
     skillsLabel: "Compétences",
     interestsLabel: "Intérêts",
     experienceLabel: "Expérience",
@@ -197,7 +197,7 @@ const L10N: Record<string, L10nStrings> = {
     profIntermediate: "intermédiaire",
     profBeginner: "débutant",
     aboutLabel: "À Propos",
-    interestsInto: "Passionné(e) de",
+    interestsInto: "Passionné de",
   },
   es: {
     welcomeTagline: (name) => `Bienvenido a la página de ${name}`,
@@ -206,7 +206,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRoleAtFirstPerson: (role, company) => `Soy ${role} en ${company}.`,
     bioRoleFirstPerson: (role) => `Soy ${role}.`,
     bioRoleFreelanceFirstPerson: (role) => `Soy ${role} freelance.`,
-    passionateAbout: (items) => `Apasionado/a por ${items}.`,
+    passionateAbout: (items) => `Apasionado por ${items}.`,
     skillsLabel: "Habilidades",
     interestsLabel: "Intereses",
     experienceLabel: "Experiencia",
@@ -227,7 +227,7 @@ const L10N: Record<string, L10nStrings> = {
     profIntermediate: "intermedio",
     profBeginner: "principiante",
     aboutLabel: "Sobre Mí",
-    interestsInto: "Apasionado/a de",
+    interestsInto: "Apasionado de",
   },
   pt: {
     welcomeTagline: (name) => `Bem-vindo à página de ${name}`,
@@ -236,7 +236,7 @@ const L10N: Record<string, L10nStrings> = {
     bioRoleAtFirstPerson: (role, company) => `Sou ${role} na ${company}.`,
     bioRoleFirstPerson: (role) => `Sou ${role}.`,
     bioRoleFreelanceFirstPerson: (role) => `Sou ${role} freelancer.`,
-    passionateAbout: (items) => `Apaixonado/a por ${items}.`,
+    passionateAbout: (items) => `Apaixonado por ${items}.`,
     skillsLabel: "Competências",
     interestsLabel: "Interesses",
     experienceLabel: "Experiência",
@@ -257,7 +257,7 @@ const L10N: Record<string, L10nStrings> = {
     profIntermediate: "intermediário",
     profBeginner: "iniciante",
     aboutLabel: "Sobre Mim",
-    interestsInto: "Apaixonado/a por",
+    interestsInto: "Apaixonado por",
   },
   ja: {
     welcomeTagline: (name) => `${name}のページへようこそ`,
@@ -368,6 +368,15 @@ const FREELANCE_MARKERS = new Set([
   "autonomo", "indipendente",
 ]);
 
+/** Remove freelance-related tokens from a role string to prevent "freelance freelance" */
+function stripFreelanceFromRole(role: string): string {
+  return role
+    .split(/[\s/]+/)
+    .filter((token) => !FREELANCE_MARKERS.has(token.toLowerCase()))
+    .join(" ")
+    .trim();
+}
+
 function buildHeroSection(
   identityFacts: FactRow[],
   experienceFacts: FactRow[],
@@ -467,7 +476,8 @@ function buildHeroSection(
     if (str(v.type) === "website") {
       const url = str(v.value) ?? str(v.url);
       if (url) {
-        socialLinks.push({ platform: "website", url: url.startsWith("http") ? url : `https://${url}` });
+        const t = getUiL10n(language);
+        socialLinks.push({ platform: t.platformWebsite, url: url.startsWith("http") ? url : `https://${url}` });
       }
     }
   }
@@ -561,7 +571,7 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
   const isFreelance = company ? FREELANCE_MARKERS.has(company.toLowerCase()) : false;
 
   if (role && isFreelance) {
-    parts.push(l.bioRoleFreelanceFirstPerson(lowerRole(role, language)));
+    parts.push(l.bioRoleFreelanceFirstPerson(lowerRole(stripFreelanceFromRole(role), language)));
   } else if (role && company) {
     parts.push(l.bioRoleAtFirstPerson(lowerRole(role, language), company));
   } else if (role) {
@@ -788,8 +798,26 @@ function buildExperienceSection(experienceFacts: FactRow[], language: string): S
       const item: ExperienceItem = { title };
       const company = str(v.company) ?? str(v.organization);
       if (company) item.company = company;
-      const period = str(v.period) ?? str(v.date);
-      if (period) item.period = period;
+      // Skip redundant freelance company display (F27)
+      if (company && FREELANCE_MARKERS.has(company.toLowerCase())) {
+        const roleStr = title.toLowerCase();
+        const roleHasFreelance = [...FREELANCE_MARKERS].some(m => roleStr.includes(m));
+        if (roleHasFreelance) {
+          delete item.company;
+        }
+      }
+      // Build period from start/end dates or raw period
+      const rawPeriod = str(v.period) ?? str(v.date);
+      const start = str(v.start);
+      const end = str(v.end);
+      const l10n = getL10n(language);
+      if (start) {
+        const startFormatted = formatFactDate(start, language);
+        const endFormatted = end ? formatFactDate(end, language) : l10n.currentLabel;
+        item.period = `${startFormatted} – ${endFormatted}`;
+      } else if (rawPeriod) {
+        item.period = rawPeriod;
+      }
       const description = str(v.description);
       if (description) item.description = description;
       if (v.status === "current" || v.current === true) item.current = true;
@@ -1055,7 +1083,15 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
         item.activityType = (ACTIVITY_TYPE_L10N[activityType] ?? activityType) as ActivityItem["activityType"];
       }
       const frequency = str(v.frequency);
-      if (frequency) item.frequency = frequency;
+      if (frequency) {
+        const t = getUiL10n(language);
+        const FREQ_L10N: Record<string, string> = {
+          daily: t.freqDaily, weekly: t.freqWeekly, monthly: t.freqMonthly,
+          biweekly: t.freqBiweekly, frequent: t.freqFrequent,
+          regularly: t.freqRegularly, occasionally: t.freqOccasionally,
+        };
+        item.frequency = FREQ_L10N[frequency.toLowerCase()] ?? frequency;
+      }
       const description = str(v.description);
       if (description) item.description = description;
       return item;
@@ -1085,7 +1121,7 @@ const SKILL_DOMAINS: Record<string, string[]> = {
   "Design":    ["Figma", "Sketch", "Adobe XD"],
 };
 
-function groupSkillsByDomain(skillNames: string[]): { domain: string; skills: string[]; showLabel: boolean }[] {
+function groupSkillsByDomain(skillNames: string[], language: string): { domain: string; skills: string[]; showLabel: boolean }[] {
   const groups: Record<string, string[]> = {};
   const assigned = new Set<string>();
 
@@ -1102,7 +1138,17 @@ function groupSkillsByDomain(skillNames: string[]): { domain: string; skills: st
   const unmatched = skillNames.filter((s) => !assigned.has(s));
   if (unmatched.length > 0) groups["Other"] = unmatched;
 
-  const result = Object.entries(groups).map(([domain, skills]) => ({ domain, skills, showLabel: true }));
+  const t = getUiL10n(language);
+  const DOMAIN_L10N_KEY: Record<string, keyof typeof t> = {
+    Frontend: "domainFrontend", Backend: "domainBackend", Infra: "domainInfra",
+    Languages: "domainLanguages", "AI/ML": "domainAiMl", Design: "domainDesign", Other: "domainOther",
+  };
+
+  const result = Object.entries(groups).map(([domain, skills]) => ({
+    domain: (t as any)[DOMAIN_L10N_KEY[domain] ?? "domainOther"] ?? domain,
+    skills,
+    showLabel: true,
+  }));
   if (result.length <= 2) {
     for (const g of result) g.showLabel = false;
   }
@@ -1136,7 +1182,7 @@ function buildAtAGlanceSection(
 
   if (skills.length === 0 && stats.length === 0 && interests.length === 0) return null;
 
-  const skillGroups = skills.length > 0 ? groupSkillsByDomain(skills) : undefined;
+  const skillGroups = skills.length > 0 ? groupSkillsByDomain(skills, language) : undefined;
 
   const l = getL10n(language);
   const content: Record<string, unknown> = {

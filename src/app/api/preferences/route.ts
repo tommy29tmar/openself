@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     language: prefs.language,
     hasPage: hasAnyPage(primaryKey),
-    authenticated: !!authCtx?.userId,
+    authenticated: !!(authCtx?.userId || authCtx?.username),
     username: authCtx?.username ?? null,
     multiUser: isMultiUserEnabled(),
     publishedUsername,
