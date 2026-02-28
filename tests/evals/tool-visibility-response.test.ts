@@ -94,6 +94,7 @@ vi.mock("@/lib/services/fact-validation", () => ({
 }));
 vi.mock("@/lib/layout/contracts", () => ({
   LAYOUT_TEMPLATES: ["vertical", "sidebar-left", "bento-standard"],
+  resolveLayoutAlias: vi.fn((x: string) => x),
 }));
 vi.mock("@/lib/layout/registry", () => ({
   getLayoutTemplate: vi.fn(() => ({ id: "vertical", slots: [] })),

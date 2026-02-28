@@ -82,12 +82,14 @@ export function getNextSortOrder(sessionId: string, category: string): number {
   return (row?.maxOrder ?? -1) + 1;
 }
 
-/** NOTE: scoped to anchor session only — consistent with createFact/getNextSortOrder scoping. */
-export function updateFactSortOrder(sessionId: string, category: string, key: string, sortOrder: number): void {
-  db.update(facts)
+/** NOTE: scoped to anchor session only — consistent with createFact/getNextSortOrder scoping.
+ * Returns the number of rows updated (0 if key not found). */
+export function updateFactSortOrder(sessionId: string, category: string, key: string, sortOrder: number): number {
+  const result = db.update(facts)
     .set({ sortOrder })
     .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
     .run();
+  return result.changes;
 }
 
 // -- CRUD Operations

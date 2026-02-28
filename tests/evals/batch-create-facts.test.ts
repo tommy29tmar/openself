@@ -242,6 +242,7 @@ describe("create_facts batch tool", () => {
       factId: "f-cooking",
       key: "cooking",
       visibility: "proposed",
+      pageVisible: true,
     });
   });
 

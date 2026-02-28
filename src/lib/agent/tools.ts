@@ -179,7 +179,13 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       for (const input of inputs) {
         try {
           const fact = await createFact(input, sessionId);
-          results.push({ success: true, factId: fact.id, key: input.key, visibility: fact.visibility });
+          results.push({
+            success: true,
+            factId: fact.id,
+            key: input.key,
+            visibility: fact.visibility,
+            pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
+          });
         } catch (error) {
           results.push({ success: false, key: input.key, error: String(error) });
           logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "create_facts", key: input.key, error: String(error) } });
@@ -942,15 +948,23 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ category, orderedKeys }) => {
       try {
+        const notFound: string[] = [];
         for (let i = 0; i < orderedKeys.length; i++) {
-          updateFactSortOrder(sessionId, category, orderedKeys[i], i);
+          const changes = updateFactSortOrder(sessionId, category, orderedKeys[i], i);
+          if (changes === 0) notFound.push(orderedKeys[i]);
         }
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
-        return { success: true, category, orderedKeys, recomposeOk };
+        return {
+          success: true,
+          category,
+          orderedKeys,
+          recomposeOk,
+          ...(notFound.length > 0 && { warning: `Keys not found: ${notFound.join(", ")}` }),
+        };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",
