@@ -15,6 +15,7 @@ import {
   linkProfileToUser,
   setProfileUsername,
   createAuthSession,
+  getProfileById,
 } from "@/lib/services/auth-service";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { sqlite } from "@/lib/db";
@@ -109,6 +110,13 @@ export async function POST(req: Request) {
       const user = await createUser(email, password);
 
       const txnLink = sqlite.transaction(() => {
+        // Ensure profile row exists — invite flow creates a session but not a profile.
+        // linkProfileToUser/setProfileUsername silently update 0 rows without it.
+        if (!getProfileById(profileId)) {
+          sqlite
+            .prepare("INSERT INTO profiles (id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)")
+            .run(profileId, user.id, new Date().toISOString(), new Date().toISOString());
+        }
         linkProfileToUser(profileId, user.id);
         setProfileUsername(profileId, username);
         registerUsername(sessionId, username);
