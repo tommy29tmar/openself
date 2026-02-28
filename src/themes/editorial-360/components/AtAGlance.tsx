@@ -15,13 +15,14 @@ type SkillGroup = {
 
 type AtAGlanceContent = {
     title?: string;
+    interestsInto?: string;
     stats?: StatItem[];
     skillGroups?: SkillGroup[];
     interests?: { name: string }[];
 };
 
 export function AtAGlance({ content }: SectionProps<AtAGlanceContent>) {
-    const { title, stats, skillGroups, interests } = content;
+    const { title, interestsInto, stats, skillGroups, interests } = content;
 
     if (!stats?.length && !skillGroups?.length && !interests?.length) return null;
 
@@ -83,7 +84,7 @@ export function AtAGlance({ content }: SectionProps<AtAGlanceContent>) {
             {/* Interests */}
             {interests && interests.length > 0 && (
                 <p className="text-base font-light text-[var(--page-fg)]">
-                    <span className="text-[var(--page-accent)] font-medium">Into</span>{" "}
+                    <span className="text-[var(--page-accent)] font-medium">{interestsInto ?? "Into"}</span>{" "}
                     {interests.map((i) => i.name).join(" · ")}
                 </p>
             )}

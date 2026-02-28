@@ -9,6 +9,7 @@ export type HeroContent = {
 
 export type BioContent = {
   text: string;
+  title?: string;
 };
 
 export type SkillGroup = {
