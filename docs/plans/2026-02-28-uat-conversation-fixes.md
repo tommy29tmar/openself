@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Vitest, Drizzle ORM, SQLite, Vercel AI SDK
 
-**Review fixes applied (v3):**
+**Review fixes applied (v4):**
 1. P0: Journey pin uses `knowledgePrimaryKey` (anchor), not `currentSessionId` — consistent read/write session
 2. P1: New facts get append-only `sort_order` via `getNextSortOrder()` — no unstable ordering
 3. P1: `set_fact_visibility` now passes `readKeys` for cross-session fact lookup
@@ -17,6 +17,8 @@
 6. BUG: `buildSystemPrompt` test uses correct `BootstrapPayload` shape (not legacy context object)
 7. MINOR: `create_facts` batch logs `tool_call_error` per individual failure for telemetry
 8. MINOR: `updateFactSortOrder` documents anchor-session-only scoping design choice
+9. BUG (P1): `getOrDetectJourneyState` checks blocked (quota) BEFORE cached pin — safety override
+10. P2: `request_publish` transitions pin to `active_fresh` after successful publish + TODO for stale
 
 ---
 
@@ -225,6 +227,45 @@ describe("journey state pinning", () => {
       expect.stringContaining("UPDATE sessions SET journey_state"),
     );
   });
+
+  it("returns blocked when quota exhausted, even if pin says active_fresh", () => {
+    // Pin says active_fresh — but quota is exhausted
+    let callIndex = 0;
+    mockSqlite.prepare.mockReturnValue({
+      get: vi.fn(() => {
+        callIndex++;
+        if (callIndex === 1) {
+          // First query: quota check
+          return { count: 200 }; // >= AUTH_MESSAGE_LIMIT
+        }
+        // Second query: cached pin (should NOT be reached)
+        return { journey_state: "active_fresh" };
+      }),
+      run: vi.fn(),
+    });
+
+    const state = getOrDetectJourneyState(scope, { authenticated: true });
+    expect(state).toBe("blocked"); // safety override wins
+  });
+
+  it("uses cached pin when quota is NOT exhausted", () => {
+    let callIndex = 0;
+    mockSqlite.prepare.mockReturnValue({
+      get: vi.fn(() => {
+        callIndex++;
+        if (callIndex === 1) {
+          // First query: quota check — under limit
+          return { count: 50 };
+        }
+        // Second query: cached pin
+        return { journey_state: "active_fresh" };
+      }),
+      run: vi.fn(),
+    });
+
+    const state = getOrDetectJourneyState(scope, { authenticated: true });
+    expect(state).toBe("active_fresh"); // pin honored
+  });
 });
 ```
 
@@ -243,6 +284,9 @@ In `src/lib/agent/journey.ts`, add after `detectJourneyState()` (after line 131)
  * This prevents mid-conversation mode flips (e.g., first_visit → draft_ready
  * after the first create_fact triggers recomposeAfterMutation).
  *
+ * Blocked check runs FIRST as a safety override — a user who exhausts their
+ * quota must be detected even if the pin says active_fresh or draft_ready.
+ *
  * IMPORTANT: The pin is stored on the ANCHOR session (knowledgePrimaryKey),
  * not the current browser session (currentSessionId). This ensures the pin
  * is consistent across multi-session scenarios (e.g., OAuth re-auth creates
@@ -253,6 +297,19 @@ export function getOrDetectJourneyState(
   authInfo?: AuthInfo,
 ): JourneyState {
   const anchorSessionId = scope.knowledgePrimaryKey;
+
+  // SAFETY OVERRIDE: blocked always takes precedence over cached pin.
+  // A user who exhausts their quota mid-conversation must be detected
+  // even if the pin says active_fresh or draft_ready.
+  // Import at top: import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
+  if (authInfo?.authenticated) {
+    const quota = sqlite
+      .prepare("SELECT count FROM profile_message_usage WHERE profile_key = ?")
+      .get(scope.cognitiveOwnerKey) as { count: number } | undefined;
+    if (quota && quota.count >= AUTH_MESSAGE_LIMIT) {
+      return "blocked";
+    }
+  }
 
   // Read cached state from anchor session
   const row = sqlite
@@ -315,6 +372,21 @@ Also add the import at the top of tools.ts:
 ```typescript
 import { updateJourneyStatePin } from "@/lib/agent/journey";
 ```
+
+**Step 5b: Wire `request_publish` to transition pin → active_fresh**
+
+In `src/lib/agent/tools.ts`, inside `request_publish` execute (after the successful publish call), add:
+
+```typescript
+// Transition journey state pin: draft_ready → active_fresh.
+// After publishing, the user has a live page — they should receive
+// the active_fresh policy (maintenance suggestions, not "publish your page" CTAs).
+updateJourneyStatePin(sessionId, "active_fresh");
+```
+
+> **TODO (future sprint):** Wire `active_fresh → active_stale` transition based on
+> `lastSeenDaysAgo` threshold. Since both map to `steady_state` mode, the practical
+> impact is limited to policy prompt tone/suggestions. Not a blocker for this sprint.
 
 **Step 6: Run tests**
 
