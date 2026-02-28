@@ -45,9 +45,17 @@ vi.mock("@/lib/agent/policies/memory-directives", () => ({
 vi.mock("@/lib/agent/policies/turn-management", () => ({
   turnManagementRules: vi.fn(() => "TURN_MANAGEMENT_RULES_BLOCK"),
 }));
+vi.mock("@/lib/agent/policies/action-awareness", () => ({
+  actionAwarenessPolicy: vi.fn(() => "ACTION_AWARENESS_POLICY_BLOCK"),
+}));
+vi.mock("@/lib/agent/policies/undo-awareness", () => ({
+  undoAwarenessPolicy: vi.fn(() => "UNDO_AWARENESS_POLICY_BLOCK"),
+}));
 
 import { buildSystemPrompt } from "@/lib/agent/prompts";
 import type { BootstrapPayload } from "@/lib/agent/journey";
+import { actionAwarenessPolicy } from "@/lib/agent/policies/action-awareness";
+import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,6 +71,7 @@ const makeBootstrap = (overrides?: Partial<BootstrapPayload>): BootstrapPayload 
   pendingProposalCount: 0,
   thinSections: [],
   staleFacts: [],
+  openConflicts: [],
   language: "en",
   conversationContext: null,
   ...overrides,
@@ -195,6 +204,59 @@ describe("buildSystemPrompt", () => {
     it("passes language to journey policy", () => {
       const result = buildSystemPrompt(makeBootstrap({ language: "it" }));
       expect(result).toContain("FIRST_VISIT_POLICY_it");
+    });
+  });
+
+  describe("action and undo awareness (Sprint 5)", () => {
+    it("includes action awareness policy block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("ACTION_AWARENESS_POLICY_BLOCK");
+      expect(actionAwarenessPolicy).toHaveBeenCalled();
+    });
+
+    it("includes undo awareness policy block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("UNDO_AWARENESS_POLICY_BLOCK");
+      expect(undoAwarenessPolicy).toHaveBeenCalled();
+    });
+
+    it("places action awareness after memory directives", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const memIdx = result.indexOf("MEMORY_USAGE_DIRECTIVES_BLOCK");
+      const actionIdx = result.indexOf("ACTION_AWARENESS_POLICY_BLOCK");
+      expect(memIdx).toBeGreaterThan(-1);
+      expect(actionIdx).toBeGreaterThan(memIdx);
+    });
+
+    it("places undo awareness after action awareness", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const actionIdx = result.indexOf("ACTION_AWARENESS_POLICY_BLOCK");
+      const undoIdx = result.indexOf("UNDO_AWARENESS_POLICY_BLOCK");
+      expect(actionIdx).toBeGreaterThan(-1);
+      expect(undoIdx).toBeGreaterThan(actionIdx);
+    });
+
+    it("composition has 12 blocks without situation directives", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const parts = result.split("\n\n---\n\n");
+      // [CORE_CHARTER, SAFETY, TOOL, FACT_SCHEMA, DATA_MODEL, OUTPUT,
+      //  journeyPolicy, expertiseCalibration, turnManagement,
+      //  memoryDirectives, actionAwareness, undoAwareness]
+      expect(parts.length).toBe(12);
+    });
+
+    it("composition has 13 blocks with situation directives", () => {
+      const result = buildSystemPrompt(
+        makeBootstrap({
+          situations: ["has_thin_sections"],
+          thinSections: ["skills", "projects"],
+        }),
+      );
+      const parts = result.split("\n\n---\n\n");
+      // [CORE_CHARTER, SAFETY, TOOL, FACT_SCHEMA, DATA_MODEL, OUTPUT,
+      //  journeyPolicy, situationDirectives, expertiseCalibration,
+      //  turnManagement, memoryDirectives, actionAwareness, undoAwareness]
+      expect(parts.length).toBe(13);
     });
   });
 });

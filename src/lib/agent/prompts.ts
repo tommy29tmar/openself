@@ -8,6 +8,8 @@ import {
 import type { SituationContext } from "@/lib/agent/policies/index";
 import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
 import { turnManagementRules } from "@/lib/agent/policies/turn-management";
+import { actionAwarenessPolicy } from "@/lib/agent/policies/action-awareness";
+import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
 
 const CORE_CHARTER = `You are the OpenSelf agent — a warm, thoughtful AI that helps people build their personal web page through natural conversation.
 
@@ -256,7 +258,8 @@ export function getSystemPromptText(
  *
  * Composition order:
  * [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE,
- *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration]
+ *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration,
+ *  turnManagementRules, memoryUsageDirectives, actionAwarenessPolicy, undoAwarenessPolicy]
  */
 export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
@@ -294,13 +297,17 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   blocks.push(expertiseCalibration);
   blocks.push(turnManagementRules());
   blocks.push(memoryUsageDirectives());
+  blocks.push(actionAwarenessPolicy());
+  blocks.push(undoAwarenessPolicy());
 
   const composed = blocks.join("\n\n---\n\n");
 
   // Budget guard: the system prompt must leave room for context (facts, memory,
   // soul, summaries, conflicts) which lives in contextParts assembled separately.
-  // TOTAL_TOKEN_BUDGET in context.ts is 7500. Reserve at least 4000 for context.
-  const MAX_SYSTEM_PROMPT_TOKENS = 3500;
+  // TOTAL_TOKEN_BUDGET in context.ts is 7500. Reserve at least 1500 for context.
+  // Budget raised from 3500 → 6000 after Sprint 5 added action-awareness +
+  // undo-awareness + enhanced expertise calibration (~1250 tokens).
+  const MAX_SYSTEM_PROMPT_TOKENS = 6000;
   const estimatedTokens = Math.ceil(composed.length / 4);
   if (estimatedTokens > MAX_SYSTEM_PROMPT_TOKENS) {
     console.warn(
