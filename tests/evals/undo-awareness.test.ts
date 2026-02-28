@@ -38,41 +38,41 @@ describe("undoAwarenessPolicy", () => {
 
   describe("response pattern steps", () => {
     it("has IDENTIFY step — check last action", () => {
-      expect(policy).toMatch(/IDENTIFY.*last action/is);
+      expect(policy).toMatch(/IDENTIFY.*last action/i);
     });
 
     it("has EXPLAIN step — describe what was done", () => {
-      expect(policy).toMatch(/EXPLAIN.*what was done/is);
+      expect(policy).toMatch(/EXPLAIN.*what was done/i);
     });
 
     it("has PROPOSE step — offer reversal and alternatives", () => {
-      expect(policy).toMatch(/PROPOSE.*reversal.*alternative/is);
+      expect(policy).toMatch(/PROPOSE.*reversal.*alternative/i);
     });
 
     it("has ACT step — execute the decision", () => {
-      expect(policy).toMatch(/ACT.*decision/is);
+      expect(policy).toMatch(/ACT.*decision/i);
     });
   });
 
   describe("critical rules", () => {
     it("prohibits full page regeneration as first reaction", () => {
-      expect(policy).toMatch(/NEVER.*regenerate.*entire page.*first/is);
+      expect(policy).toMatch(/NEVER.*regenerate.*entire page.*first/i);
     });
 
     it("requires asking what specifically when complaint is vague", () => {
-      expect(policy).toMatch(/vague|what specifically|what part/is);
+      expect(policy).toMatch(/vague|what specifically|what part/i);
     });
 
     it("prohibits excessive apologies", () => {
-      expect(policy).toMatch(/NEVER.*apologize.*excessively/is);
+      expect(policy).toMatch(/NEVER.*apologize.*excessively/i);
     });
 
     it("handles case when no recent changes were made", () => {
-      expect(policy).toMatch(/haven't made any.*changes/is);
+      expect(policy).toMatch(/haven't made any.*changes/i);
     });
 
     it("handles impossible reversals honestly", () => {
-      expect(policy).toMatch(/impossible|don't have the exact|be honest/is);
+      expect(policy).toMatch(/impossible|don't have the exact|be honest/i);
     });
   });
 
@@ -90,7 +90,7 @@ describe("undoAwarenessPolicy", () => {
     });
 
     it("acknowledges page regeneration is hard to undo", () => {
-      expect(policy).toMatch(/page regeneration.*harder to undo|hard.*undo/is);
+      expect(policy).toMatch(/page regeneration.*harder to undo|hard.*undo/i);
     });
   });
 });

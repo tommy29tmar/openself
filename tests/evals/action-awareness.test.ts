@@ -105,15 +105,15 @@ describe("actionAwarenessPolicy", () => {
 
   describe("expertise modulation", () => {
     it("defines novice behavior — always explain", () => {
-      expect(policy).toMatch(/novice.*ALWAYS.*explain/is);
+      expect(policy).toMatch(/novice[\s\S]*ALWAYS[\s\S]*explain/i);
     });
 
     it("defines familiar behavior — explain when ambiguous", () => {
-      expect(policy).toMatch(/familiar.*ambiguous/is);
+      expect(policy).toMatch(/familiar[\s\S]*ambiguous/i);
     });
 
     it("defines expert behavior — act and confirm", () => {
-      expect(policy).toMatch(/expert.*act and confirm/is);
+      expect(policy).toMatch(/expert[\s\S]*act and confirm/i);
     });
 
     it("references EXPERTISE CALIBRATION block", () => {

@@ -6,7 +6,10 @@
  *
  * LLM usage: Direct generateObject with Zod schema (SDK-level).
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { generateObject } from "ai";
+import { getModel } from "@/lib/ai/provider";
+import { z } from "zod";
 import { getTestProviders, setProvider, SEED_FACTS, type TestProvider } from "./setup";
 
 const providers = getTestProviders();
@@ -23,10 +26,6 @@ describe.each(providers)("personalization [%s]", (provider: TestProvider) => {
   });
 
   it("generates personalized bio text within word limits", async () => {
-    const { getModel } = await import("@/lib/ai/provider");
-    const { generateObject } = await import("ai");
-    const { z } = await import("zod");
-
     const bioSchema = z.object({
       bio: z.string().describe("A personalized bio paragraph for the page"),
     });
@@ -52,10 +51,6 @@ describe.each(providers)("personalization [%s]", (provider: TestProvider) => {
   });
 
   it("does not include non-text content in personalized output", async () => {
-    const { getModel } = await import("@/lib/ai/provider");
-    const { generateObject } = await import("ai");
-    const { z } = await import("zod");
-
     const heroSchema = z.object({
       tagline: z.string().describe("A short, punchy tagline for the hero section"),
     });

@@ -219,7 +219,7 @@ then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
-NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete. Sprint 4 (Reliable Execution) complete.
+NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete. Sprint 4 (Reliable Execution) complete. Sprint 5 (Conversation Polish + Eval Matrix) complete.
 Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
@@ -392,6 +392,21 @@ Branch: `feature/sprint-4-reliable-execution`. 8 commits, 39 new tests (1140 tot
 - `inspect_page_state` tool: layout info, per-section details (slot/widget/locked/complete/richness), warnings
 - `request_publish` hardened: username format validation guard (belt-and-suspenders)
 - TOOL_POLICY: added `publish_preflight` and `inspect_page_state` for agent discoverability
+
+**Sprint 5 — Conversation Polish + Eval Matrix (Done):**
+
+Transparent agent behavior and cross-provider behavioral verification. Action-awareness,
+undo-awareness, enhanced expertise calibration, and 8-scenario eval matrix.
+Branch: `feature/sprint-5-conversation-polish`. 3 commits, 81 new tests (1221 total, 77 files).
+
+- Action-awareness policy: tool classification (high-impact → explain+confirm, low-impact → silent)
+- Undo-awareness policy: detection keywords (EN+IT), 4-step response (IDENTIFY→EXPLAIN→PROPOSE→ACT)
+- Enhanced expertise calibration: detailed behavioral instructions per level (novice/familiar/expert)
+- `buildSystemPrompt` extended with 2 new blocks (13 total without situations, 14 with)
+- Cross-provider eval infrastructure: `vitest.config.cross-provider.ts`, provider parameterization,
+  seed fact profiles, fuzzy assertion helpers
+- 8 eval scenarios: onboarding-flow, translation, personalization, layout-change, undo-request,
+  returning-stale, publish-incomplete, low-signal
 
 ### Deferred Until Phase 1 Closure
 

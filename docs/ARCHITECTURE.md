@@ -359,10 +359,12 @@ Two prompt-building paths exist:
 9. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
 10. **Turn management rules** — 5 rules (R1-R5) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length (see Section 4.2.5)
 11. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence (see Section 4.2.5)
+12. **Action awareness** — Explain-before-act policy classifying tools as high-impact (set_layout, set_theme, update_page_style, reorder_sections, generate_page in steady_state → explain and confirm before executing) or low-impact (fact CRUD, visibility, memory, soul → execute silently). Modulated by expertise calibration level.
+13. **Undo awareness** — Graceful reversal handling: detection keywords (EN + IT), 4-step response pattern (IDENTIFY → EXPLAIN → PROPOSE → ACT), reversal scope per tool, critical rules (never regenerate entire page as first reaction, ask specifics for vague complaints).
 
 The composable path replaces the monolithic `onboardingPolicy`/`steadyStatePolicy` functions
 with fine-grained, per-journey-state policies composed from the bootstrap payload.
-Token budget guard: the journey policy + directives + calibration + turn management + memory directives block is capped at 3500 tokens.
+Token budget guard: the journey policy + directives + calibration + turn management + memory directives + action awareness + undo awareness block is capped at 3500 tokens.
 
 Both paths then have dynamic context blocks appended by `assembleContext()`:
 

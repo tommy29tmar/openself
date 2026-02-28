@@ -6,7 +6,9 @@
  *
  * LLM usage: Direct generateText with translation prompt (SDK-level).
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { generateText } from "ai";
+import { getModel } from "@/lib/ai/provider";
 import { getTestProviders, setProvider, type TestProvider } from "./setup";
 
 const providers = getTestProviders();
@@ -23,9 +25,6 @@ describe.each(providers)("translation [%s]", (provider: TestProvider) => {
   });
 
   it("translates Italian bio section to English", async () => {
-    const { getModel } = await import("@/lib/ai/provider");
-    const { generateText } = await import("ai");
-
     const italianBio = "Maria è una designer UX con sede a Milano. Si occupa di progettazione di interfacce digitali e ricerca con gli utenti.";
 
     const { text } = await generateText({
@@ -43,9 +42,6 @@ describe.each(providers)("translation [%s]", (provider: TestProvider) => {
   });
 
   it("preserves proper nouns during translation", async () => {
-    const { getModel } = await import("@/lib/ai/provider");
-    const { generateText } = await import("ai");
-
     const italianText = "Marco lavora presso Google a Roma. Ha studiato al Politecnico di Milano.";
 
     const { text } = await generateText({
@@ -61,9 +57,6 @@ describe.each(providers)("translation [%s]", (provider: TestProvider) => {
   });
 
   it("translates skill names appropriately", async () => {
-    const { getModel } = await import("@/lib/ai/provider");
-    const { generateText } = await import("ai");
-
     const skillList = "Competenze: Progettazione grafica, Ricerca utenti, Prototipazione, TypeScript, React";
 
     const { text } = await generateText({

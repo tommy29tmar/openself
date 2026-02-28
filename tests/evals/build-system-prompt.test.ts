@@ -71,6 +71,7 @@ const makeBootstrap = (overrides?: Partial<BootstrapPayload>): BootstrapPayload 
   pendingProposalCount: 0,
   thinSections: [],
   staleFacts: [],
+  openConflicts: [],
   language: "en",
   conversationContext: null,
   ...overrides,
