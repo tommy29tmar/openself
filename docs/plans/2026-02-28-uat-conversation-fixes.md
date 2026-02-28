@@ -8,12 +8,15 @@
 
 **Tech Stack:** TypeScript, Vitest, Drizzle ORM, SQLite, Vercel AI SDK
 
-**Review fixes applied (v2):**
+**Review fixes applied (v3):**
 1. P0: Journey pin uses `knowledgePrimaryKey` (anchor), not `currentSessionId` — consistent read/write session
 2. P1: New facts get append-only `sort_order` via `getNextSortOrder()` — no unstable ordering
 3. P1: `set_fact_visibility` now passes `readKeys` for cross-session fact lookup
 4. P2: Anti-fabrication test uses runtime `buildSystemPrompt()` output, not source-string matching
 5. P2: Migration verified via explicit `sqlite3` application + `PRAGMA table_info` check
+6. BUG: `buildSystemPrompt` test uses correct `BootstrapPayload` shape (not legacy context object)
+7. MINOR: `create_facts` batch logs `tool_call_error` per individual failure for telemetry
+8. MINOR: `updateFactSortOrder` documents anchor-session-only scoping design choice
 
 ---
 
@@ -697,24 +700,20 @@ import { buildSystemPrompt } from "@/lib/agent/prompts";
 
 describe("anti-fabrication prompt guards", () => {
   // Build a real system prompt and check the runtime output
+  // NOTE: buildSystemPrompt takes a BootstrapPayload — use its actual shape
   const prompt = buildSystemPrompt({
-    mode: "onboarding",
-    language: "en",
-    factsSummary: "",
-    soulSummary: null,
-    memorySummary: null,
-    conversationSummary: null,
-    conflictSummary: null,
     journeyState: "first_visit",
     situations: [],
     expertiseLevel: "novice",
-    situationContext: {
-      pendingProposalCount: 0,
-      pendingProposalSections: [],
-      thinSections: [],
-      staleFacts: [],
-      openConflicts: [],
-    },
+    userName: null,
+    lastSeenDaysAgo: null,
+    publishedUsername: null,
+    pendingProposalCount: 0,
+    thinSections: [],
+    staleFacts: [],
+    openConflicts: [],
+    language: "en",
+    conversationContext: null,
   });
 
   it("system prompt prohibits creating facts for unmentioned categories", () => {
@@ -892,7 +891,10 @@ export function getNextSortOrder(sessionId: string, category: string): number {
   return (row?.maxOrder ?? -1) + 1;
 }
 
-/** Update the sort_order of a fact by sessionId + category + key. */
+/** Update the sort_order of a fact by sessionId + category + key.
+ * NOTE: scoped to anchor session (knowledgePrimaryKey) only —
+ * facts from prior sessions in the same profile are not reorderable.
+ * Consistent with createFact/getNextSortOrder scoping. */
 export function updateFactSortOrder(
   sessionId: string,
   category: string,
@@ -1198,6 +1200,7 @@ create_facts: tool({
         });
       } catch (error) {
         results.push({ success: false, key: input.key, error: String(error) });
+        logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "create_facts", key: input.key, error: String(error) } });
       }
     }
     // Single recomposition at the end (not per-fact)
