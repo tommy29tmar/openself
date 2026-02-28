@@ -25,8 +25,10 @@ describe("website in hero socialLinks", () => {
     const hero = page.sections.find((s) => s.type === "hero");
     const socialLinks = (hero!.content as { socialLinks?: { platform: string; url: string }[] }).socialLinks;
     expect(socialLinks).toBeDefined();
-    expect(socialLinks!.some((l) => l.platform === "website")).toBe(true);
-    expect(socialLinks!.find((l) => l.platform === "website")!.url).toContain("elenarossi.design");
+    const websiteLink = socialLinks!.find((l) => l.platform === "website");
+    expect(websiteLink).toBeDefined();
+    expect(websiteLink!.url).toContain("elenarossi.design");
+    expect((websiteLink as any).label).toBe("Website");
   });
 
   it("prepends https:// if missing", () => {

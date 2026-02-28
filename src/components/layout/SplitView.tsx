@@ -105,6 +105,48 @@ export function SplitView({
   publishedConfigHash,
   onPublishedConfigHashChange,
 }: SplitViewProps) {
+  // Lifted chat data fetching — bootstrap + messages fetched once, shared by both ChatPanel instances
+  const [bootstrapData, setBootstrapData] = useState<Record<string, unknown> | null>(null);
+  const [chatInitialMessages, setChatInitialMessages] = useState<Array<{id: string; role: string; content: string}>>([]);
+  const [chatDataReady, setChatDataReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [bRes, mRes] = await Promise.all([
+          fetch("/api/chat/bootstrap", { cache: "no-store" }),
+          fetch("/api/messages", { cache: "no-store" }),
+        ]);
+        if (cancelled) return;
+        // Redirect to invite page on 401 (unauthenticated)
+        if (bRes.status === 401 || mRes.status === 401) {
+          window.location.href = "/invite";
+          return;
+        }
+        const bootstrap = bRes.ok ? await bRes.json() : null;
+        let msgs: Array<{id: string; role: string; content: string}> = [];
+        if (mRes.ok) {
+          const data = await mRes.json();
+          if (data.success && Array.isArray(data.messages)) {
+            msgs = data.messages.filter(
+              (m: any) => typeof m.id === "string" && typeof m.role === "string" && typeof m.content === "string" && (m.role === "user" || m.role === "assistant")
+            );
+          }
+        }
+        if (!cancelled) {
+          setBootstrapData(bootstrap);
+          setChatInitialMessages(msgs);
+        }
+      } catch (err) {
+        console.warn("[SplitView] chat data prefetch failed:", err);
+      } finally {
+        if (!cancelled) setChatDataReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [language]);
+
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
   const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
@@ -434,7 +476,7 @@ export function SplitView({
       {/* Desktop: side-by-side */}
       <div className="hidden h-screen md:flex">
         <div className="w-[400px] shrink-0 overflow-hidden border-r">
-          <ChatPanel language={language} authState={authState} />
+          {chatDataReady && <ChatPanel language={language} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
         </div>
         <div className="relative flex-1">{previewPane}</div>
       </div>
@@ -454,7 +496,7 @@ export function SplitView({
           forceMount
           className="flex-1 overflow-hidden data-[state=inactive]:hidden"
         >
-          <ChatPanel language={language} authState={authState} />
+          {chatDataReady && <ChatPanel language={language} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
         </TabsContent>
         <TabsContent
           value="preview"

@@ -77,7 +77,7 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 |----------|-----------|-------------|
 | identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} |
 | experience | company-kebab | {role: "...", company: "...", start: "YYYY-MM", end: "YYYY-MM"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | type: "employment" (default if omitted), "freelance", or "client". Use "client" for project clients (e.g. Barilla branding). Clients appear in Projects section. |
-| education | institution-kebab | {institution: "...", degree: "...", field: "...", period: "YYYY-YYYY"} |
+| education | institution-kebab | {institution: "...", degree?: "...", field?: "...", period?: "YYYY-YYYY"} | Create education facts even without dates — period can be added later. |
 | project | project-kebab | {name: "...", description: "...", url?: "...", status: "active"|"completed", role?: "..."} |
 | skill | skill-kebab | {name: "...", level?: "beginner"|"intermediate"|"advanced"|"expert"} |
 | interest | interest-kebab | {name: "...", detail?: "..."} |
@@ -85,7 +85,7 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 | stat | stat-kebab | {label: "...", value: "..."} |
 | activity | activity-kebab | {name: "...", activityType?: "sport"|"volunteering"|"event"|"club"|"other", frequency?: "...", description?: "..."} |
 | social | platform-kebab | {platform: "...", url: "...", username?: "..."} |
-| reading | book-kebab | {title: "...", author?: "...", rating?: 1-5} |
+| reading | book-kebab | {title: "...", author: "...", rating?: 1-5} |
 | music | song-kebab | {title: "...", artist?: "..."} |
 | language | language-kebab | {language: "...", proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"} |
 | contact | contact-type | {type: "email"|"phone"|"location"|"website", value: "..."} |
@@ -95,7 +95,13 @@ Common mistakes to avoid:
 - NEVER use "skill" for spoken languages — use "language" category instead.
 - NEVER use "interest" for regular activities (sports, volunteering) — use "activity" instead.
 - NEVER use "experience" for education/study — use "education" instead.
-- When updating a fact, include ALL fields in value (not just the changed ones).`;
+- When updating a fact, include ALL fields in value (not just the changed ones).
+- For reading facts, ALWAYS include author. If the user doesn't mention the author, ask before creating the fact.
+- NEVER assign a rating to books/music unless the user explicitly rates the item. Leave rating empty by default.
+- CRITICAL: Experience keys MUST be unique per employer. NEVER reuse a key for a different company/role.
+  Example: "experience/acme-corp" for Acme Corp, "experience/beta-inc" for Beta Inc.
+  If a key already exists for a different company, use a different key (e.g., append a number: "acme-corp-2").
+- "I am now X" or "My role changed" → update the identity/role fact, NOT experience facts. Current role = identity fact. Past roles = experience facts. These are separate concepts.`;
 
 const DATA_MODEL_REFERENCE = `Data model quick reference:
 - Sections are AUTO-COMPOSED from facts. You never edit sections directly.
@@ -113,6 +119,10 @@ Workflows:
   To change the user's CURRENT role/title: search_facts("identity") → find fact with key "role" → update_fact with { role: "New Title" }.
   To change a PAST job title: search_facts("experience") → update_fact for that specific experience.
   When user says "I am now X" or "my role changed" → always update the IDENTITY fact.
+- Bio MUST mention the user's current activity. If the user says "I am a freelance architect", this takes priority over past corporate roles in both bio and hero tagline.
+  The identity/role fact drives hero tagline and bio — keep it current.
+- Experience facts: each key MUST map to exactly one employer. NEVER overwrite an experience fact with a different company.
+  Use update_fact to change details of an EXISTING role. Use create_fact with a NEW key for a new employer.
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
 
 Value object schemas (must pass the FULL object, not partial):

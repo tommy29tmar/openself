@@ -14,9 +14,17 @@ describe("UI L10N strings", () => {
     "registrationFailed", "networkError",
     "improvementsReady", "review", "pageImprovements",
     "current", "proposed", "accept", "reject", "acceptAll",
+    // Activity frequencies (F6)
+    "freqDaily", "freqWeekly", "freqMonthly", "freqBiweekly",
+    "freqFrequent", "freqRegularly", "freqOccasionally",
+    // Skill domains (F9)
+    "domainFrontend", "domainBackend", "domainInfra", "domainLanguages",
+    "domainAiMl", "domainDesign", "domainOther",
+    // Platform (F17/F22)
+    "platformWebsite",
   ];
 
-  for (const lang of ["en", "it", "de"] as const) {
+  for (const lang of ["en", "it", "de", "fr", "es", "pt", "ja", "zh"] as const) {
     it(`${lang}: all required keys present and non-empty`, () => {
       const strings = getUiL10n(lang);
       for (const key of REQUIRED_KEYS) {

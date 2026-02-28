@@ -100,7 +100,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
                                         rel="noopener noreferrer"
                                         className="hover-underline-grow text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors uppercase tracking-[0.05em] text-xs font-medium"
                                     >
-                                        {link.platform}
+                                        {link.label ?? link.platform}
                                     </a>
                                 </React.Fragment>
                             ))}
@@ -116,7 +116,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
                     )}
                     {content.languages && content.languages.length > 0 && (
                         <>
-                            <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span>
+                            {(content.socialLinks?.length || content.contactEmail) && <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span>}
                             <span className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
                                 {content.languages
                                     .map((l) => `${l.language}${l.proficiency ? ` (${l.proficiency})` : ""}`)

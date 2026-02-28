@@ -629,9 +629,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
         const errors = issues.filter((i) => i.severity === "error");
         if (errors.length > 0) {
+          const details = errors.map((e) => `${e.slotId ?? "unknown"}: ${e.message}`).join("; ");
           return {
             success: false,
-            error: "Layout incompatible",
+            error: `Layout change failed: ${details}`,
             issues: errors,
           };
         }

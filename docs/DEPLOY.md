@@ -206,7 +206,7 @@ Optional cost guardrails (recommended):
 
 | Name | Value |
 |---|---|
-| `LLM_DAILY_TOKEN_LIMIT` | `150000` |
+| `LLM_DAILY_TOKEN_LIMIT` | `500000` |
 | `LLM_MONTHLY_COST_LIMIT_USD` | `25` |
 | `LLM_DAILY_COST_WARNING_USD` | `1` |
 | `LLM_DAILY_COST_HARD_LIMIT_USD` | `2` |

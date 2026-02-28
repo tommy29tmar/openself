@@ -256,6 +256,14 @@ To avoid chat resets and keep behavior consistent across devices:
 - **Error recovery**: On stream error, the error banner offers two actions: "Retry"
   (retries last AI request via `reload()`) and "Refresh chat" (re-syncs all messages
   from `/api/messages` via `refreshChat()` to restore DB-consistent state).
+- **Error extraction**: `extractErrorMessage()` (`src/lib/services/errors.ts`) robustly
+  parses unknown error types: handles `Error` objects, plain strings, JSON-wrapped
+  messages, and mixed content with embedded JSON. Falls back to a user-friendly message.
+- **Data prefetch dedup**: `SplitView.tsx` fetches `/api/chat/bootstrap` and
+  `/api/messages` once on mount (and re-fetches on language change), passing results
+  to `ChatPanel` via `initialBootstrap`/`initialMessages` props with
+  `disableInitialFetch={true}` to prevent duplicate requests from dual ChatPanel
+  instances (desktop + mobile). On 401, redirects to `/invite`.
 - **Markdown rendering**: Assistant messages are rendered as HTML via `markdown-it`
   (`breaks: true`, `linkify: true`, `html: false`). User messages remain plain text.
   The `html: false` default is a security invariant — prevents XSS from AI content.
@@ -855,6 +863,10 @@ because `createAuthSession` does not write username to the sessions table (UNIQU
 constraint). The profiles table fallback ensures auth indicators, ownership checks,
 and publish flow all see the correct username after registration.
 
+**Auth detection:** The preferences endpoint determines `authenticated` status via
+`!!(authCtx?.userId || authCtx?.username)`. This covers both auth v2 sessions (which
+set `userId`) and legacy signup sessions (which set `username` only).
+
 **Message quota:**
 - Authenticated: per-profile quota via `profile_message_usage` table (200 message limit)
 - Anonymous: per-session quota (50 message limit)
@@ -1088,6 +1100,11 @@ It is the single source of truth from which the page is generated.
 5. **Overwritable**: When information changes, the fact is updated — not duplicated.
 6. **Taxonomy guardrails**: Category aliases are normalized to canonical names at write time
    (e.g., `job`, `work`, `employment` → `experience`) to avoid KB drift.
+7. **Experience key collision guardrail**: `createFact()` checks for existing experience
+   facts with the same key but a different company. If found, it throws an error directing
+   the agent to use a different key or `update_fact`. This prevents accidental data loss
+   when the agent reuses a key for a different employer. `getFactByKey()` is exported from
+   `kb-service.ts` for exact triple-lookup (sessionId + category + key).
 
 ### 5.2 Fact Structure
 
@@ -1275,10 +1292,14 @@ follows OpenSelf's visual identity.
 │  experience    Work history, roles, companies                │
 │                Optional type: employment|freelance|client    │
 │                client-type items routed to projects section  │
+│                Period from start/end dates (formatFactDate)  │
+│                status: "current" → localized "Present" label │
+│                Freelance/freelance company redundancy guard   │
 │                Variants: timeline                            │
 │                Phase 1b (gated by EXTENDED_SECTIONS flag)    │
 │                                                              │
 │  education     Degrees, institutions, study periods          │
+│                Period is optional — entries shown w/o dates   │
 │                Variants: cards                               │
 │                Phase 1b (gated by EXTENDED_SECTIONS flag)    │
 │                                                              │
@@ -1641,12 +1662,23 @@ Skills are grouped by a deterministic `SKILL_DOMAINS` dictionary (Frontend, Back
 AI/ML, Design + Other fallback). Domain labels are hidden when only 1-2 groups exist. Standalone
 skills/stats/interests sections are suppressed when extended mode is on.
 
-**Freelance detection:**
+**Freelance detection and stripping:**
 `buildBioSection()` detects freelance roles via `FREELANCE_MARKERS` (a set of 10 keywords
 across 5 languages: "freelance", "self-employed", "libero professionista", etc.). When
 matched, the bio uses `bioRoleFreelanceFirstPerson(role)` from the L10N table — a
 first-person template avoiding gendered occupational suffixes (e.g., German uses
 "Ich arbeite freiberuflich als ${role}" instead of "Ich bin freiberufliche/r ${role}").
+`stripFreelanceFromRole(role)` removes freelance tokens from the role string before
+passing it to the template, preventing "freelance freelance" redundancy. If stripping
+leaves an empty string, the bio falls back to the non-freelance `bioRoleFirstPerson`
+template. The same logic is applied in `buildExperienceSection()` — when both role and
+company match `FREELANCE_MARKERS`, the company field is suppressed.
+
+**Gender-neutral L10N templates:**
+All page-composer L10N templates use gender-neutral phrasing. Italian uses masculine
+default ("Appassionato di", not "Appassionato/a di"), French avoids parenthetical gender
+marks ("Passionné de", not "Passionné(e) de"), Spanish uses masculine default
+("Apasionado por", not "Apasionado/a por"). No `/(e)` or `/a` patterns in any template.
 
 **Role casing (`lowerRole()`):**
 Job titles are lowercased for use in bio prose, except in languages where common nouns
@@ -1655,15 +1687,28 @@ by checking `w === w.toUpperCase() && w.length > 1` per word.
 
 **Centralized UI localization (`getUiL10n()`):**
 Section headers, labels, and UI strings are localized via `getUiL10n(lang)` in
-`src/lib/i18n/ui-strings.ts`. The function returns a `UiStrings` object with 45 keys
+`src/lib/i18n/ui-strings.ts`. The function returns a `UiStrings` object with ~60 keys
 for 8 languages (en, it, de, fr, es, pt, ja, zh), with English fallback for unknown
 languages. Used by `composeOptimisticPage()` for section headers and labels, activity
-type localization, and proficiency level localization.
+type localization, proficiency level localization, activity frequency localization,
+skill domain labels, and platform display names.
 
 **Activity type localization:**
 Activity types (volunteering, sport, club, etc.) are localized at composition time via
 `getUiL10n(lang)` lookup keys (`actVolunteering`, `actSport`, `actClub`). Unknown
 activity types pass through unchanged.
+
+**Activity frequency localization:**
+Activity frequency strings (daily, weekly, monthly, etc.) are localized via `FREQ_L10N`
+map in `buildActivitiesSection()`. Keys: `freqDaily`, `freqWeekly`, `freqMonthly`,
+`freqBiweekly`, `freqFrequent`, `freqRegularly`, `freqOccasionally`. Lookup is
+case-insensitive. Unknown frequencies pass through unchanged.
+
+**Skill domain label localization:**
+`groupSkillsByDomain()` accepts a `language` parameter and translates domain labels
+(Frontend, Backend, Infra, Languages, AI/ML, Design, Other) via `DOMAIN_L10N_KEY` map.
+Keys: `domainFrontend`, `domainBackend`, `domainInfra`, `domainLanguages`, `domainAiMl`,
+`domainDesign`, `domainOther`.
 
 **Music artist deduplication:**
 When a music fact's artist name matches the track title (case-insensitive), the artist
@@ -1675,9 +1720,11 @@ achievements and experience. Year-only strings ("2024") pass through; ISO dates 
 Jan 1 are treated as year-only; other dates are formatted as localized "month year".
 
 **Website in hero:**
-Contact facts with `type: "website"` are added to the hero's `socialLinks` array with
-automatic `https://` prepend. This surfaces personal websites prominently alongside
-social media links.
+Contact facts with `type: "website"` and social facts with `platform: "website"` are
+added to the hero's `socialLinks` array with automatic `https://` prepend. Each link
+carries a canonical `platform` field (for icon lookup) and a localized `label` field
+(for display text, e.g., "Sito Web" in Italian). The `platformWebsite` key in
+`getUiL10n()` provides the translation.
 
 Translation to other languages is handled separately via the LLM translation pipeline
 (see Section 6.7). This keeps composition fast and predictable.
@@ -1773,8 +1820,9 @@ A two-phase LLM process runs during `heartbeat_deep`:
 - `src/app/api/proposals/` — Proposal API routes (GET, accept, reject, accept-all)
 - `src/components/builder/ProposalBanner.tsx` — Proposal review UI
 - `src/lib/db/personalizer-schema.ts` — Drizzle schema for 3 new tables
-- `src/lib/i18n/ui-strings.ts` — Centralized UI localization (`getUiL10n`, 45 keys × 8 languages)
+- `src/lib/i18n/ui-strings.ts` — Centralized UI localization (`getUiL10n`, ~60 keys × 8 languages)
 - `src/lib/i18n/format-date.ts` — Locale-aware date formatting (`formatFactDate`)
+- `src/lib/services/errors.ts` — `PublishError`, `extractErrorMessage()` — shared error utilities
 
 ### 6.3.1 Live Preview Strategy (Onboarding)
 
@@ -2689,7 +2737,7 @@ CREATE TABLE llm_usage_daily (
 
 CREATE TABLE llm_limits (
     id TEXT PRIMARY KEY DEFAULT 'main',
-    daily_token_limit INTEGER DEFAULT 150000,
+    daily_token_limit INTEGER DEFAULT 500000,
     monthly_cost_limit_usd REAL DEFAULT 25.0,
     daily_cost_warning_usd REAL DEFAULT 1.0,
     daily_cost_hard_limit_usd REAL DEFAULT 2.0,
@@ -2952,7 +3000,7 @@ not user-uploaded binaries.
 Cost control is enforced in the runtime, not left to provider dashboards alone.
 
 Default guardrails (single-user self-hosted starter profile):
-1. Daily token cap: `150000`
+1. Daily token cap: `500000` (env var `LLM_DAILY_TOKEN_LIMIT`, schema default, migration 0019 backfill)
 2. Monthly estimated cost cap: `$25`
 3. Daily cost warning: `$1`
 4. Daily hard-stop cap: `$2`
@@ -2971,6 +3019,10 @@ Configuration precedence (highest first):
 Boot behavior:
 - If `llm_limits` row does not exist, create it from env values (or schema defaults).
 - After creation, DB values are the source of truth.
+
+**Rate limit exceptions:** The `GET /api/chat/bootstrap` endpoint passes `{ skipPace: true }`
+to `checkRateLimit()` because it is an idempotent read — pace-limiting is inappropriate
+for data loads that fire on every page mount.
 
 ---
 
@@ -3196,7 +3248,7 @@ AI_PROVIDER=google
 GOOGLE_API_KEY=...
 
 # Cost guardrails (recommended)
-LLM_DAILY_TOKEN_LIMIT=150000
+LLM_DAILY_TOKEN_LIMIT=500000
 LLM_MONTHLY_COST_LIMIT_USD=25
 LLM_DAILY_COST_WARNING_USD=1
 LLM_DAILY_COST_HARD_LIMIT_USD=2
@@ -3924,12 +3976,14 @@ Runtime behavior:
 
 ### 15.7 Bootstrap Seed (SQL Reference)
 
-Migration files (17 total, `db/migrations/0001-0017`):
+Migration files (19 total, `db/migrations/0001-0019`):
 - `0001`-`0011`: Phase 0 core schema, taxonomy, components, sessions, media, translation cache, etc.
 - `0012`-`0016`: Phase 1a additions — agent memory expansion, conversation summaries,
   soul profiles, fact conflicts, trust ledger, heartbeat tables, jobs rebuild, schema_meta,
   profile_message_usage
 - `0017`: Phase 1b — extended taxonomy (6 new categories, aliases, hobby/hobbies remap)
+- `0018`: Phase 1c — section copy tables (cache, state, proposals)
+- `0019`: Raise `daily_token_limit` from 150k → 500k (backfill for existing DBs)
 
 Key bootstrap migrations:
 - `db/migrations/0001_core_schema.sql` (creates taxonomy tables)
