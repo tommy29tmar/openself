@@ -380,6 +380,59 @@ designer, executive, student, creator, developer, or generalist. The detected ar
 is injected into the system prompt as a "PAGE LAYOUT INTELLIGENCE" block with per-archetype
 reordering guidance (e.g., designer = portfolio-first, student = education before experience).
 
+### 4.2.3 Journey Intelligence
+
+Before the LLM sees anything, a deterministic (zero-LLM) detection layer runs to
+understand where the user is in their journey. This pre-computed context shapes the
+system prompt, mode selection, and UI behavior.
+
+**Implementation:** `src/lib/agent/journey.ts`
+
+**Journey States** — priority chain (highest wins):
+
+| State | Condition |
+|---|---|
+| `blocked` | Authenticated user at/over message quota (`AUTH_MESSAGE_LIMIT`) |
+| `active_fresh` | Published page updated ≤ 7 days ago |
+| `active_stale` | Published page updated > 7 days ago |
+| `draft_ready` | Draft exists but no published page |
+| `returning_no_page` | Has facts or prior sessions, but no draft/published |
+| `first_visit` | No facts, no messages, no draft, no published page |
+
+**Situations** — additive flags detected from current data:
+
+- `has_pending_proposals` — unapplied section copy proposals exist
+- `has_thin_sections` — at least one section classified as thin/empty
+- `has_stale_facts` — facts older than 30 days
+- `has_open_conflicts` — unresolved fact conflicts
+- `has_name` — identity name or full-name fact exists
+- `has_soul` — active soul profile exists
+
+**Expertise Level** — based on distinct session count:
+
+| Sessions | Level |
+|---|---|
+| 0–2 | `novice` |
+| 3–5 | `familiar` |
+| 6+ | `expert` |
+
+**Bootstrap Payload** (`BootstrapPayload`):
+Assembled by `assembleBootstrapPayload()` and exposed via `GET /api/chat/bootstrap`.
+Contains all detection results plus derived data (userName, lastSeenDaysAgo,
+publishedUsername, pendingProposalCount, thinSections list, staleFacts list, language).
+
+**Mode Mapping:**
+`mapJourneyStateToMode()` in `context.ts` maps journey states to prompt modes:
+- `first_visit` / `returning_no_page` → `onboarding`
+- All other states → `steady_state`
+
+When a bootstrap payload is provided to `assembleContext()`, mode is derived from
+the journey state instead of the legacy `detectMode()` heuristic. This ensures
+consistent behavior: the same detection that drives the UI also drives the prompt.
+
+**Shared constant:** `AUTH_MESSAGE_LIMIT` lives in `src/lib/constants.ts` and is
+imported by both the chat route (quota enforcement) and journey detection (blocked state).
+
 ### 4.3 Tool Calling (Autonomous Actions)
 
 During conversation, the agent calls tools silently to manage the knowledge base, page,

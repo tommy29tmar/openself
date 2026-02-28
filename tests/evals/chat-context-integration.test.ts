@@ -71,6 +71,22 @@ vi.mock("@/lib/services/summary-service", () => ({
   enqueueSummaryJob: vi.fn(),
 }));
 
+vi.mock("@/lib/agent/journey", () => ({
+  assembleBootstrapPayload: vi.fn(() => ({
+    journeyState: "first_visit",
+    situations: [],
+    expertiseLevel: "novice",
+    userName: null,
+    lastSeenDaysAgo: null,
+    publishedUsername: null,
+    pendingProposalCount: 0,
+    thinSections: [],
+    staleFacts: [],
+    language: "en",
+    conversationContext: null,
+  })),
+}));
+
 // --- Import after mocks ---
 import { POST } from "@/app/api/chat/route";
 import { streamText } from "ai";

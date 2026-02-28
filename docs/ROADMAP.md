@@ -219,7 +219,7 @@ then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
-Phase 1d (media/connectors/translation) is next.
+NEXT-16 Sprint 1 (Journey Intelligence) complete. Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 
@@ -326,6 +326,7 @@ Goal:
 
 Execution reference:
 1. `docs/plans/2026-02-27-model-agnostic-control-plane-implementation-plan.md`
+2. `docs/plans/sprint-1-journey-intelligence.md`
 
 Main deliverables:
 1. User journey state engine + contextual bootstrap messages (no generic welcome for known users)
@@ -335,6 +336,22 @@ Main deliverables:
 5. Domain control-plane expansion (facts, heartbeat, publish preflight)
 6. Skills package v1 aligned to journey states (onboarding/returning/layout/publish/heartbeat/conflicts)
 7. MCP connector gateway foundation with GitHub pilot
+
+**Sprint 1 — Journey Intelligence (Done):**
+
+Deterministic, zero-LLM detection layer that runs before the LLM sees anything.
+6 journey states, 6 situations, 3 expertise levels. Bootstrap payload exposed via
+`GET /api/chat/bootstrap` and wired into `POST /api/chat` for mode-aware prompting.
+Branch: `feature/sprint-1-journey-intelligence`. 7 commits, 70 new tests (892 total, 63 files).
+
+- `detectJourneyState()` — priority chain: blocked > active_fresh > active_stale > draft_ready > returning_no_page > first_visit
+- `detectSituations()` — additive flags: pending proposals, thin sections, stale facts, open conflicts, has name, has soul
+- `detectExpertiseLevel()` — session-count thresholds (novice/familiar/expert)
+- `assembleBootstrapPayload()` — orchestrator returning all detection + derived data
+- `mapJourneyStateToMode()` — journey state → prompt mode mapping in context.ts
+- `assembleContext()` extended with optional bootstrap param (backward-compatible)
+- `AUTH_MESSAGE_LIMIT` extracted to shared `src/lib/constants.ts`
+- Legacy `identity/full-name` fact key supported alongside `identity/name`
 
 ### Deferred Until Phase 1 Closure
 

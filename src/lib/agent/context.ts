@@ -9,6 +9,7 @@ import { getSystemPromptText } from "@/lib/agent/prompts";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
+import type { JourneyState, BootstrapPayload } from "@/lib/agent/journey";
 import type { PromptMode } from "./promptAssembler";
 
 /**
@@ -98,13 +99,32 @@ export type AuthInfo = {
   username: string | null;
 };
 
+/**
+ * Map JourneyState to PromptMode for backward compatibility.
+ *
+ * CONTRACT (frozen — must match Sprint 2 journeyStateToPromptMode):
+ *   onboarding:    first_visit, returning_no_page
+ *   steady_state:  draft_ready, active_fresh, active_stale, blocked
+ *
+ * Rationale: returning_no_page users have no draft yet — they still
+ * need the onboarding flow to collect initial facts.
+ */
+function mapJourneyStateToMode(state: JourneyState): PromptMode {
+  if (state === "first_visit" || state === "returning_no_page") return "onboarding";
+  return "steady_state";
+}
+
 export function assembleContext(
   scope: OwnerScope,
   language: string,
   clientMessages: Array<{ role: string; content: string }>,
   authInfo?: AuthInfo,
+  bootstrap?: BootstrapPayload,
 ): ContextResult {
-  const mode = detectMode(scope.knowledgeReadKeys);
+  // Use bootstrap journeyState when available, fall back to detectMode()
+  const mode: PromptMode = bootstrap
+    ? mapJourneyStateToMode(bootstrap.journeyState)
+    : detectMode(scope.knowledgeReadKeys);
 
   // --- Build context blocks ---
 

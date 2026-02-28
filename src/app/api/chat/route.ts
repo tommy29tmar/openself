@@ -1,6 +1,7 @@
 import { streamText, generateText, type CoreMessage } from "ai";
 import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
 import { assembleContext } from "@/lib/agent/context";
+import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { createAgentTools } from "@/lib/agent/tools";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
@@ -16,6 +17,7 @@ import {
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 import { enqueueSummaryJob } from "@/lib/services/summary-service";
+import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 
 /**
  * Per-profile message quota for authenticated users.
@@ -45,8 +47,6 @@ function checkAndIncrementQuota(
 
   return { allowed: result.changes === 1, count: row.count };
 }
-
-const AUTH_MESSAGE_LIMIT = 200;
 
 export async function POST(req: Request) {
   // Rate limiting
@@ -210,12 +210,21 @@ export async function POST(req: Request) {
   // Resolve auth for context injection
   const chatAuthCtx = multiUser ? getAuthContext(req) : null;
 
+  // --- Journey Intelligence: assemble bootstrap payload ---
+  // TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
+  // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
+  const authInfoForBootstrap = chatAuthCtx
+    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
+    : undefined;
+  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+
   // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
   const { systemPrompt, trimmedMessages, mode } = assembleContext(
     effectiveScope,
     sessionLanguage,
     messages,
-    chatAuthCtx ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null } : undefined,
+    authInfoForBootstrap,
+    bootstrap,
   );
 
   // Role whitelist: AI SDK expects only these roles
