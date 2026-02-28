@@ -1,4 +1,4 @@
-import { eq, and, like, or, sql, inArray } from "drizzle-orm";
+import { eq, and, like, or, sql, inArray, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   facts,
@@ -71,6 +71,25 @@ export type FactRow = {
   updatedAt: string | null;
 };
 
+// -- Sort order helpers
+
+export function getNextSortOrder(sessionId: string, category: string): number {
+  const row = db
+    .select({ maxOrder: sql<number>`MAX(sort_order)` })
+    .from(facts)
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
+    .get();
+  return (row?.maxOrder ?? -1) + 1;
+}
+
+/** NOTE: scoped to anchor session only — consistent with createFact/getNextSortOrder scoping. */
+export function updateFactSortOrder(sessionId: string, category: string, key: string, sortOrder: number): void {
+  db.update(facts)
+    .set({ sortOrder })
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
+    .run();
+}
+
 // -- CRUD Operations
 
 export async function createFact(
@@ -123,6 +142,7 @@ export async function createFact(
   const id = randomUUID();
   const now = new Date().toISOString();
   const effectiveProfileId = profileId ?? sessionId;
+  const sortOrder = getNextSortOrder(sessionId, normalized.canonical);
 
   db.insert(facts)
     .values({
@@ -135,6 +155,7 @@ export async function createFact(
       source: input.source ?? "chat",
       confidence,
       visibility,
+      sortOrder,
       createdAt: now,
       updatedAt: now,
     })
@@ -293,12 +314,12 @@ export function searchFacts(query: string, sessionId: string = "__default__", se
  */
 export function getAllFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
   if (PROFILE_ID_CANONICAL) {
-    return db.select().from(facts).where(eq(facts.profileId, sessionId)).all() as FactRow[];
+    return db.select().from(facts).where(eq(facts.profileId, sessionId)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
   }
   if (sessionIds && sessionIds.length > 0) {
-    return db.select().from(facts).where(inArray(facts.sessionId, sessionIds)).all() as FactRow[];
+    return db.select().from(facts).where(inArray(facts.sessionId, sessionIds)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
   }
-  return db.select().from(facts).where(eq(facts.sessionId, sessionId)).all() as FactRow[];
+  return db.select().from(facts).where(eq(facts.sessionId, sessionId)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
 }
 
 export function getFactsByCategory(category: string, sessionId: string = "__default__"): FactRow[] {

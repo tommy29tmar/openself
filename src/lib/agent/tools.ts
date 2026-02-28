@@ -8,6 +8,7 @@ import {
   getAllFacts,
   setFactVisibility,
   VisibilityTransitionError,
+  updateFactSortOrder,
 } from "@/lib/services/kb-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
@@ -891,6 +892,39 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
           info: { sectionCount: 0, factCount: 0 },
         };
+      }
+    },
+  }),
+
+  reorder_section_items: tool({
+    description:
+      "Reorder items within a section (e.g., skills, experiences, interests). Provide the fact keys in the desired order. Do NOT use reorder_sections for this — that tool reorders sections on the page, not items within a section.",
+    parameters: z.object({
+      category: z
+        .string()
+        .describe("The fact category whose items to reorder (e.g., 'skill', 'experience', 'interest')"),
+      orderedKeys: z
+        .array(z.string())
+        .describe("Array of fact keys in the desired display order"),
+    }),
+    execute: async ({ category, orderedKeys }) => {
+      try {
+        for (let i = 0; i < orderedKeys.length; i++) {
+          updateFactSortOrder(sessionId, category, orderedKeys[i], i);
+        }
+        let recomposeOk = true;
+        try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
+        return { success: true, category, orderedKeys, recomposeOk };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "reorder_section_items", error: String(error), category },
+        });
+        return { success: false, error: String(error) };
       }
     },
   }),

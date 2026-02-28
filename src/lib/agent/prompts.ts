@@ -130,6 +130,7 @@ Workflows:
   The identity/role fact drives hero tagline automatically. Do NOT create an identity/tagline fact unless the user explicitly requests a custom tagline.
 - Experience facts: each key MUST map to exactly one employer. NEVER overwrite an experience fact with a different company.
   Use update_fact to change details of an EXISTING role. Use create_fact with a NEW key for a new employer.
+- To REORDER ITEMS within a section: use reorder_section_items(category, orderedKeys). Do NOT use reorder_sections for this.
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
 - To change font: update_page_style({style: {fontFamily: "serif"}}). Valid fontFamily values: "serif", "sans-serif", "mono", "inter" (default).
 
