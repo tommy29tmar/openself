@@ -143,6 +143,21 @@ describe("F17/F22: Website platform localized", () => {
     expect(websiteLink).toBeDefined();
     expect(websiteLink.platform).toBe("Sito Web");
   });
+
+  it("localizes 'website' from social facts too", async () => {
+    const { composeOptimisticPage } = await import("@/lib/services/page-composer");
+    const facts = [
+      { id: "1", category: "identity", key: "name", value: { full: "Marco" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+      { id: "2", category: "social", key: "website", value: { platform: "website", url: "https://marco.dev" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
+    ];
+    const config = composeOptimisticPage(facts as any, "draft", "it");
+    const hero = config.sections.find((s) => s.type === "hero");
+    expect(hero).toBeDefined();
+    const links = (hero!.content as any).socialLinks ?? [];
+    const websiteLink = links.find((l: any) => l.url?.includes("marco.dev"));
+    expect(websiteLink).toBeDefined();
+    expect(websiteLink.platform).toBe("Sito Web");
+  });
 });
 
 // --- F27: Experience freelance redundancy ---

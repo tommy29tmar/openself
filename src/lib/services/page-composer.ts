@@ -463,10 +463,13 @@ function buildHeroSection(
 
   // ContactBar data (injected from social, contact, language facts)
   const socialLinks: { platform: string; url: string }[] = [];
+  const t = getUiL10n(language);
   for (const f of socialFacts ?? []) {
     const v = val(f);
-    const platform = str(v.platform) ?? str(v.name) ?? f.key;
+    let platform = str(v.platform) ?? str(v.name) ?? f.key;
     const url = str(v.url) ?? str(v.link);
+    // Localize "website" platform label from social facts (same as contact branch)
+    if (platform && /^website$/i.test(platform)) platform = t.platformWebsite;
     if (platform && url) socialLinks.push({ platform, url });
   }
 
@@ -476,7 +479,6 @@ function buildHeroSection(
     if (str(v.type) === "website") {
       const url = str(v.value) ?? str(v.url);
       if (url) {
-        const t = getUiL10n(language);
         socialLinks.push({ platform: t.platformWebsite, url: url.startsWith("http") ? url : `https://${url}` });
       }
     }

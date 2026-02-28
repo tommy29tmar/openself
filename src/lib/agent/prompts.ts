@@ -77,7 +77,7 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 |----------|-----------|-------------|
 | identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} |
 | experience | company-kebab | {role: "...", company: "...", start: "YYYY-MM", end: "YYYY-MM"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | type: "employment" (default if omitted), "freelance", or "client". Use "client" for project clients (e.g. Barilla branding). Clients appear in Projects section. |
-| education | institution-kebab | {institution: "...", degree: "...", field: "...", period: "YYYY-YYYY"} |
+| education | institution-kebab | {institution: "...", degree?: "...", field?: "...", period?: "YYYY-YYYY"} | Create education facts even without dates — period can be added later. |
 | project | project-kebab | {name: "...", description: "...", url?: "...", status: "active"|"completed", role?: "..."} |
 | skill | skill-kebab | {name: "...", level?: "beginner"|"intermediate"|"advanced"|"expert"} |
 | interest | interest-kebab | {name: "...", detail?: "..."} |
