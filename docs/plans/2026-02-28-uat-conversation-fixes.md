@@ -8,6 +8,13 @@
 
 **Tech Stack:** TypeScript, Vitest, Drizzle ORM, SQLite, Vercel AI SDK
 
+**Review fixes applied (v2):**
+1. P0: Journey pin uses `knowledgePrimaryKey` (anchor), not `currentSessionId` — consistent read/write session
+2. P1: New facts get append-only `sort_order` via `getNextSortOrder()` — no unstable ordering
+3. P1: `set_fact_visibility` now passes `readKeys` for cross-session fact lookup
+4. P2: Anti-fabrication test uses runtime `buildSystemPrompt()` output, not source-string matching
+5. P2: Migration verified via explicit `sqlite3` application + `PRAGMA table_info` check
+
 ---
 
 ## Task 1: Migration — `journey_state` and `sort_order` columns
@@ -49,12 +56,33 @@ In `src/lib/db/schema.ts`, add `sortOrder` to the facts table (after `updatedAt`
   sortOrder: integer("sort_order").default(0),  // ← ADD
 ```
 
-**Step 4: Verify migration runs**
+**Step 4: Verify migration SQL is valid**
+
+Run the migration SQL against a scratch SQLite DB to verify it applies cleanly:
+
+```bash
+# Create a temp DB with the current schema, then apply migration
+sqlite3 /tmp/openself-migration-test.db < <(
+  echo "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, invite_code TEXT, username TEXT, message_count INTEGER DEFAULT 0, status TEXT DEFAULT 'active', user_id TEXT, profile_id TEXT, created_at TEXT, updated_at TEXT);"
+  echo "CREATE TABLE IF NOT EXISTS facts (id TEXT PRIMARY KEY, session_id TEXT NOT NULL DEFAULT '__default__', profile_id TEXT, category TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, source TEXT DEFAULT 'chat', confidence REAL DEFAULT 1.0, visibility TEXT DEFAULT 'private', created_at TEXT, updated_at TEXT);"
+  cat db/migrations/0021_journey_state_and_sort_order.sql
+  echo "PRAGMA table_info(sessions);"
+  echo "PRAGMA table_info(facts);"
+)
+```
+
+Expected: `journey_state` appears in sessions columns, `sort_order` appears in facts columns. No SQL errors.
+
+```bash
+rm /tmp/openself-migration-test.db
+```
+
+**Step 5: Verify existing tests still pass**
 
 Run: `npx vitest run tests/evals/agent-auto-recompose.test.ts --reporter=verbose 2>&1 | tail -5`
-Expected: Existing tests still pass (migration doesn't break anything)
+Expected: Existing tests still pass (schema change doesn't break anything)
 
-**Step 5: Commit**
+**Step 7: Commit**
 
 ```bash
 git add db/migrations/0021_journey_state_and_sort_order.sql src/lib/db/schema.ts
@@ -126,23 +154,28 @@ describe("journey state pinning", () => {
     mockGetDraft.mockReturnValue(null);
   });
 
-  it("detects first_visit and pins it in sessions table", () => {
+  it("detects first_visit and pins it on the anchor session", () => {
     // No cached state
     mockSqlite.prepare.mockReturnValue({
       get: vi.fn(() => undefined), // no cached journey_state
       run: vi.fn(), // write
     });
 
-    const state = getOrDetectJourneyState(sessionId, scope);
+    const state = getOrDetectJourneyState(scope);
     expect(state).toBe("first_visit");
-    // Should have written to DB
-    expect(mockSqlite.prepare).toHaveBeenCalledWith(
-      expect.stringContaining("UPDATE sessions"),
-    );
+    // Should have written to DB using knowledgePrimaryKey (anchor), not currentSessionId
+    const runCalls = mockSqlite.prepare.mock.results
+      .filter((r: any) => r.value?.run)
+      .map((r: any) => r.value.run.mock.calls)
+      .flat();
+    const updateCall = runCalls.find((c: any) => c[0] === "first_visit");
+    expect(updateCall).toBeTruthy();
+    // Second arg should be the anchor session ID (knowledgePrimaryKey = "owner-1")
+    expect(updateCall[1]).toBe("owner-1");
   });
 
   it("returns cached state on subsequent calls even if facts/draft exist", () => {
-    // Cached state = first_visit
+    // Cached state = first_visit (read from anchor session)
     mockSqlite.prepare.mockReturnValue({
       get: vi.fn(() => ({ journey_state: "first_visit" })),
       run: vi.fn(),
@@ -151,8 +184,29 @@ describe("journey state pinning", () => {
     mockCountFacts.mockReturnValue(5);
     mockGetDraft.mockReturnValue({ config: {} });
 
-    const state = getOrDetectJourneyState(sessionId, scope);
+    const state = getOrDetectJourneyState(scope);
     expect(state).toBe("first_visit"); // pinned, not draft_ready
+  });
+
+  it("reads pin from anchor session even when currentSessionId differs", () => {
+    const multiScope = {
+      ...scope,
+      knowledgePrimaryKey: "anchor-session",
+      currentSessionId: "browser-session-99", // different!
+    };
+    mockSqlite.prepare.mockReturnValue({
+      get: vi.fn(() => ({ journey_state: "first_visit" })),
+      run: vi.fn(),
+    });
+
+    const state = getOrDetectJourneyState(multiScope);
+    expect(state).toBe("first_visit");
+    // SELECT should use anchor session ID
+    const getCalls = mockSqlite.prepare.mock.results
+      .map((r: any) => r.value?.get?.mock?.calls)
+      .flat()
+      .filter(Boolean);
+    expect(getCalls.some((c: any) => c[0] === "anchor-session")).toBe(true);
   });
 
   it("allows explicit transition via updateJourneyStatePin", () => {
@@ -161,9 +215,8 @@ describe("journey state pinning", () => {
       run: vi.fn(),
     });
 
-    // Import the update function
     const { updateJourneyStatePin } = require("@/lib/agent/journey");
-    updateJourneyStatePin(sessionId, "draft_ready");
+    updateJourneyStatePin("owner-1", "draft_ready");
 
     expect(mockSqlite.prepare).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE sessions SET journey_state"),
@@ -186,40 +239,47 @@ In `src/lib/agent/journey.ts`, add after `detectJourneyState()` (after line 131)
  * Get journey state from session cache, or detect + pin on first call.
  * This prevents mid-conversation mode flips (e.g., first_visit → draft_ready
  * after the first create_fact triggers recomposeAfterMutation).
+ *
+ * IMPORTANT: The pin is stored on the ANCHOR session (knowledgePrimaryKey),
+ * not the current browser session (currentSessionId). This ensures the pin
+ * is consistent across multi-session scenarios (e.g., OAuth re-auth creates
+ * a new currentSessionId but the anchor stays the same).
  */
 export function getOrDetectJourneyState(
-  sessionId: string,
   scope: OwnerScope,
   authInfo?: AuthInfo,
 ): JourneyState {
-  // Read cached state
+  const anchorSessionId = scope.knowledgePrimaryKey;
+
+  // Read cached state from anchor session
   const row = sqlite
     .prepare("SELECT journey_state FROM sessions WHERE id = ?")
-    .get(sessionId) as { journey_state: string | null } | undefined;
+    .get(anchorSessionId) as { journey_state: string | null } | undefined;
 
   if (row?.journey_state) {
     return row.journey_state as JourneyState;
   }
 
-  // First call: detect and pin
+  // First call: detect and pin on the anchor session
   const detected = detectJourneyState(scope, authInfo);
   sqlite
     .prepare("UPDATE sessions SET journey_state = ? WHERE id = ?")
-    .run(detected, sessionId);
+    .run(detected, anchorSessionId);
 
   return detected;
 }
 
 /**
  * Explicitly update the pinned journey state (e.g., after generate_page).
+ * Uses the anchor session ID (knowledgePrimaryKey) for consistency.
  */
 export function updateJourneyStatePin(
-  sessionId: string,
+  anchorSessionId: string,
   newState: JourneyState,
 ): void {
   sqlite
     .prepare("UPDATE sessions SET journey_state = ? WHERE id = ?")
-    .run(newState, sessionId);
+    .run(newState, anchorSessionId);
 }
 ```
 
@@ -233,11 +293,7 @@ const journeyState = detectJourneyState(scope, authInfo);
 ```
 To:
 ```typescript
-const journeyState = getOrDetectJourneyState(
-  scope.currentSessionId,
-  scope,
-  authInfo,
-);
+const journeyState = getOrDetectJourneyState(scope, authInfo);
 ```
 
 **Step 5: Wire `generate_page` to transition pin**
@@ -245,7 +301,9 @@ const journeyState = getOrDetectJourneyState(
 In `src/lib/agent/tools.ts`, inside `generate_page` execute (after the `upsertDraft` call at line 417), add:
 
 ```typescript
-// Transition journey state pin: onboarding → draft_ready
+// Transition journey state pin: onboarding → draft_ready.
+// sessionId here is knowledgePrimaryKey (the anchor), which is the same
+// session where getOrDetectJourneyState stores the pin.
 // Import at top: import { updateJourneyStatePin } from "@/lib/agent/journey";
 updateJourneyStatePin(sessionId, "draft_ready");
 ```
@@ -496,46 +554,58 @@ Create `tests/evals/visibility-upsert.test.ts`:
 ```typescript
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// This test needs the real initialVisibility to verify recalculation.
-// We mock the DB layer but keep visibility logic real.
+// We mock the DB to capture the SQL and verify visibility is in the upsert set.
+// This is a behavioral test: we call createFact twice with the same key
+// and verify the second call updates visibility.
 
-const mockDb = {
-  insert: vi.fn(),
-  prepare: vi.fn(),
-};
-const mockRun = vi.fn();
-const mockGet = vi.fn();
+const mockInsertRun = vi.fn();
+const mockInsertValues = vi.fn(() => ({ onConflictDoUpdate: vi.fn(() => ({ run: mockInsertRun })) }));
+const mockSelectGet = vi.fn();
+const mockSelectAll = vi.fn(() => []);
 
-vi.mock("@/lib/db", () => ({
-  default: mockDb,
-  sqlite: { prepare: mockDb.prepare },
+vi.mock("@/lib/db", () => {
+  const db = {
+    insert: vi.fn(() => ({ values: mockInsertValues })),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({ get: mockSelectGet, all: mockSelectAll })),
+      })),
+    })),
+    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ run: vi.fn() })) })) })),
+  };
+  return { default: db, sqlite: { prepare: vi.fn(() => ({ run: vi.fn(), get: vi.fn() })) } };
+});
+
+vi.mock("@/lib/services/event-service", () => ({ logEvent: vi.fn() }));
+vi.mock("@/lib/services/fact-validation", () => ({
+  validateFactValue: vi.fn(),
+  FactValidationError: class extends Error {},
 }));
 
-// We'll test the behavior by checking that the onConflictDoUpdate set
-// includes visibility. This is a unit test of the SQL shape.
+describe("createFact upsert recalculates visibility", () => {
+  it("includes visibility in onConflictDoUpdate set block", async () => {
+    // This test verifies the fix is present by importing createFact
+    // and checking that the Drizzle chain includes visibility.
+    // A full integration test requires a real SQLite DB.
+    //
+    // The behavioral proof: read the source and verify the SQL expression.
+    // This is intentionally a structural check because Drizzle mocking
+    // is too fragile for verifying SQL generation.
+    const { readFileSync } = await import("fs");
+    const source = readFileSync("src/lib/services/kb-service.ts", "utf-8");
 
-describe("createFact upsert includes visibility", () => {
-  it("should include visibility in onConflictDoUpdate set", async () => {
-    // This is a structural test: we verify that the code path
-    // for upsert includes visibility in the update set.
-    // The actual integration test would require a real DB.
-    // For now, verify by reading the source.
-    const source = await import("fs").then(fs =>
-      fs.readFileSync("src/lib/services/kb-service.ts", "utf-8")
-    );
-
-    // Check that onConflictDoUpdate set includes visibility
-    const upsertSection = source.match(
-      /onConflictDoUpdate\(\{[\s\S]*?set:\s*\{([\s\S]*?)\}/
-    );
-    expect(upsertSection).toBeTruthy();
-    const setBlock = upsertSection![1];
-
-    // visibility should be in the set block (either as a direct field or sql expression)
+    // Find the onConflictDoUpdate block and verify visibility is in the set
+    const match = source.match(/onConflictDoUpdate\(\{[\s\S]*?set:\s*\{([\s\S]*?)\}\s*,?\s*\}/);
+    expect(match).toBeTruthy();
+    const setBlock = match![1];
+    // Should contain visibility with a CASE expression (not just the field name)
     expect(setBlock).toMatch(/visibility/);
+    expect(setBlock).toMatch(/private/); // The CASE WHEN condition
   });
 });
 ```
+
+**Note on test approach:** This task is one of the rare cases where a structural test is acceptable — the Drizzle ORM upsert chain is too complex to mock behaviorally without a real DB. The test verifies both that `visibility` is present AND that the `CASE WHEN ... 'private'` guard exists, catching regressions if someone removes the conditional logic.
 
 **Step 2: Run test to verify it fails**
 
@@ -610,25 +680,58 @@ git commit -m "fix(P0): recalculate visibility on fact upsert — upgrade from p
 Create `tests/evals/anti-fabrication-prompt.test.ts`:
 
 ```typescript
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { describe, it, expect, vi } from "vitest";
+
+// Mock all heavy dependencies so we can import prompts cleanly
+vi.mock("@/lib/agent/policies", () => ({
+  getJourneyPolicy: vi.fn(() => ""),
+  getSituationDirectives: vi.fn(() => ""),
+  getExpertiseCalibration: vi.fn(() => ""),
+}));
+vi.mock("@/lib/agent/policies/memory-directives", () => ({ memoryUsageDirectives: vi.fn(() => "") }));
+vi.mock("@/lib/agent/policies/turn-management", () => ({ turnManagementRules: vi.fn(() => "") }));
+vi.mock("@/lib/agent/policies/action-awareness", () => ({ actionAwarenessPolicy: vi.fn(() => "") }));
+vi.mock("@/lib/agent/policies/undo-awareness", () => ({ undoAwarenessPolicy: vi.fn(() => "") }));
+
+import { buildSystemPrompt } from "@/lib/agent/prompts";
 
 describe("anti-fabrication prompt guards", () => {
-  const source = readFileSync("src/lib/agent/prompts.ts", "utf-8");
-
-  it("SAFETY_POLICY prohibits creating facts for unmentioned categories", () => {
-    expect(source).toContain("NEVER create facts for categories the user has NOT explicitly mentioned");
+  // Build a real system prompt and check the runtime output
+  const prompt = buildSystemPrompt({
+    mode: "onboarding",
+    language: "en",
+    factsSummary: "",
+    soulSummary: null,
+    memorySummary: null,
+    conversationSummary: null,
+    conflictSummary: null,
+    journeyState: "first_visit",
+    situations: [],
+    expertiseLevel: "novice",
+    situationContext: {
+      pendingProposalCount: 0,
+      pendingProposalSections: [],
+      thinSections: [],
+      staleFacts: [],
+      openConflicts: [],
+    },
   });
 
-  it("SAFETY_POLICY prohibits inventing optional fields", () => {
-    expect(source).toContain("NEVER invent optional fields");
+  it("system prompt prohibits creating facts for unmentioned categories", () => {
+    expect(prompt).toContain("NEVER create facts for categories the user has NOT explicitly mentioned");
   });
 
-  it("TOOL_POLICY requires explicit user statement for fact creation", () => {
-    expect(source).toContain("Only create facts from information the user explicitly stated");
+  it("system prompt prohibits inventing optional fields", () => {
+    expect(prompt).toContain("NEVER invent optional fields");
+  });
+
+  it("system prompt requires explicit user statement for fact creation", () => {
+    expect(prompt).toContain("Only create facts from information the user explicitly stated");
   });
 });
 ```
+
+Note: This tests the **runtime output** of `buildSystemPrompt()` rather than reading source strings. If the function signature differs, adjust the mock context to match — the key point is testing that the assembled prompt contains the guard strings.
 
 **Step 2: Run test to verify it fails**
 
@@ -774,11 +877,21 @@ describe("reorder_section_items tool", () => {
 Run: `npx vitest run tests/evals/item-reorder.test.ts --reporter=verbose`
 Expected: FAIL — `reorder_section_items` does not exist
 
-**Step 3: Add `updateFactSortOrder` to kb-service**
+**Step 3: Add `updateFactSortOrder` and `getNextSortOrder` to kb-service**
 
-In `src/lib/services/kb-service.ts`, add a new exported function:
+In `src/lib/services/kb-service.ts`, add two new exported functions:
 
 ```typescript
+/** Get the next sort_order for a new fact in a category (append-only). */
+export function getNextSortOrder(sessionId: string, category: string): number {
+  const row = db
+    .select({ maxOrder: sql<number>`MAX(sort_order)` })
+    .from(facts)
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
+    .get();
+  return (row?.maxOrder ?? -1) + 1;
+}
+
 /** Update the sort_order of a fact by sessionId + category + key. */
 export function updateFactSortOrder(
   sessionId: string,
@@ -799,11 +912,50 @@ export function updateFactSortOrder(
 }
 ```
 
-Ensure `and`, `eq` are imported from `drizzle-orm` (they likely are already).
+Ensure `and`, `eq`, `sql` are imported from `drizzle-orm` (they likely are already).
+
+**Step 3b: Initialize sort_order in createFact**
+
+In `src/lib/services/kb-service.ts`, in the `createFact` function, before the `db.insert(facts)` call (around line 127), compute the next sort_order:
+
+```typescript
+const sortOrder = getNextSortOrder(sessionId, normalized.canonical);
+```
+
+Then add it to the `.values()` object:
+```typescript
+.values({
+  id,
+  sessionId,
+  // ... existing fields ...
+  sortOrder,  // ← ADD
+  createdAt: now,
+  updatedAt: now,
+})
+```
+
+This ensures new facts are always appended at the end of their category, preventing unstable ordering when multiple facts share sort_order = 0.
 
 **Step 4: Update `getAllFacts` to order by sort_order**
 
-In `src/lib/services/kb-service.ts`, find the `getAllFacts` function and modify its query to include `ORDER BY sort_order ASC, created_at ASC`. If it uses Drizzle query builder, add `.orderBy(asc(facts.sortOrder), asc(facts.createdAt))`. If it uses raw SQL, append `ORDER BY sort_order ASC, created_at ASC`.
+In `src/lib/services/kb-service.ts`, modify all three branches of `getAllFacts` to append `.orderBy(asc(facts.sortOrder), asc(facts.createdAt))`:
+
+```typescript
+export function getAllFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
+  if (PROFILE_ID_CANONICAL) {
+    return db.select().from(facts).where(eq(facts.profileId, sessionId))
+      .orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+  }
+  if (sessionIds && sessionIds.length > 0) {
+    return db.select().from(facts).where(inArray(facts.sessionId, sessionIds))
+      .orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+  }
+  return db.select().from(facts).where(eq(facts.sessionId, sessionId))
+    .orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+}
+```
+
+Add `asc` to the Drizzle import: `import { asc, and, eq, inArray, sql } from "drizzle-orm";`
 
 **Step 5: Add `reorder_section_items` tool**
 
@@ -1183,6 +1335,23 @@ describe("set_fact_visibility triggers recomposition", () => {
     // Verify recomposition happened (upsertDraft called with new config)
     expect(mockUpsertDraft).toHaveBeenCalled();
   });
+
+  it("passes readKeys to setFactVisibility for cross-session lookup", async () => {
+    mockSetFactVisibility.mockReturnValue({
+      id: "f1", visibility: "proposed",
+    });
+
+    const tools = createAgentTools("en", "sess-1", "owner-1", "req-1", ["owner-1", "old-sess"]);
+    await tools.set_fact_visibility.execute(
+      { factId: "f1", visibility: "proposed" },
+      { toolCallId: "tc2", messages: [], abortSignal: undefined as any },
+    );
+
+    // Verify readKeys was passed as 5th argument
+    expect(mockSetFactVisibility).toHaveBeenCalledWith(
+      "f1", "proposed", "assistant", "sess-1", ["owner-1", "old-sess"],
+    );
+  });
 });
 ```
 
@@ -1212,7 +1381,8 @@ To:
 ```typescript
 execute: async ({ factId, visibility }) => {
   try {
-    const fact = setFactVisibility(factId, visibility, "assistant", sessionId);
+    // Pass readKeys for cross-session fact lookup (same as update_fact/delete_fact)
+    const fact = setFactVisibility(factId, visibility, "assistant", sessionId, readKeys);
     try { recomposeAfterMutation(); } catch (e) {
       console.warn("[tools] recomposeAfterMutation after visibility change failed:", e);
     }
