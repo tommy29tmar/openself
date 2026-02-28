@@ -819,10 +819,18 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         .string()
         .describe("The username for the page to inspect"),
     }),
-    execute: async ({ username }) => {
+    execute: async ({ username: _username }) => {
+      const emptyResult = (error: string) => ({
+        error,
+        layout: { template: "unknown", theme: "unknown", style: {} },
+        sections: [] as { id: string; type: string; slot: string; widget: string; locked: boolean; complete: boolean; richness: string }[],
+        availableSlots: [] as string[],
+        warnings: [] as string[],
+      });
+
       try {
         const draft = getDraft(sessionId);
-        if (!draft) return { error: "No draft found" } as any;
+        if (!draft) return emptyResult("No draft found");
 
         const config = draft.config;
         const template = resolveLayoutTemplate(config);
@@ -831,7 +839,6 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const publishable = filterPublishableFacts(allFacts);
 
         const sections = config.sections.map((s: any) => {
-          // Find which slot this section landed in
           let slot = "unknown";
           for (const [slotId, slotSections] of Object.entries(slotGroups)) {
             if ((slotSections as any[]).some((ss: any) => ss.id === s.id)) {
@@ -852,11 +859,11 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
         const warnings: string[] = [];
         sections
-          .filter((s: any) => s.richness === "thin")
-          .forEach((s: any) => warnings.push(`${s.type} section is thin`));
+          .filter((s) => s.richness === "thin")
+          .forEach((s) => warnings.push(`${s.type} section is thin`));
         sections
-          .filter((s: any) => !s.complete)
-          .forEach((s: any) => warnings.push(`${s.type} section is incomplete`));
+          .filter((s) => !s.complete)
+          .forEach((s) => warnings.push(`${s.type} section is incomplete`));
         if (
           !allFacts.some(
             (f: any) => f.category === "contact" && f.visibility !== "private",
@@ -881,7 +888,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           actor: "assistant",
           payload: { requestId, tool: "inspect_page_state", error: String(error) },
         });
-        return { error: String(error) } as any;
+        return emptyResult(String(error));
       }
     },
   }),
