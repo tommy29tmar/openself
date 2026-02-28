@@ -9,7 +9,7 @@
  */
 
 import { sqlite } from "@/lib/db";
-import { countFacts, getAllFacts } from "@/lib/services/kb-service";
+import { countFacts, getAllFacts, type FactRow } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage, getDraft, getPublishedUsername } from "@/lib/services/page-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
@@ -135,12 +135,12 @@ export function detectJourneyState(
 // ---------------------------------------------------------------------------
 
 export function detectSituations(
-  facts: Array<{ id: string; category: string; key: string; value: unknown; updatedAt: string | null }>,
+  facts: FactRow[],
   ownerKey: string,
   opts?: {
     pendingProposalCount?: number;
     openConflicts?: Array<{ category: string; key: string }>;
-    publishableFacts?: Array<{ id: string; category: string; key: string; value: unknown; updatedAt: string | null }>;
+    publishableFacts?: FactRow[];
   },
 ): Situation[] {
   const situations: Situation[] = [];

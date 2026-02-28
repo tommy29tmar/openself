@@ -241,7 +241,7 @@ describe("detectJourneyState", () => {
 // ---------------------------------------------------------------------------
 describe("detectSituations", () => {
   const baseFacts = [
-    { id: "f1", category: "identity", key: "name", value: { full: "Alice" }, updatedAt: new Date().toISOString() },
+    { id: "f1", category: "identity", key: "name", value: { full: "Alice" }, source: "chat", confidence: 1, visibility: "public", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   ];
 
   it("returns has_name when name fact exists", () => {
@@ -251,7 +251,7 @@ describe("detectSituations", () => {
 
   it("returns has_name when legacy full-name fact exists", () => {
     const legacyFacts = [
-      { id: "f1", category: "identity", key: "full-name", value: { full: "Bob" }, updatedAt: new Date().toISOString() },
+      { id: "f1", category: "identity", key: "full-name", value: { full: "Bob" }, source: "chat", confidence: 1, visibility: "public", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     ];
     const result = detectSituations(legacyFacts, "cog-1");
     expect(result).toContain("has_name");
@@ -277,6 +277,10 @@ describe("detectSituations", () => {
       category: "skill",
       key: "typescript",
       value: { name: "TypeScript" },
+      source: "chat",
+      confidence: 1,
+      visibility: "public",
+      createdAt: oldDate.toISOString(),
       updatedAt: oldDate.toISOString(),
     };
     const result = detectSituations([staleFact], "cog-1");

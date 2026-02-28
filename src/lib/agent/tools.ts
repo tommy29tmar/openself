@@ -912,7 +912,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
             id: s.id,
             type: s.type,
             slot,
-            widget: s.widget ?? "default",
+            widget: s.widgetId ?? "default",
             locked: !!s.lock,
             complete: isSectionComplete(s),
             richness: classifySectionRichness(publishable, s.type),

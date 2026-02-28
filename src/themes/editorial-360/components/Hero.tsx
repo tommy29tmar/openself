@@ -100,7 +100,7 @@ export function Hero({ content, variant = "hero-split" }: SectionProps<HeroConte
                                         rel="noopener noreferrer"
                                         className="hover-underline-grow text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors uppercase tracking-[0.05em] text-xs font-medium"
                                     >
-                                        {link.label ?? link.platform}
+                                        {(link as { platform: string; url: string; label?: string }).label ?? link.platform}
                                     </a>
                                 </React.Fragment>
                             ))}
