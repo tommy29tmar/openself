@@ -10,6 +10,10 @@
 
 **Design doc:** `docs/plans/2026-03-01-agent-brain-v2-design.md`
 
+> **Note (M1):** Line numbers in this plan are approximate references to the codebase at time of writing. They may drift as earlier tasks modify files. Always verify the target location before editing.
+
+> **Note (M3):** FACT_SCHEMA_REFERENCE compression (~50 tokens recoverable) is not a separate task. Apply opportunistically when editing `prompts.ts` in Task 16.
+
 ---
 
 ## Layer 0: Prerequisites
@@ -93,6 +97,107 @@ Expected: PASS
 ```bash
 git add db/migrations/0019_smart_facts.sql src/lib/db/schema.ts src/lib/services/kb-service.ts tests/evals/smart-facts-schema.test.ts
 git commit -m "feat: migration 0019 — sortOrder, parentFactId, archivedAt, sessions.metadata"
+```
+
+---
+
+### Task 1b: Session Metadata Helper
+
+**Files:**
+- Create: `src/lib/services/session-metadata.ts`
+- Test: `tests/evals/session-metadata.test.ts`
+
+> **S1:** This helper is used by 3 tasks: Task 12 (archetype caching in session), Task 13 (operation journal persistence), Task 14 (coherence issues storage). Defining it once here avoids inline duplication.
+
+**Step 1: Write failing tests**
+
+```typescript
+// tests/evals/session-metadata.test.ts
+import { describe, it, expect, beforeEach } from "vitest";
+import { getSessionMeta, setSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
+
+describe("session-metadata helper", () => {
+  it("getSessionMeta returns parsed JSON from sessions.metadata", () => {
+    // session has metadata='{"archetype":"developer"}'
+    // getSessionMeta(sessionId) → { archetype: "developer" }
+  });
+
+  it("getSessionMeta returns {} for default metadata", () => {
+    // session has metadata='{}'
+    // getSessionMeta(sessionId) → {}
+  });
+
+  it("setSessionMeta writes entire metadata object", () => {
+    // setSessionMeta(sessionId, { archetype: "developer" })
+    // getSessionMeta(sessionId) → { archetype: "developer" }
+  });
+
+  it("mergeSessionMeta merges without overwriting existing keys", () => {
+    // session has metadata='{"archetype":"developer"}'
+    // mergeSessionMeta(sessionId, { coherenceIssues: [...] })
+    // result → { archetype: "developer", coherenceIssues: [...] }
+  });
+
+  it("mergeSessionMeta can delete a key by setting to undefined", () => {
+    // session has metadata='{"archetype":"developer","stale":true}'
+    // mergeSessionMeta(sessionId, { stale: undefined })
+    // result → { archetype: "developer" }
+  });
+});
+```
+
+**Step 2: Run tests to verify they fail**
+
+Run: `npx vitest run tests/evals/session-metadata.test.ts`
+Expected: FAIL
+
+**Step 3: Implement**
+
+Create `src/lib/services/session-metadata.ts`:
+
+```typescript
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sessions } from "@/lib/db/schema";
+
+export type SessionMeta = Record<string, unknown>;
+
+export function getSessionMeta(sessionId: string): SessionMeta {
+  const row = db.select({ metadata: sessions.metadata })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .get();
+  if (!row?.metadata) return {};
+  try { return JSON.parse(row.metadata); } catch { return {}; }
+}
+
+export function setSessionMeta(sessionId: string, meta: SessionMeta): void {
+  db.update(sessions)
+    .set({ metadata: JSON.stringify(meta) })
+    .where(eq(sessions.id, sessionId))
+    .run();
+}
+
+export function mergeSessionMeta(sessionId: string, partial: Record<string, unknown>): SessionMeta {
+  const current = getSessionMeta(sessionId);
+  for (const [k, v] of Object.entries(partial)) {
+    if (v === undefined) delete current[k];
+    else current[k] = v;
+  }
+  setSessionMeta(sessionId, current);
+  return current;
+}
+```
+
+**Step 4: Run tests**
+
+Run: `npx vitest run tests/evals/session-metadata.test.ts`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git commit -m "feat: session-metadata helper — get/set/merge for sessions.metadata JSON"
 ```
 
 ---
@@ -277,7 +382,33 @@ if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
 }
 ```
 
-**Step 5: Wire cascade into deleteFact()**
+**Step 5: Wire cascade warning into updateFact()**
+
+In `src/lib/services/kb-service.ts`, inside `updateFact()`, after the existing fact lookup:
+
+```typescript
+// Cascade warning: check if fact has children
+const children = db.select({ count: sql<number>`count(*)` })
+  .from(facts)
+  .where(and(eq(facts.parentFactId, input.factId), isNull(facts.archivedAt)))
+  .get();
+const hasChildren = (children?.count ?? 0) > 0;
+```
+
+Then include `warnings` in the return when `hasChildren`:
+
+```typescript
+return {
+  ...existing,
+  value: input.value,
+  updatedAt: now,
+  ...(hasChildren ? { _warnings: [`This fact has ${children!.count} child fact(s) that may need updating`] } : {}),
+} as FactRow;
+```
+
+> Note: `_warnings` is a transient field, not part of FactRow — the tool layer reads it and surfaces to the LLM.
+
+**Step 6: Wire cascade into deleteFact()**
 
 In `src/lib/services/kb-service.ts:228-265`, after deletion:
 
@@ -289,12 +420,12 @@ db.update(facts)
   .run();
 ```
 
-**Step 6: Run tests**
+**Step 7: Run tests**
 
 Run: `npx vitest run tests/evals/fact-constraints.test.ts`
 Expected: PASS
 
-**Step 7: Commit**
+**Step 8: Commit**
 
 ```bash
 git commit -m "feat: FactConstraintError — current uniqueness per-category + cascade orphan cleanup"
@@ -365,6 +496,15 @@ describe("refineArchetype", () => {
       { category: "skill" }, { category: "skill" },
       { category: "identity" },
     ];
+    expect(refineArchetype(facts as any, "developer")).toBe("developer");
+  });
+
+  it("does not use 'experience' category for refinement (not discriminating)", () => {
+    const facts = [
+      { category: "experience" }, { category: "experience" }, { category: "experience" },
+      { category: "experience" }, { category: "experience" },
+    ];
+    // experience is NOT in CATEGORY_TO_ARCHETYPE — everyone has experience
     expect(refineArchetype(facts as any, "developer")).toBe("developer");
   });
 });
@@ -645,22 +785,43 @@ export function assignSlotsFromFacts(
 ): AssignResult
 ```
 
+Add a `isSlotValid` helper (local to this module):
+
+```typescript
+/** Check slot exists, accepts the section type, and has remaining capacity */
+function isSlotValid(
+  slotId: string,
+  sectionType: string,
+  template: LayoutTemplateDefinition,
+  slotUsage: Map<string, number>,
+): boolean {
+  const slot = template.slots.find(s => s.id === slotId);
+  if (!slot) return false;
+  if (!slot.accepts.includes(sectionType as any)) return false;
+  const used = slotUsage.get(slotId) ?? 0;
+  if (slot.maxSections && used >= slot.maxSections) return false;
+  return true;
+}
+```
+
 In Phase 1, extend the lock check to also handle soft-pins:
 
 ```typescript
 // Phase 1: locked sections AND soft-pinned sections
+const slotUsage = new Map<string, number>(); // track consumed capacity
+
 for (const section of sections) {
   const lock = locks?.get(section.id) ?? section.lock;
   const draftSlot = draftSlots?.get(section.id);
 
   if (lock?.position && section.slot) {
     // Hard lock: keep slot unconditionally
-    consumeSlot(section.slot);
+    consumeSlot(section.slot, slotUsage);
     result.push(section);
-  } else if (draftSlot && isSlotValid(draftSlot, section.type, template)) {
+  } else if (draftSlot && isSlotValid(draftSlot, section.type, template, slotUsage)) {
     // Soft-pin: keep draft slot if valid + has capacity
     section.slot = draftSlot;
-    consumeSlot(draftSlot);
+    consumeSlot(draftSlot, slotUsage);
     result.push(section);
   } else {
     unassigned.push(section);
@@ -670,7 +831,26 @@ for (const section of sections) {
 
 **Step 4: Implement carry-over in projectCanonicalConfig**
 
-In `src/lib/services/page-projection.ts:39-93`, after section ordering (line 89):
+> **CRITICAL (C3):** `composeOptimisticPage()` already calls `assignSlotsFromFacts()` internally.
+> Calling it again in `projectCanonicalConfig()` would be a double-run.
+> Solution: pass `draftSlots` into `composeOptimisticPage()` so the FIRST call already applies soft-pins.
+> This avoids re-running the entire Phase 1→2→3 pipeline twice.
+
+In `src/lib/services/page-composer.ts`, update `composeOptimisticPage()` signature to accept optional `draftSlots`:
+
+```typescript
+export function composeOptimisticPage(
+  facts: FactRow[],
+  username: string,
+  language: string,
+  layoutTemplate?: LayoutTemplateId,
+  draftSlots?: Map<string, string>,  // NEW: carry-over from previous draft
+): PageConfig
+```
+
+Pass `draftSlots` through to `assignSlotsFromFacts()` at the point where it's called inside `composeOptimisticPage`.
+
+In `src/lib/services/page-projection.ts:39-93`, build the `draftSlots` map and pass it through:
 
 ```typescript
 // 5. Build draftSlots map for carry-over
@@ -681,16 +861,16 @@ if (draftMeta) {
   }
 }
 
-// 6. Re-run slot assignment with soft-pins
-if (draftSlots.size > 0 && config.layoutTemplate) {
-  const template = getLayoutTemplate(config.layoutTemplate);
-  if (template) {
-    const locks = new Map(config.sections.filter(s => s.lock).map(s => [s.id, s.lock!]));
-    const { sections: reassigned } = assignSlotsFromFacts(template, config.sections, locks, { repair: true }, draftSlots);
-    config = { ...config, sections: reassigned };
-  }
-}
+// Pass draftSlots through to composeOptimisticPage (which passes them to assignSlotsFromFacts)
+const composed = composeOptimisticPage(
+  publishable, username, factLanguage,
+  draftMeta?.layoutTemplate,
+  draftSlots.size > 0 ? draftSlots : undefined,
+);
 ```
+
+> This replaces the naive approach of re-running assignSlotsFromFacts a second time.
+> The `draftSlots` parameter flows: `projectCanonicalConfig` → `composeOptimisticPage` → `assignSlotsFromFacts`.
 
 **Step 5: Run tests**
 
@@ -710,15 +890,13 @@ git commit -m "feat: slot carry-over — soft-pin in assignSlotsFromFacts + proj
 
 ---
 
-### Task 8: New Tools — batch_facts, archive_fact, unarchive_fact, reorder_items
+### Task 8a: batch_facts Tool
 
 **Files:**
-- Modify: `src/lib/agent/tools.ts:36+` (add 4 new tools + update constraint error handling)
+- Modify: `src/lib/agent/tools.ts:36+` (add batch_facts tool + FactConstraintError handling in create/update)
 - Test: `tests/evals/batch-facts-tool.test.ts`
-- Test: `tests/evals/archive-fact-tool.test.ts`
-- Test: `tests/evals/reorder-items-tool.test.ts`
 
-**Step 1: Write failing tests for batch_facts**
+**Step 1: Write failing tests**
 
 ```typescript
 // tests/evals/batch-facts-tool.test.ts
@@ -754,7 +932,98 @@ describe("batch_facts tool", () => {
 });
 ```
 
-**Step 2: Write failing tests for archive/unarchive**
+**Step 2: Run tests to verify they fail**
+
+Run: `npx vitest run tests/evals/batch-facts-tool.test.ts`
+Expected: FAIL
+
+**Step 3: Implement batch_facts tool**
+
+In `src/lib/agent/tools.ts`, inside the `createAgentTools()` closure:
+
+> **CRITICAL (C1):** `batch_facts` MUST call kb-service functions directly (`createFact`, `updateFact`, `deleteFact` from `kb-service.ts`), NOT the tool wrappers (which each trigger `recomposeAfterMutation`). The tool layer performs ONE recompose at the end of the batch, not N recomposes per operation.
+
+```typescript
+batch_facts: tool({
+  description: "Execute multiple fact operations atomically (all-or-nothing).",
+  parameters: z.object({
+    operations: z.array(z.object({
+      action: z.enum(["create", "update", "delete"]),
+      // create: category, key, value required
+      // update: factId, value required
+      // delete: factId required
+      category: z.string().optional(),
+      key: z.string().optional(),
+      value: z.record(z.unknown()).optional(),
+      factId: z.string().optional(),
+      source: z.string().optional(),
+      confidence: z.number().optional(),
+    })).max(20),
+  }),
+  execute: async ({ operations }) => {
+    let created = 0, updated = 0, deleted = 0;
+
+    // All-or-nothing: run in SQLite transaction
+    db.transaction(() => {
+      for (const op of operations) {
+        switch (op.action) {
+          case "create":
+            // Call kb-service createFact directly (NOT the tool wrapper)
+            createFact({ category: op.category!, key: op.key!, value: op.value!, source: op.source, confidence: op.confidence }, sessionId, profileId);
+            created++;
+            break;
+          case "update":
+            updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
+            updated++;
+            break;
+          case "delete":
+            deleteFact(op.factId!, sessionId, readKeys);
+            deleted++;
+            break;
+        }
+      }
+    })();
+
+    // Single recompose after entire batch
+    recomposeAfterMutation();
+
+    return { success: true, created, updated, deleted };
+  },
+}),
+```
+
+Also update existing `create_fact` and `update_fact` try/catch blocks to handle `FactConstraintError`:
+```typescript
+} catch (err) {
+  if (err instanceof FactValidationError) { ... }
+  if (err instanceof FactConstraintError) {
+    return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion };
+  }
+  throw err;
+}
+```
+
+**Step 4: Run tests**
+
+Run: `npx vitest run tests/evals/batch-facts-tool.test.ts`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git commit -m "feat: batch_facts tool — atomic multi-operation with single recompose"
+```
+
+---
+
+### Task 8b: archive_fact, unarchive_fact, reorder_items Tools
+
+**Files:**
+- Modify: `src/lib/agent/tools.ts` (add 3 tools)
+- Test: `tests/evals/archive-fact-tool.test.ts`
+- Test: `tests/evals/reorder-items-tool.test.ts`
+
+**Step 1: Write failing tests for archive/unarchive**
 
 ```typescript
 // tests/evals/archive-fact-tool.test.ts
@@ -774,7 +1043,7 @@ describe("unarchive_fact tool", () => {
 });
 ```
 
-**Step 3: Write failing tests for reorder_items**
+**Step 2: Write failing tests for reorder_items**
 
 ```typescript
 // tests/evals/reorder-items-tool.test.ts
@@ -791,43 +1060,28 @@ describe("reorder_items tool", () => {
 });
 ```
 
-**Step 4: Run all test files to verify they fail**
+**Step 3: Run tests to verify they fail**
 
-Run: `npx vitest run tests/evals/batch-facts-tool.test.ts tests/evals/archive-fact-tool.test.ts tests/evals/reorder-items-tool.test.ts`
+Run: `npx vitest run tests/evals/archive-fact-tool.test.ts tests/evals/reorder-items-tool.test.ts`
 Expected: FAIL
 
-**Step 5: Implement all 4 tools in tools.ts**
+**Step 4: Implement 3 tools**
 
-In `src/lib/agent/tools.ts`, inside the `createAgentTools()` closure (after existing tools):
+In `src/lib/agent/tools.ts`:
 
-Implement `batch_facts`, `archive_fact`, `unarchive_fact`, `reorder_items` per the design doc (Section 2).
-
-Key implementation details:
-- `batch_facts`: wrap in `db.transaction()`, iterate operations, call existing `createFact`/`updateFact`/`deleteFact` per item, single `recomposeAfterMutation()` at end
 - `archive_fact`: `UPDATE facts SET archived_at = ? WHERE id = ?` + orphan cleanup + recompose
 - `unarchive_fact`: `UPDATE facts SET archived_at = null WHERE id = ?` + recompose
 - `reorder_items`: `COMPOSITE_SECTIONS` guard, then `UPDATE facts SET sort_order = ? WHERE id = ?` in loop + recompose
 
-Also update `create_fact` and `update_fact` try/catch blocks to handle `FactConstraintError`:
-```typescript
-} catch (err) {
-  if (err instanceof FactValidationError) { ... }
-  if (err instanceof FactConstraintError) {
-    return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion };
-  }
-  throw err;
-}
-```
+**Step 5: Run tests**
 
-**Step 6: Run tests**
-
-Run: `npx vitest run tests/evals/batch-facts-tool.test.ts tests/evals/archive-fact-tool.test.ts tests/evals/reorder-items-tool.test.ts`
+Run: `npx vitest run tests/evals/archive-fact-tool.test.ts tests/evals/reorder-items-tool.test.ts`
 Expected: PASS
 
-**Step 7: Commit**
+**Step 6: Commit**
 
 ```bash
-git commit -m "feat: batch_facts, archive_fact, unarchive_fact, reorder_items tools"
+git commit -m "feat: archive_fact, unarchive_fact, reorder_items tools"
 ```
 
 ---
@@ -1132,7 +1386,7 @@ Expected: FAIL
 
 **Step 3: Implement**
 
-1. `src/lib/agent/journey.ts`: update `assembleBootstrapPayload` signature to accept `lastUserMessage?: string`. After detecting journey state, call `detectArchetypeFromSignals()`. Save to session metadata. Return archetype in payload.
+1. `src/lib/agent/journey.ts`: update `assembleBootstrapPayload` signature to accept `lastUserMessage?: string`. After detecting journey state, call `detectArchetypeFromSignals()`. Save to session metadata via `mergeSessionMeta(sessionId, { archetype })` (from Task 1b). Return archetype in payload.
 
 2. `src/lib/agent/context.ts`: in `assembleContext()`, if mode is onboarding/returning_no_page and bootstrap has archetype, build archetype context block (~150 tokens) with explorationOrder, toneHint, and coverage (which categories have facts vs empty).
 
@@ -1201,11 +1455,24 @@ Expected: FAIL
 
 **Step 3: Implement**
 
-1. In `src/lib/agent/tools.ts`: add `operationJournal: JournalEntry[]` array at closure level. Each tool execute wraps its result with `operationJournal.push(...)`. Export `getOperationJournal()` from the tools closure.
+1. In `src/lib/agent/tools.ts`: add `operationJournal: JournalEntry[]` array at closure level. Each tool execute wraps its result with `operationJournal.push(...)`.
 
-2. In `src/app/api/chat/route.ts`: in `onFinish`, check if steps used >= maxSteps. If yes and journal is non-empty, save to `sessions.metadata.pendingOperations`.
+> **S2 — Journal export mechanism:** `createAgentTools()` currently returns just the tools record. Change the return type to expose the journal:
+> ```typescript
+> export function createAgentTools(...): { tools: Record<string, CoreTool>; getJournal: () => JournalEntry[] } {
+>   const operationJournal: JournalEntry[] = [];
+>   // ... tool definitions ...
+>   return {
+>     tools: { create_fact, update_fact, ... },
+>     getJournal: () => operationJournal,
+>   };
+> }
+> ```
+> Update all callers of `createAgentTools()` — currently only `src/app/api/chat/route.ts` — to destructure: `const { tools, getJournal } = createAgentTools(...)`.
 
-3. In `src/lib/agent/context.ts`: check `sessions.metadata.pendingOperations`. If exists and timestamp < 1 hour: inject INCOMPLETE_OPERATION block. If timestamp > 1 hour: delete from metadata.
+2. In `src/app/api/chat/route.ts`: in `onFinish`, check `finishReason`. If `finishReason === "length"` (step limit hit) and `getJournal().length > 0`, save to `sessions.metadata.pendingOperations` via `mergeSessionMeta()`.
+
+3. In `src/lib/agent/context.ts`: use `getSessionMeta()` to read `pendingOperations`. If exists and timestamp < 1 hour: inject INCOMPLETE_OPERATION block. If timestamp > 1 hour: delete via `mergeSessionMeta(sessionId, { pendingOperations: undefined })`.
 
 **Step 4: Run tests**
 
@@ -1330,8 +1597,8 @@ if (mode === "steady_state") {
     try {
       const issues = await checkPageCoherence(config.sections);
       if (issues.length > 0) {
-        // Save to session metadata
-        saveToSession(sessionId, "coherenceIssues", issues);
+        // Save to session metadata (via Task 1b helper)
+        mergeSessionMeta(sessionId, { coherenceIssues: issues });
       }
     } catch (err) {
       console.error("[generate_page] coherence check error:", err);
@@ -1352,7 +1619,7 @@ export function coherenceIssuesDirective(issues: CoherenceIssue[]): string {
 }
 ```
 
-Wire in `src/lib/agent/context.ts`: read `sessions.metadata.coherenceIssues`, inject via directive.
+Wire in `src/lib/agent/context.ts`: read coherenceIssues via `getSessionMeta(sessionId).coherenceIssues` (from Task 1b), inject via directive.
 
 **Step 6: Run tests**
 
@@ -1445,10 +1712,11 @@ git commit -m "feat: has_archivable_facts situation — relevance-based archival
 
 ---
 
-### Task 16: TOOL_POLICY Update
+### Task 16: TOOL_POLICY + DATA_MODEL_REFERENCE Update
 
 **Files:**
 - Modify: `src/lib/agent/prompts.ts:41+` (TOOL_POLICY block)
+- Modify: `src/lib/agent/prompts.ts` (DATA_MODEL_REFERENCE block — add sortOrder, parentFactId, archivedAt)
 - Test: `tests/evals/tool-policy-update.test.ts`
 
 **Step 1: Write test**
@@ -1465,6 +1733,14 @@ describe("TOOL_POLICY includes new tools", () => {
   it("mentions batch_facts is all-or-nothing", () => {});
   it("mentions identity/tagline pattern for text customization", () => {});
 });
+
+describe("DATA_MODEL_REFERENCE includes new fields", () => {
+  it("mentions sortOrder", () => {});
+  it("mentions parentFactId", () => {});
+  it("mentions archivedAt", () => {});
+  it("describes sortOrder usage for item ordering", () => {});
+  it("describes parentFactId for child-parent fact relationships", () => {});
+});
 ```
 
 **Step 2: Update TOOL_POLICY**
@@ -1479,15 +1755,26 @@ Add to the TOOL_POLICY block in `src/lib/agent/prompts.ts`:
 - To customize display text (tagline, bio), create/update the corresponding fact (e.g., identity/tagline). The composer prioritizes explicit facts over derived text.
 ```
 
-**Step 3: Run tests**
+**Step 3: Update DATA_MODEL_REFERENCE**
+
+In the `DATA_MODEL_REFERENCE` block in `src/lib/agent/prompts.ts`, add the new fact fields:
+
+```
+Fact fields:
+- sortOrder (integer, default 0): Controls item ordering within sections. Set via reorder_items tool. Lower values appear first.
+- parentFactId (text, nullable): Links child facts to parent facts (e.g., project → parent experience). Set on create_fact.
+- archivedAt (text, nullable): Soft-delete timestamp. Set via archive_fact/unarchive_fact. Archived facts are hidden from page and search.
+```
+
+**Step 4: Run tests**
 
 Run: `npx vitest run tests/evals/tool-policy-update.test.ts`
 Expected: PASS
 
-**Step 4: Commit**
+**Step 5: Commit**
 
 ```bash
-git commit -m "docs: TOOL_POLICY updated with batch_facts, move_section, reorder_items, archive/unarchive"
+git commit -m "docs: TOOL_POLICY + DATA_MODEL_REFERENCE updated for Agent Brain v2"
 ```
 
 ---
@@ -1597,24 +1884,42 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | Task | Layer | Description | Depends On |
 |------|-------|-------------|------------|
 | 1 | L0 | Migration 0019 + schema + FactRow | — |
+| 1b | L0 | Session metadata helper (get/set/merge) | T1 |
 | 2 | L1 | Archived filtering + getActiveFacts | T1 |
-| 3 | L1 | FactConstraintError + current uniqueness | T1 |
+| 3 | L1 | FactConstraintError + current uniqueness + cascade warning | T1 |
 | 4 | L1 | Archetype detection constants | — |
 | 5 | L2 | sortOrder in composer | T1 |
 | 6 | L2 | parentFactId grouping in composer | T1 |
-| 7 | L2 | Slot carry-over + soft-pin | T1 |
-| 8 | L2 | batch_facts, archive, unarchive, reorder_items tools | T2, T3 |
+| 7 | L2 | Slot carry-over + soft-pin (single-run via composeOptimisticPage) | T1 |
+| 8a | L2 | batch_facts tool (kb-service direct calls, single recompose) | T2, T3 |
+| 8b | L2 | archive_fact, unarchive_fact, reorder_items tools | T2 |
 | 9 | L3 | move_section tool | T7 |
 | 10 | L3 | Fix reorder_sections + maxSteps→8 | — |
 | 11 | L3 | Planning Protocol | — |
-| 12 | L3 | Archetype wiring | T4 |
-| 13 | L4 | Operation Journal | T10 |
-| 14 | L4 | Page Coherence Check | — |
+| 12 | L3 | Archetype wiring | T4, T1b |
+| 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b, T10 |
+| 14 | L4 | Page Coherence Check | T1b |
 | 15 | L4 | has_archivable_facts directive | T2 |
-| 16 | L4 | TOOL_POLICY update | T8, T9 |
+| 16 | L4 | TOOL_POLICY + DATA_MODEL_REFERENCE update | T8a, T8b, T9 |
 | 17 | L5 | Integration tests | All |
 | 18 | L5 | Update existing tests | All |
 
 **Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict.
 
-**Estimated tests:** ~90 new + ~35 updated = ~1250 total (from 1151 current).
+**Estimated tests:** ~100 new + ~35 updated = ~1260 total (from 1151 current).
+
+### Review Fixes Applied
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| C1 | Critical | batch_facts calls kb-service directly, NOT tool wrappers | Task 8a |
+| C2 | Critical | updateFact cascade warning implementation step added | Task 3, Step 5 |
+| C3 | Critical | Single-run: draftSlots flows through composeOptimisticPage, not double-run | Task 7, Step 4 |
+| S1 | Significant | session-metadata.ts helper module added | Task 1b (new) |
+| S2 | Significant | createAgentTools returns `{tools, getJournal}`, callers updated | Task 13 |
+| S3 | Significant | DATA_MODEL_REFERENCE updated with sortOrder/parentFactId/archivedAt | Task 16 |
+| S4 | Significant | Task 8 split into 8a (batch_facts) and 8b (archive/unarchive/reorder) | Task 8a, 8b |
+| M1 | Minor | Line numbers caveat note at top of plan | Header |
+| M2 | Minor | isSlotValid helper defined with full signature | Task 7, Step 3 |
+| M3 | Minor | FACT_SCHEMA_REFERENCE compression noted as opportunistic, not a task | Header |
+| M4 | Minor | Test that experience is NOT in CATEGORY_TO_ARCHETYPE | Task 4 |
