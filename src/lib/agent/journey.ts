@@ -74,7 +74,7 @@ const FRESH_PAGE_DAYS = 7;
 
 /**
  * Deterministic priority chain:
- * blocked > draft_ready > active_fresh > active_stale > returning_no_page > first_visit
+ * blocked > active_fresh > active_stale > draft_ready > returning_no_page > first_visit
  */
 export function detectJourneyState(
   scope: OwnerScope,
@@ -137,19 +137,23 @@ export function detectJourneyState(
 export function detectSituations(
   facts: Array<{ id: string; category: string; key: string; value: unknown; updatedAt: string | null }>,
   ownerKey: string,
-  pendingProposalCount?: number,
+  opts?: {
+    pendingProposalCount?: number;
+    openConflicts?: Array<{ category: string; key: string }>;
+    publishableFacts?: Array<{ id: string; category: string; key: string; value: unknown; updatedAt: string | null }>;
+  },
 ): Situation[] {
   const situations: Situation[] = [];
 
   // Pending proposals (accept pre-fetched count to avoid duplicate DB query)
-  const proposalCount = pendingProposalCount
+  const proposalCount = opts?.pendingProposalCount
     ?? createProposalService().getPendingProposals(ownerKey).length;
   if (proposalCount > 0) {
     situations.push("has_pending_proposals");
   }
 
   // Thin sections
-  const publishable = filterPublishableFacts(facts);
+  const publishable = opts?.publishableFacts ?? filterPublishableFacts(facts);
   for (const sectionType of Object.keys(SECTION_FACT_CATEGORIES)) {
     const level = classifySectionRichness(publishable, sectionType);
     if (level === "thin" || level === "empty") {
@@ -170,8 +174,8 @@ export function detectSituations(
   }
 
   // Open conflicts
-  const openConflicts = getOpenConflicts(ownerKey);
-  if (openConflicts.length > 0) {
+  const conflicts = opts?.openConflicts ?? getOpenConflicts(ownerKey);
+  if (conflicts.length > 0) {
     situations.push("has_open_conflicts");
   }
 
@@ -223,10 +227,16 @@ export function assembleBootstrapPayload(
 
   const facts = getAllFacts(scope.knowledgePrimaryKey, readKeys);
 
-  // Fetch proposals once — shared between detectSituations and pendingProposalCount
+  // Pre-compute shared data (used by both detectSituations and payload fields)
   const pendingProposalCount = createProposalService().getPendingProposals(ownerKey).length;
+  const openConflictRecords = getOpenConflicts(ownerKey);
+  const publishable = filterPublishableFacts(facts);
 
-  const situations = detectSituations(facts, ownerKey, pendingProposalCount);
+  const situations = detectSituations(facts, ownerKey, {
+    pendingProposalCount,
+    openConflicts: openConflictRecords,
+    publishableFacts: publishable,
+  });
   const expertiseLevel = detectExpertiseLevel(readKeys);
 
   // User name from facts (legacy facts may use "full-name" instead of "name")
@@ -244,7 +254,6 @@ export function assembleBootstrapPayload(
   const publishedUsername = getPublishedUsername(readKeys);
 
   // Thin sections list
-  const publishable = filterPublishableFacts(facts);
   const thinSections: string[] = [];
   for (const sectionType of Object.keys(SECTION_FACT_CATEGORIES)) {
     const level = classifySectionRichness(publishable, sectionType);
@@ -260,7 +269,6 @@ export function assembleBootstrapPayload(
     .map((f) => `${f.category}/${f.key}`);
 
   // Open conflicts (category/key descriptions for situation directives)
-  const openConflictRecords = getOpenConflicts(ownerKey);
   const openConflicts: string[] = openConflictRecords.map(
     (c) => `${c.category}/${c.key}`,
   );

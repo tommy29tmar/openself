@@ -111,6 +111,22 @@ export async function POST(req: Request) {
       ? body.sessionId
       : DEFAULT_SESSION_ID;
 
+  const requestId = randomUUID();
+  const sessionLanguage = language || "en";
+
+  // Resolve auth for context injection
+  const chatAuthCtx = multiUser ? getAuthContext(req) : null;
+
+  // --- Journey Intelligence: assemble bootstrap payload ---
+  // Must run BEFORE quota enforcement so the message count read by bootstrap
+  // reflects the pre-increment state (avoids false "blocked" on the Nth message).
+  // TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
+  // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
+  const authInfoForBootstrap = chatAuthCtx
+    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
+    : undefined;
+  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+
   // Quota enforcement
   const isAuthenticated =
     multiUser && effectiveScope.cognitiveOwnerKey !== effectiveScope.currentSessionId;
@@ -203,20 +219,6 @@ export async function POST(req: Request) {
       extraHeaders["X-Message-Limit"] = String(limit);
     }
   }
-
-  const requestId = randomUUID();
-  const sessionLanguage = language || "en";
-
-  // Resolve auth for context injection
-  const chatAuthCtx = multiUser ? getAuthContext(req) : null;
-
-  // --- Journey Intelligence: assemble bootstrap payload ---
-  // TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
-  // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
-  const authInfoForBootstrap = chatAuthCtx
-    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
-    : undefined;
-  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
 
   // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
   const { systemPrompt, trimmedMessages, mode } = assembleContext(
