@@ -32,6 +32,7 @@ import type {
 } from "@/lib/page-config/content-types";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import { formatFactDate } from "@/lib/i18n/format-date";
+import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 
@@ -1041,7 +1042,15 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
       if (!name) return null;
       const item: ActivityItem = { name };
       const activityType = str(v.activityType) ?? str(v.type);
-      if (activityType) item.activityType = activityType as ActivityItem["activityType"];
+      if (activityType) {
+        const t = getUiL10n(language);
+        const ACTIVITY_TYPE_L10N: Record<string, string> = {
+          volunteering: t.activityVolunteering,
+          mentoring: t.activityMentoring,
+          hobby: t.activityHobby,
+        };
+        item.activityType = (ACTIVITY_TYPE_L10N[activityType] ?? activityType) as ActivityItem["activityType"];
+      }
       const frequency = str(v.frequency);
       if (frequency) item.frequency = frequency;
       const description = str(v.description);

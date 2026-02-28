@@ -56,6 +56,11 @@ export interface UiStrings {
   registrationFailed: string;
   networkError: string;
 
+  // Activity types
+  activityVolunteering: string;
+  activityMentoring: string;
+  activityHobby: string;
+
   // Proposal banner
   improvementsReady: string;
   review: string;
@@ -106,6 +111,9 @@ const en: UiStrings = {
   passwordTooShort: "Password must be at least 8 characters",
   registrationFailed: "Registration failed",
   networkError: "Network error. Please try again.",
+  activityVolunteering: "volunteering",
+  activityMentoring: "mentoring",
+  activityHobby: "hobby",
   improvementsReady: "improvements ready",
   review: "Review",
   pageImprovements: "Page improvements",
@@ -155,6 +163,9 @@ const it: UiStrings = {
   passwordTooShort: "La password deve avere almeno 8 caratteri",
   registrationFailed: "Registrazione fallita",
   networkError: "Errore di rete. Riprova.",
+  activityVolunteering: "volontariato",
+  activityMentoring: "mentoring",
+  activityHobby: "hobby",
   improvementsReady: "miglioramenti disponibili",
   review: "Rivedi",
   pageImprovements: "Miglioramenti pagina",
@@ -204,6 +215,9 @@ const de: UiStrings = {
   passwordTooShort: "Passwort muss mindestens 8 Zeichen lang sein",
   registrationFailed: "Registrierung fehlgeschlagen",
   networkError: "Netzwerkfehler. Bitte erneut versuchen.",
+  activityVolunteering: "Ehrenamt",
+  activityMentoring: "Mentoring",
+  activityHobby: "Hobby",
   improvementsReady: "Verbesserungen verfügbar",
   review: "Überprüfen",
   pageImprovements: "Seitenverbesserungen",
@@ -253,6 +267,9 @@ const fr: UiStrings = {
   passwordTooShort: "Le mot de passe doit contenir au moins 8 caractères",
   registrationFailed: "Échec de l'inscription",
   networkError: "Erreur réseau. Veuillez réessayer.",
+  activityVolunteering: "bénévolat",
+  activityMentoring: "mentorat",
+  activityHobby: "loisir",
   improvementsReady: "améliorations disponibles",
   review: "Examiner",
   pageImprovements: "Améliorations de la page",
@@ -302,6 +319,9 @@ const es: UiStrings = {
   passwordTooShort: "La contraseña debe tener al menos 8 caracteres",
   registrationFailed: "Error en el registro",
   networkError: "Error de red. Inténtalo de nuevo.",
+  activityVolunteering: "voluntariado",
+  activityMentoring: "mentoría",
+  activityHobby: "afición",
   improvementsReady: "mejoras disponibles",
   review: "Revisar",
   pageImprovements: "Mejoras de la página",
@@ -351,6 +371,9 @@ const pt: UiStrings = {
   passwordTooShort: "A palavra-passe deve ter pelo menos 8 caracteres",
   registrationFailed: "Falha no registo",
   networkError: "Erro de rede. Tente novamente.",
+  activityVolunteering: "voluntariado",
+  activityMentoring: "mentoria",
+  activityHobby: "hobby",
   improvementsReady: "melhorias disponíveis",
   review: "Rever",
   pageImprovements: "Melhorias da página",
@@ -400,6 +423,9 @@ const ja: UiStrings = {
   passwordTooShort: "パスワードは8文字以上必要です",
   registrationFailed: "登録に失敗しました",
   networkError: "ネットワークエラー。もう一度お試しください。",
+  activityVolunteering: "ボランティア",
+  activityMentoring: "メンタリング",
+  activityHobby: "趣味",
   improvementsReady: "件の改善提案",
   review: "確認",
   pageImprovements: "ページの改善",
@@ -449,6 +475,9 @@ const zh: UiStrings = {
   passwordTooShort: "密码至少需要8个字符",
   registrationFailed: "注册失败",
   networkError: "网络错误，请重试。",
+  activityVolunteering: "志愿服务",
+  activityMentoring: "指导",
+  activityHobby: "爱好",
   improvementsReady: "项改进可用",
   review: "查看",
   pageImprovements: "页面改进",
