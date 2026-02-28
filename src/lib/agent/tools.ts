@@ -752,7 +752,8 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         // 2. Gate checks
         const multiUser = isMultiUserEnabled();
         const hasAuth = !multiUser || !!ownerKey;
-        const hasUsername = username.length > 0;
+        const usernameValidation = username.length > 0 ? validateUsernameFormat(username) : { ok: false, message: "Username is required" };
+        const hasUsername = usernameValidation.ok;
 
         // 3. Quality checks
         const allFacts = getAllFacts(sessionId, readKeys);
@@ -790,9 +791,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
             sectionCount: config.sections.length,
             factCount: allFacts.length,
           },
+          ...(!hasUsername && !usernameValidation.ok ? { usernameIssue: usernameValidation.message } : {}),
           summary: readyToPublish
             ? `Page ready to publish with ${config.sections.length} sections.`
-            : `Cannot publish: ${Object.entries(gates).filter(([, v]) => !v).map(([k]) => k).join(", ")}.`,
+            : `Cannot publish: ${Object.entries(gates).filter(([, v]) => !v).map(([k]) => k).join(", ")}.${!hasUsername && usernameValidation.message ? ` Username: ${usernameValidation.message}` : ""}`,
         };
       } catch (error) {
         logEvent({
@@ -814,12 +816,8 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
   inspect_page_state: tool({
     description:
       "Get a structured view of the current page state including layout, sections, slot assignments, and warnings. Use this to understand what the page looks like before making changes.",
-    parameters: z.object({
-      username: z
-        .string()
-        .describe("The username for the page to inspect"),
-    }),
-    execute: async ({ username: _username }) => {
+    parameters: z.object({}),
+    execute: async () => {
       const emptyResult = (error: string) => ({
         error,
         layout: { template: "unknown", theme: "unknown", style: {} },
@@ -838,10 +836,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const allFacts = getAllFacts(sessionId, readKeys);
         const publishable = filterPublishableFacts(allFacts);
 
-        const sections = config.sections.map((s: any) => {
+        const sections = config.sections.map((s) => {
           let slot = "unknown";
           for (const [slotId, slotSections] of Object.entries(slotGroups)) {
-            if ((slotSections as any[]).some((ss: any) => ss.id === s.id)) {
+            if (Array.isArray(slotSections) && slotSections.some((ss) => ss.id === s.id)) {
               slot = slotId;
               break;
             }

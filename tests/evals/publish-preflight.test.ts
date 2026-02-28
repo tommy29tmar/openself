@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted mocks ──────────────────────────────────────────
-const { mockGetDraft, mockGetAllFacts, mockIsMultiUserEnabled } = vi.hoisted(() => ({
+const { mockGetDraft, mockGetAllFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
   mockGetAllFacts: vi.fn(),
   mockIsMultiUserEnabled: vi.fn(() => false),
+  mockValidateUsernameFormat: vi.fn(() => ({ ok: true })),
+  mockRequestPublish: vi.fn(),
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: mockGetDraft,
   upsertDraft: vi.fn(),
-  requestPublish: vi.fn(),
+  requestPublish: mockRequestPublish,
 }));
 
 vi.mock("@/lib/services/kb-service", () => ({
@@ -119,7 +121,7 @@ vi.mock("@/lib/page-config/schema", () => ({
 }));
 
 vi.mock("@/lib/page-config/usernames", () => ({
-  validateUsernameFormat: vi.fn(() => ({ ok: true })),
+  validateUsernameFormat: mockValidateUsernameFormat,
 }));
 
 vi.mock("ai", () => ({
@@ -308,6 +310,23 @@ describe("publish_preflight tool", () => {
     expect(result.quality.missingContact).toBe(false);
   });
 
+  it("returns readyToPublish=false when username format is invalid", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+    mockGetAllFacts.mockReturnValue([makeFact()]);
+    mockIsMultiUserEnabled.mockReturnValue(false);
+    mockValidateUsernameFormat.mockReturnValue({ ok: false, message: "Username must be 3-30 characters" });
+
+    const result = await tools.publish_preflight.execute(
+      { username: "ab" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.readyToPublish).toBe(false);
+    expect(result.gates.hasUsername).toBe(false);
+    expect(result.usernameIssue).toBe("Username must be 3-30 characters");
+    expect(result.summary).toContain("Username");
+  });
+
   it("returns section and fact counts in info", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
     mockGetAllFacts.mockReturnValue([
@@ -324,5 +343,68 @@ describe("publish_preflight tool", () => {
 
     expect(result.info.sectionCount).toBe(4);
     expect(result.info.factCount).toBe(3);
+  });
+});
+
+describe("request_publish username guard", () => {
+  let tools: ReturnType<typeof createAgentTools>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+  });
+
+  it("rejects empty username", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+
+    const result = await tools.request_publish.execute(
+      { username: "" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Username is required");
+    expect(mockRequestPublish).not.toHaveBeenCalled();
+  });
+
+  it("rejects username with invalid format", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+    mockValidateUsernameFormat.mockReturnValue({ ok: false, message: "Username must be 3-30 characters" });
+
+    const result = await tools.request_publish.execute(
+      { username: "ab" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Username must be 3-30 characters");
+    expect(mockRequestPublish).not.toHaveBeenCalled();
+  });
+
+  it("rejects reserved username", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+    mockValidateUsernameFormat.mockReturnValue({ ok: false, message: "Username is reserved" });
+
+    const result = await tools.request_publish.execute(
+      { username: "login" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Username is reserved");
+    expect(mockRequestPublish).not.toHaveBeenCalled();
+  });
+
+  it("succeeds with valid username", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+    mockValidateUsernameFormat.mockReturnValue({ ok: true });
+
+    const result = await tools.request_publish.execute(
+      { username: "testuser" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockRequestPublish).toHaveBeenCalledWith("testuser", "session-1");
   });
 });

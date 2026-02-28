@@ -198,7 +198,7 @@ describe("inspect_page_state tool", () => {
     mockGetDraft.mockReturnValue(null);
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -209,7 +209,7 @@ describe("inspect_page_state tool", () => {
     mockGetDraft.mockReturnValue(makeDraft());
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -222,7 +222,7 @@ describe("inspect_page_state tool", () => {
     mockGetDraft.mockReturnValue(makeDraft());
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -245,7 +245,7 @@ describe("inspect_page_state tool", () => {
     mockGetDraft.mockReturnValue(draftWithLock);
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -263,7 +263,7 @@ describe("inspect_page_state tool", () => {
     );
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -276,7 +276,7 @@ describe("inspect_page_state tool", () => {
     mockGetDraft.mockReturnValue(makeDraft());
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -294,7 +294,7 @@ describe("inspect_page_state tool", () => {
     mockGetAllFacts.mockReturnValue([]);
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -310,7 +310,7 @@ describe("inspect_page_state tool", () => {
     ]);
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
@@ -324,7 +324,7 @@ describe("inspect_page_state tool", () => {
     ]);
 
     const result = await tools.inspect_page_state.execute(
-      { username: "testuser" },
+      {},
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 

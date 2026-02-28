@@ -22,9 +22,9 @@ type SectionPayload = {
 /** Zod schema for structured translation output. */
 const TranslationResultSchema = z.array(
   z.object({
-    sectionId: z.string(),
-    type: z.string(),
-    content: z.record(z.unknown()),
+    sectionId: z.string().min(1),
+    type: z.string().min(1),
+    content: z.record(z.string(), z.unknown()),
   }),
 );
 

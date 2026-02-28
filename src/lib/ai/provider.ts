@@ -28,21 +28,23 @@ const CAPABLE_MODELS: Record<Provider, string> = {
   ollama: "llama3.3",
 };
 
+/** Maps non-cheap tiers to their model tables. */
+const TIER_MODELS: Record<Exclude<ModelTier, "cheap">, Record<Provider, string>> = {
+  medium: MEDIUM_MODELS,
+  capable: CAPABLE_MODELS,
+};
+
+/** Maps non-cheap tiers to their env override keys. */
+const TIER_ENV_KEYS: Record<Exclude<ModelTier, "cheap">, string> = {
+  medium: "AI_MODEL_MEDIUM",
+  capable: "AI_MODEL_CAPABLE",
+};
+
 export function getModelForTier(tier: ModelTier): LanguageModel {
   if (tier === "cheap") return getModel();
 
   const provider = getProvider();
-
-  const tierMap: Record<Exclude<ModelTier, "cheap">, Record<Provider, string>> = {
-    medium: MEDIUM_MODELS,
-    capable: CAPABLE_MODELS,
-  };
-  const envKey: Record<Exclude<ModelTier, "cheap">, string> = {
-    medium: "AI_MODEL_MEDIUM",
-    capable: "AI_MODEL_CAPABLE",
-  };
-
-  const modelId = process.env[envKey[tier]] ?? tierMap[tier][provider];
+  const modelId = process.env[TIER_ENV_KEYS[tier]] ?? TIER_MODELS[tier][provider];
 
   switch (provider) {
     case "google": {
@@ -67,15 +69,7 @@ export function getModelForTier(tier: ModelTier): LanguageModel {
 export function getModelIdForTier(tier: ModelTier): string {
   if (tier === "cheap") return getModelId();
   const provider = getProvider();
-  const tierMap: Record<Exclude<ModelTier, "cheap">, Record<Provider, string>> = {
-    medium: MEDIUM_MODELS,
-    capable: CAPABLE_MODELS,
-  };
-  const envKey: Record<Exclude<ModelTier, "cheap">, string> = {
-    medium: "AI_MODEL_MEDIUM",
-    capable: "AI_MODEL_CAPABLE",
-  };
-  return process.env[envKey[tier]] ?? tierMap[tier][provider];
+  return process.env[TIER_ENV_KEYS[tier]] ?? TIER_MODELS[tier][provider];
 }
 
 const DEFAULT_MODELS: Record<Provider, string> = {
