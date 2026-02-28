@@ -19,7 +19,7 @@ import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
 import { proposeSoulChange, getActiveSoul, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
 import { FactValidationError } from "@/lib/services/fact-validation";
-import { LAYOUT_TEMPLATES } from "@/lib/layout/contracts";
+import { LAYOUT_TEMPLATES, resolveLayoutAlias } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
@@ -582,18 +582,22 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
   set_layout: tool({
     description:
-      "Change the page layout template. Available: vertical, sidebar-left, bento-standard.",
+      "Change the page layout template. Available: vertical, sidebar-left (or \"sidebar\"), bento-standard (or \"bento\").",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       layoutTemplate: z
-        .enum(LAYOUT_TEMPLATES)
-        .describe("Layout template to use"),
+        .string()
+        .describe("Layout template: vertical, sidebar-left (or 'sidebar'), bento-standard (or 'bento')"),
     }),
     execute: async ({ username, layoutTemplate }) => {
       try {
+        const resolved = resolveLayoutAlias(layoutTemplate);
+        if (!(LAYOUT_TEMPLATES as readonly string[]).includes(resolved)) {
+          return { success: false, error: `Invalid layout '${layoutTemplate}'. Valid: ${LAYOUT_TEMPLATES.join(", ")}` };
+        }
         const config = ensureDraft();
 
-        const template = getLayoutTemplate(layoutTemplate);
+        const template = getLayoutTemplate(resolved as any);
         const locks = extractLocks(config.sections);
         const { sections, issues } = assignSlotsFromFacts(
           template,
@@ -612,7 +616,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
         const updated: PageConfig = {
           ...config,
-          layoutTemplate,
+          layoutTemplate: resolved as any,
           sections,
         };
         upsertDraft(username, updated, sessionId);
@@ -621,9 +625,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
-          payload: { username, change: "layout", layoutTemplate },
+          payload: { username, change: "layout", layoutTemplate: resolved },
         });
-        return { success: true, layoutTemplate, warnings };
+        return { success: true, layoutTemplate: resolved, warnings };
       } catch (error) {
         return { success: false, error: String(error) };
       }
