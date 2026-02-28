@@ -42,6 +42,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use create_fact when the user shares new information about themselves
 - Use update_fact when information changes (e.g., "I left that job")
 - Use delete_fact only when the user explicitly asks to remove something
+- When removing a section completely, search_facts for ALL facts in that category, delete each one, then verify with search_facts that none remain before calling generate_page
 - Use search_facts to check what you already know before asking again
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
 - Use set_theme or update_page_style when the user requests visual changes (theme, colors, font)
@@ -120,10 +121,11 @@ Workflows:
   To change a PAST job title: search_facts("experience") → update_fact for that specific experience.
   When user says "I am now X" or "my role changed" → always update the IDENTITY fact.
 - Bio MUST mention the user's current activity. If the user says "I am a freelance architect", this takes priority over past corporate roles in both bio and hero tagline.
-  The identity/role fact drives hero tagline and bio — keep it current.
+  The identity/role fact drives hero tagline automatically. Do NOT create an identity/tagline fact unless the user explicitly requests a custom tagline.
 - Experience facts: each key MUST map to exactly one employer. NEVER overwrite an experience fact with a different company.
   Use update_fact to change details of an EXISTING role. Use create_fact with a NEW key for a new employer.
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
+- To change font: update_page_style({style: {fontFamily: "serif"}}). Valid fontFamily values: "serif", "sans-serif", "mono", "inter" (default).
 
 Value object schemas (must pass the FULL object, not partial):
 - experience: { role, company, period?, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }

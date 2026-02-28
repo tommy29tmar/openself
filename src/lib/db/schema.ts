@@ -38,13 +38,21 @@ export const authIdentities = sqliteTable(
 );
 
 // -- Profiles (data anchor: owns facts, pages, messages, agent_config)
-export const profiles = sqliteTable("profiles", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id),
-  username: text("username"),
-  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
-});
+export const profiles = sqliteTable(
+  "profiles",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id),
+    username: text("username"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("profiles_user_id_unique")
+      .on(table.userId)
+      .where(sql`user_id IS NOT NULL`),
+  ],
+);
 
 // -- Sessions
 export const sessions = sqliteTable("sessions", {

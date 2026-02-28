@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getUiL10n } from "@/lib/i18n/ui-strings";
+import { friendlyError } from "@/lib/i18n/error-messages";
 
 type SignupModalProps = {
   open: boolean;
   onClose: () => void;
   initialUsername?: string;
+  language?: string;
 };
 
-export function SignupModal({ open, onClose, initialUsername }: SignupModalProps) {
+export function SignupModal({ open, onClose, initialUsername, language = "en" }: SignupModalProps) {
+  const t = getUiL10n(language);
   const [username, setUsername] = useState(initialUsername ?? "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,15 +43,15 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
     setError(null);
 
     if (!username) {
-      setError("Username is required");
+      setError(t.usernameRequired);
       return;
     }
     if (!email) {
-      setError("Email is required");
+      setError(t.emailRequired);
       return;
     }
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError(t.passwordTooShort);
       return;
     }
 
@@ -64,10 +68,10 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
       if (data.success) {
         window.location.href = `/${data.username}`;
       } else {
-        setError(data.error || "Registration failed");
+        setError(friendlyError(data.code, t));
       }
     } catch {
-      setError("Network error");
+      setError(t.networkError);
     } finally {
       setSubmitting(false);
     }
@@ -83,15 +87,15 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
       }}
     >
       <div className="w-full max-w-sm rounded-lg border bg-background p-6 shadow-lg">
-        <h2 className="mb-1 text-lg font-semibold">Create your account</h2>
+        <h2 className="mb-1 text-lg font-semibold">{t.createYourAccount}</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Sign up to publish your page
+          {t.signUpToPublishPage}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label htmlFor="signup-username" className="mb-1 block text-sm font-medium">
-              Username
+              {t.username}
             </label>
             <input
               id="signup-username"
@@ -112,7 +116,7 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
 
           <div>
             <label htmlFor="signup-email" className="mb-1 block text-sm font-medium">
-              Email
+              {t.email}
             </label>
             <input
               id="signup-email"
@@ -127,7 +131,7 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
 
           <div>
             <label htmlFor="signup-password" className="mb-1 block text-sm font-medium">
-              Password
+              {t.password}
             </label>
             <input
               id="signup-password"
@@ -135,7 +139,7 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded border px-3 py-2 text-sm"
-              placeholder="At least 8 characters"
+              placeholder={t.atLeast8Chars}
               autoComplete="new-password"
             />
           </div>
@@ -149,14 +153,14 @@ export function SignupModal({ open, onClose, initialUsername }: SignupModalProps
             disabled={submitting}
             className="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {submitting ? "Creating account..." : "Sign up & publish"}
+            {submitting ? t.creatingAccount : t.signUpAndPublish}
           </button>
         </form>
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Already have an account?{" "}
+          {t.alreadyHaveAccount}{" "}
           <a href="/login" className="underline underline-offset-2 hover:text-foreground">
-            Log in
+            {t.logIn}
           </a>
         </p>
       </div>

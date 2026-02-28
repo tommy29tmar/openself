@@ -1,8 +1,14 @@
 import { hash, verify } from "@node-rs/argon2";
-import { eq } from "drizzle-orm";
+import { eq, or, isNull, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db, sqlite } from "@/lib/db";
 import { users, profiles, sessions } from "@/lib/db/schema";
+
+export class ProfileAlreadyLinkedError extends Error {
+  constructor() {
+    super("Profile already linked to a different user");
+  }
+}
 
 // -- Password hashing (Argon2id) --
 
@@ -117,11 +123,26 @@ export function createProfile(userId?: string): Profile {
   };
 }
 
+/**
+ * Link a profile to a user. Succeeds if:
+ * - profile is unlinked (userId IS NULL), OR
+ * - profile is already linked to the same user.
+ * Throws ProfileAlreadyLinkedError if linked to a different user.
+ */
 export function linkProfileToUser(profileId: string, userId: string): void {
-  db.update(profiles)
+  const result = db
+    .update(profiles)
     .set({ userId, updatedAt: new Date().toISOString() })
-    .where(eq(profiles.id, profileId))
+    .where(
+      and(
+        eq(profiles.id, profileId),
+        or(isNull(profiles.userId), eq(profiles.userId, userId)),
+      ),
+    )
     .run();
+  if (result.changes === 0) {
+    throw new ProfileAlreadyLinkedError();
+  }
 }
 
 export function getProfileForUser(userId: string): Profile | null {

@@ -10,15 +10,17 @@ import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline
 import { logEvent } from "@/lib/services/event-service";
 import { AUTH_V2 } from "@/lib/flags";
 import {
-  createUser,
-  isEmailTaken,
+  getUserByEmail,
+  verifyPassword,
+  hashPassword,
   linkProfileToUser,
-  setProfileUsername,
-  createAuthSession,
   getProfileById,
+  createAuthSession,
+  ProfileAlreadyLinkedError,
 } from "@/lib/services/auth-service";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
-import { sqlite } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
+import { users, profiles } from "@/lib/db/schema";
 
 const USERNAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/;
 const RESERVED = new Set(["draft", "api", "builder", "admin", "invite", "_next", "login", "signup"]);
@@ -87,44 +89,106 @@ export async function POST(req: Request) {
 
       if (!email || typeof email !== "string" || !EMAIL_RE.test(email)) {
         return NextResponse.json(
-          { success: false, error: "Valid email is required", code: "USERNAME_INVALID" },
+          { success: false, error: "Valid email is required", code: "EMAIL_INVALID" },
           { status: 400 },
         );
       }
 
       if (!password || typeof password !== "string" || password.length < 8) {
         return NextResponse.json(
-          { success: false, error: "Password must be at least 8 characters", code: "USERNAME_INVALID" },
+          { success: false, error: "Password must be at least 8 characters", code: "PASSWORD_TOO_SHORT" },
           { status: 400 },
         );
       }
 
-      if (isEmailTaken(email)) {
-        return NextResponse.json(
-          { success: false, error: "Email already registered", code: "EMAIL_TAKEN" },
-          { status: 409 },
-        );
+      // Step 2: Retry detection (ownership-first, no password oracle)
+      let user: { id: string; email: string };
+      const existingUser = getUserByEmail(email);
+
+      if (existingUser) {
+        // Check ownership first: only allow retry if this session's profile belongs to same user
+        const profile = getProfileById(profileId);
+        if (profile?.userId === existingUser.id) {
+          // Same owner confirmed — now check password
+          const passwordOk = await verifyPassword(existingUser.passwordHash, password);
+          if (!passwordOk) {
+            return NextResponse.json(
+              { success: false, error: "Incorrect password for retry", code: "PASSWORD_MISMATCH" },
+              { status: 400 },
+            );
+          }
+          // Retry: reuse existing user
+          user = existingUser;
+        } else {
+          // Different owner or unlinked profile — opaque rejection (no password oracle)
+          return NextResponse.json(
+            { success: false, error: "Email already registered", code: "EMAIL_TAKEN" },
+            { status: 409 },
+          );
+        }
+      } else {
+        // Step 3: Create user + profile atomically
+        const passwordHash = await hashPassword(password);
+        const now = new Date().toISOString();
+        const userId = crypto.randomUUID();
+
+        try {
+          user = sqlite.transaction(() => {
+            db.insert(users)
+              .values({
+                id: userId,
+                email: email.toLowerCase().trim(),
+                passwordHash,
+                createdAt: now,
+                updatedAt: now,
+              })
+              .run();
+
+            // Ensure profile row exists
+            if (!getProfileById(profileId)) {
+              db.insert(profiles)
+                .values({
+                  id: profileId,
+                  userId,
+                  createdAt: now,
+                  updatedAt: now,
+                })
+                .run();
+            }
+
+            linkProfileToUser(profileId, userId);
+
+            return {
+              id: userId,
+              email: email.toLowerCase().trim(),
+            };
+          })();
+        } catch (err: unknown) {
+          // SQLITE_CONSTRAINT on email unique → race condition, treat as EMAIL_TAKEN
+          if (err instanceof Error && err.message.includes("UNIQUE constraint failed")) {
+            return NextResponse.json(
+              { success: false, error: "Email already registered", code: "EMAIL_TAKEN" },
+              { status: 409 },
+            );
+          }
+          if (err instanceof ProfileAlreadyLinkedError) {
+            return NextResponse.json(
+              { success: false, error: "Email already registered", code: "EMAIL_TAKEN" },
+              { status: 409 },
+            );
+          }
+          throw err;
+        }
       }
 
-      // Atomic: create user + link profile + register username
-      const user = await createUser(email, password);
-
-      const txnLink = sqlite.transaction(() => {
-        // Ensure profile row exists — invite flow creates a session but not a profile.
-        // linkProfileToUser/setProfileUsername silently update 0 rows without it.
-        if (!getProfileById(profileId)) {
-          sqlite
-            .prepare("INSERT INTO profiles (id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .run(profileId, user.id, new Date().toISOString(), new Date().toISOString());
-        }
-        linkProfileToUser(profileId, user.id);
-        setProfileUsername(profileId, username);
-        registerUsername(sessionId, username);
+      // Step 4: Publish (username claim happens inside pipeline via claimProfileId)
+      const result = await prepareAndPublish(username, sessionId, {
+        mode: "register",
+        claimProfileId: profileId,
       });
-      txnLink();
 
-      // Publish via shared pipeline
-      const result = await prepareAndPublish(username, sessionId, { mode: "register" });
+      // Step 5: Register username on session only AFTER publish succeeds
+      registerUsername(sessionId, username);
 
       // Backfill old session's profileId so it appears in allSessionIdsForProfile()
       sqlite
@@ -133,11 +197,9 @@ export async function POST(req: Request) {
         )
         .run(profileId, sessionId);
 
-      // Session rotation: new session linked to user + profile
+      // Step 6: Session rotation + WAL checkpoint
       const newSessionId = createAuthSession(user.id, profileId);
 
-      // Flush WAL to disk — registration spans multiple writes and a process
-      // kill before WAL checkpoint would lose the auth session.
       sqlite.pragma("wal_checkpoint(PASSIVE)");
 
       logEvent({
@@ -157,9 +219,12 @@ export async function POST(req: Request) {
       return response;
     } else {
       // -- Legacy mode: username only --
-      registerUsername(sessionId, username);
+      console.warn("[register] AUTH_V2 disabled — no user/profile records");
 
+      // Publish first — registerUsername only on success
       const result = await prepareAndPublish(username, sessionId, { mode: "register" });
+
+      registerUsername(sessionId, username);
 
       // Flush WAL to disk — registration writes must survive process kill.
       sqlite.pragma("wal_checkpoint(PASSIVE)");
@@ -185,7 +250,7 @@ export async function POST(req: Request) {
     }
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: message, code: "INTERNAL" },
       { status: 400 },
     );
   }

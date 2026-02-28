@@ -7,6 +7,8 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import type { AuthState } from "@/app/builder/page";
 import { extractErrorMessage } from "@/lib/services/errors";
+import { getUiL10n } from "@/lib/i18n/ui-strings";
+import { friendlyError } from "@/lib/i18n/error-messages";
 
 /**
  * Welcome messages for first-time visitors.
@@ -574,6 +576,7 @@ function ChatPanelInner({
   initialMessages,
   authState,
 }: ChatPanelInnerProps) {
+  const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [limitReached, setLimitReached] = useState(false);
   const [registerUsername, setRegisterUsername] = useState("");
@@ -703,10 +706,10 @@ function ChatPanelInner({
       if (data.success) {
         setRegistered(data.username);
       } else {
-        setRegisterError(data.error || "Registration failed");
+        setRegisterError(friendlyError(data.code, t));
       }
     } catch {
-      setRegisterError("Network error");
+      setRegisterError(t.networkError);
     } finally {
       setRegistering(false);
     }
@@ -727,25 +730,10 @@ function ChatPanelInner({
       if (data.success) {
         setPublishRequested(true);
       } else {
-        switch (data.code) {
-          case "USERNAME_TAKEN":
-            setPublishRequestError("Username non più disponibile, scegline un altro.");
-            break;
-          case "USERNAME_RESERVED":
-            setPublishRequestError("Username riservato, scegline un altro.");
-            break;
-          case "USERNAME_INVALID":
-            setPublishRequestError("Username non valido (lettere minuscole, numeri, trattini).");
-            break;
-          case "NO_DRAFT":
-            setPublishRequestError("Nessuna bozza trovata. Continua la chat per creare la pagina.");
-            break;
-          default:
-            setPublishRequestError(data.error || "Errore durante la pubblicazione.");
-        }
+        setPublishRequestError(friendlyError(data.code, t));
       }
     } catch {
-      setPublishRequestError("Errore di rete.");
+      setPublishRequestError(t.networkError);
     } finally {
       setRequestingPublish(false);
     }
@@ -835,6 +823,7 @@ function ChatPanelInner({
             onChange={handleInputChange}
             onSubmit={handleChatSubmit}
             isLoading={isLoading}
+            placeholder={t.typeMessage}
           />
         </>
       )}

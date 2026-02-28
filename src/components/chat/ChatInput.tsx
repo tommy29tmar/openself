@@ -9,16 +9,17 @@ type ChatInputProps = {
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   isLoading?: boolean;
+  placeholder?: string;
 };
 
-export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputProps) {
+export function ChatInput({ value, onChange, onSubmit, isLoading, placeholder }: ChatInputProps) {
   return (
     <form onSubmit={onSubmit} className="flex gap-2 border-t p-4">
       <Input
         name="prompt"
         value={value}
         onChange={onChange}
-        placeholder="Type a message..."
+        placeholder={placeholder ?? "Type a message..."}
         className="flex-1"
         disabled={isLoading}
       />

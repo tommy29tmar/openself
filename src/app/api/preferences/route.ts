@@ -13,6 +13,7 @@ import { isLanguageCode } from "@/lib/i18n/languages";
 import { translatePageContent } from "@/lib/ai/translate";
 import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
+import { AUTH_V2 } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
     multiUser: isMultiUserEnabled(),
     publishedUsername,
     publishedConfigHash: getPublishedConfigHash(readKeys),
+    authV2: AUTH_V2,
   });
 }
 

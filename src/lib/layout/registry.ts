@@ -23,7 +23,7 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
         id: "main",
         size: "wide",
         required: false,
-        maxSections: 10,
+        maxSections: 20,
         accepts: [
           "bio",
           "skills",
@@ -77,7 +77,7 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
         id: "main",
         size: "half",
         required: true,
-        maxSections: 5,
+        maxSections: 10,
         accepts: [
           "bio",
           "projects",
@@ -98,7 +98,7 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
         id: "sidebar",
         size: "half",
         required: false,
-        maxSections: 4,
+        maxSections: 6,
         accepts: ["bio", "skills", "interests", "social", "stats", "contact", "languages", "activities"],
         order: 2,
         mobileOrder: 2,

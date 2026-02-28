@@ -91,6 +91,21 @@ export interface UiStrings {
 
   // Platform labels
   platformWebsite: string;
+
+  // Error messages (centralized mapper)
+  usernameInvalid: string;
+  usernameReserved: string;
+  usernameTaken: string;
+  emailInvalid: string;
+  emailTaken: string;
+  passwordMismatch: string;
+  rateLimited: string;
+  authRequired: string;
+  publishErrorLayout: string;
+  publishErrorNoContent: string;
+  publishErrorStale: string;
+  publishErrorGeneric: string;
+  creatingAccount: string;
 }
 
 const en: UiStrings = {
@@ -158,6 +173,19 @@ const en: UiStrings = {
   domainDesign: "Design",
   domainOther: "Other",
   platformWebsite: "Website",
+  usernameInvalid: "Invalid username. Use lowercase letters, numbers, and hyphens.",
+  usernameReserved: "This username is reserved.",
+  usernameTaken: "Username already taken.",
+  emailInvalid: "Please enter a valid email address.",
+  emailTaken: "This email is already registered.",
+  passwordMismatch: "Incorrect password. Please try again.",
+  rateLimited: "Too many attempts. Please wait a moment.",
+  authRequired: "Please log in to continue.",
+  publishErrorLayout: "Page layout is invalid. Try changing the layout.",
+  publishErrorNoContent: "Not enough content to publish. Keep chatting!",
+  publishErrorStale: "Page has changed. Please review and try again.",
+  publishErrorGeneric: "Something went wrong. Please try again.",
+  creatingAccount: "Creating account...",
 };
 
 const it: UiStrings = {
@@ -225,6 +253,19 @@ const it: UiStrings = {
   domainDesign: "Design",
   domainOther: "Altro",
   platformWebsite: "Sito Web",
+  usernameInvalid: "Nome utente non valido. Usa lettere minuscole, numeri e trattini.",
+  usernameReserved: "Questo nome utente è riservato.",
+  usernameTaken: "Nome utente già in uso.",
+  emailInvalid: "Inserisci un indirizzo email valido.",
+  emailTaken: "Questa email è già registrata.",
+  passwordMismatch: "Password errata. Riprova.",
+  rateLimited: "Troppi tentativi. Attendi un momento.",
+  authRequired: "Accedi per continuare.",
+  publishErrorLayout: "Layout della pagina non valido. Prova a cambiare layout.",
+  publishErrorNoContent: "Contenuto insufficiente per pubblicare. Continua a chattare!",
+  publishErrorStale: "La pagina è cambiata. Controlla e riprova.",
+  publishErrorGeneric: "Qualcosa è andato storto. Riprova.",
+  creatingAccount: "Creazione account...",
 };
 
 const de: UiStrings = {
@@ -292,6 +333,19 @@ const de: UiStrings = {
   domainDesign: "Design",
   domainOther: "Sonstige",
   platformWebsite: "Webseite",
+  usernameInvalid: "Ungültiger Benutzername. Verwende Kleinbuchstaben, Zahlen und Bindestriche.",
+  usernameReserved: "Dieser Benutzername ist reserviert.",
+  usernameTaken: "Benutzername bereits vergeben.",
+  emailInvalid: "Bitte gib eine gültige E-Mail-Adresse ein.",
+  emailTaken: "Diese E-Mail ist bereits registriert.",
+  passwordMismatch: "Falsches Passwort. Bitte versuche es erneut.",
+  rateLimited: "Zu viele Versuche. Bitte warte einen Moment.",
+  authRequired: "Bitte melde dich an, um fortzufahren.",
+  publishErrorLayout: "Seitenlayout ist ungültig. Versuche ein anderes Layout.",
+  publishErrorNoContent: "Nicht genug Inhalt zum Veröffentlichen. Chatte weiter!",
+  publishErrorStale: "Die Seite hat sich geändert. Bitte überprüfe und versuche es erneut.",
+  publishErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+  creatingAccount: "Konto wird erstellt...",
 };
 
 const fr: UiStrings = {
@@ -359,6 +413,19 @@ const fr: UiStrings = {
   domainDesign: "Design",
   domainOther: "Autre",
   platformWebsite: "Site Web",
+  usernameInvalid: "Nom d'utilisateur invalide. Utilisez des lettres minuscules, chiffres et tirets.",
+  usernameReserved: "Ce nom d'utilisateur est réservé.",
+  usernameTaken: "Nom d'utilisateur déjà pris.",
+  emailInvalid: "Veuillez entrer une adresse e-mail valide.",
+  emailTaken: "Cet e-mail est déjà enregistré.",
+  passwordMismatch: "Mot de passe incorrect. Veuillez réessayer.",
+  rateLimited: "Trop de tentatives. Veuillez patienter.",
+  authRequired: "Veuillez vous connecter pour continuer.",
+  publishErrorLayout: "Mise en page invalide. Essayez un autre layout.",
+  publishErrorNoContent: "Pas assez de contenu pour publier. Continuez à discuter !",
+  publishErrorStale: "La page a changé. Vérifiez et réessayez.",
+  publishErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
+  creatingAccount: "Création du compte...",
 };
 
 const es: UiStrings = {
@@ -426,6 +493,19 @@ const es: UiStrings = {
   domainDesign: "Diseño",
   domainOther: "Otros",
   platformWebsite: "Sitio Web",
+  usernameInvalid: "Nombre de usuario no válido. Usa letras minúsculas, números y guiones.",
+  usernameReserved: "Este nombre de usuario está reservado.",
+  usernameTaken: "Nombre de usuario ya en uso.",
+  emailInvalid: "Introduce un correo electrónico válido.",
+  emailTaken: "Este correo ya está registrado.",
+  passwordMismatch: "Contraseña incorrecta. Inténtalo de nuevo.",
+  rateLimited: "Demasiados intentos. Espera un momento.",
+  authRequired: "Inicia sesión para continuar.",
+  publishErrorLayout: "El diseño de la página no es válido. Prueba otro diseño.",
+  publishErrorNoContent: "No hay suficiente contenido para publicar. ¡Sigue chateando!",
+  publishErrorStale: "La página ha cambiado. Revisa e inténtalo de nuevo.",
+  publishErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
+  creatingAccount: "Creando cuenta...",
 };
 
 const pt: UiStrings = {
@@ -493,6 +573,19 @@ const pt: UiStrings = {
   domainDesign: "Design",
   domainOther: "Outros",
   platformWebsite: "Site",
+  usernameInvalid: "Nome de utilizador inválido. Use letras minúsculas, números e hífens.",
+  usernameReserved: "Este nome de utilizador está reservado.",
+  usernameTaken: "Nome de utilizador já em uso.",
+  emailInvalid: "Introduza um endereço de e-mail válido.",
+  emailTaken: "Este e-mail já está registado.",
+  passwordMismatch: "Palavra-passe incorreta. Tente novamente.",
+  rateLimited: "Demasiadas tentativas. Aguarde um momento.",
+  authRequired: "Inicie sessão para continuar.",
+  publishErrorLayout: "Layout da página inválido. Tente outro layout.",
+  publishErrorNoContent: "Conteúdo insuficiente para publicar. Continue a conversar!",
+  publishErrorStale: "A página mudou. Reveja e tente novamente.",
+  publishErrorGeneric: "Algo correu mal. Tente novamente.",
+  creatingAccount: "A criar conta...",
 };
 
 const ja: UiStrings = {
@@ -560,6 +653,19 @@ const ja: UiStrings = {
   domainDesign: "デザイン",
   domainOther: "その他",
   platformWebsite: "ウェブサイト",
+  usernameInvalid: "無効なユーザー名です。小文字、数字、ハイフンを使用してください。",
+  usernameReserved: "このユーザー名は予約されています。",
+  usernameTaken: "このユーザー名は既に使用されています。",
+  emailInvalid: "有効なメールアドレスを入力してください。",
+  emailTaken: "このメールアドレスは既に登録されています。",
+  passwordMismatch: "パスワードが正しくありません。もう一度お試しください。",
+  rateLimited: "試行回数が多すぎます。しばらくお待ちください。",
+  authRequired: "続行するにはログインしてください。",
+  publishErrorLayout: "ページレイアウトが無効です。別のレイアウトをお試しください。",
+  publishErrorNoContent: "公開するコンテンツが不足しています。チャットを続けましょう！",
+  publishErrorStale: "ページが変更されました。確認して再度お試しください。",
+  publishErrorGeneric: "エラーが発生しました。もう一度お試しください。",
+  creatingAccount: "アカウントを作成中...",
 };
 
 const zh: UiStrings = {
@@ -627,6 +733,19 @@ const zh: UiStrings = {
   domainDesign: "设计",
   domainOther: "其他",
   platformWebsite: "网站",
+  usernameInvalid: "用户名无效。请使用小写字母、数字和连字符。",
+  usernameReserved: "此用户名已被保留。",
+  usernameTaken: "用户名已被使用。",
+  emailInvalid: "请输入有效的电子邮件地址。",
+  emailTaken: "此电子邮件已注册。",
+  passwordMismatch: "密码不正确，请重试。",
+  rateLimited: "尝试次数过多，请稍等。",
+  authRequired: "请登录以继续。",
+  publishErrorLayout: "页面布局无效。请尝试其他布局。",
+  publishErrorNoContent: "内容不足，无法发布。继续聊天吧！",
+  publishErrorStale: "页面已更改。请查看后重试。",
+  publishErrorGeneric: "出现错误，请重试。",
+  creatingAccount: "正在创建账户...",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };

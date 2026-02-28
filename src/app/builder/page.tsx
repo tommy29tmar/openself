@@ -48,6 +48,7 @@ export type AuthState = {
   username: string | null;
   multiUser: boolean;
   publishedUsername: string | null;
+  authV2?: boolean;
 };
 
 export default function BuilderPage() {
@@ -72,6 +73,7 @@ export default function BuilderPage() {
         username: data.username ?? null,
         multiUser: !!data.multiUser,
         publishedUsername: data.publishedUsername ?? null,
+        authV2: !!data.authV2,
       });
       setPublishedConfigHash(data.publishedConfigHash ?? null);
     } catch { /* silent */ }
@@ -101,6 +103,7 @@ export default function BuilderPage() {
           multiUser?: boolean;
           publishedUsername?: string | null;
           publishedConfigHash?: string | null;
+          authV2?: boolean;
         };
         const serverLanguage = isLanguageCode(data.language) ? data.language : null;
 

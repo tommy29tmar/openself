@@ -12,6 +12,8 @@ import { SignupModal } from "@/components/auth/SignupModal";
 import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
 import { PageRenderer } from "@/components/page";
+import { getUiL10n } from "@/lib/i18n/ui-strings";
+import { friendlyError } from "@/lib/i18n/error-messages";
 import {
   Tabs,
   TabsContent,
@@ -183,6 +185,8 @@ export function SplitView({
     )
   );
 
+  const t = getUiL10n(language);
+
   const doPublish = async (username: string) => {
     setPublishing(true);
     setPublishError(null);
@@ -202,10 +206,10 @@ export function SplitView({
         onPublishedConfigHashChange?.(configHash);
         window.location.href = data.url;
       } else {
-        setPublishError(data.error || "Publish failed");
+        setPublishError(friendlyError(data.code, t));
       }
     } catch {
-      setPublishError("Network error");
+      setPublishError(t.networkError);
     } finally {
       setPublishing(false);
     }
@@ -471,12 +475,13 @@ export function SplitView({
         open={signupOpen}
         onClose={() => setSignupOpen(false)}
         initialUsername={publishUsername !== "draft" ? publishUsername : ""}
+        language={language}
       />
 
       {/* Desktop: side-by-side */}
       <div className="hidden h-screen md:flex">
         <div className="w-[400px] shrink-0 overflow-hidden border-r">
-          {chatDataReady && <ChatPanel language={language} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
+          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
         </div>
         <div className="relative flex-1">{previewPane}</div>
       </div>
@@ -496,7 +501,7 @@ export function SplitView({
           forceMount
           className="flex-1 overflow-hidden data-[state=inactive]:hidden"
         >
-          {chatDataReady && <ChatPanel language={language} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
+          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
         </TabsContent>
         <TabsContent
           value="preview"

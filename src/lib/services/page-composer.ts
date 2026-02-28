@@ -1314,19 +1314,8 @@ export function composeOptimisticPage(
   const template = getLayoutTemplate(resolvedTemplate);
   const { sections: assigned, issues } = assignSlotsFromFacts(template, sections);
 
-  let finalSections: Section[];
-  let finalTemplate: LayoutTemplateId;
-
-  if (issues.some((i) => i.severity === "error")) {
-    // Fallback: use "vertical" if the requested template has errors
-    const fallback = getLayoutTemplate("vertical");
-    const { sections: fallbackAssigned } = assignSlotsFromFacts(fallback, sections);
-    finalSections = fallbackAssigned;
-    finalTemplate = "vertical";
-  } else {
-    finalSections = assigned;
-    finalTemplate = resolvedTemplate;
-  }
+  const finalSections = assigned;
+  const finalTemplate = resolvedTemplate;
 
   const config: PageConfig = {
     version: 1,
