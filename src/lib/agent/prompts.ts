@@ -72,7 +72,7 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 | Category | Key format | Value shape |
 |----------|-----------|-------------|
 | identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} |
-| experience | company-kebab | {role: "...", company: "...", start: "YYYY-MM", end: "YYYY-MM"|null, status: "current"|"past"} |
+| experience | company-kebab | {role: "...", company: "...", start: "YYYY-MM", end: "YYYY-MM"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | type: "employment" (default if omitted), "freelance", or "client". Use "client" for project clients (e.g. Barilla branding). Clients appear in Projects section. |
 | education | institution-kebab | {institution: "...", degree: "...", field: "...", period: "YYYY-YYYY"} |
 | project | project-kebab | {name: "...", description: "...", url?: "...", status: "active"|"completed", role?: "..."} |
 | skill | skill-kebab | {name: "...", level?: "beginner"|"intermediate"|"advanced"|"expert"} |
@@ -97,6 +97,7 @@ const DATA_MODEL_REFERENCE = `Data model quick reference:
 - Sections are AUTO-COMPOSED from facts. You never edit sections directly.
 - The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
 - Available themes: ${"`"}minimal${"`"}, ${"`"}warm${"`"}, ${"`"}editorial-360${"`"}. Use set_theme with the exact name.
+- Valid layouts: vertical, sidebar-left (or "sidebar"), bento-standard (or "bento"). Use set_layout with any of these names.
 
 Workflows:
 - To MODIFY content: search_facts(category) → find the factId → update_fact(factId, FULL new value object)
@@ -111,7 +112,7 @@ Workflows:
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
 
 Value object schemas (must pass the FULL object, not partial):
-- experience: { role, company, period?, description?, status?: "current"|"past" }
+- experience: { role, company, period?, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
 - education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders
 - identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }
 - project: { name, description?, url?, status?: "active"|"completed" }

@@ -587,9 +587,7 @@ function buildSkillsSection(skillFacts: FactRow[], language: string): Section | 
   };
 }
 
-function buildProjectsSection(projectFacts: FactRow[], language: string): Section | null {
-  if (projectFacts.length === 0) return null;
-
+function buildProjectsSection(projectFacts: FactRow[], language: string, extraItems: ProjectItem[] = []): Section | null {
   const items: ProjectItem[] = projectFacts
     .map((f) => {
       const v = val(f);
@@ -607,9 +605,12 @@ function buildProjectsSection(projectFacts: FactRow[], language: string): Sectio
     })
     .filter((item): item is ProjectItem => item !== null);
 
-  if (items.length === 0) return null;
+  // Merge any extra items (e.g. from client-type experience facts)
+  const allItems = [...items, ...extraItems];
 
-  const content: ProjectsContent = { items, title: getL10n(language).projectsLabel };
+  if (allItems.length === 0) return null;
+
+  const content: ProjectsContent = { items: allItems, title: getL10n(language).projectsLabel };
 
   return {
     id: "projects-1",
@@ -617,6 +618,25 @@ function buildProjectsSection(projectFacts: FactRow[], language: string): Sectio
     variant: "grid",
     content: content as unknown as Record<string, unknown>,
   };
+}
+
+/** Convert client-type experience facts into ProjectItem[] for the projects section. */
+function buildProjectsFromExperience(experienceFacts: FactRow[]): ProjectItem[] {
+  return experienceFacts
+    .filter((f) => str(val(f).type) === "client")
+    .map((f) => {
+      const v = val(f);
+      const role = str(v.role) ?? str(v.title) ?? "";
+      const company = str(v.company);
+      if (!role && !company) return null;
+      const title = role && company ? `${role} — ${company}` : role || company || "";
+      if (!title) return null;
+      const item: ProjectItem = { title };
+      const description = str(v.description);
+      if (description) item.description = description;
+      return item;
+    })
+    .filter((item): item is ProjectItem => item !== null);
 }
 
 function buildInterestsSection(interestFacts: FactRow[], language: string): Section | null {
@@ -719,9 +739,14 @@ function isExtendedSectionsEnabled(): boolean {
 }
 
 function buildExperienceSection(experienceFacts: FactRow[], language: string): Section | null {
-  if (experienceFacts.length === 0) return null;
+  // Filter: employment (undefined/employment) + freelance → experience; client → projects (handled separately)
+  const employmentFacts = experienceFacts.filter((f) => {
+    const t = str(val(f).type);
+    return !t || t === "employment" || t === "freelance";
+  });
+  if (employmentFacts.length === 0) return null;
 
-  const items: ExperienceItem[] = experienceFacts
+  const items: ExperienceItem[] = employmentFacts
     .map((f) => {
       const v = val(f);
       const title = str(v.role) ?? str(v.title);
@@ -1136,7 +1161,10 @@ export function composeOptimisticPage(
     const experience = buildExperienceSection(experienceFacts, language);
     if (experience) sections.push(experience);
 
-    const projects = buildProjectsSection(grouped.get("project") ?? [], language);
+    // Merge project-category facts with client-type experience facts into a single projects section
+    const clientProjectItems = buildProjectsFromExperience(experienceFacts);
+    const projectFacts = grouped.get("project") ?? [];
+    const projects = buildProjectsSection(projectFacts, language, clientProjectItems);
     if (projects) sections.push(projects);
 
     const education = buildEducationSection(grouped.get("education") ?? [], language);
