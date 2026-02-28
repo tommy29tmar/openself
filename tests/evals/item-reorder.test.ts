@@ -127,10 +127,10 @@ describe("reorder_section_items tool", () => {
   const draftConfig = {
     username: "draft",
     theme: "minimal",
-    style: {},
+    style: { colorScheme: "dark" } as any,
     sections: [
-      { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } },
-      { id: "skills-1", type: "skills", variant: "grid", content: { items: [] } },
+      { id: "hero-1", type: "hero" as const, variant: "large", content: { name: "Test" } },
+      { id: "skills-1", type: "skills" as const, variant: "grid", content: { items: [] } },
     ],
   };
 
@@ -147,12 +147,7 @@ describe("reorder_section_items tool", () => {
       config: draftConfig,
       configHash: "old-hash",
     });
-    vi.mocked(projectCanonicalConfig).mockReturnValue({
-      username: "draft",
-      theme: "minimal",
-      style: {},
-      sections: draftConfig.sections,
-    });
+    vi.mocked(projectCanonicalConfig).mockReturnValue(draftConfig as any);
   });
 
   it("calls updateFactSortOrder for each key with correct indices", async () => {

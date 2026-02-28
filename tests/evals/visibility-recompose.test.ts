@@ -142,9 +142,9 @@ describe("set_fact_visibility triggers recomposition", () => {
     vi.mocked(projectCanonicalConfig).mockReturnValue({
       username: "draft",
       theme: "minimal",
-      style: {},
+      style: { colorScheme: "dark" },
       sections: [{ id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } }],
-    });
+    } as any);
     vi.mocked(computeConfigHash).mockReturnValue("new-hash");
     mockSetFactVisibility.mockReturnValue({
       id: "f1",
