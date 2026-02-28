@@ -31,6 +31,7 @@ vi.mock("@/lib/services/page-projection", () => ({
 }));
 vi.mock("@/lib/agent/prompts", () => ({
   getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
+  buildSystemPrompt: vi.fn(() => "BOOTSTRAP_PROMPT"),
 }));
 vi.mock("@/lib/agent/journey", () => ({
   // Module exists but we only import types — no runtime mock needed
@@ -44,6 +45,8 @@ import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
+import { buildSystemPrompt } from "@/lib/agent/prompts";
+import { getSystemPromptText } from "@/lib/agent/prompts";
 
 const SCOPE: OwnerScope = {
   cognitiveOwnerKey: "cog-1",
@@ -399,5 +402,34 @@ describe("assembleContext with bootstrap", () => {
     expect(result.mode).toBe("onboarding");
     // detectMode WAS called (countFacts or hasAnyPublishedPage invoked)
     expect(countFacts).toHaveBeenCalled();
+  });
+
+  it("uses buildSystemPrompt when bootstrap is provided", () => {
+    const bootstrap = {
+      journeyState: "first_visit" as const,
+      situations: [] as never[],
+      expertiseLevel: "novice" as const,
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [] as string[],
+      staleFacts: [] as string[],
+      language: "en",
+      conversationContext: null,
+    };
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);
+    expect(buildSystemPrompt).toHaveBeenCalledWith(bootstrap);
+    expect(result.systemPrompt).toContain("BOOTSTRAP_PROMPT");
+  });
+
+  it("uses getSystemPromptText when no bootstrap provided", () => {
+    vi.mocked(countFacts).mockReturnValue(0);
+    vi.mocked(hasAnyPublishedPage).mockReturnValue(false);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(buildSystemPrompt).not.toHaveBeenCalled();
+    expect(result.systemPrompt).toContain("BASE_PROMPT");
   });
 });

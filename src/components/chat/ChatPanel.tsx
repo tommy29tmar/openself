@@ -7,6 +7,52 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import type { AuthState } from "@/app/builder/page";
 
+/**
+ * Welcome messages for first-time visitors.
+ * These ask the user's name as the very first interaction.
+ */
+const FIRST_VISIT_WELCOME: Record<string, string> = {
+  en: "Hi! I create personal pages from a conversation. What's your name?",
+  it: "Ciao! Creo pagine personali partendo da una conversazione. Come ti chiami?",
+  de: "Hallo! Ich erstelle persönliche Seiten aus einem Gespräch. Wie heißt du?",
+  fr: "Salut\u00a0! Je crée des pages personnelles à partir d'une conversation. Comment tu t'appelles\u00a0?",
+  es: "¡Hola! Creo páginas personales a partir de una conversación. ¿Cómo te llamas?",
+  pt: "Olá! Crio páginas pessoais a partir de uma conversa. Como te chamas?",
+  ja: "こんにちは！会話からパーソナルページを作ります。お名前は？",
+  zh: "你好！我通过对话创建个人页面。你叫什么名字？",
+};
+
+/**
+ * Welcome messages for returning users with no page yet.
+ */
+const RETURNING_WELCOME: Record<string, string> = {
+  en: "Welcome back! Ready to pick up where we left off?",
+  it: "Bentornato! Riprendiamo da dove eravamo rimasti?",
+  de: "Willkommen zurück! Sollen wir weitermachen, wo wir aufgehört haben?",
+  fr: "Re-bonjour\u00a0! On reprend là où on en était\u00a0?",
+  es: "¡Bienvenido de nuevo! ¿Seguimos donde lo dejamos?",
+  pt: "Bem-vindo de volta! Continuamos de onde parámos?",
+  ja: "おかえりなさい！前回の続きから始めましょうか？",
+  zh: "欢迎回来！我们继续之前的对话吧？",
+};
+
+/**
+ * Welcome messages for users with a draft page ready.
+ */
+const DRAFT_READY_WELCOME: Record<string, string> = {
+  en: "Welcome back! Your page is ready for review — take a look on the right. Want to make any changes?",
+  it: "Bentornato! La tua pagina è pronta — dai un'occhiata a destra. Vuoi modificare qualcosa?",
+  de: "Willkommen zurück! Deine Seite ist fertig — schau rechts. Möchtest du etwas ändern?",
+  fr: "Re-bonjour\u00a0! Ta page est prête — jette un œil à droite. Tu veux modifier quelque chose\u00a0?",
+  es: "¡Bienvenido! Tu página está lista — mira a la derecha. ¿Quieres cambiar algo?",
+  pt: "Bem-vindo! A tua página está pronta — vê à direita. Queres mudar alguma coisa?",
+  ja: "おかえりなさい！ページの準備ができています — 右側をご覧ください。変更はありますか？",
+  zh: "欢迎回来！你的页面已准备好——看看右边。想做什么修改吗？",
+};
+
+/**
+ * Legacy welcome messages — kept as fallback.
+ */
 const WELCOME_MESSAGES: Record<string, string> = {
   en: "Hey! I\u2019m going to build your personal page. Tell me \u2014 who are you and what are you into?",
   it: "Ciao! Costruir\u00f2 la tua pagina personale. Raccontami \u2014 chi sei e cosa ti appassiona?",
@@ -35,6 +81,72 @@ function getWelcomeMessage(language: string) {
     role: "assistant" as const,
     content: WELCOME_MESSAGES[language] ?? WELCOME_MESSAGES.en,
   };
+}
+
+type BootstrapResponse = {
+  journeyState?: string;
+  userName?: string | null;
+  publishedUsername?: string | null;
+  language?: string;
+};
+
+function getSmartWelcomeMessage(
+  language: string,
+  bootstrap: BootstrapResponse | null,
+): { id: string; role: "assistant"; content: string } {
+  const lang = language || "en";
+
+  if (!bootstrap) {
+    // Fallback to legacy welcome
+    return {
+      id: "welcome",
+      role: "assistant",
+      content: WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en,
+    };
+  }
+
+  let content: string;
+
+  switch (bootstrap.journeyState) {
+    case "first_visit":
+      content = FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en;
+      break;
+    case "returning_no_page":
+      content = RETURNING_WELCOME[lang] ?? RETURNING_WELCOME.en;
+      break;
+    case "draft_ready":
+      content = DRAFT_READY_WELCOME[lang] ?? DRAFT_READY_WELCOME.en;
+      break;
+    case "active_fresh":
+    case "active_stale": {
+      // For returning active users, greet by name if known
+      const name = bootstrap.userName;
+      if (name) {
+        const templates: Record<string, string> = {
+          en: `Hey ${name}! What's new?`,
+          it: `Ciao ${name}! Cosa c'è di nuovo?`,
+          de: `Hey ${name}! Was gibt's Neues?`,
+          fr: `Salut ${name}\u00a0! Quoi de neuf\u00a0?`,
+          es: `¡Hola ${name}! ¿Qué hay de nuevo?`,
+          pt: `Olá ${name}! Novidades?`,
+          ja: `${name}さん、お久しぶりです！何か新しいことはありますか？`,
+          zh: `${name}，你好！有什么新动态吗？`,
+        };
+        content = templates[lang] ?? templates.en;
+      } else {
+        content = WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en;
+      }
+      break;
+    }
+    case "blocked":
+      // Shouldn't normally reach here (blocked users can't chat much)
+      content = WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en;
+      break;
+    default:
+      content = WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en;
+  }
+
+  return { id: "welcome", role: "assistant", content };
 }
 
 const LIMIT_AUTHENTICATED_MESSAGES: Record<string, string> = {
@@ -315,17 +427,49 @@ export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPa
   useEffect(() => {
     let cancelled = false;
 
-    const loadHistory = async () => {
+    const load = async () => {
+      // Fetch bootstrap and history in parallel
+      let bootstrap: BootstrapResponse | null = null;
+      let historyRes: Response | null = null;
+
       try {
-        const res = await fetch("/api/messages", { cache: "no-store" });
+        const [bootstrapRes, messagesRes] = await Promise.all([
+          fetch("/api/chat/bootstrap", { cache: "no-store" }),
+          fetch("/api/messages", { cache: "no-store" }),
+        ]);
+        if (bootstrapRes.ok) {
+          bootstrap = await bootstrapRes.json();
+        }
+        historyRes = messagesRes;
+      } catch {
+        // Fetch failed — will use static fallback for bootstrap, no history
+      }
+
+      // Compute smart welcome based on bootstrap
+      const smartWelcome = getSmartWelcomeMessage(language, bootstrap);
+
+      try {
+        const res = historyRes ?? await fetch("/api/messages", { cache: "no-store" });
         if (res.status === 401) {
           window.location.href = "/invite";
           return;
         }
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!cancelled) {
+            setInitialMessages([smartWelcome]);
+            setHistoryLoaded(true);
+          }
+          return;
+        }
 
         const data = (await res.json()) as MessagesResponse;
-        if (!data.success || !Array.isArray(data.messages)) return;
+        if (!data.success || !Array.isArray(data.messages)) {
+          if (!cancelled) {
+            setInitialMessages([smartWelcome]);
+            setHistoryLoaded(true);
+          }
+          return;
+        }
 
         const restoredMessages: StoredMessage[] = data.messages
           .filter(
@@ -343,21 +487,32 @@ export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPa
 
         if (cancelled) return;
 
-        setInitialMessages((current) => {
-          const welcome = current[0] ?? getWelcomeMessage("en");
-          if (restoredMessages.length === 0) return [welcome];
+        setInitialMessages(() => {
+          if (restoredMessages.length === 0) return [smartWelcome];
 
+          // Check if any existing message matches the smart welcome
           const welcomeAlreadyStored = restoredMessages.some(
             (message) =>
-              message.role === "assistant" && message.content === welcome.content,
+              message.role === "assistant" && message.content === smartWelcome.content,
           );
 
-          return welcomeAlreadyStored
-            ? restoredMessages
-            : [welcome, ...restoredMessages];
+          // Also check legacy welcome messages
+          const legacyWelcome = WELCOME_MESSAGES[language] ?? WELCOME_MESSAGES.en;
+          const legacyAlreadyStored = restoredMessages.some(
+            (message) =>
+              message.role === "assistant" && message.content === legacyWelcome,
+          );
+
+          if (welcomeAlreadyStored || legacyAlreadyStored) {
+            return restoredMessages;
+          }
+
+          return [smartWelcome, ...restoredMessages];
         });
       } catch {
-        // Keep fallback welcome message when history fetch fails.
+        if (!cancelled) {
+          setInitialMessages([smartWelcome]);
+        }
       } finally {
         if (!cancelled) {
           setHistoryLoaded(true);
@@ -365,11 +520,11 @@ export function ChatPanel({ language = "en", authV2 = false, authState }: ChatPa
       }
     };
 
-    loadHistory();
+    load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [language]);
 
   if (!historyLoaded) {
     return <ChatPanelLoading />;

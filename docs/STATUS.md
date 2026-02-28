@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 846 automated tests passing (60 test files) — unchanged count, review fixes only
+- 959 automated tests passing (66 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -41,8 +41,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - Profile archetype detection: deterministic classification (developer/designer/executive/student/creator/generalist) injected into agent context for layout intelligence
 - Vertical magazine redesign: luxury digital magazine aesthetic for vertical layout — unified `.section-label` headers with accent bar, scroll reveal animations, variable vertical rhythm, dot separators, hover-underline-grow links, warm theme WCAG AA contrast fix
 - UAT Round 3 (8 fixes): scroll-reveal bypass in builder preview, auto-draft for style tools, agent role prompt guidance, language proficiency L10N (8 languages × 5 levels), chat markdown rendering (markdown-it), favicon, dot separator polish, WAL checkpoint on registration
+- Sprint 2 — Onboarding Rewrite: composable policy system replacing monolithic onboarding/steady-state prompts, per-journey-state policies (6 states), situation directives (4 situations), expertise calibration (3 levels), `buildSystemPrompt()` composable prompt builder, dynamic welcome messages from bootstrap payload (3 maps × 8 languages)
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete.
 
 ## 2) Implemented Today
 
@@ -66,7 +67,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 |---|---|---|
 | Streaming AI chat | Done | `useChat` + `/api/chat`. Assistant messages rendered as markdown via `markdown-it` (bold, lists, links). User messages plain text. |
 | Tool-calling agent | Done | 15 tools: Fact CRUD, set_fact_visibility, page generation, update_page_style, request_publish, reorder, theme, set_layout, propose_lock, save_memory, propose_soul_change, resolve_conflict. Structured schema reference in prompt + `experimental_repairToolCall` for automatic recovery from invalid tool arguments |
-| Language-aware onboarding prompt | Done | Language propagated to prompt and composer |
+| Language-aware onboarding prompt | Done | Language propagated to prompt and composer. Composable policy system: per-journey-state policies, situation directives, expertise calibration via `buildSystemPrompt()` |
 | Publish gate enforcement | Done | `request_publish` tool (agent proposes) + `POST /api/publish` (user confirms) + `POST /api/draft/request-publish` (chat-initiated publish) |
 | LLM-powered content translation | Done | Composes in factLanguage, translates to target via generateText, cached in translation_cache |
 | Translation cache | Done | Hash-based, no explicit invalidation, eliminates repeated LLM calls |
@@ -93,6 +94,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Trust ledger | Done | Undo payload at write time, transactional CAS reverse |
 | Schema versioning | Done | schema_meta table, leader/follower bootstrap mode |
 | Chat history rehydration | Done | `ChatPanel` loads `GET /api/messages` on mount before `useChat` initialization |
+| Dynamic welcome messages | Done | ChatPanel fetches bootstrap payload, selects journey-aware welcome (first_visit/returning/draft_ready/active) with personalized greeting for returning users |
 
 ### Page Engine and UI
 
@@ -271,6 +273,19 @@ Third E2E UAT as "Marco Bellini" (clean DB, fresh start, 6 messages, publish, si
 
 Verified not-a-bug: M4 (webpack HMR hang), M5 (18 theme-reveal elements — expected conditional variants), L2 ("Colpo d'Occhio" intentional fusion), L4 (_next/static dev noise), M3 (empty assistant response — model behavior).
 
+### NEXT-16 Sprint 2 — Onboarding Rewrite ✅
+
+Composable policy system replacing monolithic prompt functions. All items complete.
+67 new tests (959 total, 66 files).
+
+1. **Policy registry** — `src/lib/agent/policies/index.ts` with `getJourneyPolicy()`, `getSituationDirectives()`, `getExpertiseCalibration()`. Maps `JourneyState` → policy function.
+2. **First-visit policy** — `first-visit.ts` with 3-phase turn structure (identity → breadth → generate+publish) and 3-step low-signal escalation (guided prompts → fill-in-the-blank → minimal page).
+3. **Stub policies** — 5 journey state policies: `returning-no-page`, `draft-ready`, `active-fresh`, `active-stale`, `blocked`. Each with state-specific behavioral guidelines.
+4. **Situation directives** — `situations.ts` with 4 generators: pending proposals, thin sections, stale facts (capped at 5), open conflicts. Injected only when situations are active.
+5. **`buildSystemPrompt()`** — New composable prompt builder in `prompts.ts`. Composes [charter, safety, tools, schema ref, data model ref, output contract, journey policy, situation directives, expertise calibration]. 3500-token budget for policy+directives. Legacy `getSystemPromptText()` marked `@deprecated`.
+6. **Context wiring** — `assembleContext()` uses `buildSystemPrompt(bootstrap)` when bootstrap payload available, falls back to legacy `getSystemPromptText()`.
+7. **Dynamic welcome messages** — `ChatPanel` fetches bootstrap on mount, selects from 3 welcome maps (8 languages each): `FIRST_VISIT_WELCOME`, `RETURNING_WELCOME`, `DRAFT_READY_WELCOME`. Active users get personalized "Hey {name}!" greetings.
+
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
 2. Connector MVP (GitHub)
@@ -297,7 +312,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 846 passed / 846 total (Vitest, 60 test files)
+- Automated tests: 959 passed / 959 total (Vitest, 66 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -360,6 +375,10 @@ Builder interface layouts (chat experience):
   58. Section order — D5 ordering constraint verification (1 test)
   59. Contact visibility — sensitivity removal, proposal allowlist, visibility transitions (8 tests)
   60. At-a-glance completeness — stats/skillGroups/interests validation (5 tests)
+  61. Onboarding policy — first-visit 3-phase turn structure, language injection, low-signal handling (25 tests)
+  62. Situation directives — pending proposals, thin sections, stale facts, open conflicts, guards (22 tests)
+  63. Policy registry — journey state mapping, situation composition, expertise calibration, backward compat (18 tests)
+  64. Context assembler bootstrap — buildSystemPrompt wiring, mode mapping from journey state (2 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
   2. Connector and worker lifecycle integration
