@@ -29,8 +29,14 @@ describe("actionAwarenessPolicy", () => {
       expect(policy).toContain("set_theme");
     });
 
-    it("lists reorder_sections (3+) as high-impact", () => {
-      expect(policy).toMatch(/reorder_sections.*3\+/);
+    it("lists update_page_style as high-impact", () => {
+      const highImpactSection = policy.split("LOW-IMPACT")[0];
+      expect(highImpactSection).toContain("update_page_style");
+    });
+
+    it("lists reorder_sections as high-impact", () => {
+      const highImpactSection = policy.split("LOW-IMPACT")[0];
+      expect(highImpactSection).toContain("reorder_sections");
     });
 
     it("lists generate_page in steady_state as high-impact", () => {
@@ -81,14 +87,14 @@ describe("actionAwarenessPolicy", () => {
       expect(lowImpactSection).toContain("set_fact_visibility");
     });
 
-    it("lists update_page_style as low-impact", () => {
+    it("does NOT list update_page_style as low-impact", () => {
       const lowImpactSection = policy.split("LOW-IMPACT")[1];
-      expect(lowImpactSection).toContain("update_page_style");
+      expect(lowImpactSection).not.toContain("update_page_style");
     });
 
-    it("lists reorder_sections (1-2) as low-impact", () => {
+    it("does NOT list reorder_sections as low-impact", () => {
       const lowImpactSection = policy.split("LOW-IMPACT")[1];
-      expect(lowImpactSection).toMatch(/reorder_sections.*1-2/);
+      expect(lowImpactSection).not.toContain("reorder_sections");
     });
 
     it("instructs to just do it without asking", () => {

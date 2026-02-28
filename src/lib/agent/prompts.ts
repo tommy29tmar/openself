@@ -258,7 +258,8 @@ export function getSystemPromptText(
  *
  * Composition order:
  * [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE,
- *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration]
+ *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration,
+ *  turnManagementRules, memoryUsageDirectives, actionAwarenessPolicy, undoAwarenessPolicy]
  */
 export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);

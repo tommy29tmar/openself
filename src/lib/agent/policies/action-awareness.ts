@@ -16,7 +16,8 @@ export function actionAwarenessPolicy(): string {
 HIGH-IMPACT operations (visual changes the user WILL notice):
 - set_layout — changes entire page structure
 - set_theme — changes visual identity (colors, fonts, spacing)
-- reorder_sections (3+ sections) — significantly rearranges the page
+- update_page_style — changes theme, colors, font, or layout template
+- reorder_sections — rearranges sections on the page
 - generate_page (in steady_state mode) — rebuilds the entire page from facts
 
 For high-impact operations, follow this pattern:
@@ -32,8 +33,6 @@ You do NOT need to ask permission when the user already told you exactly what to
 LOW-IMPACT operations (data changes, invisible to the user until page refresh):
 - create_fact, update_fact, delete_fact — storing information
 - set_fact_visibility — changing what appears on the page
-- update_page_style — metadata-only (not visual restructuring)
-- reorder_sections (1-2 sections) — minor positional tweaks
 - search_facts — read-only lookup
 - save_memory, propose_soul_change, resolve_conflict — background operations
 
