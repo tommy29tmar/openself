@@ -26,9 +26,9 @@ vi.mock("@/lib/ai/provider", () => ({
   getModelId: vi.fn(() => "mock-model-id"),
 }));
 
-// Mock generateText from the ai package
+// Mock generateObject from the ai package
 vi.mock("ai", () => ({
-  generateText: vi.fn(),
+  generateObject: vi.fn(),
   tool: vi.fn((config) => config),
 }));
 
@@ -63,11 +63,11 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 import { translatePageContent } from "@/lib/ai/translate";
-import { generateText } from "ai";
+import { generateObject } from "ai";
 import { logEvent } from "@/lib/services/event-service";
 import type { PageConfig } from "@/lib/page-config/schema";
 
-const mockGenerateText = vi.mocked(generateText);
+const mockGenerateObject = vi.mocked(generateObject);
 const mockLogEvent = vi.mocked(logEvent);
 
 function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
@@ -149,7 +149,7 @@ describe("translatePageContent", () => {
     const result = await translatePageContent(config, "it", "it");
 
     expect(result).toBe(config); // Same reference — no copy
-    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(mockGenerateObject).not.toHaveBeenCalled();
   });
 
   it("skips translation when sourceLanguage is null but targetLanguage given", async () => {
@@ -161,14 +161,14 @@ describe("translatePageContent", () => {
         content: { name: "Marco Rossi", tagline: "Welcome to Marco Rossi's page" },
       },
     ];
-    mockGenerateText.mockResolvedValue({
-      text: JSON.stringify(translatedPayload),
+    mockGenerateObject.mockResolvedValue({
+      object: translatedPayload,
     } as any);
 
     const config = makeConfig();
     const result = await translatePageContent(config, "en", null);
 
-    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
 
   it("translates section content and merges back", async () => {
@@ -195,8 +195,8 @@ describe("translatePageContent", () => {
       },
     ];
 
-    mockGenerateText.mockResolvedValue({
-      text: JSON.stringify(translatedPayload),
+    mockGenerateObject.mockResolvedValue({
+      object: translatedPayload,
     } as any);
 
     const config = makeConfig();
@@ -225,19 +225,19 @@ describe("translatePageContent", () => {
   });
 
   it("does not send social and footer sections to the LLM", async () => {
-    mockGenerateText.mockResolvedValue({ text: "[]" } as any);
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
 
-    const prompt = mockGenerateText.mock.calls[0][0].prompt as string;
+    const prompt = mockGenerateObject.mock.calls[0][0].prompt as string;
     expect(prompt).not.toContain("social-1");
     expect(prompt).not.toContain("footer-1");
     expect(prompt).toContain("hero-1");
     expect(prompt).toContain("bio-1");
   });
 
-  it("handles markdown code fences in LLM response", async () => {
+  it("handles structured output directly without text parsing", async () => {
     const translatedPayload = [
       {
         sectionId: "hero-1",
@@ -246,8 +246,8 @@ describe("translatePageContent", () => {
       },
     ];
 
-    mockGenerateText.mockResolvedValue({
-      text: "```json\n" + JSON.stringify(translatedPayload) + "\n```",
+    mockGenerateObject.mockResolvedValue({
+      object: translatedPayload,
     } as any);
 
     const config = makeConfig();
@@ -258,7 +258,7 @@ describe("translatePageContent", () => {
   });
 
   it("returns original config on LLM error (graceful fallback)", async () => {
-    mockGenerateText.mockRejectedValue(new Error("API rate limit"));
+    mockGenerateObject.mockRejectedValue(new Error("API rate limit"));
 
     const config = makeConfig();
     const result = await translatePageContent(config, "en", "it");
@@ -268,21 +268,20 @@ describe("translatePageContent", () => {
     expect((hero.content as any).tagline).toBe("Benvenuto nella pagina di Marco Rossi");
   });
 
-  it("returns original config on invalid JSON response", async () => {
-    mockGenerateText.mockResolvedValue({
-      text: "Sorry, I cannot translate this content.",
-    } as any);
+  it("returns original config when generateObject throws validation error", async () => {
+    mockGenerateObject.mockRejectedValue(
+      new Error("Failed to parse structured output"),
+    );
 
     const config = makeConfig();
     const result = await translatePageContent(config, "en", "it");
 
-    // Should return original config unchanged
     const bio = result.sections.find((s) => s.id === "bio-1")!;
     expect((bio.content as any).text).toContain("ingegnere di software");
   });
 
   it("preserves theme and style through translation", async () => {
-    mockGenerateText.mockResolvedValue({ text: "[]" } as any);
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
 
     const config = makeConfig({ theme: "warm", style: { colorScheme: "dark", primaryColor: "#ff0000", fontFamily: "serif", layout: "centered" } });
     const result = await translatePageContent(config, "en", "it");
@@ -293,23 +292,23 @@ describe("translatePageContent", () => {
   });
 
   it("includes target and source language names in the prompt", async () => {
-    mockGenerateText.mockResolvedValue({ text: "[]" } as any);
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "de", "it");
 
-    const prompt = mockGenerateText.mock.calls[0][0].prompt as string;
+    const prompt = mockGenerateObject.mock.calls[0][0].prompt as string;
     expect(prompt).toContain("German");
     expect(prompt).toContain("Italian");
   });
 
   it("instructs to keep tech acronyms in English", async () => {
-    mockGenerateText.mockResolvedValue({ text: "[]" } as any);
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "de", "it");
 
-    const prompt = mockGenerateText.mock.calls[0][0].prompt as string;
+    const prompt = mockGenerateObject.mock.calls[0][0].prompt as string;
     expect(prompt).toContain("AI, API, IT");
   });
 });
@@ -345,7 +344,7 @@ describe("translatePageContent — cache behavior", () => {
     const result = await translatePageContent(config, "de", "it");
 
     // LLM should NOT have been called
-    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(mockGenerateObject).not.toHaveBeenCalled();
 
     // Cached content should be merged
     const hero = result.sections.find((s) => s.id === "hero-1")!;
@@ -384,15 +383,15 @@ describe("translatePageContent — cache behavior", () => {
       },
     ];
 
-    mockGenerateText.mockResolvedValue({
-      text: JSON.stringify(translatedPayload),
+    mockGenerateObject.mockResolvedValue({
+      object: translatedPayload,
     } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
 
     // LLM should have been called
-    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
 
     // Cache insert should have been called
     expect(mockInsert).toHaveBeenCalled();
@@ -405,7 +404,7 @@ describe("translatePageContent — cache behavior", () => {
   });
 
   it("logs cache_miss event on cache miss", async () => {
-    mockGenerateText.mockResolvedValue({ text: "[]" } as any);
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
@@ -438,7 +437,7 @@ describe("translatePageContent — cache behavior", () => {
     const result2 = await translatePageContent(config, "en", "it");
 
     // LLM should never have been called
-    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(mockGenerateObject).not.toHaveBeenCalled();
 
     // Both results should have translated content
     const hero1 = result1.sections.find((s) => s.id === "hero-1")!;
@@ -449,17 +448,17 @@ describe("translatePageContent — cache behavior", () => {
 
   it("different content triggers new LLM call (cache miss)", async () => {
     // First call: cache miss, LLM called
-    mockGenerateText.mockResolvedValue({
-      text: JSON.stringify([{
+    mockGenerateObject.mockResolvedValue({
+      object: [{
         sectionId: "hero-1",
         type: "hero",
         content: { name: "Marco Rossi", tagline: "Welcome" },
-      }]),
+      }],
     } as any);
 
     const config1 = makeConfig();
     await translatePageContent(config1, "en", "it");
-    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
 
     // Second call with different content: still cache miss
     const config2 = makeConfig({
@@ -477,7 +476,7 @@ describe("translatePageContent — cache behavior", () => {
     });
 
     await translatePageContent(config2, "en", "it");
-    expect(mockGenerateText).toHaveBeenCalledTimes(2);
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2);
   });
 
   it("does not fail translation when cache write errors", async () => {
@@ -490,8 +489,8 @@ describe("translatePageContent — cache behavior", () => {
         content: { name: "Marco Rossi", tagline: "Welcome" },
       },
     ];
-    mockGenerateText.mockResolvedValue({
-      text: JSON.stringify(translatedPayload),
+    mockGenerateObject.mockResolvedValue({
+      object: translatedPayload,
     } as any);
 
     const config = makeConfig();
@@ -512,15 +511,15 @@ describe("translatePageContent — cache behavior", () => {
         content: { name: "Marco Rossi", tagline: "Welcome" },
       },
     ];
-    mockGenerateText.mockResolvedValue({
-      text: JSON.stringify(translatedPayload),
+    mockGenerateObject.mockResolvedValue({
+      object: translatedPayload,
     } as any);
 
     const config = makeConfig();
     const result = await translatePageContent(config, "en", "it");
 
     // LLM should have been called as fallback
-    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
     const hero = result.sections.find((s) => s.id === "hero-1")!;
     expect((hero.content as any).tagline).toBe("Welcome");
 
