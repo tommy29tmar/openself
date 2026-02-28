@@ -38,6 +38,19 @@ export function EditorialLayout({ config, children, previewMode }: ThemeLayoutPr
             { threshold: 0.08, root: scrollParent },
         );
         reveals.forEach(el => observer.observe(el));
+        // Reveal sections already in viewport on initial load
+        requestAnimationFrame(() => {
+            reveals.forEach(el => {
+                const rect = el.getBoundingClientRect();
+                const rootRect = scrollParent
+                    ? scrollParent.getBoundingClientRect()
+                    : { top: 0, bottom: window.innerHeight };
+                if (rect.top < rootRect.bottom && rect.bottom > rootRect.top) {
+                    el.classList.add('revealed');
+                    observer.unobserve(el);
+                }
+            });
+        });
         return () => observer.disconnect();
     }, [previewMode]);
 
