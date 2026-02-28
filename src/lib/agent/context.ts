@@ -5,7 +5,7 @@ import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
-import { getSystemPromptText } from "@/lib/agent/prompts";
+import { getSystemPromptText, buildSystemPrompt } from "@/lib/agent/prompts";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
@@ -172,7 +172,10 @@ export function assembleContext(
   conflictsBlock = truncateToTokenBudget(conflictsBlock, BUDGET.conflicts);
 
   // Base system prompt
-  const basePrompt = getSystemPromptText(mode, language);
+  // Base system prompt — use new composable path when bootstrap available
+  const basePrompt = bootstrap
+    ? buildSystemPrompt(bootstrap)
+    : getSystemPromptText(mode, language);
 
   // Compose full system prompt
   const contextParts = [basePrompt];
