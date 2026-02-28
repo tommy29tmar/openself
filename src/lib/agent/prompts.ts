@@ -263,7 +263,7 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
     pendingProposalSections: [], // Will be populated when proposals carry section info
     thinSections: bootstrap.thinSections,
     staleFacts: bootstrap.staleFacts,
-    openConflicts: [], // Will be populated from conflict service in context assembler
+    openConflicts: bootstrap.openConflicts ?? []
   };
 
   const situationDirectives = getSituationDirectives(

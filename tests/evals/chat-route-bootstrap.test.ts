@@ -21,6 +21,7 @@ const mockBootstrapPayload = {
   pendingProposalCount: 0,
   thinSections: [] as string[],
   staleFacts: [] as string[],
+  openConflicts: [] as string[],
   language: "en",
   conversationContext: null,
 };

@@ -616,10 +616,17 @@ function ChatPanelInner({
           role: m.role as StoredMessage["role"],
           content: m.content,
         }));
-      const welcome = getWelcomeMessage(language);
+      // Check if ANY welcome variant is already in stored history
+      const allWelcomeTexts = new Set([
+        ...Object.values(WELCOME_MESSAGES),
+        ...Object.values(FIRST_VISIT_WELCOME),
+        ...Object.values(RETURNING_WELCOME),
+        ...Object.values(DRAFT_READY_WELCOME),
+      ]);
       const welcomeAlreadyStored = restored.some(
-        (msg) => msg.role === "assistant" && msg.content === welcome.content,
+        (msg) => msg.role === "assistant" && allWelcomeTexts.has(msg.content),
       );
+      const welcome = getWelcomeMessage(language);
       setMessages(welcomeAlreadyStored ? restored : [welcome, ...restored]);
       setChatError(null);
     } catch {

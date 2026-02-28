@@ -53,6 +53,7 @@ export interface BootstrapPayload {
   pendingProposalCount: number;
   thinSections: string[];
   staleFacts: string[];
+  openConflicts: string[];
   language: string;
   conversationContext: string | null;
 }
@@ -258,6 +259,12 @@ export function assembleBootstrapPayload(
     .filter((f) => f.updatedAt && daysBetween(new Date(f.updatedAt), now) > STALE_FACT_DAYS)
     .map((f) => `${f.category}/${f.key}`);
 
+  // Open conflicts (category/key descriptions for situation directives)
+  const openConflictRecords = getOpenConflicts(ownerKey);
+  const openConflicts: string[] = openConflictRecords.map(
+    (c) => `${c.category}/${c.key}`,
+  );
+
   // Conversation context (latest summary or null)
   // Lightweight — we don't load the full summary here, just indicate if one exists
   const conversationContext = null; // Reserved for future use
@@ -272,6 +279,7 @@ export function assembleBootstrapPayload(
     pendingProposalCount,
     thinSections,
     staleFacts,
+    openConflicts,
     language,
     conversationContext,
   };

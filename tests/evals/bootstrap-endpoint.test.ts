@@ -18,6 +18,7 @@ const mockBootstrapPayload = {
   pendingProposalCount: 0,
   thinSections: [],
   staleFacts: [],
+  openConflicts: [],
   language: "en",
   conversationContext: null,
 };

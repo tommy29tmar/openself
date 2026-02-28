@@ -293,6 +293,7 @@ describe("assembleContext with bootstrap", () => {
       pendingProposalCount: 0,
       thinSections: [],
       staleFacts: [],
+      openConflicts: [],
       language: "en",
       conversationContext: null,
     };
@@ -322,6 +323,7 @@ describe("assembleContext with bootstrap", () => {
       pendingProposalCount: 0,
       thinSections: [],
       staleFacts: [],
+      openConflicts: [],
       language: "en",
       conversationContext: null,
     };
@@ -348,6 +350,7 @@ describe("assembleContext with bootstrap", () => {
       pendingProposalCount: 0,
       thinSections: [],
       staleFacts: [],
+      openConflicts: [],
       language: "en",
       conversationContext: null,
     };
@@ -374,6 +377,7 @@ describe("assembleContext with bootstrap", () => {
       pendingProposalCount: 0,
       thinSections: [],
       staleFacts: [],
+      openConflicts: [],
       language: "en",
       conversationContext: null,
     };
@@ -415,6 +419,7 @@ describe("assembleContext with bootstrap", () => {
       pendingProposalCount: 0,
       thinSections: [] as string[],
       staleFacts: [] as string[],
+      openConflicts: [] as string[],
       language: "en",
       conversationContext: null,
     };
