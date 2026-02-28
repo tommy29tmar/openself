@@ -145,6 +145,7 @@ export async function createFact(
         source: input.source ?? "chat",
         confidence,
         profileId: effectiveProfileId,
+        visibility: sql`CASE WHEN ${facts.visibility} = 'private' THEN ${visibility} ELSE ${facts.visibility} END`,
         updatedAt: now,
       },
     })
