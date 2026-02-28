@@ -355,7 +355,7 @@ const CAPITALIZE_NOUNS_LANGUAGES = new Set(["de"]);
 function lowerRole(role: string, language: string): string {
   if (CAPITALIZE_NOUNS_LANGUAGES.has(language)) return role;
   if (role.length === 0) return role;
-  return role[0].toLowerCase() + role.slice(1);
+  return role.toLowerCase();
 }
 
 const FREELANCE_MARKERS = new Set([
@@ -455,6 +455,17 @@ function buildHeroSection(
     const platform = str(v.platform) ?? str(v.name) ?? f.key;
     const url = str(v.url) ?? str(v.link);
     if (platform && url) socialLinks.push({ platform, url });
+  }
+
+  // Include website-type contact facts in hero social links
+  for (const f of contactFacts ?? []) {
+    const v = val(f);
+    if (str(v.type) === "website") {
+      const url = str(v.value) ?? str(v.url);
+      if (url) {
+        socialLinks.push({ platform: "website", url: url.startsWith("http") ? url : `https://${url}` });
+      }
+    }
   }
 
   // Email selection: visibility controls which emails appear.
@@ -925,7 +936,8 @@ function buildMusicSection(musicFacts: FactRow[], language: string): Section | n
       if (!title) return null;
       const item: MusicItem = { title };
       const artist = str(v.artist);
-      if (artist) item.artist = artist;
+      // Dedup: suppress artist if same as title (case-insensitive)
+      if (artist && artist.toLowerCase() !== title?.toLowerCase()) item.artist = artist;
       const note = str(v.note) ?? str(v.description);
       if (note) item.note = note;
       const url = str(v.url);
