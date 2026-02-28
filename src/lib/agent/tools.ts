@@ -163,6 +163,36 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
+  create_facts: tool({
+    description:
+      "Store multiple facts at once. Use when the user shares several pieces of information in one message.",
+    parameters: z.object({
+      facts: z.array(z.object({
+        category: z.string(),
+        key: z.string(),
+        value: z.record(z.unknown()),
+        confidence: z.number().optional().default(1.0),
+      })),
+    }),
+    execute: async ({ facts: inputs }) => {
+      const results = [];
+      for (const input of inputs) {
+        try {
+          const fact = await createFact(input, sessionId);
+          results.push({ success: true, factId: fact.id, key: input.key, visibility: fact.visibility });
+        } catch (error) {
+          results.push({ success: false, key: input.key, error: String(error) });
+          logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "create_facts", key: input.key, error: String(error) } });
+        }
+      }
+      // Single recomposition at end
+      try { recomposeAfterMutation(); } catch (e) {
+        console.warn("[tools] recomposeAfterMutation after batch create failed:", e);
+      }
+      return { results, totalCreated: results.filter(r => r.success).length };
+    },
+  }),
+
   update_fact: tool({
     description:
       "Update an existing fact's value. Use when information changes (e.g., user left a job, changed location). ALWAYS provide the FULL new value object — partial updates are not supported. Example: update_fact({factId: 'abc-123', value: {role: 'senior economist', company: 'CDP', status: 'current'}})",

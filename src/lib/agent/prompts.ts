@@ -58,6 +58,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use propose_soul_change when you notice consistent patterns in voice/tone/values — the user must approve soul changes
 - Use resolve_conflict when you detect contradictory facts and can propose which to keep or how to merge them
 - Use set_fact_visibility to control which facts appear on the page: "proposed" = visible in preview, "private" = hidden. You cannot set "public" — only publishing does that
+- When the user shares 3 or more facts in one message, prefer create_facts (batch) over multiple create_fact calls
 - Only create facts from information the user explicitly stated. Confidence 1.0 = stated directly, 0.7 = clearly implied from context. Do NOT create facts from your own assumptions, general knowledge, or inferences about what the user "might" like.
 
 When extracting facts:
