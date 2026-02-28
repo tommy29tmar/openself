@@ -591,9 +591,25 @@ type constraint.
 from facts if none exists. This lets users request style changes before explicitly
 generating the page — the draft is created on-demand from the knowledge base.
 
+**Auto-recompose after fact mutations:** The `create_fact`, `update_fact`, and `delete_fact`
+tools call `recomposeAfterMutation()` after each successful operation to keep the preview
+in sync without requiring a separate `generate_page` call. The function uses
+`projectCanonicalConfig()` — the same projection used by the preview/stream endpoint —
+which preserves section order, lock metadata, and theme/style/layoutTemplate from the
+existing draft (`DraftMeta`). An anti-loop flag (`_recomposing`) prevents re-entry.
+Hash-based idempotency (`computeConfigHash`) skips the write if the composed config matches
+the current draft. Each call is wrapped in try/catch so that recompose failures (e.g.,
+missing draft) never mask the successful fact operation.
+
+**Layout alias resolution:** The `set_layout` tool normalizes shorthand layout names via
+`resolveLayoutAlias()` in `contracts.ts`: `"bento"` → `"bento-standard"`, `"sidebar"` →
+`"sidebar-left"`. Invalid aliases return `null` and the tool returns an error listing
+available templates.
+
 Key files:
 - `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas, role/title priority)
 - `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback in `streamText()`
+- `src/lib/layout/contracts.ts` — `resolveLayoutAlias()`, `LAYOUT_ALIAS_MAP`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
 
@@ -1253,6 +1269,8 @@ follows OpenSelf's visual identity.
 │                Kept for backward compat, never newly generated│
 │                                                              │
 │  experience    Work history, roles, companies                │
+│                Optional type: employment|freelance|client    │
+│                client-type items routed to projects section  │
 │                Variants: timeline                            │
 │                Phase 1b (gated by EXTENDED_SECTIONS flag)    │
 │                                                              │
@@ -1619,6 +1637,44 @@ Skills are grouped by a deterministic `SKILL_DOMAINS` dictionary (Frontend, Back
 AI/ML, Design + Other fallback). Domain labels are hidden when only 1-2 groups exist. Standalone
 skills/stats/interests sections are suppressed when extended mode is on.
 
+**Freelance detection:**
+`buildBioSection()` detects freelance roles via `FREELANCE_MARKERS` (a set of 10 keywords
+across 5 languages: "freelance", "self-employed", "libero professionista", etc.). When
+matched, the bio uses `bioRoleFreelanceFirstPerson(role)` from the L10N table — a
+first-person template avoiding gendered occupational suffixes (e.g., German uses
+"Ich arbeite freiberuflich als ${role}" instead of "Ich bin freiberufliche/r ${role}").
+
+**Role casing (`lowerRole()`):**
+Job titles are lowercased for use in bio prose, except in languages where common nouns
+are capitalized (German). The function preserves all-uppercase words (e.g., "CEO", "UX")
+by checking `w === w.toUpperCase() && w.length > 1` per word.
+
+**Centralized UI localization (`getUiL10n()`):**
+Section headers, labels, and UI strings are localized via `getUiL10n(lang)` in
+`src/lib/i18n/ui-strings.ts`. The function returns a `UiStrings` object with 45 keys
+for 8 languages (en, it, de, fr, es, pt, ja, zh), with English fallback for unknown
+languages. Used by `composeOptimisticPage()` for section headers and labels, activity
+type localization, and proficiency level localization.
+
+**Activity type localization:**
+Activity types (volunteering, sport, club, etc.) are localized at composition time via
+`getUiL10n(lang)` lookup keys (`actVolunteering`, `actSport`, `actClub`). Unknown
+activity types pass through unchanged.
+
+**Music artist deduplication:**
+When a music fact's artist name matches the track title (case-insensitive), the artist
+field is omitted from the composed section to avoid visual redundancy.
+
+**Date formatting (`formatFactDate()`):**
+`src/lib/i18n/format-date.ts` provides locale-aware date formatting for sections like
+achievements and experience. Year-only strings ("2024") pass through; ISO dates with
+Jan 1 are treated as year-only; other dates are formatted as localized "month year".
+
+**Website in hero:**
+Contact facts with `type: "website"` are added to the hero's `socialLinks` array with
+automatic `https://` prepend. This surfaces personal websites prominently alongside
+social media links.
+
 Translation to other languages is handled separately via the LLM translation pipeline
 (see Section 6.7). This keeps composition fast and predictable.
 
@@ -1713,6 +1769,8 @@ A two-phase LLM process runs during `heartbeat_deep`:
 - `src/app/api/proposals/` — Proposal API routes (GET, accept, reject, accept-all)
 - `src/components/builder/ProposalBanner.tsx` — Proposal review UI
 - `src/lib/db/personalizer-schema.ts` — Drizzle schema for 3 new tables
+- `src/lib/i18n/ui-strings.ts` — Centralized UI localization (`getUiL10n`, 45 keys × 8 languages)
+- `src/lib/i18n/format-date.ts` — Locale-aware date formatting (`formatFactDate`)
 
 ### 6.3.1 Live Preview Strategy (Onboarding)
 
@@ -1961,8 +2019,13 @@ without `layoutTemplate` render **identically** to before.
 - When `layoutTemplate` is present, `style.layout` is canonicalized to `"centered"` by `normalizeConfigForWrite()`
 - All new fields (`widgetId`, `slot`, `lock`, `lockProposal`, `layoutTemplate`) are optional
 
+**Layout Alias Resolution:**
+`resolveLayoutAlias()` in `contracts.ts` maps shorthand layout names to canonical IDs:
+`"bento"` → `"bento-standard"`, `"sidebar"` → `"sidebar-left"`. Used by the `set_layout`
+tool so users (and the LLM) can use natural names. Returns `null` for unknown aliases.
+
 **Key files:**
-- `src/lib/layout/contracts.ts` — pure constants (zero deps, breaks import cycles)
+- `src/lib/layout/contracts.ts` — pure constants, `resolveLayoutAlias()` (zero deps, breaks import cycles)
 - `src/lib/layout/types.ts` — FullSlotDefinition, LayoutTemplateDefinition
 - `src/lib/layout/registry.ts` — template definitions + resolveLayoutTemplate()
 - `src/lib/layout/widgets.ts` — widget definitions + resolveVariant()
@@ -2031,7 +2094,18 @@ without regressing user control.
    - Regression: no content truncation under heartbeat path.
    - Budget tests: heartbeat exits cleanly when global or owner budget is exceeded.
 
-### 6.7 Automatic Page Translation
+### 6.7 Localization & Translation
+
+OpenSelf has two separate localization systems:
+
+1. **UI L10N (deterministic):** Section headers, labels, proficiency levels, and activity
+   types are localized at composition time via `getUiL10n(lang)` in `src/lib/i18n/ui-strings.ts`.
+   45 keys × 8 languages (en, it, de, fr, es, pt, ja, zh) with English fallback. No LLM
+   call — pure lookup table. Handles: section headers (e.g., "Esperienza" vs "Experience"),
+   proficiency levels (e.g., "madrelingua" vs "native"), activity types (e.g., "volontariato"
+   vs "volunteering"), At-a-Glance labels.
+
+2. **Page translation (LLM-based):** Full page content translation via `translatePageContent()`.
 
 The page is written in the owner's language (`factLanguage` tracked in user preferences).
 When the owner switches the display language in the Settings panel, content is translated
