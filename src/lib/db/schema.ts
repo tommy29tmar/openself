@@ -65,6 +65,7 @@ export const sessions = sqliteTable("sessions", {
   profileId: text("profile_id").references(() => profiles.id),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  journeyState: text("journey_state"),
 });
 
 // -- Facts
@@ -82,6 +83,7 @@ export const facts = sqliteTable(
     visibility: text("visibility").default("private"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+    sortOrder: integer("sort_order").default(0),
   },
   (table) => [uniqueIndex("uniq_facts_session_category_key").on(table.sessionId, table.category, table.key)],
 );
