@@ -800,6 +800,81 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       }
     },
   }),
+
+  inspect_page_state: tool({
+    description:
+      "Get a structured view of the current page state including layout, sections, slot assignments, and warnings. Use this to understand what the page looks like before making changes.",
+    parameters: z.object({
+      username: z
+        .string()
+        .describe("The username for the page to inspect"),
+    }),
+    execute: async ({ username }) => {
+      try {
+        const draft = getDraft(sessionId);
+        if (!draft) return { error: "No draft found" } as any;
+
+        const config = draft.config;
+        const template = resolveLayoutTemplate(config);
+        const slotGroups = groupSectionsBySlot(config.sections, template);
+        const allFacts = getAllFacts(sessionId, readKeys);
+        const publishable = filterPublishableFacts(allFacts);
+
+        const sections = config.sections.map((s: any) => {
+          // Find which slot this section landed in
+          let slot = "unknown";
+          for (const [slotId, slotSections] of Object.entries(slotGroups)) {
+            if ((slotSections as any[]).some((ss: any) => ss.id === s.id)) {
+              slot = slotId;
+              break;
+            }
+          }
+          return {
+            id: s.id,
+            type: s.type,
+            slot,
+            widget: s.widget ?? "default",
+            locked: !!s.lock,
+            complete: isSectionComplete(s),
+            richness: classifySectionRichness(publishable, s.type),
+          };
+        });
+
+        const warnings: string[] = [];
+        sections
+          .filter((s: any) => s.richness === "thin")
+          .forEach((s: any) => warnings.push(`${s.type} section is thin`));
+        sections
+          .filter((s: any) => !s.complete)
+          .forEach((s: any) => warnings.push(`${s.type} section is incomplete`));
+        if (
+          !allFacts.some(
+            (f: any) => f.category === "contact" && f.visibility !== "private",
+          )
+        ) {
+          warnings.push("No public contact information");
+        }
+
+        return {
+          layout: {
+            template: config.layoutTemplate ?? "vertical",
+            theme: config.theme ?? "minimal",
+            style: config.style ?? {},
+          },
+          sections,
+          availableSlots: template.slots.map((s: any) => s.id),
+          warnings,
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "inspect_page_state", error: String(error) },
+        });
+        return { error: String(error) } as any;
+      }
+    },
+  }),
   };
 }
 
