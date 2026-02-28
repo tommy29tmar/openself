@@ -131,6 +131,66 @@ export function detectJourneyState(
 }
 
 // ---------------------------------------------------------------------------
+// Cached detection: pin state per session to prevent mid-conversation flips
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the journey state, using a per-session pin to prevent mid-conversation
+ * mode flips (e.g. first_visit → draft_ready after recomposeAfterMutation).
+ *
+ * Safety override: blocked always wins, even over a cached pin.
+ * The state is read/written on the anchor session (knowledgePrimaryKey).
+ */
+export function getOrDetectJourneyState(
+  scope: OwnerScope,
+  authInfo?: AuthInfo,
+): JourneyState {
+  // SAFETY OVERRIDE: blocked takes priority over any cached pin.
+  // Check quota BEFORE reading cache.
+  if (authInfo?.authenticated) {
+    const row = sqlite
+      .prepare(
+        "SELECT count FROM profile_message_usage WHERE profile_key = ?",
+      )
+      .get(scope.cognitiveOwnerKey) as { count: number } | undefined;
+    if (row && row.count >= AUTH_MESSAGE_LIMIT) {
+      return "blocked";
+    }
+  }
+
+  // Read cached pin from anchor session
+  const anchorId = scope.knowledgePrimaryKey;
+  const cached = sqlite
+    .prepare("SELECT journey_state FROM sessions WHERE id = ?")
+    .get(anchorId) as { journey_state: string | null } | undefined;
+
+  if (cached?.journey_state) {
+    return cached.journey_state as JourneyState;
+  }
+
+  // No pin yet — detect and write
+  const detected = detectJourneyState(scope, authInfo);
+  sqlite
+    .prepare("UPDATE sessions SET journey_state = ? WHERE id = ?")
+    .run(detected, anchorId);
+
+  return detected;
+}
+
+/**
+ * Explicitly transition the pinned journey state.
+ * Called by tools (generate_page, request_publish) on milestone events.
+ */
+export function updateJourneyStatePin(
+  anchorSessionId: string,
+  newState: JourneyState,
+): void {
+  sqlite
+    .prepare("UPDATE sessions SET journey_state = ? WHERE id = ?")
+    .run(newState, anchorSessionId);
+}
+
+// ---------------------------------------------------------------------------
 // Detection: Situations
 // ---------------------------------------------------------------------------
 
@@ -223,7 +283,7 @@ export function assembleBootstrapPayload(
   const readKeys = scope.knowledgeReadKeys;
   const ownerKey = scope.cognitiveOwnerKey;
 
-  const journeyState = detectJourneyState(scope, authInfo);
+  const journeyState = getOrDetectJourneyState(scope, authInfo);
 
   const facts = getAllFacts(scope.knowledgePrimaryKey, readKeys);
 

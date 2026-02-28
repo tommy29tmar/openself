@@ -32,6 +32,7 @@ import { personalizeSection } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
+import { updateJourneyStatePin } from "@/lib/agent/journey";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
@@ -415,6 +416,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const config = await translatePageContent(styled, targetLang, factLang);
 
         upsertDraft(username, config, sessionId);
+        updateJourneyStatePin(sessionId, "draft_ready");
         logEvent({
           eventType: "page_generated",
           actor: "assistant",
@@ -500,6 +502,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         // Mark the existing draft as pending approval — no recomposition,
         // so manual changes (theme, section order, content edits) are preserved.
         requestPublish(username, sessionId);
+        updateJourneyStatePin(sessionId, "active_fresh");
 
         logEvent({
           eventType: "page_publish_requested",
