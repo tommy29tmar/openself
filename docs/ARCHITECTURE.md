@@ -527,7 +527,7 @@ and cognitive state. The user sees a natural conversation. Under the hood, the a
 performing structured actions:
 
 ```
-Available tools (15):
+Available tools (17):
 
 Knowledge Base management:
   create_fact(category, key, value, confidence?)     # Learn something new
@@ -542,7 +542,9 @@ Page management:
   set_layout(username, layoutTemplate)                # Change layout template
   reorder_sections(username, sectionOrder)            # Rearrange page sections
   generate_page(username, language?)                  # Full page synthesis from facts
-  request_publish(username)                           # Request publish approval
+  inspect_page_state(username)                        # Structured view of page layout/sections/warnings
+  publish_preflight(username)                         # Pre-publish gate + quality checks
+  request_publish(username)                           # Request publish approval (validates username)
   propose_lock(sectionId, lockPosition?, ...)         # Propose locking a section
 
 Cognitive management:

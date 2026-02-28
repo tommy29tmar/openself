@@ -219,7 +219,7 @@ then hybrid page personalization. Each sub-phase builds on the previous.
 
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
-NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete.
+NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete. Sprint 4 (Reliable Execution) complete.
 Phase 1d (media/connectors/translation) is next.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
@@ -332,9 +332,9 @@ Execution reference:
 Main deliverables:
 1. User journey state engine + contextual bootstrap messages (no generic welcome for known users)
 2. AI router v2 (capability-based model selection + fallback chain)
-3. Structured output hardening (schema-first for translation/personalization/conformity)
+3. Structured output hardening (schema-first for translation/personalization/conformity) — Sprint 4 (translation)
 4. Layout control plane v1 (inspect_layout_state, simulate_layout_patch, apply_layout_patch)
-5. Domain control-plane expansion (facts, heartbeat, publish preflight)
+5. Domain control-plane expansion (facts, heartbeat, publish preflight) — Sprint 4 (publish_preflight + inspect_page_state)
 6. Skills package v1 aligned to journey states (onboarding/returning/layout/publish/heartbeat/conflicts)
 7. MCP connector gateway foundation with GitHub pilot
 
@@ -378,6 +378,20 @@ added to all system prompts. 142 new tests (1101 total, 70 files).
 - Memory usage directives (`memory-directives.ts`): 3-tier strategic memory guide (facts=WHAT, summary=CONTEXT, memories=HOW), golden rule for meta-observation persistence
 - Turn management rules (`turn-management.ts`): R1 (breadth), R2 (max 6 exchanges), R3 (banned closings), R4 (stall recovery), R5 (proportional response)
 - `buildSystemPrompt` extended with `turnManagementRules()` + `memoryUsageDirectives()` after expertise calibration
+
+**Sprint 4 — Reliable Execution (Done):**
+
+Hardening LLM interaction reliability and agent tooling. Capability-based model tier,
+structured output migration, pre-publish validation, and page introspection tools.
+Branch: `feature/sprint-4-reliable-execution`. 8 commits, 39 new tests (1140 total, 74 files).
+
+- `capable` model tier: `CAPABLE_MODELS` map with per-provider selection + `AI_MODEL_CAPABLE` env override
+- Provider fix: `summary-service` hardcoded `"anthropic"` → dynamic `getProviderName()`
+- Translation structured output: `generateText` + `stripCodeFences` → `generateObject` + Zod schema
+- `publish_preflight` tool: gates (hasDraft, hasAuth, hasUsername) + quality checks (incomplete/thin/proposed/contact)
+- `inspect_page_state` tool: layout info, per-section details (slot/widget/locked/complete/richness), warnings
+- `request_publish` hardened: username format validation guard (belt-and-suspenders)
+- TOOL_POLICY: added `publish_preflight` and `inspect_page_state` for agent discoverability
 
 ### Deferred Until Phase 1 Closure
 
