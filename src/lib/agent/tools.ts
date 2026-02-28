@@ -27,6 +27,7 @@ import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { isSectionComplete } from "@/lib/page-config/section-completeness";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
+import { validateUsernameFormat } from "@/lib/page-config/usernames";
 import { personalizeSection } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
@@ -426,6 +427,15 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const draft = getDraft(sessionId);
         if (!draft) {
           return { success: false, error: "No draft page to publish. Generate a page first." };
+        }
+
+        // Username format validation (belt-and-suspenders with publish_preflight)
+        if (!username || username.length === 0) {
+          return { success: false, error: "Username is required for publishing." };
+        }
+        const usernameCheck = validateUsernameFormat(username);
+        if (!usernameCheck.ok) {
+          return { success: false, error: usernameCheck.message };
         }
 
         // Mark the existing draft as pending approval — no recomposition,
