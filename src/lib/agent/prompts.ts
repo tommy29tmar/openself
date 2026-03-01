@@ -8,7 +8,7 @@ import {
 import type { SituationContext } from "@/lib/agent/policies";
 import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
 import { turnManagementRules } from "@/lib/agent/policies/turn-management";
-import { actionAwarenessPolicy } from "@/lib/agent/policies/action-awareness";
+import { planningProtocol } from "@/lib/agent/policies/planning-protocol";
 import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
 
 const CORE_CHARTER = `You are the OpenSelf agent — a warm, thoughtful AI that helps people build their personal web page through natural conversation.
@@ -280,7 +280,7 @@ export function getSystemPromptText(
  * Composition order:
  * [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE,
  *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration,
- *  turnManagementRules, memoryUsageDirectives, actionAwarenessPolicy, undoAwarenessPolicy]
+ *  turnManagementRules, memoryUsageDirectives, planningProtocol, undoAwarenessPolicy]
  */
 export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
@@ -318,7 +318,7 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   blocks.push(expertiseCalibration);
   blocks.push(turnManagementRules());
   blocks.push(memoryUsageDirectives());
-  blocks.push(actionAwarenessPolicy());
+  blocks.push(planningProtocol());
   blocks.push(undoAwarenessPolicy());
 
   const composed = blocks.join("\n\n---\n\n");
