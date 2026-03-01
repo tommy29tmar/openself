@@ -363,6 +363,9 @@ export function assembleBootstrapPayload(
     if (sessionId) {
       mergeSessionMeta(sessionId, { archetype });
     }
+    // TODO(Circuito A): When archetype !== "generalist" and no soul exists,
+    // propose an initial soul profile based on archetype strategies.
+    // Deferred — cross-cutting concern tracked in v2 plan.
   }
 
   return {

@@ -254,6 +254,7 @@ export async function POST(req: Request) {
 
   const provider = getProviderName();
   const modelId = getModelId();
+  const MAX_STEPS = 8; // batch_facts reduces per-turn tool calls; 8 is sufficient
 
   try {
     const model = getModel();
@@ -263,7 +264,7 @@ export async function POST(req: Request) {
       system: systemPrompt,
       messages: safeMessages,
       tools: agentTools,
-      maxSteps: 8, // batch_facts reduces per-turn tool calls; 8 is sufficient
+      maxSteps: MAX_STEPS,
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
         const { text } = await generateText({
@@ -310,17 +311,23 @@ export async function POST(req: Request) {
         const journal = getJournal();
         if (journal.length > 0) {
           const metaUpdate: Record<string, unknown> = { journal };
-          // Step exhaustion: model wanted more tool calls but hit maxSteps
           if (finishReason === "tool-calls") {
+            // Step exhaustion: model wanted more tool calls but hit maxSteps
             metaUpdate.pendingOperations = {
               timestamp: new Date().toISOString(),
               journal,
               finishReason: "step_exhaustion",
             };
+          } else {
+            // Successful completion: clear any stale pendingOperations from previous turns
+            metaUpdate.pendingOperations = null;
           }
           try { mergeSessionMeta(writeSessionId, metaUpdate); } catch (e) {
             console.warn("[chat] journal persistence failed:", e);
           }
+        } else {
+          // No tool calls this turn — still clear any stale pendingOps
+          try { mergeSessionMeta(writeSessionId, { pendingOperations: null }); } catch { /* best-effort */ }
         }
 
         // Enqueue summary generation (best-effort, non-blocking)

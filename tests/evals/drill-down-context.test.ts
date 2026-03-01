@@ -29,6 +29,10 @@ vi.mock("@/lib/services/conflict-service", () => ({
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn(() => []),
 }));
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(),
+}));
 
 import { assembleContext } from "@/lib/agent/context";
 import type { OwnerScope } from "@/lib/auth/session";
