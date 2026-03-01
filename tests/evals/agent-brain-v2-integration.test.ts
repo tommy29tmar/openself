@@ -10,8 +10,11 @@ import { facts, sessions, page, agentConfig } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { createAgentTools } from "@/lib/agent/tools";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { createFact, getActiveFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
+import { assembleBootstrapPayload } from "@/lib/agent/journey";
+import { assembleContext } from "@/lib/agent/context";
+import type { OwnerScope } from "@/lib/auth/session";
 
 const sessionId = "test-intv2-" + randomUUID().slice(0, 8);
 
@@ -130,6 +133,65 @@ describe("Agent Brain v2 — end-to-end", () => {
     expect(s2Row!.sortOrder).toBe(2);
   });
 
+  it("move + recompose: section stays in moved slot after fact mutation", async () => {
+    const tools = getTools();
+    const suffix = randomUUID().slice(0, 8);
+
+    // 1. Create identity + activity facts (activities accepted in both main & sidebar)
+    await tools.create_fact.execute(
+      { category: "identity", key: `name-mv-${suffix}`, value: { full: `Move User ${suffix}` } },
+      toolCtx,
+    );
+    await tools.create_fact.execute(
+      { category: "activity", key: `act1-${suffix}`, value: { name: "Running", activityType: "sport" } },
+      toolCtx,
+    );
+    await tools.create_fact.execute(
+      { category: "activity", key: `act2-${suffix}`, value: { name: "Volunteering", activityType: "volunteering" } },
+      toolCtx,
+    );
+
+    // 2. Set layout to sidebar-left (assigns slots)
+    const layoutResult = await tools.set_layout.execute(
+      { username: "draft", layoutTemplate: "sidebar-left" },
+      { toolCallId: "lay", messages: [], abortSignal: undefined as any },
+    );
+    expect(layoutResult.success).toBe(true);
+
+    // Find the activities section
+    let draft = getDraft(sessionId);
+    expect(draft).not.toBeNull();
+    const activitiesSection = draft!.config.sections.find(s => s.type === "activities");
+    if (!activitiesSection) return; // skip if not enough data
+
+    const sectionId = activitiesSection.id;
+    const originalSlot = activitiesSection.slot;
+
+    // 3. Move activities to the other slot (both main and sidebar accept activities)
+    const targetSlot = originalSlot === "sidebar" ? "main" : "sidebar";
+    const moveResult = await tools.move_section.execute(
+      { sectionId, targetSlot },
+      { toolCallId: "mv", messages: [], abortSignal: undefined as any },
+    );
+    expect(moveResult.success).toBe(true);
+
+    // Verify move applied
+    draft = getDraft(sessionId);
+    expect(draft!.config.sections.find(s => s.id === sectionId)!.slot).toBe(targetSlot);
+
+    // 4. Create another activity → triggers recomposeAfterMutation
+    await tools.create_fact.execute(
+      { category: "activity", key: `act3-${suffix}`, value: { name: "Cycling", activityType: "sport" } },
+      toolCtx,
+    );
+
+    // 5. Verify: activities section is STILL in the moved slot (carry-over works)
+    draft = getDraft(sessionId);
+    const afterRecompose = draft!.config.sections.find(s => s.id === sectionId);
+    expect(afterRecompose).toBeDefined();
+    expect(afterRecompose!.slot).toBe(targetSlot);
+  });
+
   it("archive + unarchive roundtrip", async () => {
     const tools = getTools();
     const suffix = randomUUID().slice(0, 8);
@@ -157,5 +219,29 @@ describe("Agent Brain v2 — end-to-end", () => {
 
     active = getActiveFacts(sessionId);
     expect(active.find(f => f.id === factId)).toBeDefined();
+  });
+
+  it("archetype detection flows into context", async () => {
+    const suffix = randomUUID().slice(0, 8);
+
+    // 1. Create identity/role = "software engineer"
+    await createFact(
+      { category: "identity", key: `role-${suffix}`, value: { role: "software engineer" } },
+      sessionId,
+    );
+
+    // 2. assembleBootstrapPayload → archetype = "developer"
+    const scope: OwnerScope = {
+      cognitiveOwnerKey: sessionId,
+      knowledgeReadKeys: [sessionId],
+      knowledgePrimaryKey: sessionId,
+      currentSessionId: sessionId,
+    };
+    const bootstrap = assembleBootstrapPayload(scope, "en", null);
+    expect(bootstrap.archetype).toBe("developer");
+
+    // 3. assembleContext with bootstrap → prompt contains archetype info
+    const ctx = assembleContext(scope, "en", [], undefined, bootstrap);
+    expect(ctx.systemPrompt).toContain("developer");
   });
 });
