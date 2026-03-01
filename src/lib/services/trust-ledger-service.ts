@@ -98,6 +98,14 @@ function executeUndo(payload: UndoPayload, ownerKey: string): void {
           .run(payload.conflictId, ownerKey);
       }
       break;
+    case "unarchive_fact":
+      // Undo an archive — caller must trigger recomposeAfterMutation() after
+      sqlite
+        .prepare(
+          "UPDATE facts SET archived_at = NULL, updated_at = ? WHERE id = ?",
+        )
+        .run(new Date().toISOString(), payload.factId as string);
+      break;
     default:
       throw new Error(`Unknown undo action: ${payload.action}`);
   }

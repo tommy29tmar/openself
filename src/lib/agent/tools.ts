@@ -9,8 +9,10 @@ import {
   getFactById,
   setFactVisibility,
   VisibilityTransitionError,
-  updateFactSortOrder,
 } from "@/lib/services/kb-service";
+import { db } from "@/lib/db";
+import { facts } from "@/lib/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { FactConstraintError } from "@/lib/services/fact-constraints";
 import { logTrustAction } from "@/lib/services/trust-ledger-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
@@ -1025,41 +1027,115 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
-  reorder_section_items: tool({
+  archive_fact: tool({
     description:
-      "Reorder items within a section (e.g., skills, experiences, interests). Provide the fact keys in the desired order. Do NOT use reorder_sections for this — that tool reorders sections on the page, not items within a section.",
+      "Soft-delete a fact by setting archived_at. The fact disappears from the page but can be restored with unarchive_fact. Use instead of delete_fact when the user might want to bring it back later.",
     parameters: z.object({
-      category: z
-        .string()
-        .describe("The fact category whose items to reorder (e.g., 'skill', 'experience', 'interest')"),
-      orderedKeys: z
-        .array(z.string())
-        .describe("Array of fact keys in the desired display order"),
+      factId: z.string().describe("The ID of the fact to archive"),
     }),
-    execute: async ({ category, orderedKeys }) => {
+    execute: async ({ factId }) => {
       try {
-        const notFound: string[] = [];
-        for (let i = 0; i < orderedKeys.length; i++) {
-          const changes = updateFactSortOrder(sessionId, category, orderedKeys[i], i);
-          if (changes === 0) notFound.push(orderedKeys[i]);
+        const existing = getFactById(factId, sessionId, readKeys);
+        if (!existing) return { success: false, error: "FACT_NOT_FOUND" };
+        if (existing.archivedAt) return { success: true, factId, alreadyArchived: true };
+        const now = new Date().toISOString();
+        db.update(facts).set({ archivedAt: now, updatedAt: now }).where(eq(facts.id, factId)).run();
+        // Orphan children
+        db.update(facts).set({ parentFactId: null }).where(eq(facts.parentFactId, factId)).run();
+        logTrustAction(effectiveOwnerKey, "archive_fact", `Archived fact ${factId}`, {
+          undoPayload: { action: "unarchive_fact", factId },
+        });
+        let recomposeOk = true;
+        try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
+        return { success: true, factId, recomposeOk };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "archive_fact", error: String(error), factId },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  unarchive_fact: tool({
+    description:
+      "Restore a previously archived fact by clearing archived_at. The fact reappears on the page.",
+    parameters: z.object({
+      factId: z.string().describe("The ID of the archived fact to restore"),
+    }),
+    execute: async ({ factId }) => {
+      try {
+        const existing = db.select().from(facts).where(eq(facts.id, factId)).get();
+        if (!existing) return { success: false, error: "FACT_NOT_FOUND" };
+        if (!existing.archivedAt) return { success: true, factId, alreadyActive: true };
+        const now = new Date().toISOString();
+        db.update(facts).set({ archivedAt: null, updatedAt: now }).where(eq(facts.id, factId)).run();
+        let recomposeOk = true;
+        try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
+        return { success: true, factId, recomposeOk };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "unarchive_fact", error: String(error), factId },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  reorder_items: tool({
+    description:
+      "Reorder items within a section by setting sort_order on each fact. Provide fact IDs (not keys) in the desired order. Cannot reorder composite sections (hero, bio, at-a-glance, footer).",
+    parameters: z.object({
+      factIds: z
+        .array(z.string())
+        .describe("Array of fact IDs in the desired display order"),
+    }),
+    execute: async ({ factIds }) => {
+      try {
+        if (factIds.length === 0) return { success: true, reordered: 0 };
+        // Validate all facts exist, are active, and share a category
+        // Categories whose facts feed composite sections (hero/bio/at-a-glance/footer)
+        // that have no meaningful item order
+        const NON_REORDERABLE_CATEGORIES = new Set(["identity"]);
+        const resolved: Array<{ id: string; category: string }> = [];
+        for (const fid of factIds) {
+          const f = getFactById(fid, sessionId, readKeys);
+          if (!f) return { success: false, error: `Fact not found: ${fid}` };
+          resolved.push({ id: f.id, category: f.category });
+        }
+        const categories = new Set(resolved.map(r => r.category));
+        if (categories.size > 1) {
+          return { success: false, error: `All facts must share a category. Found: ${[...categories].join(", ")}` };
+        }
+        const category = resolved[0].category;
+        if (NON_REORDERABLE_CATEGORIES.has(category)) {
+          return { success: false, error: `Cannot reorder items in composite section '${category}'` };
+        }
+        // Write dense ranks
+        for (let i = 0; i < resolved.length; i++) {
+          db.update(facts).set({ sortOrder: i }).where(eq(facts.id, resolved[i].id)).run();
         }
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
-        return {
-          success: true,
-          category,
-          orderedKeys,
-          recomposeOk,
-          ...(notFound.length > 0 && { warning: `Keys not found: ${notFound.join(", ")}` }),
-        };
+        return { success: true, reordered: resolved.length, category, recomposeOk };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { requestId, tool: "reorder_section_items", error: String(error), category },
+          payload: { requestId, tool: "reorder_items", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
