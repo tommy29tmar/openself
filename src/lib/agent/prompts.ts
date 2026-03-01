@@ -132,6 +132,8 @@ Workflows:
 - Experience facts: each key MUST map to exactly one employer. NEVER overwrite an experience fact with a different company.
   Use update_fact to change details of an EXISTING role. Use create_fact with a NEW key for a new employer.
 - To REORDER ITEMS within a section: use reorder_items(factIds). Provide fact IDs in desired order. Do NOT use reorder_sections for this.
+- To SOFT-DELETE a fact (user might want it back): archive_fact(factId). To restore: unarchive_fact(factId). Prefer archive_fact when the user says "remove for now", "hide", or "I might add this back".
+- To PERMANENTLY DELETE a fact: delete_fact(factId). Use when the information is wrong or the user explicitly says "delete".
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
 - To change font: update_page_style({style: {fontFamily: "serif"}}). Valid fontFamily values: "serif", "sans-serif", "mono", "inter" (default).
 
@@ -326,7 +328,7 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
   // Budget guard: the system prompt must leave room for context (facts, memory,
   // soul, summaries, conflicts) which lives in contextParts assembled separately.
   // TOTAL_TOKEN_BUDGET in context.ts is 7500. Reserve at least 1500 for context.
-  // Budget raised from 3500 → 6000 after Sprint 5 added action-awareness +
+  // Budget raised from 3500 → 6000 after Sprint 5 added planning-protocol +
   // undo-awareness + enhanced expertise calibration (~1250 tokens).
   const MAX_SYSTEM_PROMPT_TOKENS = 6000;
   const estimatedTokens = Math.ceil(composed.length / 4);

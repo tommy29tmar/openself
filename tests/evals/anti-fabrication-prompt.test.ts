@@ -19,8 +19,8 @@ vi.mock("@/lib/agent/policies/memory-directives", () => ({
 vi.mock("@/lib/agent/policies/turn-management", () => ({
   turnManagementRules: vi.fn(() => ""),
 }));
-vi.mock("@/lib/agent/policies/action-awareness", () => ({
-  actionAwarenessPolicy: vi.fn(() => ""),
+vi.mock("@/lib/agent/policies/planning-protocol", () => ({
+  planningProtocol: vi.fn(() => ""),
 }));
 vi.mock("@/lib/agent/policies/undo-awareness", () => ({
   undoAwarenessPolicy: vi.fn(() => ""),

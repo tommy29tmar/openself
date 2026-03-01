@@ -12,7 +12,7 @@ import {
 } from "@/lib/services/kb-service";
 import { db } from "@/lib/db";
 import { facts } from "@/lib/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { FactConstraintError } from "@/lib/services/fact-constraints";
 import { logTrustAction } from "@/lib/services/trust-ledger-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
@@ -1083,7 +1083,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId }) => {
       try {
-        const existing = db.select().from(facts).where(eq(facts.id, factId)).get();
+        const existing = getFactById(factId, sessionId, readKeys);
         if (!existing) return { success: false, error: "FACT_NOT_FOUND" };
         if (!existing.archivedAt) return { success: true, factId, alreadyActive: true };
         const now = new Date().toISOString();
@@ -1135,8 +1135,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           return { success: false, error: `Cannot reorder items in composite section '${category}'` };
         }
         // Write dense ranks
+        const now = new Date().toISOString();
         for (let i = 0; i < resolved.length; i++) {
-          db.update(facts).set({ sortOrder: i }).where(eq(facts.id, resolved[i].id)).run();
+          db.update(facts).set({ sortOrder: i, updatedAt: now }).where(eq(facts.id, resolved[i].id)).run();
         }
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {

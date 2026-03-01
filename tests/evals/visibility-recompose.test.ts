@@ -53,7 +53,6 @@ vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: mockGetAllFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
-  updateFactSortOrder: vi.fn(),
 }));
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: mockGetDraft,
