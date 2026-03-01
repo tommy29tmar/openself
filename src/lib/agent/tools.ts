@@ -32,7 +32,7 @@ import { extractLocks } from "@/lib/layout/lock-policy";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { toSlotAssignments } from "@/lib/layout/validate-adapter";
 import { validateLayoutComposition } from "@/lib/layout/quality";
-import { WIDGET_REGISTRY } from "@/lib/layout/widgets";
+import { WIDGET_REGISTRY, getBestWidget, getWidgetById } from "@/lib/layout/widgets";
 import { isSectionComplete } from "@/lib/page-config/section-completeness";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
@@ -517,6 +517,123 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         upsertDraft(username, updated, sessionId);
         return { success: true, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  move_section: tool({
+    description:
+      "Move a section to a different layout slot. Auto-switches widget if the current one doesn't fit the target slot.",
+    parameters: z.object({
+      sectionId: z.string().describe("The ID of the section to move"),
+      targetSlot: z.string().describe("The target slot ID (e.g., 'sidebar', 'main')"),
+    }),
+    execute: async ({ sectionId, targetSlot }) => {
+      try {
+        const draft = ensureDraft();
+
+        const sectionIdx = draft.sections.findIndex((s) => s.id === sectionId);
+        if (sectionIdx === -1) {
+          return { success: false, error: "SECTION_NOT_FOUND" };
+        }
+        const section = draft.sections[sectionIdx];
+
+        // Check user position lock
+        if (section.lock?.position && section.lock.lockedBy === "user") {
+          return { success: false, error: "POSITION_LOCKED" };
+        }
+
+        // Same slot → no-op
+        if (section.slot === targetSlot) {
+          return { success: true, movedTo: targetSlot, widgetChanged: false };
+        }
+
+        // Resolve template
+        const templateId = draft.layoutTemplate ?? "vertical";
+        const template = getLayoutTemplate(templateId);
+        if (!template) {
+          return { success: false, error: "NO_TEMPLATE" };
+        }
+
+        // Validate target slot exists
+        const slot = template.slots.find((s) => s.id === targetSlot);
+        if (!slot) {
+          return {
+            success: false,
+            error: "SLOT_NOT_FOUND",
+            available: template.slots.map((s) => s.id),
+          };
+        }
+
+        // Validate slot accepts section type
+        if (!slot.accepts.includes(section.type as any)) {
+          return {
+            success: false,
+            error: "TYPE_NOT_ACCEPTED",
+            accepted: slot.accepts,
+          };
+        }
+
+        // Check capacity (exclude the section being moved if it's already in targetSlot)
+        const currentInSlot = draft.sections.filter(
+          (s) => s.slot === targetSlot && s.id !== sectionId,
+        ).length;
+        if (slot.maxSections && currentInSlot >= slot.maxSections) {
+          return {
+            success: false,
+            error: "SLOT_FULL",
+            current: currentInSlot,
+            max: slot.maxSections,
+          };
+        }
+
+        // Auto-switch widget if current doesn't fit target slot size
+        const previousWidget = section.widgetId;
+        let widgetChanged = false;
+        if (section.widgetId) {
+          const currentWidget = getWidgetById(section.widgetId);
+          if (currentWidget && !currentWidget.fitsIn.includes(slot.size)) {
+            const better = getBestWidget(section.type as any, slot.size);
+            if (better) {
+              section.widgetId = better.id;
+              widgetChanged = true;
+            }
+          }
+        } else {
+          // No widget assigned — pick one for the target slot
+          const widget = getBestWidget(section.type as any, slot.size);
+          if (widget) {
+            section.widgetId = widget.id;
+            widgetChanged = true;
+          }
+        }
+
+        // Apply move
+        section.slot = targetSlot;
+        const updated = { ...draft, sections: [...draft.sections] };
+        updated.sections[sectionIdx] = { ...section };
+
+        upsertDraft(draft.username ?? "draft", updated, sessionId);
+
+        logEvent({
+          eventType: "page_config_updated",
+          actor: "assistant",
+          payload: { requestId, tool: "move_section", sectionId, targetSlot, widgetChanged },
+        });
+
+        return {
+          success: true,
+          movedTo: targetSlot,
+          widgetChanged,
+          ...(widgetChanged ? { previousWidget, newWidget: section.widgetId } : {}),
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "move_section", error: String(error) },
+        });
         return { success: false, error: String(error) };
       }
     },
