@@ -42,6 +42,8 @@ import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import { updateJourneyStatePin } from "@/lib/agent/journey";
+import { checkPageCoherence } from "@/lib/services/coherence-check";
+import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import type { JournalEntry } from "@/lib/services/session-metadata";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
@@ -730,6 +732,24 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
               })();
             }
           }
+
+          // Fire-and-forget coherence check (steady_state only)
+          // Circuit I: pass compiled soul for tone-aware coherence
+          // Circuit D1: store warning/info issues in session metadata
+          (async () => {
+            try {
+              const soulCompiled = getActiveSoul(effectiveOwnerKey)?.compiled;
+              const issues = await checkPageCoherence(config.sections, facts, soulCompiled);
+              const warnings = issues.filter(i => i.severity === "warning");
+              const infos = issues.filter(i => i.severity === "info");
+              mergeSessionMeta(sessionId, {
+                coherenceWarnings: warnings.length > 0 ? warnings : null,
+                coherenceInfos: infos.length > 0 ? infos : null,
+              });
+            } catch (err) {
+              console.error("[generate_page] coherence check error:", err);
+            }
+          })();
         }
 
         return {

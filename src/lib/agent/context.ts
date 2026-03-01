@@ -12,6 +12,7 @@ import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing"
 import type { JourneyState, BootstrapPayload } from "@/lib/agent/journey";
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
+import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import type { PromptMode } from "./promptAssembler";
 
 /**
@@ -236,6 +237,20 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
           // Stale — clean up
           mergeSessionMeta(sessionId, { pendingOperations: undefined });
         }
+      }
+    } catch { /* best-effort */ }
+  }
+
+  // --- Coherence issues injection (circuit D1) ---
+  if (sessionId) {
+    try {
+      const meta = getSessionMeta(sessionId);
+      const warnings = (meta.coherenceWarnings ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
+      const infos = (meta.coherenceInfos ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
+      const allIssues = [...warnings, ...infos];
+      const directive = coherenceIssuesDirective(allIssues);
+      if (directive) {
+        contextParts.push(`\n\n---\n\n${directive}`);
       }
     } catch { /* best-effort */ }
   }

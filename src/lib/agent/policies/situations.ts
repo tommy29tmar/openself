@@ -55,3 +55,27 @@ Ask the user to clarify which version is correct.
 Use resolve_conflict once the user makes a choice.
 Do not present conflicts as errors — frame them as "I noticed two different pieces of info about X, which one is current?"`;
 }
+
+/**
+ * Directive: facts with low relevance scores that could be archived.
+ */
+export function archivableFactsDirective(facts: string[]): string {
+  if (facts.length === 0) return "";
+  const topArchivable = facts.slice(0, 5); // Limit to 5 to avoid prompt bloat
+  const factList = topArchivable.join(", ");
+  const moreNote = facts.length > 5 ? ` (and ${facts.length - 5} more)` : "";
+  return `ARCHIVABLE FACTS: These facts have low relevance (old, low confidence, or no children): ${factList}${moreNote}.
+When natural, ask the user if any of these are still relevant.
+Use archive_fact for facts the user confirms are outdated — this soft-deletes them (recoverable via unarchive_fact).
+Do not archive facts the user hasn't confirmed — always ask first.`;
+}
+
+/**
+ * Directive: coherence issues detected during last page generation.
+ * Merges both warning and info severity issues into a single block.
+ */
+export function coherenceIssuesDirective(issues: Array<{ type: string; severity: string; description: string; suggestion: string }>): string {
+  if (issues.length === 0) return "";
+  const lines = issues.map(i => `- ${i.severity}: [${i.type}] ${i.description}\n  → ${i.suggestion}`);
+  return `COHERENCE ISSUES (from last page generation):\n${lines.join("\n")}`;
+}
