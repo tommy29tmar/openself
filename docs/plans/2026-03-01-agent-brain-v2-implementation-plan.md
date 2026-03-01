@@ -50,7 +50,7 @@ CREATE INDEX idx_facts_active ON facts(archived_at) WHERE archived_at IS NULL;
 
 **Step 2: Update EXPECTED_SCHEMA_VERSION**
 
-> **NOTE (R5-S2):** `EXPECTED_SCHEMA_VERSION` in `src/lib/db/migrate.ts:9` is currently `18`. Adding migration 0022 requires bumping it to `22`. Verify current value and update accordingly.
+> **NOTE (R5-S2 / R10-C1):** `EXPECTED_SCHEMA_VERSION` in `src/lib/db/migrate.ts:9` is currently `21` (bumped from 18 in round 10 — was out of sync with migrations 0019-0021). Adding migration 0022 requires bumping it to `22`.
 
 In `src/lib/db/migrate.ts`, update:
 ```typescript
@@ -762,9 +762,9 @@ for (const fact of allFacts) {
 }
 ```
 
-2. In `buildExperienceSection()`: for each experience fact, look up `childrenOf.get(expFact.id)` to find child projects. Include them as `relatedProjects` in the experience item content.
+2. In `buildProjectsSection()`: exclude project facts that have a `parentFactId` pointing to an existing experience fact (they're shown under experience instead). Only include top-level projects (parentFactId is null OR points to non-existent fact).
 
-3. In `buildProjectsSection()`: exclude project facts that have a `parentFactId` pointing to an existing experience fact (they're shown under experience instead). Only include top-level projects (parentFactId is null OR points to non-existent fact).
+> **NOTE (R10-S7):** Do NOT add `relatedProjects` to `ExperienceItem` in `content-types.ts` or render them in `Experience.tsx`. The parent→child grouping is used **only** for filtering in `buildProjectsSection()` (child projects displayed under experience are suppressed from the standalone projects section). If we want to display linked projects inline in experience items, that requires a separate task to update `ExperienceItem`, `ExperienceContent`, and `Experience.tsx` — out of scope for v2 core.
 
 **Step 4: Run tests**
 
@@ -1052,53 +1052,54 @@ batch_facts: tool({
     try {
       let created = 0, updated = 0, deleted = 0;
 
-      // CRITICAL (R5-C1): createFact is async (uses `await normalizeCategory()`),
-      // but db.transaction() in better-sqlite3 is synchronous.
-      // Solution: pre-normalize all categories BEFORE the transaction,
-      // then use sync-only DB calls inside the transaction.
+      // DESIGN (R10-C3): Delegate to existing kb-service functions instead of
+      // raw DB inserts. This preserves all guardrails: visibility policy,
+      // experience key collision guard, upsert semantics, event logging.
       //
-      // Step 1: Pre-normalize categories for all "create" operations
-      const normalizedCategories = new Map<number, string>();
-      for (let i = 0; i < operations.length; i++) {
-        const op = operations[i];
-        if (op.action === "create") {
-          const normalized = await normalizeCategory(op.category!, taxonomyStore);
-          normalizedCategories.set(i, normalized.canonical);
-        }
+      // createFact is async (normalizeCategory), so we cannot wrap creates
+      // in a sync db.transaction(). Instead: run creates sequentially (async),
+      // then run sync update/delete in a transaction.
+      //
+      // Trade-off: creates are not atomically grouped with updates/deletes.
+      // Acceptable because (a) batch_facts is a convenience tool, not a
+      // transactional API, and (b) trust ledger provides undo for recovery.
+
+      const reverseOps: Array<Record<string, unknown>> = [];
+
+      // Phase 1: Creates (async, one by one — each goes through createFact)
+      for (const op of operations) {
+        if (op.action !== "create") continue;
+        const result = await createFact(
+          {
+            category: op.category!,
+            key: op.key!,
+            value: op.value!,
+            source: op.source ?? "chat",
+            confidence: op.confidence,
+            parentFactId: op.parentFactId,  // R7-C3: pass through
+          },
+          sessionId,
+          profileId,
+        );
+        reverseOps.push({ action: "delete", factId: result.id });
+        created++;
       }
 
-      // Step 2: Run all DB mutations in a sync transaction
-      // NOTE: requires `import { db } from "@/lib/db"` at top of tools.ts
-      // Inside the transaction, call SYNC kb-service internals directly:
-      // - For "create": use db.insert(facts) directly (not async createFact)
-      //   with the pre-normalized category. Apply validateFactValue() and
-      //   constraint checks before the insert.
-      // - For "update": updateFact is already sync — safe to call directly.
-      // - For "delete": deleteFact is already sync — safe to call directly.
+      // Phase 2: Updates + Deletes (sync — safe for db.transaction)
       db.transaction(() => {
-        for (let i = 0; i < operations.length; i++) {
-          const op = operations[i];
-          switch (op.action) {
-            case "create": {
-              const canonical = normalizedCategories.get(i)!;
-              // Validate + constraint check + insert (all sync)
-              validateFactValue(canonical, op.key!, op.value!);
-              // (CURRENT_UNIQUE_CATEGORIES check here)
-              // db.insert(facts).values({
-              //   ...standard fields,
-              //   parentFactId: op.parentFactId ?? null,  // R7-C3: pass through
-              // }).onConflictDoUpdate({...}).run();
-              created++;
-              break;
-            }
-            case "update":
-              updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
-              updated++;
-              break;
-            case "delete":
-              deleteFact(op.factId!, sessionId, readKeys);
-              deleted++;
-              break;
+        for (const op of operations) {
+          if (op.action === "update") {
+            // Capture old value for undo before updating
+            const old = getFactById(op.factId!, sessionId, readKeys);
+            if (old) reverseOps.push({ action: "update", factId: op.factId, value: old.value });
+            updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
+            updated++;
+          } else if (op.action === "delete") {
+            // Capture full row for undo before deleting
+            const old = getFactById(op.factId!, sessionId, readKeys);
+            if (old) reverseOps.push({ action: "create", category: old.category, key: old.key, value: old.value });
+            deleteFact(op.factId!, sessionId, readKeys);
+            deleted++;
           }
         }
       })();
@@ -1933,13 +1934,13 @@ export function quickCoherenceCheck(sections: Section[], facts: FactRow[]): Cohe
     (f.value as Record<string, unknown>)?.status === "current"
   );
   if (currentExperiences.length >= 2) {
-    // Check pairwise for date overlap (startDate comparison)
+    // Check pairwise for date overlap (start/end field comparison — see page-composer.ts:819)
     for (let i = 0; i < currentExperiences.length; i++) {
       for (let j = i + 1; j < currentExperiences.length; j++) {
         const aVal = currentExperiences[i].value as Record<string, unknown>;
         const bVal = currentExperiences[j].value as Record<string, unknown>;
-        const aStart = String(aVal.startDate ?? "");
-        const bStart = String(bVal.startDate ?? "");
+        const aStart = String(aVal.start ?? "");
+        const bStart = String(bVal.start ?? "");
         // Both current with start dates → overlap (both run to present)
         if (aStart && bStart) {
           issues.push({
@@ -2438,7 +2439,7 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 
 ### Task 19: Archetype-Weighted Personalization Priority (Circuit B)
 
-> **Circuit B:** Archetype drives personalization priority — "developer" prioritizes projects/skills, "creative" prioritizes portfolio/interests.
+> **Circuit B:** Archetype drives personalization priority — "developer" prioritizes projects/skills, "creator" prioritizes portfolio/interests.
 
 **Files:**
 - Modify: `src/lib/services/section-personalizer.ts` (priority ordering)
@@ -2459,7 +2460,7 @@ describe("archetype-weighted personalization", () => {
   });
 
   it("creative archetype prioritizes interests and portfolio sections", () => {
-    // archetype = "creative"
+    // archetype = "creator"
     // → priority order: ["interests", "projects", "skills", ...]
   });
 
@@ -2888,14 +2889,17 @@ In `src/lib/worker/heartbeat.ts`, in `handleHeartbeatDeep()`:
 
 ```typescript
 // Circuit F2: journal patterns → meta-memories
+// saveMemory signature: (ownerKey, content, memoryType?, category?, confidence?)
+// memoryType must be: "observation" | "preference" | "insight" | "pattern"
 const recentJournals = getRecentJournalEntries(ownerKey, 5); // last 5 sessions
 const patterns = detectJournalPatterns(recentJournals);
 for (const pattern of patterns) {
-  saveMemory(ownerKey, {
-    type: "behavioral_pattern",
-    content: `${pattern.description}. ${pattern.suggestion}`,
-    source: "journal_analysis",
-  });
+  saveMemory(
+    ownerKey,
+    `${pattern.description}. ${pattern.suggestion}`,
+    "pattern",           // MemoryType (not "behavioral_pattern")
+    "journal_analysis",  // category
+  );
 }
 ```
 
@@ -3026,8 +3030,11 @@ git commit -m "feat: reverse_batch undo handler in trust ledger (circuit G undo)
 > **Solution:** Define a `CONTEXT_PROFILE` per JourneyState that specifies which blocks to include and at what budget. Estimated -30/40% input tokens.
 
 **Files:**
-- Modify: `src/lib/agent/context.ts` (conditional block injection)
+- Modify: `src/lib/agent/context.ts` (conditional block injection based on profile)
+- Modify: `src/lib/agent/prompts.ts` (make `buildSystemPrompt` accept profile to conditionally include FACT_SCHEMA_REFERENCE / DATA_MODEL_REFERENCE)
 - Test: `tests/evals/conditional-context.test.ts`
+
+> **NOTE (R10-C4):** `FACT_SCHEMA_REFERENCE` and `DATA_MODEL_REFERENCE` are included in `buildSystemPrompt()` (prompts.ts:308), not in `assembleContext()`. To omit them per journey state, `buildSystemPrompt` must accept the context profile (or at minimum a `includeSchemaReference: boolean` flag) and conditionally skip those blocks. `assembleContext` already calls `buildSystemPrompt` — pass the profile through.
 
 **Step 1: Write failing tests**
 
@@ -3043,8 +3050,9 @@ describe("conditional context by journey state", () => {
     // → systemPrompt does NOT contain "SECTION RICHNESS" or "PAGE LAYOUT INTELLIGENCE"
   });
 
-  it("draft_ready: omits FACT_SCHEMA_REFERENCE, includes soul + style", () => {
+  it("draft_ready: omits FACT_SCHEMA_REFERENCE (via buildSystemPrompt profile), includes soul + style", () => {
     // bootstrap.journeyState = "draft_ready"
+    // → buildSystemPrompt receives profile with includeSchemaReference: false
     // → systemPrompt does NOT contain FACT_SCHEMA_REFERENCE
     // → systemPrompt contains "SOUL PROFILE" (if soul exists)
   });
@@ -3385,17 +3393,33 @@ Delete the TODO at `route.ts:123-124`:
 // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
 ```
 
-**Step 8: Run tests**
+**Step 8: Update bootstrap/route.ts**
+
+> **NOTE (R10-S5):** `src/app/api/chat/bootstrap/route.ts:54` also calls `assembleBootstrapPayload`. Its return type changes from `BootstrapPayload` to `{ payload, data }`. Update to destructure:
+
+```typescript
+// In src/app/api/chat/bootstrap/route.ts:
+const { payload } = assembleBootstrapPayload(effectiveScope, language, authInfo);
+
+return new Response(JSON.stringify(payload), {
+  status: 200,
+  headers: { "Content-Type": "application/json" },
+});
+```
+
+> Also check test files that call `assembleBootstrapPayload` directly — they must destructure `{ payload }` or `{ payload, data }`.
+
+**Step 9: Run tests**
 
 Run: `npx vitest run tests/evals/context-data-passthrough.test.ts`
 Expected: PASS
 
-**Step 9: Run full suite**
+**Step 10: Run full suite**
 
 Run: `npx vitest run`
 Expected: ALL pass
 
-**Step 10: Commit**
+**Step 11: Commit**
 
 ```bash
 git commit -m "perf: bootstrap → context data passthrough — eliminate duplicate DB queries"
@@ -3506,7 +3530,30 @@ const REASONING_MODELS: Record<Provider, string> = {
 };
 ```
 
-> **Backward compat:** The existing `"cheap"` and `"medium"` types are replaced. `summary-service.ts` already uses `getModelForTier("medium")` — update to `"standard"`. If any external code references old tiers, a deprecation alias can be added.
+> **Backward compat (R10-S8):** The existing `"cheap"` and `"medium"` types must continue to work. Add a type alias and runtime mapping:
+> ```typescript
+> export type ModelTier = "fast" | "standard" | "reasoning";
+> /** @deprecated Use "fast" | "standard" | "reasoning" */
+> export type LegacyModelTier = "cheap" | "medium" | "capable";
+>
+> const TIER_ALIAS: Record<string, ModelTier> = {
+>   cheap: "fast", medium: "standard", capable: "reasoning",
+> };
+>
+> export function getModelForTier(tier: ModelTier | LegacyModelTier): LanguageModel {
+>   const resolved = TIER_ALIAS[tier] ?? tier;
+>   // ...
+> }
+> ```
+> Also preserve existing env vars as fallbacks: `AI_MODEL_MEDIUM` → `AI_MODEL_STANDARD`, `AI_MODEL_CAPABLE` → `AI_MODEL_REASONING`:
+> ```typescript
+> const TIER_ENV_KEYS: Record<ModelTier, string[]> = {
+>   fast:      ["AI_MODEL_FAST"],
+>   standard:  ["AI_MODEL_STANDARD", "AI_MODEL_MEDIUM"],     // fallback
+>   reasoning: ["AI_MODEL_REASONING", "AI_MODEL_CAPABLE"],   // fallback
+> };
+> ```
+> This ensures existing deployments with `AI_MODEL_MEDIUM=...` in their `.env` don't break.
 
 **Step 4: Update all LLM call sites**
 
@@ -3776,3 +3823,25 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 | R7-S6 | Significant | Soul auto-proposal: added `getPendingProposals(ownerKey).length === 0` guard to prevent duplicate proposal on every message (assembleBootstrapPayload runs per message). | T12 Step 3 |
 | R7-S7 | Significant | Journal→summary: `generateSummary` reads journal from `sessions.metadata.journal` via `getSessionMeta()` internally, instead of depending on caller to pass journal data. Worker job stays unchanged. | T21 Step 3 |
 | R7-M8 | Minor | Task 19: `personalizeSection` is singular (per-section), not `personalizeSections`. `prioritizeSections()` is a new exported helper; ordering applied in the caller loop (tools.ts), not inside the per-section function. | T19 Step 3-4 |
+
+**Round 8 — final review annotations (3 items):**
+
+Observability cross-cutting logEvent calls (T13, T14, T20, T22, T24), coherence timeout (COHERENCE_TIMEOUT_MS = 3000), Task 10 moved to v2 core.
+
+**Round 9 — user review (4 items):**
+
+D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13 journal persistence in `onFinish`, T19 archetypes path + session metadata source.
+
+**Round 10 — findings (9 issues):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R10-C1 | Critical | **Project fix:** `EXPECTED_SCHEMA_VERSION` bumped 18→21 in `migrate.ts` — was out of sync with migrations 0019-0021. Plan note updated to reference baseline 21. | `migrate.ts:9`, Task 1 |
+| R10-C2 | Critical | `saveMemory` call fixed: positional args `(ownerKey, content, "pattern", "journal_analysis")` — not object arg. `MemoryType` has no `"behavioral_pattern"`, use `"pattern"`. | T22 Step 4 |
+| R10-C3 | Critical | `batch_facts` redesigned: delegates to `createFact()` (async, phase 1) + sync `updateFact/deleteFact` in db.transaction (phase 2). No raw DB inserts, no `taxonomyStore` dependency, preserves all guardrails (visibility, collision, upsert, events). | T8a Step 3 |
+| R10-C4 | Critical | Task 24: `FACT_SCHEMA_REFERENCE` lives in `buildSystemPrompt()` (prompts.ts:308), not `assembleContext()`. Added `prompts.ts` to files list + note: `buildSystemPrompt` must accept profile/flag to conditionally include schema blocks. | T24 Files, Step 1 |
+| R10-S5 | Significant | Task 25: `bootstrap/route.ts:54` also calls `assembleBootstrapPayload` — added Step 8 to destructure `{ payload }` after return type change. Tests calling `assembleBootstrapPayload` also need update. | T25 Step 8 |
+| R10-S6 | Significant | Coherence check field name: `startDate` → `start` (experience facts use `start`/`end`, not `startDate`/`endDate`). See `page-composer.ts:819`. | T14 Step 3 |
+| R10-S7 | Significant | `relatedProjects` removed from experience scope — `ExperienceItem` and `Experience.tsx` don't support it. parentFactId grouping only used for project filtering in `buildProjectsSection()`. Inline display is out of scope. | T6 Step 3 |
+| R10-S8 | Significant | Model tier rename: added `LegacyModelTier` alias, runtime `TIER_ALIAS` mapping, and env var fallbacks (`AI_MODEL_MEDIUM` → `AI_MODEL_STANDARD`, `AI_MODEL_CAPABLE` → `AI_MODEL_REASONING`). Zero breaking change for existing deployments. | T26 Step 3 |
+| R10-M9 | Minor | Archetype naming: `"creative"` → `"creator"` (consistent with Task 4 list: developer, designer, executive, student, creator, consultant, academic, generalist). | T19 Step 1 |
