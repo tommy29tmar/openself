@@ -206,6 +206,7 @@ export type JournalEntry = {
   timestamp: string;         // ISO 8601
   durationMs: number;
   success: boolean;
+  args?: Record<string, unknown>;  // tool input args (category, key, factId, etc.)
   summary?: string;          // brief output description (optional)
   batchSize?: number;        // for batch_facts
 };
@@ -985,7 +986,7 @@ git commit -m "feat: slot carry-over — soft-pin in assignSlotsFromFacts + proj
 - Delete: `tests/evals/batch-create-facts.test.ts` (269 lines — replaced by batch-facts-tool.test.ts)
 - Test: `tests/evals/batch-facts-tool.test.ts`
 
-> **C3 (post-1814e4b):** `create_facts` tool exists from commit 1814e4b (create-only, non-atomic, partial success). `batch_facts` is architecturally superior (create+update+delete, all-or-nothing transaction). **batch_facts REPLACES create_facts.** Remove `create_facts` from tools.ts entirely — having both would confuse the LLM.
+> **C3 (post-1814e4b):** `create_facts` tool exists from commit 1814e4b (create-only, partial success). `batch_facts` is architecturally superior (create+update+delete, sequential with trust-ledger undo). **batch_facts REPLACES create_facts.** Remove `create_facts` from tools.ts entirely — having both would confuse the LLM.
 
 **Step 1: Write failing tests**
 
@@ -994,7 +995,7 @@ git commit -m "feat: slot carry-over — soft-pin in assignSlotsFromFacts + proj
 import { describe, it, expect } from "vitest";
 
 describe("batch_facts tool", () => {
-  it("creates multiple facts in a single transaction", () => {
+  it("creates multiple facts sequentially", () => {
     // batch 3 create operations → all should exist
   });
 
@@ -1002,9 +1003,11 @@ describe("batch_facts tool", () => {
     // verify recomposeAfterMutation called once, not 3 times
   });
 
-  it("rolls back all operations if one fails validation", () => {
+  it("stops at first validation error, earlier ops are persisted", () => {
     // batch: [valid create, valid create, invalid create (placeholder value)]
-    // all 3 should fail — first two should NOT be persisted
+    // → first two ARE persisted (sequential, non-transactional)
+    // → trust ledger entry allows undo of applied ops
+    // → error response includes created/updated/deleted counts
   });
 
   it("respects constraint layer within batch", () => {
@@ -1047,19 +1050,26 @@ In `src/lib/agent/tools.ts`, inside the `createAgentTools()` closure:
 batch_facts: tool({
   description: "Execute multiple fact operations in order. Operations are applied sequentially (create, update, delete) and a single recompose runs at the end.",
   parameters: z.object({
-    operations: z.array(z.object({
-      action: z.enum(["create", "update", "delete"]),
-      // create: category, key, value required
-      // update: factId, value required
-      // delete: factId required
-      category: z.string().optional(),
-      key: z.string().optional(),
-      value: z.record(z.unknown()).optional(),
-      factId: z.string().optional(),
-      source: z.string().optional(),
-      confidence: z.number().optional(),
-      parentFactId: z.string().optional(),  // links child fact to parent (e.g. project → experience)
-    })).max(20),
+    operations: z.array(z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("create"),
+        category: z.string(),
+        key: z.string(),
+        value: z.record(z.unknown()),
+        source: z.string().optional(),
+        confidence: z.number().optional(),
+        parentFactId: z.string().optional(),
+      }),
+      z.object({
+        action: z.literal("update"),
+        factId: z.string(),
+        value: z.record(z.unknown()),
+      }),
+      z.object({
+        action: z.literal("delete"),
+        factId: z.string(),
+      }),
+    ])).max(20),
   }),
   execute: async ({ operations }) => {
     try {
@@ -1086,14 +1096,15 @@ batch_facts: tool({
         previousFact?: Record<string, unknown>;
       }> = [];
 
+      // Discriminated union ensures fields are present per action — no ! assertions needed.
       for (const op of operations) {
         switch (op.action) {
           case "create": {
             const result = await createFact(
               {
-                category: op.category!,
-                key: op.key!,
-                value: op.value!,
+                category: op.category,
+                key: op.key,
+                value: op.value,
                 source: op.source ?? "chat",
                 confidence: op.confidence,
                 parentFactId: op.parentFactId,  // R7-C3: pass through
@@ -1107,43 +1118,52 @@ batch_facts: tool({
           }
           case "update": {
             // Capture old value for undo before updating
-            const old = getFactById(op.factId!, sessionId, readKeys);
-            if (old) reverseOps.push({ action: "restore", factId: op.factId!, previousValue: old.value });
-            updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
-            updated++;
+            const old = getFactById(op.factId, sessionId, readKeys);
+            if (old) reverseOps.push({ action: "restore", factId: op.factId, previousValue: old.value });
+            const updated_row = updateFact({ factId: op.factId, value: op.value }, sessionId, readKeys);
+            if (updated_row) updated++;
             break;
           }
           case "delete": {
             // Capture full row for undo before deleting
-            const old = getFactById(op.factId!, sessionId, readKeys);
+            const old = getFactById(op.factId, sessionId, readKeys);
             if (old) {
               const { id, ...rest } = old;
               reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
             }
-            deleteFact(op.factId!, sessionId, readKeys);
-            deleted++;
+            const did_delete = deleteFact(op.factId, sessionId, readKeys);
+            if (did_delete) deleted++;
             break;
           }
         }
       }
 
-      // Circuito G: Trust ledger — log batch with reverse payload
+      // Circuito G: Trust ledger + single recompose
       // R11-C2: effectiveOwnerKey is always string (ownerKey ?? sessionId at closure top)
-      logTrustAction(effectiveOwnerKey, "batch_facts",
-        `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
-        { undoPayload: { action: "reverse_batch", reverseOps } },
-      );
-
-      // Single recompose after entire batch
+      if (reverseOps.length > 0) {
+        logTrustAction(effectiveOwnerKey, "batch_facts",
+          `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
+          { undoPayload: { action: "reverse_batch", reverseOps } },
+        );
+      }
       recomposeAfterMutation();
-
       return { success: true, created, updated, deleted };
     } catch (err) {
+      // Partial failure: some ops may have been applied before the error.
+      // Log trust ledger for undo of applied ops, then recompose.
+      if (reverseOps.length > 0) {
+        logTrustAction(effectiveOwnerKey, "batch_facts",
+          `Batch (partial): ${created} created, ${updated} updated, ${deleted} deleted — stopped by error`,
+          { undoPayload: { action: "reverse_batch", reverseOps } },
+        );
+        recomposeAfterMutation();
+      }
+
       if (err instanceof FactValidationError) {
-        return { success: false, error: "VALIDATION_ERROR", message: err.message, hint: "Batch stopped at failing operation — earlier operations were applied" };
+        return { success: false, error: "VALIDATION_ERROR", message: err.message, created, updated, deleted, hint: "Batch stopped at failing operation — earlier operations were applied and can be undone via trust ledger" };
       }
       if (err instanceof FactConstraintError) {
-        return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, hint: "Batch stopped at failing operation — earlier operations were applied" };
+        return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, created, updated, deleted, hint: "Batch stopped at failing operation — earlier operations were applied and can be undone via trust ledger" };
       }
       throw err;
     }
@@ -1170,7 +1190,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git commit -m "feat: batch_facts tool — atomic multi-operation with single recompose"
+git commit -m "feat: batch_facts tool — sequential multi-op with single recompose + trust ledger"
 ```
 
 ---
@@ -1261,7 +1281,7 @@ After the archive UPDATE, log to trust ledger with undo payload:
 
 ```typescript
 // In archive_fact, after UPDATE and orphan cleanup:
-logTrustAction(ownerKey, "archive_fact", `Archived fact ${factId}`, {
+logTrustAction(effectiveOwnerKey, "archive_fact", `Archived fact ${factId}`, {
   undoPayload: { action: "unarchive_fact", factId },
 });
 ```
@@ -1784,9 +1804,13 @@ if (getJournal().length > 0) {
   mergeSessionMeta(sessionId, { journal: getJournal() });
 }
 if (steps.length >= MAX_STEPS && finishReason === "tool-calls" && getJournal().length > 0) {
+  // Step exhaustion: save pending operations for resume
   mergeSessionMeta(sessionId, {
     pendingOperations: { journal: getJournal(), timestamp: new Date().toISOString() },
   });
+} else {
+  // Successful completion: clear any stale pendingOperations from previous turns
+  mergeSessionMeta(sessionId, { pendingOperations: null });
 }
 ```
 
@@ -2290,7 +2314,7 @@ describe("TOOL_POLICY includes new tools", () => {
   it("mentions move_section", () => {});
   it("mentions reorder_items", () => {});
   it("mentions archive_fact and unarchive_fact", () => {});
-  it("mentions batch_facts is all-or-nothing", () => {});
+  it("mentions batch_facts is sequential with trust-ledger undo", () => {});
   it("mentions identity/tagline pattern for text customization", () => {});
 });
 
@@ -2308,7 +2332,7 @@ describe("DATA_MODEL_REFERENCE includes new fields", () => {
 Add to the TOOL_POLICY block in `src/lib/agent/prompts.ts`:
 
 ```
-- Use batch_facts for multiple fact changes (all-or-nothing: validate data before calling)
+- Use batch_facts for multiple fact changes in one tool call (operations run in order; if one fails, earlier ones persist — trust ledger provides undo)
 - Use move_section to move a section between layout slots (auto-switches widget if needed)
 - Use reorder_items to change the order of items within a section (not for composite sections: hero, bio, at-a-glance, footer)
 - Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal)
@@ -2356,7 +2380,8 @@ describe("Agent Brain v2 — end-to-end", () => {
   it("job change scenario: batch update old + create new + generate", () => {
     // 1. Create current experience fact
     // 2. Call batch_facts([update old to past, create new current])
-    // 3. Constraint layer should NOT block (old is updated first in same batch)
+    // 3. Sequential: update runs first → old is no longer "current"
+    //    → create runs second → no constraint conflict
     // 4. generate_page → page shows new role, old role in experience history
   });
 
@@ -2482,7 +2507,7 @@ describe("archetype-weighted personalization", () => {
     // → first sections personalized are projects + skills
   });
 
-  it("creative archetype prioritizes interests and portfolio sections", () => {
+  it("creator archetype prioritizes interests and portfolio sections", () => {
     // archetype = "creator"
     // → priority order: ["interests", "projects", "skills", ...]
   });
@@ -2733,7 +2758,23 @@ export async function generateSummary(
   // ... existing code ...
 
   // Circuit F1: read journal from session metadata (Task 1b provides getSessionMeta)
-  // Journal entries are per-session — aggregate from all messageKeys sessions
+  // Journal entries are per-session — aggregate from all messageKeys sessions.
+  //
+  // NOTE (R12-S6): messageKeys come from the worker job payload. Currently,
+  // enqueueSummaryJob(ownerKey) passes only ownerKey, and the worker defaults
+  // messageKeys = [ownerKey]. But journal lives in sessions.metadata for
+  // currentSessionId (not cognitiveOwnerKey). Fix: enqueueSummaryJob must
+  // pass knowledgeReadKeys so the worker iterates the correct session IDs.
+  //
+  // In route.ts onFinish, change:
+  //   enqueueSummaryJob(effectiveScope.cognitiveOwnerKey)
+  // to:
+  //   enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys)
+  //
+  // In summary-service.ts, update enqueueSummaryJob signature:
+  //   export function enqueueSummaryJob(ownerKey: string, messageKeys?: string[]): void {
+  //     enqueueJob("memory_summary", { ownerKey, messageKeys: messageKeys ?? [ownerKey] });
+  //   }
   const journalEntries: JournalEntry[] = [];
   for (const sessionKey of messageKeys) {
     const meta = getSessionMeta(sessionKey);
@@ -3655,7 +3696,7 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 
 **Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict. Exception: T24 and T25 both modify `context.ts` — implement T24 first, T25 on top. T26 is independent of both.
 
-**Estimated tests:** ~135 new + ~35 updated = ~1300 total (from 1151 current).
+**Estimated tests:** ~135 new + ~35 updated = ~1430 total (from ~1263 current).
 
 **Integration circuit map:**
 
@@ -3811,7 +3852,7 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 
 | ID | Severity | Fix | Location |
 |----|----------|-----|----------|
-| R5-C1 | Critical | batch_facts: createFact is async (normalizeCategory), can't be inside sync db.transaction(). Pre-normalize categories before txn, use sync DB inserts inside. | Task 8a |
+| R5-C1 | Critical | ~~batch_facts: pre-normalize categories before sync txn~~ **SUPERSEDED by R10-C3/R11-C1:** batch_facts now delegates to createFact sequentially (no raw inserts, no txn wrapper). | Task 8a |
 | R5-C2 | Critical | move_section: `username` not in createAgentTools closure. Use `draft.username ?? "draft"` pattern. | Task 9 |
 | R5-C3 | Critical | Coherence service import: `@/lib/ai/model` → `@/lib/ai/provider` (getModel lives in provider.ts) | Task 14 |
 | R5-C4 | Critical | Task 15 `facts` symbol collision: local `facts` array in assembleBootstrapPayload shadows Drizzle table import. Alias as `factsTable`. | Task 15 |
@@ -3867,7 +3908,7 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 |----|----------|-----|----------|
 | R10-C1 | Critical | **Project fix:** `EXPECTED_SCHEMA_VERSION` bumped 18→21 in `migrate.ts` — was out of sync with migrations 0019-0021. Plan note updated to reference baseline 21. | `migrate.ts:9`, Task 1 |
 | R10-C2 | Critical | `saveMemory` call fixed: positional args `(ownerKey, content, "pattern", "journal_analysis")` — not object arg. `MemoryType` has no `"behavioral_pattern"`, use `"pattern"`. | T22 Step 4 |
-| R10-C3 | Critical | `batch_facts` redesigned: delegates to `createFact()` (async, phase 1) + sync `updateFact/deleteFact` in db.transaction (phase 2). No raw DB inserts, no `taxonomyStore` dependency, preserves all guardrails (visibility, collision, upsert, events). | T8a Step 3 |
+| R10-C3 | Critical | ~~batch_facts: async creates (phase 1) + sync update/delete in db.transaction (phase 2)~~ **SUPERSEDED by R11-C1/R12-C1:** sequential loop in order, no transaction wrapper. | T8a Step 3 |
 | R10-C4 | Critical | Task 24: `FACT_SCHEMA_REFERENCE` lives in `buildSystemPrompt()` (prompts.ts:308), not `assembleContext()`. Added `prompts.ts` to files list + note: `buildSystemPrompt` must accept profile/flag to conditionally include schema blocks. | T24 Files, Step 1 |
 | R10-S5 | Significant | Task 25: `bootstrap/route.ts:54` also calls `assembleBootstrapPayload` — added Step 8 to destructure `{ payload }` after return type change. Tests calling `assembleBootstrapPayload` also need update. | T25 Step 8 |
 | R10-S6 | Significant | Coherence check field name: `startDate` → `start` (experience facts use `start`/`end`, not `startDate`/`endDate`). See `page-composer.ts:819`. | T14 Step 3 |
@@ -3879,7 +3920,7 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 
 | ID | Severity | Fix | Location |
 |----|----------|-----|----------|
-| R11-C1 | Critical | batch_facts: removed false "atomic" claim. Operations now run IN ORDER (not grouped by type), supporting "job change" pattern (update old→create new in same batch). No `db.transaction` wrapper — sequential async loop with trust ledger undo for recovery. | T8a Step 3, T17 |
+| R11-C1 | Critical | ~~batch_facts: removed "atomic" but still had phased execution~~ **SUPERSEDED by R12-C1:** sequential in-order loop, trust ledger for both success + partial failure. | T8a Step 3, T17 |
 | R11-C2 | Critical | `profileId` → `effectiveOwnerKey` in createFact call (profileId doesn't exist in createAgentTools closure). `logTrustAction(ownerKey, ...)` → `logTrustAction(effectiveOwnerKey, ...)` — ownerKey is `string?` but effectiveOwnerKey is `string`. | T8a Step 3 |
 | R11-C3 | Critical | reverseOps shape aligned: producer uses `"delete"/"restore"/"recreate"` (matching undo handler). Producer captures `previousValue` for updates, `previousFact` (with `id`) for deletes. Consumer shape matches exactly. | T8a Step 3, T23 Step 3 |
 | R11-C4 | Critical | `db.transaction(() => {...})()` → `sqlite.transaction(() => {...})()` in Task 23 undo handler. Drizzle `db.transaction` doesn't return a callable — codebase uses better-sqlite3 `sqlite.transaction` pattern (confirmed in trust-ledger-service.ts, summary-service.ts, register/route.ts). | T23 Step 3 |
@@ -3887,3 +3928,17 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 | R11-S6 | Significant | `JournalEntry` type defined explicitly in `session-metadata.ts` (Task 1b) with `toolName`, `timestamp`, `durationMs`, `success`, `summary?`, `batchSize?`. Exported and consumed by Tasks 13, 21, 22. | T1b Step 3 |
 | R11-M7 | Minor | Task 22 test: `"behavioral_pattern"` → `"pattern"` (aligned with R10-C2 fix). | T22 Step 1 |
 | R11-M8 | Minor | Delivery counts: v2.1 "7 tasks" → "8 tasks" (list has 8: 4,6,7,9,12,13,14,15). "v2 core is 11 tasks" → "12 tasks" (includes T10). Task 10 note updated to definitive. | Delivery strategy |
+
+**Round 12 — findings (9 issues):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R12-C1 | Critical | Removed all remaining "atomic/all-or-nothing/transactional" text from batch_facts (description, test titles, commit message, TOOL_POLICY, integration test). Sequential semantics now consistent everywhere. | T8a, T17, T24 |
+| R12-C2 | Critical | Failure path (catch block) now logs trust ledger with partial counts (`${created} created, ${updated} updated, ${deleted} deleted`) + calls `recomposeAfterMutation()` so draft reflects partial state. | T8a Step 3 |
+| R12-C3 | Critical | Added `args?: Record<string, unknown>` to `JournalEntry` type — Task 22 accesses `entries[i].args?.category` but field was missing from definition. | T1b Step 3 |
+| R12-S4 | Significant | Zod schema: flat object → `z.discriminatedUnion("action", [...])` eliminating runtime `!` assertions. Update/delete return values verified (`updateFact` returns `null` if not found, `deleteFact` returns `false`). Counters only increment on success. | T8a Step 3 |
+| R12-S5 | Significant | `pendingOperations` cleared to `null` via `mergeSessionMeta` on successful turn completion (was only set on exhaustion, never cleared). | T13 Step 3 |
+| R12-S6 | Significant | Task 21 data flow gap documented: `enqueueSummaryJob` only receives `ownerKey` but journal lives in `sessions.metadata` keyed by `currentSessionId`. NOTE added with fix: pass `knowledgeReadKeys` through job payload. | T21 Step 3 |
+| R12-S7 | Significant | Task 8b: `logTrustAction(ownerKey, ...)` → `logTrustAction(effectiveOwnerKey, ...)` — `ownerKey` is `string?` but `logTrustAction` requires `string`. | T8b Step 3 |
+| R12-M8 | Minor | Historical fixes R5-C1, R10-C3, R11-C1 marked as ~~SUPERSEDED~~ with cross-references to their replacements. | Changelog |
+| R12-M9 | Minor | "creative archetype" → "creator archetype" in test title. Test count updated to ~1263 (was 1151). | T22 Step 1 |
