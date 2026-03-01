@@ -23,6 +23,7 @@
 **Files:**
 - Create: `db/migrations/0022_smart_facts_v2.sql`
 - Modify: `src/lib/db/schema.ts` (facts table + sessions table)
+- Modify: `src/lib/db/migrate.ts:9` (EXPECTED_SCHEMA_VERSION bump)
 - Modify: `src/lib/services/kb-service.ts:62-72` (FactRow type)
 - Test: `tests/evals/smart-facts-schema.test.ts`
 
@@ -47,7 +48,16 @@ CREATE INDEX idx_facts_parent ON facts(parent_fact_id) WHERE parent_fact_id IS N
 CREATE INDEX idx_facts_active ON facts(archived_at) WHERE archived_at IS NULL;
 ```
 
-**Step 2: Update Drizzle schema**
+**Step 2: Update EXPECTED_SCHEMA_VERSION**
+
+> **NOTE (R5-S2):** `EXPECTED_SCHEMA_VERSION` in `src/lib/db/migrate.ts:9` is currently `18`. Adding migration 0022 requires bumping it to `22`. Verify current value and update accordingly.
+
+In `src/lib/db/migrate.ts`, update:
+```typescript
+const EXPECTED_SCHEMA_VERSION = 22;
+```
+
+**Step 3: Update Drizzle schema**
 
 In `src/lib/db/schema.ts`, add to the `facts` table definition (`sortOrder` should already be present from 1814e4b — verify):
 
@@ -63,7 +73,7 @@ In `src/lib/db/schema.ts`, add to the `sessions` table definition:
 metadata: text("metadata").notNull().default("{}"),
 ```
 
-**Step 3: Update FactRow type**
+**Step 4: Update FactRow type**
 
 In `src/lib/services/kb-service.ts:62-72`, update to include ALL fields (fixing the existing sortOrder gap + adding new fields):
 
@@ -86,7 +96,7 @@ export type FactRow = {
 
 > Note: `sortOrder` is `number | null` because migration 0021 created it as nullable. In practice, `getNextSortOrder()` populates it on create, so values are always non-null. Use `?? 0` fallback where needed.
 
-**Step 4: Write schema test**
+**Step 5: Write schema test**
 
 ```typescript
 // tests/evals/smart-facts-schema.test.ts
@@ -97,16 +107,16 @@ import { describe, it, expect } from "vitest";
 // Test FactRow includes sortOrder, parentFactId, archivedAt
 ```
 
-**Step 5: Run tests**
+**Step 6: Run tests**
 
 Run: `npx vitest run tests/evals/smart-facts-schema.test.ts`
 Expected: PASS
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
-git add db/migrations/0022_smart_facts_v2.sql src/lib/db/schema.ts src/lib/services/kb-service.ts tests/evals/smart-facts-schema.test.ts
-git commit -m "feat: migration 0022 — parentFactId, archivedAt, sessions.metadata + fix FactRow type gap"
+git add db/migrations/0022_smart_facts_v2.sql src/lib/db/schema.ts src/lib/db/migrate.ts src/lib/services/kb-service.ts tests/evals/smart-facts-schema.test.ts
+git commit -m "feat: migration 0022 — parentFactId, archivedAt, sessions.metadata + fix FactRow type gap + bump EXPECTED_SCHEMA_VERSION"
 ```
 
 ---
@@ -188,6 +198,10 @@ export function setSessionMeta(sessionId: string, meta: SessionMeta): void {
     .run();
 }
 
+// NOTE (R5-S5): mergeSessionMeta has a read-modify-write pattern that is theoretically
+// susceptible to race conditions. For single-user SQLite with WAL mode this is safe in
+// practice (one writer at a time), but if we ever move to multi-process writes, consider
+// using a SQL JSON_PATCH or a CAS pattern.
 export function mergeSessionMeta(sessionId: string, partial: Record<string, unknown>): SessionMeta {
   const current = getSessionMeta(sessionId);
   for (const [k, v] of Object.entries(partial)) {
@@ -402,7 +416,9 @@ if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
 }
 ```
 
-**Step 5: Wire cascade warning into updateFact()**
+**Step 5: Wire constraint check + cascade warning into updateFact()**
+
+> **NOTE (R5-S1):** The constraint check (CURRENT_UNIQUE_CATEGORIES) must also run in `updateFact()`, not just `createFact()`. If a user updates `status: "past"` → `status: "current"`, the uniqueness constraint should be enforced. Check if `existing.category` is in `CURRENT_UNIQUE_CATEGORIES` AND the new value sets `status: "current"` AND a different active fact with `status: "current"` already exists.
 
 In `src/lib/services/kb-service.ts`, inside `updateFact()`, after the existing fact lookup:
 
@@ -954,6 +970,15 @@ describe("batch_facts tool", () => {
     // batch: [2 creates, 1 update, 1 delete]
     // result: { success: true, created: 2, updated: 1, deleted: 1 }
   });
+
+  // Edge cases (R5-M1)
+  it("handles empty operations array (0 ops)", () => {
+    // batch: [] → { success: true, created: 0, updated: 0, deleted: 0 }
+  });
+
+  it("handles single operation (degenerate batch)", () => {
+    // batch: [1 create] → should work identically to create_fact
+  });
 });
 ```
 
@@ -989,16 +1014,42 @@ batch_facts: tool({
     try {
       let created = 0, updated = 0, deleted = 0;
 
-      // All-or-nothing: run in SQLite transaction
+      // CRITICAL (R5-C1): createFact is async (uses `await normalizeCategory()`),
+      // but db.transaction() in better-sqlite3 is synchronous.
+      // Solution: pre-normalize all categories BEFORE the transaction,
+      // then use sync-only DB calls inside the transaction.
+      //
+      // Step 1: Pre-normalize categories for all "create" operations
+      const normalizedCategories = new Map<number, string>();
+      for (let i = 0; i < operations.length; i++) {
+        const op = operations[i];
+        if (op.action === "create") {
+          const normalized = await normalizeCategory(op.category!, taxonomyStore);
+          normalizedCategories.set(i, normalized.canonical);
+        }
+      }
+
+      // Step 2: Run all DB mutations in a sync transaction
       // NOTE: requires `import { db } from "@/lib/db"` at top of tools.ts
+      // Inside the transaction, call SYNC kb-service internals directly:
+      // - For "create": use db.insert(facts) directly (not async createFact)
+      //   with the pre-normalized category. Apply validateFactValue() and
+      //   constraint checks before the insert.
+      // - For "update": updateFact is already sync — safe to call directly.
+      // - For "delete": deleteFact is already sync — safe to call directly.
       db.transaction(() => {
-        for (const op of operations) {
+        for (let i = 0; i < operations.length; i++) {
+          const op = operations[i];
           switch (op.action) {
-            case "create":
-              // Call kb-service createFact directly (NOT the tool wrapper)
-              createFact({ category: op.category!, key: op.key!, value: op.value!, source: op.source, confidence: op.confidence }, sessionId);
+            case "create": {
+              const canonical = normalizedCategories.get(i)!;
+              // Validate + constraint check + insert (all sync)
+              validateFactValue(canonical, op.key!, op.value!);
+              // (CURRENT_UNIQUE_CATEGORIES check here)
+              // db.insert(facts).values({...}).onConflictDoUpdate({...}).run();
               created++;
               break;
+            }
             case "update":
               updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
               updated++;
@@ -1080,6 +1131,17 @@ describe("unarchive_fact tool", () => {
   it("clears archived_at", () => {});
   it("fact reappears in getActiveFacts", () => {});
   it("triggers recompose — fact reappears on page", () => {});
+
+  // Edge cases (R5-M1)
+  it("archive_fact on already-archived fact is idempotent", () => {
+    // archive already-archived → no error, archived_at unchanged or refreshed
+  });
+  it("unarchive_fact on non-archived fact is no-op", () => {
+    // unarchive active fact → no error, fact unchanged
+  });
+  it("archive_fact with non-existent factId returns error", () => {
+    // bad factId → { success: false, error: "FACT_NOT_FOUND" }
+  });
 });
 ```
 
@@ -1097,6 +1159,14 @@ describe("reorder_items tool", () => {
     // expect error: "Cannot reorder items in composite section 'hero'"
   });
   it("rejects if factIds belong to different categories", () => {});
+
+  // Edge cases (R5-M1)
+  it("handles 0 factIds (empty reorder)", () => {
+    // empty array → no-op, success
+  });
+  it("handles 1 factId (single-element reorder)", () => {
+    // single fact → sets sortOrder 0, success
+  });
 });
 ```
 
@@ -1112,6 +1182,8 @@ In `src/lib/agent/tools.ts`:
 - `archive_fact`: `UPDATE facts SET archived_at = ? WHERE id = ?` + orphan cleanup + recompose
 - `unarchive_fact`: `UPDATE facts SET archived_at = null WHERE id = ?` + recompose
 - `reorder_items`: `COMPOSITE_SECTIONS` guard, then `UPDATE facts SET sort_order = ? WHERE id = ?` in loop + recompose
+
+> **Architecture note (R5-M2):** `reorder_items` currently writes dense ranks (0, 1, 2, ...). A future optimization could use spaced ranks (0, 1000, 2000, ...) to allow single-row inserts between items without rewriting all sortOrders. Not needed now — the current approach is simpler and reorder_items already rewrites all ranks in the array. Consider spaced ranks if insert-between becomes a hot path.
 
 **Step 5: Run tests**
 
@@ -1167,6 +1239,14 @@ describe("move_section tool", () => {
   it("survives recompose after move", () => {
     // move section → create_fact → recomposeAfterMutation
     // section should still be in the moved slot (thanks to carry-over)
+  });
+
+  // Edge cases (R5-M1)
+  it("move to same slot is no-op", () => {
+    // section already in "main", move to "main" → success, no change
+  });
+  it("non-existent sectionId returns error", () => {
+    // move_section("does-not-exist", "main") → SECTION_NOT_FOUND
   });
 });
 ```
@@ -1230,8 +1310,11 @@ move_section: tool({
     }
 
     // Apply move
+    // NOTE (R5-C2): `username` is NOT in the createAgentTools closure — it's a
+    // parameter on individual tools like set_theme. Use the draft's own username
+    // (same pattern as recomposeAfterMutation which uses currentDraft?.username ?? "draft").
     section.slot = targetSlot;
-    upsertDraft(username, { ...draft }, sessionId);
+    upsertDraft(draft.username ?? "draft", { ...draft }, sessionId);
 
     return {
       success: true,
@@ -1281,7 +1364,9 @@ describe("reorder_sections — slot validation", () => {
 
 **Step 2: Implement fix**
 
-In `src/lib/agent/tools.ts`, the `reorder_sections` tool: after reordering the array, call `groupSectionsBySlot()` to validate. If issues found, include as warnings in result (non-blocking).
+> **NOTE (R5-S3):** `groupSectionsBySlot()` only groups sections by slot — it does NOT produce validation warnings. For slot compatibility validation, use `toSlotAssignments()` from `src/lib/layout/validate-adapter.ts` (which calls the quality validator internally) or call `validateLayout()` from `src/lib/layout/quality.ts` directly. The validator returns `{errors, warnings}`. Include non-empty warnings in the result.
+
+In `src/lib/agent/tools.ts`, the `reorder_sections` tool: after reordering the array, run the reordered config through `validateLayout()` from `quality.ts`. If `warnings.length > 0`, include as warnings in result (non-blocking).
 
 In `src/app/api/chat/route.ts:259`, change `maxSteps: 10` to `maxSteps: 8`.
 
@@ -1513,7 +1598,11 @@ Expected: FAIL
 >   };
 > }
 > ```
-> Update all callers of `createAgentTools()` — currently only `src/app/api/chat/route.ts` — to destructure: `const { tools, getJournal } = createAgentTools(...)`.
+> Update ALL callers of `createAgentTools()` to destructure: `const { tools, getJournal } = createAgentTools(...)`.
+> **NOTE (R5-S4):** Run `grep -r "createAgentTools" src/ tests/` to find all callers. Known callers:
+> - `src/app/api/chat/route.ts` (production caller)
+> - Test files that construct tools for testing (may use `createAgentTools` directly)
+> All must be updated or they will get a type error (receiving `{tools, getJournal}` where they expect a tools record).
 
 2. In `src/app/api/chat/route.ts`: in `onFinish`, detect step exhaustion. In Vercel AI SDK v4, when `maxSteps` is exhausted while the model wanted another tool call, `finishReason === "tool-calls"` (NOT `"length"` — that's token limit). Use the robust check:
 ```typescript
@@ -1603,7 +1692,7 @@ Create `src/lib/services/coherence-check.ts`:
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { Section } from "@/lib/page-config/schema";
-import { getModel } from "@/lib/ai/model";
+import { getModel } from "@/lib/ai/provider"; // NOTE (R5-C3): getModel is in provider.ts, not model.ts
 
 export type CoherenceIssue = {
   type: "role_mismatch" | "timeline_overlap" | "skill_gap" | "level_mismatch" | "completeness_gap";
@@ -1728,14 +1817,17 @@ describe("has_archivable_facts situation", () => {
 
 In `assembleBootstrapPayload()` (the caller), compute `childCounts` and pass to `detectSituations`:
 
+> **CAUTION (R5-C4):** `assembleBootstrapPayload()` has a local variable named `facts` (the array of fact objects). The Drizzle table schema import is also `facts`. To avoid collision, alias the table import: `import { facts as factsTable } from "@/lib/db/schema"`, or compute childCounts before the local `facts` variable is declared, or use a raw SQL query.
+
 ```typescript
 // In assembleBootstrapPayload, before calling detectSituations:
+// Use factsTable (aliased import) to avoid collision with local `facts` variable
 const childCounts = db.select({
-  parentId: facts.parentFactId,
+  parentId: factsTable.parentFactId,
   count: sql<number>`count(*)`,
-}).from(facts)
-  .where(and(isNotNull(facts.parentFactId), isNull(facts.archivedAt)))
-  .groupBy(facts.parentFactId)
+}).from(factsTable)
+  .where(and(isNotNull(factsTable.parentFactId), isNull(factsTable.archivedAt)))
+  .groupBy(factsTable.parentFactId)
   .all();
 const childCountMap = new Map(childCounts.map(r => [r.parentId!, r.count]));
 
@@ -2041,3 +2133,19 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | R4-S2 | Significant | Added `import { db }` note for batch transaction in tools.ts | Task 8a |
 | R4-M1 | Minor | Removed `policies/index.ts` from Task 11 files (actionAwareness imported directly in prompts.ts) | Task 11 |
 | R4-M2 | Minor | Extract `MAX_STEPS` constant for onFinish check (maxSteps is inline in streamText call) | Task 13 |
+
+**Round 5 — external architecture review (11 fixes):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R5-C1 | Critical | batch_facts: createFact is async (normalizeCategory), can't be inside sync db.transaction(). Pre-normalize categories before txn, use sync DB inserts inside. | Task 8a |
+| R5-C2 | Critical | move_section: `username` not in createAgentTools closure. Use `draft.username ?? "draft"` pattern. | Task 9 |
+| R5-C3 | Critical | Coherence service import: `@/lib/ai/model` → `@/lib/ai/provider` (getModel lives in provider.ts) | Task 14 |
+| R5-C4 | Critical | Task 15 `facts` symbol collision: local `facts` array in assembleBootstrapPayload shadows Drizzle table import. Alias as `factsTable`. | Task 15 |
+| R5-S1 | Significant | Constraint enforcement (CURRENT_UNIQUE_CATEGORIES) also needed in updateFact, not just createFact | Task 3, Step 5 |
+| R5-S2 | Significant | EXPECTED_SCHEMA_VERSION bump (18→22) added to Task 1 as new Step 2 | Task 1 |
+| R5-S3 | Significant | Task 10: groupSectionsBySlot only groups, doesn't validate. Use validateLayout() from quality.ts instead. | Task 10 |
+| R5-S4 | Significant | createAgentTools return shape change: grep all callers in src/ and tests/ to update | Task 13 |
+| R5-S5 | Significant | mergeSessionMeta read-modify-write race condition noted (safe for single-user SQLite, document for future) | Task 1b |
+| R5-M1 | Minor | Edge-case tests added: batch 0 ops, single op, archive idempotent, unarchive no-op, reorder 0/1 facts, move to same slot | Tasks 8a, 8b, 9 |
+| R5-M2 | Minor | Architecture note: spaced ranks for sortOrder as future optimization (not needed now) | Task 8b |
