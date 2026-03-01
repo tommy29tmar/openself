@@ -55,6 +55,11 @@ describe("TOOL_POLICY includes new tools", () => {
     expect(prompt).toContain("batch_facts");
   });
 
+  it("mentions move_section", () => {
+    const prompt = buildSystemPrompt(makeBootstrap());
+    expect(prompt).toContain("move_section");
+  });
+
   it("mentions reorder_items", () => {
     const prompt = buildSystemPrompt(makeBootstrap());
     expect(prompt).toContain("reorder_items");

@@ -59,6 +59,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use resolve_conflict when you detect contradictory facts and can propose which to keep or how to merge them
 - Use set_fact_visibility to control which facts appear on the page: "proposed" = visible in preview, "private" = hidden. You cannot set "public" — only publishing does that
 - When the user shares 3 or more facts in one message, prefer batch_facts over multiple create_fact calls. batch_facts runs operations sequentially — if one fails, earlier ones persist. Trust ledger provides undo for the entire batch.
+- Use move_section to move a section between layout slots (auto-switches widget if needed). Use inspect_page_state first to see current slot assignments.
 - Use reorder_items to change the order of items within a section (pass factIds in desired order). Not for composite sections: hero, bio, at-a-glance, footer.
 - Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal). When the user says "remove for now", "hide", or "I might add this back" → archive_fact.
 - Only create facts from information the user explicitly stated. Confidence 1.0 = stated directly, 0.7 = clearly implied from context. Do NOT create facts from your own assumptions, general knowledge, or inferences about what the user "might" like.
