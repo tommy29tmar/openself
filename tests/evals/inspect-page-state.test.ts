@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGetDraft,
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockResolveLayoutTemplate,
   mockGroupSectionsBySlot,
   mockIsSectionComplete,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockResolveLayoutTemplate: vi.fn(),
   mockGroupSectionsBySlot: vi.fn(),
   mockIsSectionComplete: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));

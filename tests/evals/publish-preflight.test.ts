@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted mocks ──────────────────────────────────────────
-const { mockGetDraft, mockGetAllFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
+const { mockGetDraft, mockGetAllFacts, mockGetActiveFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockIsMultiUserEnabled: vi.fn(() => false),
   mockValidateUsernameFormat: vi.fn(() => ({ ok: true })),
   mockRequestPublish: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));

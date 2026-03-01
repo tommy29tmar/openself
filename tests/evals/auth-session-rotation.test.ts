@@ -431,6 +431,21 @@ vi.mock("@/lib/services/kb-service", () => ({
       updatedAt: "2026-01-01T00:00:00Z",
     },
   ],
+  getActiveFacts: () => [
+    {
+      id: "f1",
+      sessionId: SESSION_ANCHOR,
+      profileId: SESSION_ANCHOR,
+      category: "identity",
+      key: "full-name",
+      value: { full: "Test User" },
+      visibility: "public",
+      confidence: 1.0,
+      source: "chat",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
+  ],
 }));
 
 vi.mock("@/lib/services/preferences-service", () => ({

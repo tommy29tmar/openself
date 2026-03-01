@@ -15,6 +15,7 @@ vi.mock("@/lib/services/page-service", () => ({
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: vi.fn(),
+  getActiveFacts: vi.fn(),
   createFact: vi.fn(),
   updateFact: vi.fn(),
   deleteFact: vi.fn(),

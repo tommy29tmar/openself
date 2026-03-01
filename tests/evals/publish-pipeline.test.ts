@@ -15,6 +15,7 @@ const mockSetFactVisibility = vi.fn();
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: (...args: any[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetAllFacts(...args),
   setFactVisibility: (...args: any[]) => mockSetFactVisibility(...args),
 }));
 

@@ -6,6 +6,7 @@ const {
   mockGenerateObject,
   mockGetModel,
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetActiveSoul,
   mockGetAllActiveCopies,
   mockGetActiveCopy,
@@ -21,6 +22,7 @@ const {
   mockGenerateObject: vi.fn(),
   mockGetModel: vi.fn(() => "mock-model"),
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockGetActiveSoul: vi.fn(),
   mockGetAllActiveCopies: vi.fn(),
   mockGetActiveCopy: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock("@/lib/ai/provider", () => ({
 // Mock kb-service
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
 }));
 
 // Mock soul-service

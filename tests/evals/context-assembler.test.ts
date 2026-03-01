@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: vi.fn(() => []),
+  getActiveFacts: vi.fn(() => []),
   countFacts: vi.fn(() => 0),
 }));
 vi.mock("@/lib/services/page-service", () => ({

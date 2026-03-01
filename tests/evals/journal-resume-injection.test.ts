@@ -24,6 +24,7 @@ vi.mock("@/lib/services/session-metadata", () => ({
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: vi.fn(() => []),
+  getActiveFacts: vi.fn(() => []),
   countFacts: vi.fn(() => 0),
 }));
 vi.mock("@/lib/services/page-service", () => ({

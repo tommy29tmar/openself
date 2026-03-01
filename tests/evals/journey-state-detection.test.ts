@@ -23,6 +23,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/services/kb-service", () => ({
   countFacts: vi.fn(() => 0),
   getAllFacts: vi.fn(() => []),
+  getActiveFacts: vi.fn(() => []),
 }));
 
 vi.mock("@/lib/services/page-service", () => ({

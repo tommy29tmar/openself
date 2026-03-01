@@ -7,6 +7,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: vi.fn().mockReturnValue([]),
+  getActiveFacts: vi.fn().mockReturnValue([]),
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));

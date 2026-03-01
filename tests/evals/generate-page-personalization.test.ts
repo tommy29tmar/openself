@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoist mock functions needed by fire-and-forget personalization
 const {
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
   mockComposeOptimisticPage,
@@ -16,6 +17,9 @@ const {
   mockPersonalizeSection,
 } = vi.hoisted(() => ({
   mockGetAllFacts: vi.fn().mockReturnValue([
+    { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
+  ]),
+  mockGetActiveFacts: vi.fn().mockReturnValue([
     { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
   ]),
   mockGetDraft: vi.fn().mockReturnValue(null),
@@ -46,6 +50,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoist all mocks before imports
 const {
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
   mockCreateFact,
@@ -24,6 +25,7 @@ const {
   mockRequestPublish,
 } = vi.hoisted(() => ({
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
   mockCreateFact: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));

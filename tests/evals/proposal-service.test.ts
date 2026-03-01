@@ -67,6 +67,7 @@ vi.mock("@/lib/services/personalization-hashing", () => ({
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetAllFacts(...args),
 }));
 
 vi.mock("@/lib/services/page-projection", () => ({
