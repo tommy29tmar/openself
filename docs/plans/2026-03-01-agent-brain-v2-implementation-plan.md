@@ -1689,7 +1689,7 @@ git commit -m "feat: archetype wiring — detection in bootstrap, injection in o
 
 **Files:**
 - Modify: `src/lib/agent/tools.ts` (journal array + journaled wrapper)
-- Modify: `src/app/api/chat/route.ts` (onFinish — save journal on step exhaustion)
+- Modify: `src/app/api/chat/route.ts` (onFinish — persist journal in metadata + save pendingOperations on step exhaustion)
 - Modify: `src/lib/agent/context.ts` (resume injection + TTL cleanup)
 - Test: `tests/evals/operation-journal.test.ts`
 
@@ -1752,10 +1752,13 @@ Expected: FAIL
 > - Test files that construct tools for testing (may use `createAgentTools` directly)
 > All must be updated or they will get a type error (receiving `{tools, getJournal}` where they expect a tools record).
 
-2. In `src/app/api/chat/route.ts`: in `onFinish`, detect step exhaustion. In Vercel AI SDK v4, when `maxSteps` is exhausted while the model wanted another tool call, `finishReason === "tool-calls"` (NOT `"length"` — that's token limit). Use the robust check:
+2. In `src/app/api/chat/route.ts`: in `onFinish`, always persist the per-turn journal into `sessions.metadata.journal`. Additionally, detect step exhaustion and store `pendingOperations` for resume. In Vercel AI SDK v4, when `maxSteps` is exhausted while the model wanted another tool call, `finishReason === "tool-calls"` (NOT `"length"` — that's token limit). Use:
 ```typescript
 // Extract constant before streamText call: const MAX_STEPS = 8;
 // Then in onFinish:
+if (getJournal().length > 0) {
+  mergeSessionMeta(sessionId, { journal: getJournal() });
+}
 if (steps.length >= MAX_STEPS && finishReason === "tool-calls" && getJournal().length > 0) {
   mergeSessionMeta(sessionId, {
     pendingOperations: { journal: getJournal(), timestamp: new Date().toISOString() },
@@ -1780,7 +1783,7 @@ git commit -m "feat: operation journal — tool call tracking + resume on step e
 
 ### Task 14: Page Coherence Check
 
-> **Integration circuits:** I (soul-aware coherence), D1 (coherence issues → proposals instead of session.metadata)
+> **Integration circuits:** I (soul-aware coherence), D1 (coherence issues → session.metadata for directives and agent context)
 
 **Files:**
 - Create: `src/lib/services/coherence-check.ts`
@@ -2087,7 +2090,7 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[], 
 In `src/lib/agent/tools.ts`, in the `generate_page` tool execute, after the personalization fire-and-forget block: add another fire-and-forget for coherence.
 
 > **Circuit I:** Pass soul context to `checkPageCoherence` so LLM can detect tone/style misalignment.
-> **Circuit D1:** Warning-severity issues become proposals (user-reviewable), not session.metadata. Info-severity issues still go to session.metadata for agent context only.
+> **Circuit D1:** Store warning/info issues in `session.metadata` (`coherenceWarnings`, `coherenceIssues`) and surface them via directives.
 
 ```typescript
 if (mode === "steady_state") {
@@ -2098,7 +2101,7 @@ if (mode === "steady_state") {
       const soulCompiled = getActiveSoul(ownerKey)?.compiled;
       const issues = await checkPageCoherence(config.sections, activeFacts, soulCompiled);
       if (issues.length > 0) {
-        // Circuit D1: warning issues → proposals (user-visible, reviewable)
+        // Circuit D1: warning issues → session metadata (coherenceWarnings)
         // NOTE (R7-C1): proposal-service.createProposal expects CreateProposalInput
         // (section_copy_proposals table shape). Coherence issues are NOT section copy
         // proposals — they need a different storage path.
@@ -2439,7 +2442,7 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 
 **Files:**
 - Modify: `src/lib/services/section-personalizer.ts` (priority ordering)
-- Modify: `src/lib/agent/tools.ts` (pass archetype to personalizeSections in generate_page)
+- Modify: `src/lib/agent/tools.ts` (read archetype from session metadata, apply priority order in generate_page loop)
 - Test: `tests/evals/archetype-personalization.test.ts`
 
 **Step 1: Write failing test**
@@ -2481,12 +2484,12 @@ Expected: FAIL
 
 In `src/lib/services/section-personalizer.ts`, add archetype-based priority.
 
-> **NOTE (R7-M8):** The existing personalizer exports `personalizeSection()` (singular, per-section). There is no `personalizeSections()` (plural) — the loop is in the caller (`generate_page` tool in tools.ts). The priority ordering must be applied in the **caller** (tools.ts), not in the per-section function. `ARCHETYPE_STRATEGIES` comes from Task 4 — if Task 4 defines them in `src/lib/agent/archetype.ts`, use that path.
+> **NOTE (R7-M8):** The existing personalizer exports `personalizeSection()` (singular, per-section). There is no `personalizeSections()` (plural) — the loop is in the caller (`generate_page` tool in tools.ts). The priority ordering must be applied in the **caller** (tools.ts), not in the per-section function. `ARCHETYPE_STRATEGIES` comes from Task 4 in `src/lib/agent/archetypes.ts`.
 
 Add a reusable helper in `src/lib/services/section-personalizer.ts`:
 
 ```typescript
-import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetype"; // from Task 4
+import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes"; // from Task 4
 import type { Section } from "@/lib/page-config/schema";
 
 /**
@@ -2509,7 +2512,8 @@ export function prioritizeSections(sections: Section[], archetype?: string): Sec
 Wire in the caller (tools.ts `generate_page` tool), where the personalization loop iterates over sections:
 ```typescript
 // In generate_page, before the personalization fire-and-forget loop:
-const archetype = bootstrap?.archetype;
+const meta = getSessionMeta(sessionId);
+const archetype = typeof meta.archetype === "string" ? meta.archetype : undefined;
 const orderedSections = prioritizeSections(config.sections, archetype);
 // Then loop over `orderedSections` calling `personalizeSection()` for each
 }
@@ -2521,7 +2525,8 @@ In `src/lib/agent/tools.ts`, in the personalization fire-and-forget block (the e
 ```typescript
 // Before personalization loop:
 import { prioritizeSections } from "@/lib/services/section-personalizer";
-const archetype = bootstrap?.archetype;
+const meta = getSessionMeta(sessionId);
+const archetype = typeof meta.archetype === "string" ? meta.archetype : undefined;
 const orderedSections = prioritizeSections(config.sections, archetype);
 // Then iterate over orderedSections instead of config.sections
 for (const section of orderedSections) {
@@ -2542,9 +2547,9 @@ git commit -m "feat: archetype-weighted personalization priority (circuit B)"
 
 ---
 
-### Task 20: Coherence Check in Deep Heartbeat → Proposals (Circuit D2)
+### Task 20: Coherence Check in Deep Heartbeat → Session Metadata (Circuit D2)
 
-> **Circuit D2:** Deep heartbeat runs coherence check and creates proposals for the user to review. This is the "self-improvement" loop — the agent reflects on its own output periodically.
+> **Circuit D2:** Deep heartbeat runs coherence check and stores issues in session metadata for follow-up directives. This is the "self-improvement" loop — the agent reflects on its own output periodically.
 
 **Files:**
 - Modify: `src/lib/worker/heartbeat.ts` (add coherence check to deep heartbeat)
@@ -2593,7 +2598,7 @@ In `src/lib/worker/heartbeat.ts`, in `handleHeartbeatDeep()`, after the conformi
 // Coherence issues use session metadata for agent context and logEvent for audit trail.
 // NOTE (R7-S5): resolve scope explicitly — heartbeat only has ownerKey, need readKeys.
 const scope = resolveOwnerScopeForWorker(ownerKey);
-const draft = getDraft(ownerKey);
+const draft = getDraft(scope.knowledgePrimaryKey);
 if (draft?.config) {
   const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;
   const activeFacts = getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
@@ -2624,7 +2629,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git commit -m "feat: coherence check in deep heartbeat → proposals (circuit D2)"
+git commit -m "feat: coherence check in deep heartbeat → session metadata (circuit D2)"
 ```
 
 ---
@@ -2692,9 +2697,9 @@ const journalDigest = buildJournalDigest(journal);
 const prompt = `Summarize this conversation...${journalDigest}`;
 ```
 
-Update `generateSummary` signature to accept optional journal. Note the existing signature is `(ownerKey: string, messageKeys: string[])` — the journal is an additional parameter:
+Keep `generateSummary` signature unchanged (`(ownerKey: string, messageKeys: string[])`).
 
-> **NOTE (R7-S7): Data flow.** The journal lives in `sessions.metadata` (from Task 1b/13). The worker job `memory_summary` in `src/lib/worker/index.ts:30-34` calls `generateSummary(ownerKey, messageKeys)`. To get journal entries, the summary service reads `sessions.metadata.journal` from the DB for the session being summarized — it does NOT depend on the caller to provide journal data. This keeps the worker job unchanged.
+> **NOTE (R7-S7): Data flow.** The journal lives in `sessions.metadata` (from Task 1b/13). The worker job `memory_summary` in `src/lib/worker/index.ts:30-34` calls `generateSummary(ownerKey, messageKeys)`. To get journal entries, the summary service reads `sessions.metadata.journal` from the DB for the session(s) being summarized — it does NOT depend on the caller to provide journal data. This keeps the worker job unchanged.
 
 ```typescript
 export async function generateSummary(
