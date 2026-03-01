@@ -1275,8 +1275,12 @@ export function composeOptimisticPage(
 
     // Merge project-category facts with client-type experience facts into a single projects section
     const clientProjectItems = buildProjectsFromExperience(experienceFacts);
-    const projectFacts = grouped.get("project") ?? [];
-    const projects = buildProjectsSection(projectFacts, language, clientProjectItems);
+    // Exclude child projects (parentFactId → existing experience) from standalone section
+    const experienceIds = new Set(experienceFacts.map(f => f.id));
+    const topLevelProjectFacts = (grouped.get("project") ?? []).filter(
+      f => !f.parentFactId || !experienceIds.has(f.parentFactId),
+    );
+    const projects = buildProjectsSection(topLevelProjectFacts, language, clientProjectItems);
     if (projects) sections.push(projects);
 
     const education = buildEducationSection(grouped.get("education") ?? [], language);
@@ -1303,7 +1307,11 @@ export function composeOptimisticPage(
     const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
     if (skills) sections.push(skills);
 
-    const projects = buildProjectsSection(grouped.get("project") ?? [], language);
+    const legacyExpIds = new Set(experienceFacts.map(f => f.id));
+    const legacyTopLevelProjects = (grouped.get("project") ?? []).filter(
+      f => !f.parentFactId || !legacyExpIds.has(f.parentFactId),
+    );
+    const projects = buildProjectsSection(legacyTopLevelProjects, language);
     if (projects) sections.push(projects);
 
     const interests = buildInterestsSection(interestFacts, language);
