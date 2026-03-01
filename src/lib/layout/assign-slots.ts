@@ -13,7 +13,6 @@ type AssignOptions = {
 function isSoftPinValid(
   slotId: string,
   sectionType: string,
-  template: LayoutTemplateDefinition,
   usedCapacity: Map<string, number>,
   slotCapacity: Map<string, number>,
   slotDefs: Map<string, FullSlotDefinition>,
@@ -81,7 +80,7 @@ export function assignSlotsFromFacts(
     }
     // Soft-pin: if this section had a slot in the previous draft, try to keep it
     const draftSlot = draftSlots?.get(section.id);
-    if (draftSlot && isSoftPinValid(draftSlot, section.type, template, usedCapacity, slotCapacity, slotDefs)) {
+    if (draftSlot && isSoftPinValid(draftSlot, section.type, usedCapacity, slotCapacity, slotDefs)) {
       const s = { ...section, slot: draftSlot };
       const slotDef = slotDefs.get(draftSlot);
       if (slotDef) {

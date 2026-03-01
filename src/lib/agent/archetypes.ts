@@ -46,7 +46,7 @@ const ARCHETYPE_SIGNALS: SignalEntry[] = [
   {
     archetype: "executive",
     pattern:
-      /\b(CEO|CTO|CFO|COO|CMO|CIO|CISO|VP|president|director(?!\s*(?:creativ|art|design))|founder|co-?founder|managing\s*director|geschäftsführer|dirigente|directeur|director\s*general|amministratore)/i,
+      /\b(CEO|CTO|CFO|COO|CMO|CIO|CISO|VP|president|(?<!art\s|creative\s|design\s)director|founder|co-?founder|managing\s*director|geschäftsführer|dirigente|directeur|director\s*general|amministratore)/i,
   },
   {
     archetype: "consultant",

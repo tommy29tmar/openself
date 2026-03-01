@@ -74,6 +74,33 @@ describe("assignSlotsFromFacts — soft-pin", () => {
     // Projects should get Phase 3 assignment (not sidebar since it's not in draftSlots)
     expect(projects!.slot).toBeTruthy();
   });
+
+  it("falls through to Phase 3 when draftSlot capacity is exhausted", () => {
+    const template = getLayoutTemplate("sidebar-left");
+    // Fill sidebar to capacity with many sections pinned to same slot
+    const sections: Section[] = [
+      { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } },
+      { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] } },
+      { id: "interests-1", type: "interests", variant: "grid", content: { items: [] } },
+      { id: "stats-1", type: "stats", variant: "grid", content: { items: [] } },
+      { id: "social-1", type: "social", variant: "grid", content: { links: [] } },
+      { id: "contact-1", type: "contact", variant: "grid", content: { items: [] } },
+      { id: "languages-1", type: "languages", variant: "grid", content: { items: [] } },
+      // 7th sidebar section — sidebar maxSections is 6
+      { id: "activities-1", type: "activities", variant: "grid", content: { items: [] } },
+    ];
+    // All pinned to sidebar
+    const draftSlots = new Map([
+      ["skills-1", "sidebar"], ["interests-1", "sidebar"], ["stats-1", "sidebar"],
+      ["social-1", "sidebar"], ["contact-1", "sidebar"], ["languages-1", "sidebar"],
+      ["activities-1", "sidebar"],
+    ]);
+    const { sections: assigned } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
+    const activities = assigned.find(s => s.id === "activities-1");
+    expect(activities).toBeDefined();
+    // 7th section should NOT be in sidebar (capacity exhausted) — falls through to Phase 3
+    expect(activities!.slot).not.toBe("sidebar");
+  });
 });
 
 describe("slot carry-over via projectCanonicalConfig", () => {
@@ -86,7 +113,7 @@ describe("slot carry-over via projectCanonicalConfig", () => {
     // Simulate a draft that has skills in "sidebar"
     const draftMeta: DraftMeta = {
       theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter" },
+      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
       layoutTemplate: "sidebar-left",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
@@ -98,9 +125,9 @@ describe("slot carry-over via projectCanonicalConfig", () => {
     const skills = config.sections.find(s => s.type === "skills" || s.type === "stats");
     // At-a-glance may replace skills in composition, but if skills section exists it should keep sidebar
     // Check any section that was in sidebar stays there
+    // Composition may change section IDs, so check the slot is present on ANY section
     const sidebarSections = config.sections.filter(s => s.slot === "sidebar");
-    // At least one section should be in sidebar (carried over from draft)
-    expect(sidebarSections.length).toBeGreaterThanOrEqual(0); // relaxed — composition may change section IDs
+    expect(sidebarSections.length).toBeGreaterThanOrEqual(1);
   });
 
   it("passes draftSlots through to assignSlotsFromFacts", () => {
@@ -113,7 +140,7 @@ describe("slot carry-over via projectCanonicalConfig", () => {
     // sidebar-left sidebar slot accepts skills — use that for a valid soft-pin
     const draftMeta: DraftMeta = {
       theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter" },
+      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
       layoutTemplate: "sidebar-left",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
