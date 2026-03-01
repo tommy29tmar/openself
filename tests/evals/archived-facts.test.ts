@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import {
   getActiveFacts,
   getFactById,
+  getFactByKey,
   searchFacts,
   getFactsByCategory,
   countFacts,
@@ -96,6 +97,22 @@ describe("archived fact filtering", () => {
     const testResults = results.filter(f => factIds.includes(f.id));
     expect(testResults.length).toBe(2);
     expect(testResults.every(f => f.archivedAt === null)).toBe(true);
+  });
+
+  it("getFactByKey excludes archived facts", () => {
+    // Get the archived fact's key via getFactById (which doesn't filter archived)
+    const archived = getFactById(factIds[2], sessionId);
+    expect(archived).not.toBeNull();
+    const result = getFactByKey(sessionId, archived!.category, archived!.key);
+    expect(result).toBeUndefined();
+  });
+
+  it("getFactByKey returns non-archived facts", () => {
+    const active = getFactById(factIds[0], sessionId);
+    expect(active).not.toBeNull();
+    const result = getFactByKey(sessionId, active!.category, active!.key);
+    expect(result).toBeDefined();
+    expect(result!.id).toBe(factIds[0]);
   });
 
   it("countFacts excludes archived facts", () => {

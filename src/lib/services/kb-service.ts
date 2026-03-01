@@ -81,7 +81,7 @@ export function getNextSortOrder(sessionId: string, category: string): number {
   const row = db
     .select({ maxOrder: sql<number>`MAX(sort_order)` })
     .from(facts)
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), isNull(facts.archivedAt)))
     .get();
   return (row?.maxOrder ?? -1) + 1;
 }
@@ -91,7 +91,7 @@ export function getNextSortOrder(sessionId: string, category: string): number {
 export function updateFactSortOrder(sessionId: string, category: string, key: string, sortOrder: number): number {
   const result = db.update(facts)
     .set({ sortOrder })
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key), isNull(facts.archivedAt)))
     .run();
   return result.changes;
 }
