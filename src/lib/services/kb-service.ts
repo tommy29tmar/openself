@@ -1,4 +1,4 @@
-import { eq, and, like, or, sql, inArray, asc } from "drizzle-orm";
+import { eq, and, like, or, sql, inArray, asc, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   facts,
@@ -303,58 +303,62 @@ export function searchFacts(query: string, sessionId: string = "__default__", se
 
   if (PROFILE_ID_CANONICAL) {
     return db.select().from(facts)
-      .where(and(eq(facts.profileId, sessionId), matchCondition))
+      .where(and(eq(facts.profileId, sessionId), isNull(facts.archivedAt), matchCondition))
       .all() as FactRow[];
   }
   if (sessionIds && sessionIds.length > 0) {
     return db.select().from(facts)
-      .where(and(inArray(facts.sessionId, sessionIds), matchCondition))
+      .where(and(inArray(facts.sessionId, sessionIds), isNull(facts.archivedAt), matchCondition))
       .all() as FactRow[];
   }
   return db.select().from(facts)
-    .where(and(eq(facts.sessionId, sessionId), matchCondition))
+    .where(and(eq(facts.sessionId, sessionId), isNull(facts.archivedAt), matchCondition))
     .all() as FactRow[];
 }
 
 /**
- * Get all facts for a session. Supports multi-key read via sessionIds array.
+ * Get all active (non-archived) facts for a session. Supports multi-key read via sessionIds array.
+ * This is the primary API — all production callers should use this.
  */
-export function getAllFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
+export function getActiveFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
   if (PROFILE_ID_CANONICAL) {
-    return db.select().from(facts).where(eq(facts.profileId, sessionId)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+    return db.select().from(facts).where(and(eq(facts.profileId, sessionId), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
   }
   if (sessionIds && sessionIds.length > 0) {
-    return db.select().from(facts).where(inArray(facts.sessionId, sessionIds)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+    return db.select().from(facts).where(and(inArray(facts.sessionId, sessionIds), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
   }
-  return db.select().from(facts).where(eq(facts.sessionId, sessionId)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+  return db.select().from(facts).where(and(eq(facts.sessionId, sessionId), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
 }
+
+/** @deprecated Use getActiveFacts() instead. Kept for backward compatibility during migration. */
+export const getAllFacts = getActiveFacts;
 
 export function getFactsByCategory(category: string, sessionId: string = "__default__"): FactRow[] {
   return db
     .select()
     .from(facts)
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), isNull(facts.archivedAt)))
     .all() as FactRow[];
 }
 
-/** Exact lookup by session + category + key triple. */
+/** Exact lookup by session + category + key triple. Excludes archived facts. */
 export function getFactByKey(sessionId: string, category: string, key: string): FactRow | undefined {
   return db
     .select()
     .from(facts)
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key), isNull(facts.archivedAt)))
     .get() as FactRow | undefined;
 }
 
 /**
- * Count facts across multiple session keys. Used by mode detection.
+ * Count active (non-archived) facts across multiple session keys. Used by mode detection.
  */
 export function countFacts(sessionIds: string[]): number {
   if (sessionIds.length === 0) return 0;
   const row = db
     .select({ count: sql<number>`count(*)` })
     .from(facts)
-    .where(inArray(facts.sessionId, sessionIds))
+    .where(and(inArray(facts.sessionId, sessionIds), isNull(facts.archivedAt)))
     .get();
   return row?.count ?? 0;
 }

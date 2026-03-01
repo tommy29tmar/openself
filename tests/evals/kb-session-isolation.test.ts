@@ -27,6 +27,8 @@ testSqlite.exec(`
     status TEXT NOT NULL DEFAULT 'active',
     user_id TEXT,
     profile_id TEXT,
+    journey_state TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -56,6 +58,8 @@ testSqlite.exec(`
     confidence REAL DEFAULT 1.0,
     visibility TEXT DEFAULT 'private',
     sort_order INTEGER DEFAULT 0,
+    parent_fact_id TEXT,
+    archived_at TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
