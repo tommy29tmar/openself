@@ -2039,12 +2039,27 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[], 
   // Phase 2: LLM only for richer pages (≥5 content sections)
   if (contentSections.length < 5) return deterministicIssues;
 
+  // Graceful degradation: timeout prevents coherence LLM from blocking page generation.
+  // If the check fails or times out, return deterministic issues only.
+  // The deep heartbeat (Task 20) will run the same check offline as a safety net.
+  const COHERENCE_TIMEOUT_MS = 3000;
+
   // Circuit I: pass soul context so LLM can check tone/style coherence
-  const { object } = await generateObject({
-    model: getModel(),
-    schema: coherenceSchema,
-    prompt: buildCoherencePrompt(sections, soulCompiled),
+  const { object } = await Promise.race([
+    generateObject({
+      model: getModel(),
+      schema: coherenceSchema,
+      prompt: buildCoherencePrompt(sections, soulCompiled),
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("coherence_timeout")), COHERENCE_TIMEOUT_MS)
+    ),
+  ]).catch((err) => {
+    console.warn("[coherence] LLM check skipped:", err.message);
+    return null;
   });
+
+  if (!object) return deterministicIssues; // timeout or error → deterministic only
 
   // Force severity rules on LLM output
   const llmIssues = object.issues.map(issue => ({
@@ -3539,7 +3554,7 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 | 8a | L2 | batch_facts tool (REPLACES create_facts, kb-service direct, atomic) + trust ledger (G) | T2, T3 |
 | 8b | L2 | archive_fact, unarchive_fact, reorder_items (REPLACES reorder_section_items) + trust ledger (E) | T2 |
 | 9 | L3 | move_section tool | T7 |
-| 10 | L3 | Fix reorder_sections + maxSteps 10→8 | — |
+| 10 | L3 | Fix reorder_sections + maxSteps 10→8 + validateLayoutComposition | — |
 | 11 | L3 | Planning Protocol + memory directive (H) | — |
 | 12 | L3 | Archetype wiring + soul proposal (A) + weighted exploration (C) | T4, T1b |
 | 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b |
@@ -3549,7 +3564,7 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 | 17 | L5 | Integration tests | All |
 | 18 | L5 | Update existing tests (delete replaced test files from 1814e4b) | All |
 | 19 | L5b | Archetype-weighted personalization priority (B) | T4, T12 |
-| 20 | L5b | Coherence check in deep heartbeat → proposals (D2) | T14 |
+| 20 | L5b | Coherence check in deep heartbeat → session metadata (D2) | T14 |
 | 21 | L5b | Journal enrichment in summaries (F1) | T13 |
 | 22 | L5b | Journal pattern analysis → meta-memories (F2) | T13 |
 | 23 | L5b | reverse_batch undo handler (G undo) | T8a |
@@ -3584,7 +3599,7 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 
 Split implementation into three delivery scopes. The integration circuits (v2.2) form a separate scope because they connect v2 systems to existing Phase 1 infrastructure and benefit from stable foundations.
 
-**v2 core (11 tasks):** 1, 1b, 2, 3, 5, 8a, 8b, 11, 16, 17, 18
+**v2 core (12 tasks):** 1, 1b, 2, 3, 5, 8a, 8b, 10, 11, 16, 17, 18
 
 | Task | What it delivers |
 |------|------------------|
@@ -3594,11 +3609,12 @@ Split implementation into three delivery scopes. The integration circuits (v2.2)
 | 5 | Sort order in composer — facts ordered by sortOrder ASC, createdAt ASC |
 | 8a | `batch_facts` tool — atomic multi-operation with single recompose + trust ledger (circuit G) |
 | 8b | `archive_fact`, `unarchive_fact`, `reorder_items` tools + trust ledger (circuit E) |
+| 10 | Fix reorder_sections slot validation + maxSteps 10→8 (immediate cost reduction) |
 | 11 | Planning Protocol — SIMPLE/COMPOUND/STRUCTURAL classification + memory directive (circuit H) |
 | 16 | TOOL_POLICY + DATA_MODEL_REFERENCE updated for new tools and fact fields |
 | 17, 18 | Integration tests + existing test updates |
 
-These are the highest-impact features: the enriched data model, batch operations, archived facts, sort order, and the planning protocol. Integration circuits G, E, and H are embedded here because they're 5-15 lines each inside code already being written.
+These are the highest-impact features: the enriched data model, batch operations, archived facts, sort order, and the planning protocol. Integration circuits G, E, and H are embedded here because they're 5-15 lines each inside code already being written. Task 10 is included because the reorder_sections fix and maxSteps reduction are small, touch files already in scope (tools.ts), and maxSteps 10→8 has immediate cost impact.
 
 **v2.1 (7 tasks):** 4, 6, 7, 9, 12, 13, 14, 15
 
@@ -3634,6 +3650,18 @@ These tasks close the remaining feedback loops. All are pure additive — no sch
 | 26 | Systematic model tiering — fast/standard/reasoning across all 7+ LLM call sites |
 
 These are pure optimizations. T26 is independent and can be done anytime (even before v2 core). T24 and T25 modify `context.ts` and should be done in order. T25 resolves the existing `route.ts:123-124` TODO.
+
+**Cross-cutting: observability.** Add `logEvent()` calls (using the existing event-service + requestId infrastructure) in the following tasks. Not a separate task — 5-10 lines each, inline with the code being written:
+
+| Where | Event type | Payload |
+|-------|-----------|---------|
+| T13 (Operation Journal) | `tool_completed` | `{ toolName, durationMs, success, batchSize? }` |
+| T14 (Coherence Check) | `coherence_completed` | `{ deterministicCount, llmCount, timeoutOccurred, durationMs }` |
+| T20 (Heartbeat Coherence) | `heartbeat_coherence` | `{ ownerKey, warningsFound, durationMs }` |
+| T22 (Journal Patterns) | `journal_patterns_detected` | `{ ownerKey, patternsCount, types[] }` |
+| T24 (Conditional Context) | `context_assembled` | `{ journeyState, totalTokens, blocksIncluded[], blocksSkipped[] }` |
+
+This enables answering: "How many tokens does a first_visit session consume vs active_fresh?" and "How often does the coherence timeout fire?"
 
 **Why this four-tier split works:**
 
