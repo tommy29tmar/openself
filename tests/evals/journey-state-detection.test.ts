@@ -52,6 +52,11 @@ vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn((facts: unknown[]) => facts),
 }));
 
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(() => ({})),
+}));
+
 vi.mock("@/lib/services/personalization-hashing", () => ({
   SECTION_FACT_CATEGORIES: {
     hero: ["identity"],

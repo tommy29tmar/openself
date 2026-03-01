@@ -141,49 +141,49 @@ export function refineArchetype(
 
 export const ARCHETYPE_STRATEGIES: Record<Archetype, ArchetypeStrategy> = {
   developer: {
-    explorationOrder: ["project", "skill", "experience", "education", "achievement"],
+    explorationOrder: ["projects", "skills", "experience", "education", "achievements"],
     sectionPriority: ["skills", "projects", "experience", "education"],
     toneHint: "technical, direct, concrete examples preferred",
     communicationStyle: "technical, concrete",
   },
   designer: {
-    explorationOrder: ["project", "skill", "experience", "interest", "achievement"],
+    explorationOrder: ["projects", "skills", "experience", "interests", "achievements"],
     sectionPriority: ["projects", "skills", "experience", "interests"],
     toneHint: "visual, evocative, portfolio-focused",
     communicationStyle: "visual, evocative",
   },
   executive: {
-    explorationOrder: ["experience", "achievement", "project", "education", "stat"],
+    explorationOrder: ["experience", "achievements", "projects", "education", "stats"],
     sectionPriority: ["experience", "achievements", "stats", "projects"],
     toneHint: "strategic, concise, impact-driven metrics",
     communicationStyle: "strategic, results-oriented",
   },
   student: {
-    explorationOrder: ["education", "project", "skill", "interest", "activity"],
+    explorationOrder: ["education", "projects", "skills", "interests", "activities"],
     sectionPriority: ["education", "projects", "skills", "activities"],
     toneHint: "enthusiastic, growth-oriented, potential over pedigree",
     communicationStyle: "encouraging, growth-focused",
   },
   creator: {
-    explorationOrder: ["project", "social", "skill", "interest", "achievement"],
-    sectionPriority: ["projects", "social", "skills", "interests"],
+    explorationOrder: ["projects", "skills", "interests", "achievements", "activities"],
+    sectionPriority: ["projects", "skills", "interests", "achievements"],
     toneHint: "expressive, portfolio-first, audience-aware",
     communicationStyle: "expressive, audience-aware",
   },
   consultant: {
-    explorationOrder: ["experience", "skill", "project", "achievement", "education"],
+    explorationOrder: ["experience", "skills", "projects", "achievements", "education"],
     sectionPriority: ["experience", "skills", "projects", "achievements"],
     toneHint: "authoritative, domain expertise, client-focused results",
     communicationStyle: "authoritative, solution-oriented",
   },
   academic: {
-    explorationOrder: ["education", "project", "achievement", "skill", "experience"],
+    explorationOrder: ["education", "projects", "achievements", "skills", "experience"],
     sectionPriority: ["education", "projects", "achievements", "skills"],
     toneHint: "precise, nuanced, publication and research focus",
     communicationStyle: "precise, nuanced",
   },
   generalist: {
-    explorationOrder: ["experience", "skill", "interest", "project", "education"],
+    explorationOrder: ["experience", "skills", "interests", "projects", "education"],
     sectionPriority: ["experience", "skills", "interests", "projects"],
     toneHint: "balanced, adaptable, breadth over depth",
     communicationStyle: "friendly, balanced",

@@ -125,7 +125,12 @@ export async function POST(req: Request) {
   const authInfoForBootstrap = chatAuthCtx
     ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
     : undefined;
-  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+  // Extract last user message for archetype signal detection
+  const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
+  const lastUserMessageText = lastUserMsg
+    ? (typeof lastUserMsg.content === "string" ? lastUserMsg.content : null)
+    : null;
+  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessageText ?? undefined);
 
   // Quota enforcement
   const isAuthenticated =

@@ -20,6 +20,8 @@ import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing"
 import type { OwnerScope } from "@/lib/auth/session";
 import type { AuthInfo } from "@/lib/agent/context";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
+import { detectArchetypeFromSignals, refineArchetype, type Archetype } from "@/lib/agent/archetypes";
+import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,6 +58,7 @@ export interface BootstrapPayload {
   openConflicts: string[];
   language: string;
   conversationContext: string | null;
+  archetype: Archetype;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +282,7 @@ export function assembleBootstrapPayload(
   scope: OwnerScope,
   language: string,
   authInfo?: AuthInfo,
+  lastUserMessage?: string,
 ): BootstrapPayload {
   const readKeys = scope.knowledgeReadKeys;
   const ownerKey = scope.cognitiveOwnerKey;
@@ -337,6 +341,30 @@ export function assembleBootstrapPayload(
   // Lightweight — we don't load the full summary here, just indicate if one exists
   const conversationContext = null; // Reserved for future use
 
+  // Archetype detection — cached in session metadata for stability
+  const sessionId = scope.currentSessionId;
+  const meta = sessionId ? getSessionMeta(sessionId) : {};
+  let archetype: Archetype;
+  if (meta.archetype && typeof meta.archetype === "string") {
+    archetype = meta.archetype as Archetype;
+  } else {
+    // Detect from role fact + last message, then refine from all facts
+    const roleFact = facts.find(
+      (f) => f.category === "identity" && (f.key === "role" || f.key === "title"),
+    );
+    const roleStr = roleFact
+      ? typeof roleFact.value === "object" && roleFact.value !== null
+        ? (roleFact.value as Record<string, unknown>).role as string ?? JSON.stringify(roleFact.value)
+        : String(roleFact.value)
+      : null;
+    const raw = detectArchetypeFromSignals(roleStr, lastUserMessage ?? null);
+    archetype = refineArchetype(facts, raw);
+    // Cache in session metadata
+    if (sessionId) {
+      mergeSessionMeta(sessionId, { archetype });
+    }
+  }
+
   return {
     journeyState,
     situations,
@@ -350,6 +378,7 @@ export function assembleBootstrapPayload(
     openConflicts,
     language,
     conversationContext,
+    archetype,
   };
 }
 

@@ -24,6 +24,7 @@ const mockBootstrapPayload = {
   openConflicts: [] as string[],
   language: "en",
   conversationContext: null,
+  archetype: "generalist" as const,
 };
 
 vi.mock("@/lib/agent/journey", () => ({
@@ -120,6 +121,7 @@ describe("POST /api/chat bootstrap wiring", () => {
       expect.objectContaining({ cognitiveOwnerKey: "cog-1" }),
       "en",
       undefined, // single-user: no auth context
+      "hello",   // lastUserMessage extracted from messages
     );
 
     // assembleContext received the bootstrap payload as 5th argument
