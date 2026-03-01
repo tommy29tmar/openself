@@ -96,6 +96,21 @@ export type FactRow = {
 
 > Note: `sortOrder` is `number | null` because migration 0021 created it as nullable. In practice, `getNextSortOrder()` populates it on create, so values are always non-null. Use `?? 0` fallback where needed.
 
+> **NOTE (R7-C3): parentFactId write path.** `parentFactId` is added to the DB schema here, but to be usable end-to-end, `CreateFactInput` in `kb-service.ts:49-55` must also accept it:
+>
+> ```typescript
+> export type CreateFactInput = {
+>   category: string;
+>   key: string;
+>   value: Record<string, unknown>;
+>   source?: string;
+>   confidence?: number;
+>   parentFactId?: string;  // NEW: links child to parent (e.g. project → experience)
+> };
+> ```
+>
+> And the `createFact()` function must pass `parentFactId: input.parentFactId ?? null` in the `.values({...})` insert. Similarly, the `batch_facts` tool (Task 8a) passes `op.parentFactId` through. Without this, Task 6 (parent-child grouping in composer) has no way to set parent-child links.
+
 **Step 5: Write schema test**
 
 ```typescript
@@ -1030,6 +1045,7 @@ batch_facts: tool({
       factId: z.string().optional(),
       source: z.string().optional(),
       confidence: z.number().optional(),
+      parentFactId: z.string().optional(),  // links child fact to parent (e.g. project → experience)
     })).max(20),
   }),
   execute: async ({ operations }) => {
@@ -1068,7 +1084,10 @@ batch_facts: tool({
               // Validate + constraint check + insert (all sync)
               validateFactValue(canonical, op.key!, op.value!);
               // (CURRENT_UNIQUE_CATEGORIES check here)
-              // db.insert(facts).values({...}).onConflictDoUpdate({...}).run();
+              // db.insert(facts).values({
+              //   ...standard fields,
+              //   parentFactId: op.parentFactId ?? null,  // R7-C3: pass through
+              // }).onConflictDoUpdate({...}).run();
               created++;
               break;
             }
@@ -1226,12 +1245,15 @@ logTrustAction(ownerKey, "archive_fact", `Archived fact ${factId}`, {
 
 In `src/lib/services/trust-ledger-service.ts`, add undo handler for `unarchive_fact`:
 
+> **NOTE (R7-C2):** `recomposeAfterMutation()` is a closure-local function inside `createAgentTools()` — it cannot be imported in trust-ledger-service. The undo handler must only perform the DB mutation. Recomposition is the **caller's responsibility** — the caller of `reverseTrustAction()` (e.g. the API route or the agent tool) must trigger recompose after a successful reversal. This matches the existing pattern: `reverseTrustAction` is a pure data operation; side-effects (recompose, draft rebuild) belong in the calling layer.
+
 ```typescript
 // In executeUndo inside reverseTrustAction:
 case "unarchive_fact":
-  db.update(facts).set({ archivedAt: null }).where(eq(facts.id, payload.factId)).run();
-  recomposeAfterMutation();
+  db.update(facts).set({ archivedAt: null, updatedAt: new Date().toISOString() })
+    .where(eq(facts.id, payload.factId)).run();
   break;
+// NOTE: caller must trigger recomposeAfterMutation() after successful reversal
 ```
 
 > **Architecture note (R5-M2):** `reorder_items` currently writes dense ranks (0, 1, 2, ...). A future optimization could use spaced ranks (0, 1000, 2000, ...) to allow single-row inserts between items without rewriting all sortOrders. Not needed now — the current approach is simpler and reorder_items already rewrites all ranks in the array. Consider spaced ranks if insert-between becomes a hot path.
@@ -1415,9 +1437,9 @@ describe("reorder_sections — slot validation", () => {
 
 **Step 2: Implement fix**
 
-> **NOTE (R5-S3):** `groupSectionsBySlot()` only groups sections by slot — it does NOT produce validation warnings. For slot compatibility validation, use `toSlotAssignments()` from `src/lib/layout/validate-adapter.ts` (which calls the quality validator internally) or call `validateLayout()` from `src/lib/layout/quality.ts` directly. The validator returns `{errors, warnings}`. Include non-empty warnings in the result.
+> **NOTE (R5-S3):** `groupSectionsBySlot()` only groups sections by slot — it does NOT produce validation warnings. For slot compatibility validation, use `toSlotAssignments()` from `src/lib/layout/validate-adapter.ts` (which calls the quality validator internally) or call `validateLayoutComposition()` from `src/lib/layout/quality.ts` directly. The validator returns `{errors, warnings}`. Include non-empty warnings in the result.
 
-In `src/lib/agent/tools.ts`, the `reorder_sections` tool: after reordering the array, run the reordered config through `validateLayout()` from `quality.ts`. If `warnings.length > 0`, include as warnings in result (non-blocking).
+In `src/lib/agent/tools.ts`, the `reorder_sections` tool: after reordering the array, run the reordered config through `validateLayoutComposition()` from `quality.ts`. If `warnings.length > 0`, include as warnings in result (non-blocking).
 
 In `src/app/api/chat/route.ts:259`, change `maxSteps: 10` to `maxSteps: 8`.
 
@@ -1565,6 +1587,11 @@ describe("archetype → soul proposal (circuito A)", () => {
   it("does NOT propose soul for generalist archetype", () => {
     // archetype = "generalist" → no proposal (too generic)
   });
+
+  it("does NOT propose soul when pending soul proposal already exists (R7-S6)", () => {
+    // no soul, archetype = "developer", but getPendingProposals returns 1 pending
+    // → proposeSoulChange NOT called (avoids duplicate per message)
+  });
 });
 
 describe("archetype context injection", () => {
@@ -1603,9 +1630,12 @@ Expected: FAIL
 2. **Circuito A: Archetype → Soul.** In `assembleBootstrapPayload`, after archetype detection:
 
 ```typescript
-// Propose initial soul from archetype when no soul exists
+// Propose initial soul from archetype when no soul exists AND no pending proposals
+// NOTE (R7-S6): Guard against duplicate proposals — assembleBootstrapPayload runs on
+// every message, so without the pending check this would create a new proposal per message.
 const soul = getActiveSoul(ownerKey);
-if (!soul && archetype !== "generalist") {
+const pendingSoulProposals = getPendingProposals(ownerKey); // from soul-service.ts
+if (!soul && archetype !== "generalist" && pendingSoulProposals.length === 0) {
   const strategy = ARCHETYPE_STRATEGIES[archetype];
   proposeSoulChange(ownerKey, {
     tone: strategy.toneHint,
@@ -1841,13 +1871,18 @@ describe("checkPageCoherence — hybrid", () => {
   });
 });
 
-describe("coherence → proposals integration (circuit D1)", () => {
-  it("warning-severity issues create proposals instead of session.metadata", () => {
-    // verify createProposal() called for each warning-severity issue
+describe("coherence → session metadata integration (circuit D1)", () => {
+  it("warning-severity issues stored in coherenceWarnings key", () => {
+    // verify mergeSessionMeta called with { coherenceWarnings: [...] }
   });
 
-  it("info-severity issues stored in session.metadata only (not proposals)", () => {
-    // verify mergeSessionMeta called, createProposal NOT called for info issues
+  it("info-severity issues stored in coherenceIssues key", () => {
+    // verify mergeSessionMeta called with { coherenceIssues: [...] }
+  });
+
+  it("both warning and info issues stored separately", () => {
+    // page with 1 warning + 1 info
+    // → coherenceWarnings has 1 entry, coherenceIssues has 1 entry
   });
 });
 
@@ -2049,14 +2084,18 @@ if (mode === "steady_state") {
       const issues = await checkPageCoherence(config.sections, activeFacts, soulCompiled);
       if (issues.length > 0) {
         // Circuit D1: warning issues → proposals (user-visible, reviewable)
+        // NOTE (R7-C1): proposal-service.createProposal expects CreateProposalInput
+        // (section_copy_proposals table shape). Coherence issues are NOT section copy
+        // proposals — they need a different storage path.
+        // Option: use `logEvent` + `mergeSessionMeta` for all issues (warnings are
+        // surfaced via situation directive), OR extend proposal system with a
+        // generic proposal table in a pre-requisite migration.
+        // Chosen approach: store coherence warnings in session metadata (like infos)
+        // and flag them for the ProposalBanner via a dedicated `coherenceWarnings`
+        // key. This avoids coupling to the section_copy_proposals schema.
         const warnings = issues.filter(i => i.severity === "warning");
-        for (const issue of warnings) {
-          createProposal(ownerKey, {
-            type: "coherence",
-            description: issue.description,
-            suggestion: issue.suggestion,
-            affectedSections: issue.affectedSections,
-          }, `Coherence: ${issue.type}`);
+        if (warnings.length > 0) {
+          mergeSessionMeta(sessionId, { coherenceWarnings: warnings });
         }
         // Info issues → session metadata only (agent context, not user-facing)
         const infos = issues.filter(i => i.severity === "info");
@@ -2425,17 +2464,22 @@ Expected: FAIL
 
 **Step 3: Implement priority ordering**
 
-In `src/lib/services/section-personalizer.ts`, add archetype-based priority:
+In `src/lib/services/section-personalizer.ts`, add archetype-based priority.
+
+> **NOTE (R7-M8):** The existing personalizer exports `personalizeSection()` (singular, per-section). There is no `personalizeSections()` (plural) — the loop is in the caller (`generate_page` tool in tools.ts). The priority ordering must be applied in the **caller** (tools.ts), not in the per-section function. `ARCHETYPE_STRATEGIES` comes from Task 4 — if Task 4 defines them in `src/lib/agent/archetype.ts`, use that path.
+
+Add a reusable helper in `src/lib/services/section-personalizer.ts`:
 
 ```typescript
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetype"; // from Task 4
+import type { Section } from "@/lib/page-config/schema";
 
 /**
  * Reorder sections for personalization priority based on archetype.
  * Archetype-priority sections are processed first (more LLM budget),
  * remaining sections follow in original order.
  */
-function prioritizeSections(sections: Section[], archetype?: string): Section[] {
+export function prioritizeSections(sections: Section[], archetype?: string): Section[] {
   if (!archetype || archetype === "generalist") return sections;
   const strategy = ARCHETYPE_STRATEGIES[archetype as keyof typeof ARCHETYPE_STRATEGIES];
   if (!strategy) return sections;
@@ -2447,27 +2491,27 @@ function prioritizeSections(sections: Section[], archetype?: string): Section[] 
 }
 ```
 
-Wire in `personalizeSections()`:
+Wire in the caller (tools.ts `generate_page` tool), where the personalization loop iterates over sections:
 ```typescript
-export async function personalizeSections(
-  sections: Section[],
-  facts: FactRow[],
-  soul: Soul | null,
-  archetype?: string,  // new param
-): Promise<Section[]> {
-  const ordered = prioritizeSections(sections, archetype);
-  // ... existing personalization loop over `ordered` instead of `sections`
+// In generate_page, before the personalization fire-and-forget loop:
+const archetype = bootstrap?.archetype;
+const orderedSections = prioritizeSections(config.sections, archetype);
+// Then loop over `orderedSections` calling `personalizeSection()` for each
 }
 ```
 
 **Step 4: Wire in generate_page**
 
-In `src/lib/agent/tools.ts`, in the personalization fire-and-forget block:
+In `src/lib/agent/tools.ts`, in the personalization fire-and-forget block (the existing loop that calls `personalizeSection()` per section):
 ```typescript
-// existing: personalizeSections(config.sections, activeFacts, soul);
-// updated: pass archetype from bootstrap
+// Before personalization loop:
+import { prioritizeSections } from "@/lib/services/section-personalizer";
 const archetype = bootstrap?.archetype;
-personalizeSections(config.sections, activeFacts, soul, archetype);
+const orderedSections = prioritizeSections(config.sections, archetype);
+// Then iterate over orderedSections instead of config.sections
+for (const section of orderedSections) {
+  await personalizeSection({ section, ownerKey, language, publishableFacts, soulCompiled, username });
+}
 ```
 
 **Step 5: Run tests**
@@ -2498,24 +2542,23 @@ git commit -m "feat: archetype-weighted personalization priority (circuit B)"
 import { describe, it, expect, vi } from "vitest";
 
 describe("deep heartbeat coherence check", () => {
-  it("runs checkPageCoherence on latest draft and creates proposals for warnings", () => {
+  it("runs checkPageCoherence on latest draft and stores warnings in session metadata", () => {
     // setup: draft with role_mismatch (hero title ≠ experience role)
     // run deep heartbeat
-    // → createProposal called with type "coherence"
+    // → mergeSessionMeta called with coherenceWarnings
   });
 
   it("skips coherence check when no draft exists", () => {
     // no draft → checkPageCoherence NOT called
   });
 
-  it("does not duplicate proposals already created by generate_page (circuit D1)", () => {
-    // existing proposal for same coherence type+sections
-    // → heartbeat skips creating duplicate
+  it("resolves scope via resolveOwnerScopeForWorker before reading facts", () => {
+    // verify getActiveFacts called with scope.knowledgePrimaryKey, scope.knowledgeReadKeys
+    // NOT with ownerKey directly
   });
 
-  it("marks stale proposals before creating new ones", () => {
-    // old coherence proposals exist
-    // → markStaleProposals called first, then new proposals created
+  it("logs coherence_check event on warnings", () => {
+    // → logEvent called with eventType "coherence_check"
   });
 });
 ```
@@ -2530,28 +2573,33 @@ Expected: FAIL
 In `src/lib/worker/heartbeat.ts`, in `handleHeartbeatDeep()`, after the conformity check block:
 
 ```typescript
-// Circuit D2: coherence check → proposals
+// Circuit D2: coherence check → session metadata + event log
+// NOTE (R7-C1): proposal-service expects section_copy_proposals shape (CreateProposalInput).
+// Coherence issues use session metadata for agent context and logEvent for audit trail.
+// NOTE (R7-S5): resolve scope explicitly — heartbeat only has ownerKey, need readKeys.
+const scope = resolveOwnerScopeForWorker(ownerKey);
 const draft = getDraft(ownerKey);
 if (draft?.config) {
   const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;
-  const activeFacts = getActiveFacts(ownerKey, readKeys);
+  const activeFacts = getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
   const soulCompiled = getActiveSoul(ownerKey)?.compiled;
   const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], activeFacts, soulCompiled);
   const warnings = coherenceIssues.filter(i => i.severity === "warning");
   if (warnings.length > 0) {
-    // Mark old coherence proposals stale before creating new ones
-    markStaleProposals(ownerKey, "coherence");
-    for (const issue of warnings) {
-      createProposal(ownerKey, {
-        type: "coherence",
-        description: issue.description,
-        suggestion: issue.suggestion,
-        affectedSections: issue.affectedSections,
-      }, `Heartbeat coherence: ${issue.type}`);
-    }
+    // Store in session metadata (agent context for next conversation)
+    const anchorSession = scope.knowledgePrimaryKey;
+    mergeSessionMeta(anchorSession, { coherenceWarnings: warnings });
+
+    logEvent({
+      eventType: "coherence_check",
+      actor: "worker",
+      payload: { ownerKey, issues: coherenceIssues.length, warnings: warnings.length },
+    });
   }
 }
 ```
+
+> **Import:** Add `import { resolveOwnerScopeForWorker } from "@/lib/auth/session"` to heartbeat.ts.
 
 **Step 4: Run tests**
 
@@ -2629,13 +2677,35 @@ const journalDigest = buildJournalDigest(journal);
 const prompt = `Summarize this conversation...${journalDigest}`;
 ```
 
-Update `generateSummary` signature to accept optional journal:
+Update `generateSummary` signature to accept optional journal. Note the existing signature is `(ownerKey: string, messageKeys: string[])` — the journal is an additional parameter:
+
+> **NOTE (R7-S7): Data flow.** The journal lives in `sessions.metadata` (from Task 1b/13). The worker job `memory_summary` in `src/lib/worker/index.ts:30-34` calls `generateSummary(ownerKey, messageKeys)`. To get journal entries, the summary service reads `sessions.metadata.journal` from the DB for the session being summarized — it does NOT depend on the caller to provide journal data. This keeps the worker job unchanged.
+
 ```typescript
 export async function generateSummary(
-  messages: Message[],
-  journal?: JournalEntry[],  // from Task 13: getJournal()
-): Promise<string> {
+  ownerKey: string,
+  messageKeys: string[],
+): Promise<boolean> {
+  // ... existing code ...
+
+  // Circuit F1: read journal from session metadata (Task 1b provides getSessionMeta)
+  // Journal entries are per-session — aggregate from all messageKeys sessions
+  const journalEntries: JournalEntry[] = [];
+  for (const sessionKey of messageKeys) {
+    const meta = getSessionMeta(sessionKey);
+    if (meta?.journal && Array.isArray(meta.journal)) {
+      journalEntries.push(...(meta.journal as JournalEntry[]));
+    }
+  }
+  const journalDigest = buildJournalDigest(journalEntries);
+
+  // Append to prompt (existing prompt variable):
+  const fullPrompt = journalDigest
+    ? `${prompt}\n\n${journalDigest}`
+    : prompt;
 ```
+
+> **Dependency:** Requires Task 1b (`getSessionMeta`) and Task 13 (journal entries written to `sessions.metadata.journal`).
 
 **Step 4: Run tests**
 
@@ -2849,8 +2919,9 @@ describe("reverse_batch undo handler", () => {
     // → no error, no DB changes
   });
 
-  it("triggers recomposeAfterMutation after reverse", () => {
-    // → recomposeAfterMutation called once at the end
+  it("does NOT call recomposeAfterMutation (caller responsibility per R7-C2)", () => {
+    // → reverseTrustAction only does DB mutations
+    // → caller must trigger recompose after successful reversal
   });
 
   it("reverse is idempotent: second undo is a no-op", () => {
@@ -2901,12 +2972,14 @@ case "reverse_batch": {
     }
   })();
 
-  recomposeAfterMutation();
+  // NOTE (R7-C2): recomposeAfterMutation is NOT available here — it's a closure
+  // inside createAgentTools. The caller of reverseTrustAction must handle recompose.
   break;
 }
 ```
 
 > **Note:** `factsTable` alias (from R5-C4 fix) avoids collision with any local `facts` variable.
+> **Note (R7-C2):** Caller of `reverseTrustAction()` must trigger draft recomposition after a successful batch reversal. This is true for both `unarchive_fact` and `reverse_batch` undo handlers.
 
 **Step 4: Run tests**
 
@@ -3470,7 +3543,7 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 | 11 | L3 | Planning Protocol + memory directive (H) | — |
 | 12 | L3 | Archetype wiring + soul proposal (A) + weighted exploration (C) | T4, T1b |
 | 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b |
-| 14 | L4 | Page Coherence Check + soul-aware (I) + proposals (D1) | T1b |
+| 14 | L4 | Page Coherence Check + soul-aware (I) + session metadata (D1) | T1b |
 | 15 | L4 | has_archivable_facts directive | T2 |
 | 16 | L4 | TOOL_POLICY + DATA_MODEL_REFERENCE update (merge with 1814e4b prompts) | T8a, T8b, T9 |
 | 17 | L5 | Integration tests | All |
@@ -3495,8 +3568,8 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 | A | Archetype → Soul (propose initial soul) | T12 |
 | B | Archetype → Personalizer (weighted priority) | T19 |
 | C | Archetype × Richness → Dynamic Exploration | T12 |
-| D1 | Coherence → Proposals (in generate_page) | T14 |
-| D2 | Coherence → Proposals (in heartbeat) | T20 |
+| D1 | Coherence → Session Metadata (warnings + infos stored for agent context) | T14 |
+| D2 | Coherence → Session Metadata (heartbeat periodic check) | T20 |
 | E | Archive → Trust Ledger (reversible archival) | T8b |
 | F1 | Journal → Summaries (digest enrichment) | T21 |
 | F2 | Journal → Meta-memories (pattern detection) | T22 |
@@ -3535,7 +3608,7 @@ These are the highest-impact features: the enriched data model, batch operations
 | 6 | Parent-child grouping in composer — projects nested under parent experience |
 | 7, 9 | Slot carry-over + move_section — section position persistence across recompose, cross-slot movement |
 | 13 | Operation Journal — tool call tracking, resume on step exhaustion |
-| 14 | Page Coherence Check — deterministic + LLM hybrid + soul-aware (circuit I) + proposals (circuit D1) |
+| 14 | Page Coherence Check — deterministic + LLM hybrid + soul-aware (circuit I) + session metadata (circuit D1) |
 | 15 | `has_archivable_facts` directive — relevance-based archival suggestions |
 
 All v2.1 tasks rely on columns already created by migration 0022. No schema changes needed. Circuits A, C, I, and D1 are embedded in tasks already being written (12 and 14).
@@ -3545,7 +3618,7 @@ All v2.1 tasks rely on columns already created by migration 0022. No schema chan
 | Task | What it delivers |
 |------|------------------|
 | 19 | Archetype-weighted personalization priority (circuit B) — archetype drives LLM budget allocation |
-| 20 | Coherence check in deep heartbeat → proposals (circuit D2) — self-improvement loop |
+| 20 | Coherence check in deep heartbeat → session metadata (circuit D2) — self-improvement loop |
 | 21 | Journal enrichment in summaries (circuit F1) — summaries capture agent actions |
 | 22 | Journal pattern analysis → meta-memories (circuit F2) — agent learns from behavioral patterns |
 | 23 | reverse_batch undo handler (circuit G undo) — trust ledger can reverse batch operations |
@@ -3635,7 +3708,7 @@ These are pure optimizations. T26 is independent and can be done anytime (even b
 | R5-C4 | Critical | Task 15 `facts` symbol collision: local `facts` array in assembleBootstrapPayload shadows Drizzle table import. Alias as `factsTable`. | Task 15 |
 | R5-S1 | Significant | Constraint enforcement (CURRENT_UNIQUE_CATEGORIES) also needed in updateFact, not just createFact | Task 3, Step 5 |
 | R5-S2 | Significant | EXPECTED_SCHEMA_VERSION bump (18→22) added to Task 1 as new Step 2 | Task 1 |
-| R5-S3 | Significant | Task 10: groupSectionsBySlot only groups, doesn't validate. Use validateLayout() from quality.ts instead. | Task 10 |
+| R5-S3 | Significant | Task 10: groupSectionsBySlot only groups, doesn't validate. Use validateLayoutComposition() from quality.ts instead. | Task 10 |
 | R5-S4 | Significant | createAgentTools return shape change: grep all callers in src/ and tests/ to update | Task 13 |
 | R5-S5 | Significant | mergeSessionMeta read-modify-write race condition noted (safe for single-user SQLite, document for future) | Task 1b |
 | R5-M1 | Minor | Edge-case tests added: batch 0 ops, single op, archive idempotent, unarchive no-op, reorder 0/1 facts, move to same slot | Tasks 8a, 8b, 9 |
@@ -3648,8 +3721,8 @@ These are pure optimizations. T26 is independent and can be done anytime (even b
 | A | Archetype → Soul: propose initial soul when archetype detected and no soul exists | T12 |
 | B | Archetype → Personalizer: weighted section priority for LLM budget allocation | T19 (new) |
 | C | Archetype × Richness → Dynamic Exploration: replace static richnessBlock with archetype-driven priorities | T12 |
-| D1 | Coherence → Proposals: warning-severity issues become proposals (user-reviewable), not session.metadata | T14 |
-| D2 | Coherence in heartbeat → Proposals: deep heartbeat runs coherence check periodically | T20 (new) |
+| D1 | Coherence → Session Metadata: warning/info issues stored for agent context + situation directives (R7-C1 fix: proposal-service incompatible) | T14 |
+| D2 | Coherence in heartbeat → Session Metadata: deep heartbeat runs coherence check, stores in anchor session (R7-S5 fix: scope resolution) | T20 (new) |
 | E | Archive → Trust Ledger: reversible archival with undo handler | T8b |
 | F1 | Journal → Summaries: operation journal digest enriches conversation summaries | T21 (new) |
 | F2 | Journal → Meta-memories: pattern detection across sessions → behavioral meta-memories | T22 (new) |
@@ -3657,3 +3730,16 @@ These are pure optimizations. T26 is independent and can be done anytime (even b
 | G undo | Trust Ledger → reverse_batch: handler to execute batch reversal | T23 (new) |
 | H | Planning Protocol → Memory Tier 3: prompt directive to save strategies as meta-memories | T11 |
 | I | Coherence → Soul: soul-aware coherence checks (soulCompiled parameter) | T14 |
+
+**Round 7 — blocker fixes (8 issues):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R7-C1 | Critical | Coherence issues use `mergeSessionMeta` (coherenceWarnings/coherenceIssues keys), NOT `createProposal` — proposal-service expects `CreateProposalInput` with section_copy fields (sectionType, currentContent, proposedContent, hashes) incompatible with coherence shape | T14 Step 4, T20 Step 3 |
+| R7-C2 | Critical | `recomposeAfterMutation()` removed from trust-ledger undo handlers — it's a closure inside `createAgentTools()`, not importable. Caller of `reverseTrustAction()` handles recompose. | T8b Step 4, T23 Step 3 |
+| R7-C3 | Critical | `parentFactId` end-to-end write path: added to `CreateFactInput` type, `createFact()` insert, and `batch_facts` tool Zod schema. Without this, Task 6 grouping is dead code. | T1 Step 4, T8a Step 3 |
+| R7-S4 | Significant | `validateLayout()` → `validateLayoutComposition()` — the actual export name in `quality.ts:83` | T10 Step 2 |
+| R7-S5 | Significant | Heartbeat coherence: `readKeys` not in scope, `ownerKey` used as session key. Fixed: resolve scope via `resolveOwnerScopeForWorker(ownerKey)` before reading facts. | T20 Step 3 |
+| R7-S6 | Significant | Soul auto-proposal: added `getPendingProposals(ownerKey).length === 0` guard to prevent duplicate proposal on every message (assembleBootstrapPayload runs per message). | T12 Step 3 |
+| R7-S7 | Significant | Journal→summary: `generateSummary` reads journal from `sessions.metadata.journal` via `getSessionMeta()` internally, instead of depending on caller to pass journal data. Worker job stays unchanged. | T21 Step 3 |
+| R7-M8 | Minor | Task 19: `personalizeSection` is singular (per-section), not `personalizeSections`. `prioritizeSections()` is a new exported helper; ordering applied in the caller loop (tools.ts), not inside the per-section function. | T19 Step 3-4 |
