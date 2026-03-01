@@ -331,7 +331,7 @@ export async function POST(req: Request) {
         }
 
         // Enqueue summary generation (best-effort, non-blocking)
-        enqueueSummaryJob(effectiveScope.cognitiveOwnerKey);
+        enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys);
       },
     });
 
