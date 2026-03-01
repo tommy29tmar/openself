@@ -58,7 +58,9 @@ const TOOL_POLICY = `Tool usage rules:
 - Use propose_soul_change when you notice consistent patterns in voice/tone/values — the user must approve soul changes
 - Use resolve_conflict when you detect contradictory facts and can propose which to keep or how to merge them
 - Use set_fact_visibility to control which facts appear on the page: "proposed" = visible in preview, "private" = hidden. You cannot set "public" — only publishing does that
-- When the user shares 3 or more facts in one message, prefer batch_facts over multiple create_fact calls
+- When the user shares 3 or more facts in one message, prefer batch_facts over multiple create_fact calls. batch_facts runs operations sequentially — if one fails, earlier ones persist. Trust ledger provides undo for the entire batch.
+- Use reorder_items to change the order of items within a section (pass factIds in desired order). Not for composite sections: hero, bio, at-a-glance, footer.
+- Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal). When the user says "remove for now", "hide", or "I might add this back" → archive_fact.
 - Only create facts from information the user explicitly stated. Confidence 1.0 = stated directly, 0.7 = clearly implied from context. Do NOT create facts from your own assumptions, general knowledge, or inferences about what the user "might" like.
 
 When extracting facts:
@@ -113,6 +115,11 @@ Common mistakes to avoid:
 
 const DATA_MODEL_REFERENCE = `Data model quick reference:
 - Sections are AUTO-COMPOSED from facts. You never edit sections directly.
+
+Fact fields (beyond category/key/value):
+- sortOrder (integer, default 0): Controls item ordering within sections. Set via reorder_items tool. Lower values appear first.
+- parentFactId (text, nullable): Links child facts to parent facts (e.g., project → parent experience). Set on create_fact.
+- archivedAt (text, nullable): Soft-delete timestamp. Set via archive_fact/unarchive_fact. Archived facts are hidden from page and search.
 - The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
 - Available themes: ${"`"}minimal${"`"}, ${"`"}warm${"`"}, ${"`"}editorial-360${"`"}. Use set_theme with the exact name.
 - Valid layouts: vertical, sidebar-left (or "sidebar"), bento-standard (or "bento"). Use set_layout with any of these names.
