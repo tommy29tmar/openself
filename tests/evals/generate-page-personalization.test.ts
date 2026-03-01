@@ -98,6 +98,7 @@ vi.mock("@/lib/layout/lock-policy", () => ({
 }));
 vi.mock("@/lib/services/section-personalizer", () => ({
   personalizeSection: mockPersonalizeSection,
+  prioritizeSections: vi.fn((sections: unknown[]) => sections),
 }));
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: mockFilterPublishableFacts,
@@ -107,6 +108,10 @@ vi.mock("@/lib/services/personalization-impact", () => ({
 }));
 vi.mock("@/lib/services/personalization-hashing", () => ({
   computeHash: mockComputeHash,
+}));
+vi.mock("@/lib/services/session-metadata", () => ({
+  mergeSessionMeta: vi.fn(() => ({})),
+  getSessionMeta: vi.fn(() => ({})),
 }));
 
 import { createAgentTools } from "@/lib/agent/tools";

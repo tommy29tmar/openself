@@ -43,7 +43,7 @@ import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import { updateJourneyStatePin } from "@/lib/agent/journey";
 import { checkPageCoherence } from "@/lib/services/coherence-check";
-import { mergeSessionMeta } from "@/lib/services/session-metadata";
+import { mergeSessionMeta, getSessionMeta } from "@/lib/services/session-metadata";
 import type { JournalEntry } from "@/lib/services/session-metadata";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
