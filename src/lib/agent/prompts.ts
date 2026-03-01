@@ -120,6 +120,7 @@ Fact fields (beyond category/key/value):
 - sortOrder (integer, default 0): Controls item ordering within sections. Set via reorder_items tool. Lower values appear first.
 - parentFactId (text, nullable): Links child facts to parent facts (e.g., project → parent experience). Set on create_fact.
 - archivedAt (text, nullable): Soft-delete timestamp. Set via archive_fact/unarchive_fact. Archived facts are hidden from page and search.
+
 - The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
 - Available themes: ${"`"}minimal${"`"}, ${"`"}warm${"`"}, ${"`"}editorial-360${"`"}. Use set_theme with the exact name.
 - Valid layouts: vertical, sidebar-left (or "sidebar"), bento-standard (or "bento"). Use set_layout with any of these names.

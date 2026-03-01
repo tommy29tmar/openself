@@ -10,7 +10,7 @@ import { facts, sessions, page, agentConfig } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { createAgentTools } from "@/lib/agent/tools";
-import { createFact, getActiveFacts } from "@/lib/services/kb-service";
+import { getActiveFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
 
 const sessionId = "test-intv2-" + randomUUID().slice(0, 8);
