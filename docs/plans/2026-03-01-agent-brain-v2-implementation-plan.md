@@ -18,20 +18,26 @@
 
 ## Layer 0: Prerequisites
 
-### Task 1: Migration 0019 — Smart Facts Schema
+### Task 1: Migration 0022 — Smart Facts v2 Schema
 
 **Files:**
-- Create: `db/migrations/0019_smart_facts.sql`
-- Modify: `src/lib/db/schema.ts:70-87` (facts table) and `src/lib/db/schema.ts:57-68` (sessions table)
+- Create: `db/migrations/0022_smart_facts_v2.sql`
+- Modify: `src/lib/db/schema.ts` (facts table + sessions table)
 - Modify: `src/lib/services/kb-service.ts:62-72` (FactRow type)
 - Test: `tests/evals/smart-facts-schema.test.ts`
 
+> **C1 (post-1814e4b):** Migrations 0019-0021 already exist. This migration is numbered 0022.
+>
+> **C2 (post-1814e4b):** `sort_order` column already exists on `facts` (added by migration 0021 as nullable `INTEGER DEFAULT 0`). Do NOT add it again. The `sortOrder` Drizzle field already exists from commit 1814e4b.
+>
+> **S2 (post-1814e4b):** FactRow type is already out of sync — `sortOrder` is in the DB schema but missing from the FactRow type. This task fixes that gap AND adds the new fields.
+
 **Step 1: Write the migration**
 
-Create `db/migrations/0019_smart_facts.sql`:
+Create `db/migrations/0022_smart_facts_v2.sql`:
 
 ```sql
-ALTER TABLE facts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+-- sort_order already exists from migration 0021. Only add new columns.
 ALTER TABLE facts ADD COLUMN parent_fact_id TEXT;
 ALTER TABLE facts ADD COLUMN archived_at TEXT;
 
@@ -43,15 +49,15 @@ CREATE INDEX idx_facts_active ON facts(archived_at) WHERE archived_at IS NULL;
 
 **Step 2: Update Drizzle schema**
 
-In `src/lib/db/schema.ts`, add to the `facts` table definition (around line 70-87):
+In `src/lib/db/schema.ts`, add to the `facts` table definition (`sortOrder` should already be present from 1814e4b — verify):
 
 ```typescript
-sortOrder: integer("sort_order").notNull().default(0),
+// sortOrder: integer("sort_order").default(0),  ← already exists from 1814e4b, verify present
 parentFactId: text("parent_fact_id"),
 archivedAt: text("archived_at"),
 ```
 
-In `src/lib/db/schema.ts`, add to the `sessions` table definition (around line 57-68):
+In `src/lib/db/schema.ts`, add to the `sessions` table definition:
 
 ```typescript
 metadata: text("metadata").notNull().default("{}"),
@@ -59,7 +65,7 @@ metadata: text("metadata").notNull().default("{}"),
 
 **Step 3: Update FactRow type**
 
-In `src/lib/services/kb-service.ts:62-72`, update:
+In `src/lib/services/kb-service.ts:62-72`, update to include ALL fields (fixing the existing sortOrder gap + adding new fields):
 
 ```typescript
 export type FactRow = {
@@ -70,7 +76,7 @@ export type FactRow = {
   source: string | null;
   confidence: number | null;
   visibility: string | null;
-  sortOrder: number;
+  sortOrder: number | null;    // nullable in DB (migration 0021 used DEFAULT 0 without NOT NULL)
   parentFactId: string | null;
   archivedAt: string | null;
   createdAt: string | null;
@@ -78,13 +84,17 @@ export type FactRow = {
 };
 ```
 
+> Note: `sortOrder` is `number | null` because migration 0021 created it as nullable. In practice, `getNextSortOrder()` populates it on create, so values are always non-null. Use `?? 0` fallback where needed.
+
 **Step 4: Write schema test**
 
 ```typescript
 // tests/evals/smart-facts-schema.test.ts
 import { describe, it, expect } from "vitest";
-// Test that migration runs and columns exist
-// Test defaults: sort_order=0, parent_fact_id=null, archived_at=null, metadata='{}'
+// Test that migration runs and new columns exist (parent_fact_id, archived_at, sessions.metadata)
+// Test defaults: parent_fact_id=null, archived_at=null, metadata='{}'
+// Test that sort_order (pre-existing from 0021) still works
+// Test FactRow includes sortOrder, parentFactId, archivedAt
 ```
 
 **Step 5: Run tests**
@@ -95,8 +105,8 @@ Expected: PASS
 **Step 6: Commit**
 
 ```bash
-git add db/migrations/0019_smart_facts.sql src/lib/db/schema.ts src/lib/services/kb-service.ts tests/evals/smart-facts-schema.test.ts
-git commit -m "feat: migration 0019 — sortOrder, parentFactId, archivedAt, sessions.metadata"
+git add db/migrations/0022_smart_facts_v2.sql src/lib/db/schema.ts src/lib/services/kb-service.ts tests/evals/smart-facts-schema.test.ts
+git commit -m "feat: migration 0022 — parentFactId, archivedAt, sessions.metadata + fix FactRow type gap"
 ```
 
 ---
@@ -569,6 +579,8 @@ git commit -m "feat: archetype detection — 8 archetypes, multilingual regex, s
 - Modify: `src/lib/services/page-composer.ts` (build*Section functions)
 - Test: `tests/evals/composer-sort-order.test.ts`
 
+> **S3 (post-1814e4b):** `getAllFacts()` already ORDER BY sort_order ASC, created_at ASC (from commit 1814e4b). The `sortFacts()` helper added here is defense-in-depth for code paths that construct fact arrays manually (e.g., filtered subsets, tests). It does not duplicate the DB ordering — it ensures correctness regardless of fact source.
+
 **Step 1: Write failing tests**
 
 ```typescript
@@ -900,11 +912,14 @@ git commit -m "feat: slot carry-over — soft-pin in assignSlotsFromFacts + proj
 
 ---
 
-### Task 8a: batch_facts Tool
+### Task 8a: batch_facts Tool (replaces create_facts)
 
 **Files:**
-- Modify: `src/lib/agent/tools.ts:36+` (add batch_facts tool + FactConstraintError handling in create/update)
+- Modify: `src/lib/agent/tools.ts:36+` (add batch_facts, DELETE create_facts, + FactConstraintError handling in create/update)
+- Delete: `tests/evals/batch-create-facts.test.ts` (269 lines — replaced by batch-facts-tool.test.ts)
 - Test: `tests/evals/batch-facts-tool.test.ts`
+
+> **C3 (post-1814e4b):** `create_facts` tool exists from commit 1814e4b (create-only, non-atomic, partial success). `batch_facts` is architecturally superior (create+update+delete, all-or-nothing transaction). **batch_facts REPLACES create_facts.** Remove `create_facts` from tools.ts entirely — having both would confuse the LLM.
 
 **Step 1: Write failing tests**
 
@@ -1036,12 +1051,16 @@ git commit -m "feat: batch_facts tool — atomic multi-operation with single rec
 
 ---
 
-### Task 8b: archive_fact, unarchive_fact, reorder_items Tools
+### Task 8b: archive_fact, unarchive_fact, reorder_items Tools (reorder_items replaces reorder_section_items)
 
 **Files:**
-- Modify: `src/lib/agent/tools.ts` (add 3 tools)
+- Modify: `src/lib/agent/tools.ts` (add 3 tools, DELETE reorder_section_items)
+- Modify: `src/lib/services/kb-service.ts` (DELETE updateFactSortOrder — reorder_items uses factId-based updates, not key-based)
+- Delete: `tests/evals/item-reorder.test.ts` (252 lines — replaced by reorder-items-tool.test.ts)
 - Test: `tests/evals/archive-fact-tool.test.ts`
 - Test: `tests/evals/reorder-items-tool.test.ts`
+
+> **C4 (post-1814e4b):** `reorder_section_items` tool exists from commit 1814e4b (category+orderedKeys, no composite section guard). `reorder_items` adds guards and uses factIds instead of keys. **reorder_items REPLACES reorder_section_items.** Remove `reorder_section_items` from tools.ts and `updateFactSortOrder()` from kb-service.ts.
 
 **Step 1: Write failing tests for archive/unarchive**
 
@@ -1236,12 +1255,14 @@ git commit -m "feat: move_section tool — cross-slot section movement with auto
 
 ---
 
-### Task 10: Fix reorder_sections + maxSteps → 8
+### Task 10: Fix reorder_sections + maxSteps 10 → 8
 
 **Files:**
 - Modify: `src/lib/agent/tools.ts` (reorder_sections, around line 331-365)
 - Modify: `src/app/api/chat/route.ts:259` (maxSteps)
 - Test: `tests/evals/reorder-sections-fix.test.ts`
+
+> **S1 (post-1814e4b):** maxSteps is currently 10 (changed from 5 in commit 1814e4b). With `batch_facts` replacing individual calls, 8 is sufficient — 10 was needed without batch but is now excessive (doubles worst-case LLM cost for marginal benefit). Reduce 10 → 8.
 
 **Step 1: Write failing test**
 
@@ -1261,7 +1282,7 @@ describe("reorder_sections — slot validation", () => {
 
 In `src/lib/agent/tools.ts`, the `reorder_sections` tool: after reordering the array, call `groupSectionsBySlot()` to validate. If issues found, include as warnings in result (non-blocking).
 
-In `src/app/api/chat/route.ts:259`, change `maxSteps: 5` to `maxSteps: 8`.
+In `src/app/api/chat/route.ts:259`, change `maxSteps: 10` to `maxSteps: 8`.
 
 **Step 3: Run tests**
 
@@ -1760,6 +1781,8 @@ git commit -m "feat: has_archivable_facts situation — relevance-based archival
 - Modify: `src/lib/agent/prompts.ts` (DATA_MODEL_REFERENCE block — add sortOrder, parentFactId, archivedAt)
 - Test: `tests/evals/tool-policy-update.test.ts`
 
+> **M2 (post-1814e4b):** SAFETY_POLICY and TOOL_POLICY already contain additions from commit 1814e4b (anti-fabrication guards, visibility feedback guidance, `create_facts` reference, `reorder_section_items` reference, `pageVisible`/`recomposeOk` guidance). **Preserve** anti-fabrication guards and visibility feedback. **Remove** references to `create_facts` (replaced by `batch_facts`) and `reorder_section_items` (replaced by `reorder_items`). Do a careful manual merge.
+
 **Step 1: Write test**
 
 ```typescript
@@ -1894,28 +1917,44 @@ git commit -m "test: Agent Brain v2 integration tests — job change, move+recom
 - Multiple test files that reference `getAllFacts` → update to `getActiveFacts`
 - `tests/evals/action-awareness.test.ts` → DELETE (replaced by planning-protocol.test.ts)
 - `tests/evals/agent-auto-recompose.test.ts` → update for new FactRow shape
+- `tests/evals/batch-create-facts.test.ts` → DELETE (replaced by batch-facts-tool.test.ts in Task 8a)
+- `tests/evals/item-reorder.test.ts` → DELETE (replaced by reorder-items-tool.test.ts in Task 8b)
+- `tests/evals/journey-state-pin.test.ts` → VERIFY compatibility with sessions.metadata (these tests use the dedicated `journey_state` column, not metadata — they should still pass but verify)
 
-**Step 1: Find all test files importing getAllFacts**
+> **M1 (post-1814e4b):** Commit 1814e4b added 3 test files (batch-create-facts, item-reorder, journey-state-pin) totaling ~750 lines. The first two test tools that are being replaced. The third tests journey_state column caching which is orthogonal to sessions.metadata.
+
+**Step 1: Delete replaced test files**
+
+```bash
+rm tests/evals/batch-create-facts.test.ts tests/evals/item-reorder.test.ts
+```
+
+**Step 2: Find all test files importing getAllFacts**
 
 Run: `grep -r "getAllFacts" tests/`
 
-**Step 2: Update imports**
+**Step 3: Update imports**
 
 Replace `getAllFacts` with `getActiveFacts` in all test files (except any that explicitly test archived fact behavior).
 
-**Step 3: Delete action-awareness.test.ts**
+**Step 4: Delete action-awareness.test.ts**
 
 This test file tests `actionAwarenessPolicy()` which no longer exists.
 
-**Step 4: Run full suite**
+**Step 5: Verify journey-state-pin tests**
+
+Run: `npx vitest run tests/evals/journey-state-pin.test.ts`
+Expected: PASS (these test the dedicated `journey_state` column, not `sessions.metadata` — orthogonal)
+
+**Step 6: Run full suite**
 
 Run: `npx vitest run`
 Expected: ALL pass
 
-**Step 5: Commit**
+**Step 7: Commit**
 
 ```bash
-git commit -m "test: update existing tests for Smart Facts model — getActiveFacts, FactRow, planning protocol"
+git commit -m "test: update existing tests for Smart Facts model — getActiveFacts, FactRow, tool replacements"
 ```
 
 ---
@@ -1924,7 +1963,7 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 
 | Task | Layer | Description | Depends On |
 |------|-------|-------------|------------|
-| 1 | L0 | Migration 0019 + schema + FactRow | — |
+| 1 | L0 | Migration 0022 + schema + FactRow (fix sortOrder type gap) | — |
 | 1b | L0 | Session metadata helper (get/set/merge) | T1 |
 | 2 | L1 | Archived filtering + getActiveFacts | T1 |
 | 3 | L1 | FactConstraintError + current uniqueness + cascade warning | T1 |
@@ -1932,18 +1971,18 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | 5 | L2 | sortOrder in composer | T1 |
 | 6 | L2 | parentFactId grouping in composer | T1 |
 | 7 | L2 | Slot carry-over + soft-pin (single-run via composeOptimisticPage) | T1 |
-| 8a | L2 | batch_facts tool (kb-service direct calls, single recompose) | T2, T3 |
-| 8b | L2 | archive_fact, unarchive_fact, reorder_items tools | T2 |
+| 8a | L2 | batch_facts tool (REPLACES create_facts, kb-service direct, atomic) | T2, T3 |
+| 8b | L2 | archive_fact, unarchive_fact, reorder_items (REPLACES reorder_section_items) | T2 |
 | 9 | L3 | move_section tool | T7 |
-| 10 | L3 | Fix reorder_sections + maxSteps→8 | — |
+| 10 | L3 | Fix reorder_sections + maxSteps 10→8 | — |
 | 11 | L3 | Planning Protocol | — |
 | 12 | L3 | Archetype wiring | T4, T1b |
 | 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b |
 | 14 | L4 | Page Coherence Check | T1b |
 | 15 | L4 | has_archivable_facts directive | T2 |
-| 16 | L4 | TOOL_POLICY + DATA_MODEL_REFERENCE update | T8a, T8b, T9 |
+| 16 | L4 | TOOL_POLICY + DATA_MODEL_REFERENCE update (merge with 1814e4b prompts) | T8a, T8b, T9 |
 | 17 | L5 | Integration tests | All |
-| 18 | L5 | Update existing tests | All |
+| 18 | L5 | Update existing tests (delete replaced test files from 1814e4b) | All |
 
 **Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict.
 
@@ -1977,3 +2016,17 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | R2-M2 | Minor | refineArchetype() wired into assembleBootstrapPayload (was dead code) | Task 12 |
 | R2-M3 | Minor | childCounts pre-computed in caller, not in detectSituations (separation of concerns) | Task 15 |
 | R2-M4 | Minor | T10 removed from T13 dependencies (journal works with any maxSteps) | Summary table |
+
+**Round 3 — post-1814e4b reconciliation (9 fixes):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R3-C1 | Critical | Migration renamed 0019→0022 (0019-0021 already exist) | Task 1 |
+| R3-C2 | Critical | sort_order removed from migration SQL (already exists from 0021), FactRow sortOrder typed as `number \| null` | Task 1 |
+| R3-C3 | Critical | batch_facts REPLACES create_facts (delete create_facts tool + test file) | Task 8a |
+| R3-C4 | Critical | reorder_items REPLACES reorder_section_items (delete tool + updateFactSortOrder + test file) | Task 8b |
+| R3-S1 | Significant | maxSteps documented as 10→8 (was 5→8, commit changed to 10) | Task 10 |
+| R3-S2 | Significant | FactRow sortOrder type gap annotated (DB has it, type didn't) | Task 1 |
+| R3-S3 | Significant | sortFacts() annotated as defense-in-depth (DB already orders) | Task 5 |
+| R3-M1 | Minor | 3 test files from 1814e4b listed for deletion/verification in Task 18 | Task 18 |
+| R3-M2 | Minor | Prompt merge annotation: preserve anti-fabrication guards, remove create_facts/reorder_section_items refs | Task 16 |
