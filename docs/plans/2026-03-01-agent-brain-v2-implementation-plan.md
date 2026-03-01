@@ -1084,6 +1084,14 @@ batch_facts: tool({
         }
       })();
 
+      // Circuito G: Trust ledger — log batch with reverse payload
+      // reverseOps is built during the transaction: collect created factIds for
+      // delete, old values for update, old facts for re-create on delete.
+      logTrustAction(ownerKey, "batch_facts",
+        `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
+        { undoPayload: { action: "reverse_batch", reverseOps } },
+      );
+
       // Single recompose after entire batch
       recomposeAfterMutation();
 
@@ -1201,9 +1209,30 @@ Expected: FAIL
 
 In `src/lib/agent/tools.ts`:
 
-- `archive_fact`: `UPDATE facts SET archived_at = ? WHERE id = ?` + orphan cleanup + recompose
+- `archive_fact`: `UPDATE facts SET archived_at = ? WHERE id = ?` + orphan cleanup + recompose + trust ledger
 - `unarchive_fact`: `UPDATE facts SET archived_at = null WHERE id = ?` + recompose
 - `reorder_items`: `COMPOSITE_SECTIONS` guard, then `UPDATE facts SET sort_order = ? WHERE id = ?` in loop + recompose
+
+**Circuito E: archive_fact → Trust Ledger**
+
+After the archive UPDATE, log to trust ledger with undo payload:
+
+```typescript
+// In archive_fact, after UPDATE and orphan cleanup:
+logTrustAction(ownerKey, "archive_fact", `Archived fact ${factId}`, {
+  undoPayload: { action: "unarchive_fact", factId },
+});
+```
+
+In `src/lib/services/trust-ledger-service.ts`, add undo handler for `unarchive_fact`:
+
+```typescript
+// In executeUndo inside reverseTrustAction:
+case "unarchive_fact":
+  db.update(facts).set({ archivedAt: null }).where(eq(facts.id, payload.factId)).run();
+  recomposeAfterMutation();
+  break;
+```
 
 > **Architecture note (R5-M2):** `reorder_items` currently writes dense ranks (0, 1, 2, ...). A future optimization could use spaced ranks (0, 1000, 2000, ...) to allow single-row inserts between items without rewriting all sortOrders. Not needed now — the current approach is simpler and reorder_items already rewrites all ranks in the array. Consider spaced ranks if insert-between becomes a hot path.
 
@@ -1452,6 +1481,17 @@ describe("Planning Protocol", () => {
 
 Create `src/lib/agent/policies/planning-protocol.ts` with the Planning Protocol text from the design doc (Section 3A).
 
+**Circuito H: Planning Protocol → Memory Tier 3.** Append to the protocol text:
+
+```
+After completing a COMPOUND or STRUCTURAL operation:
+- Use save_memory to record the strategy and outcome
+- Example: "User asked to reorganize projects by date. Used batch_facts to reorder + archive 2 old projects. Outcome: cleaner projects section."
+- This helps you learn which approaches work for this user.
+```
+
+This is prompt text only (~5 lines), zero code. The agent learns to persist its own strategies.
+
 Delete `src/lib/agent/policies/action-awareness.ts`.
 
 Update `src/lib/agent/prompts.ts:277-333`: in `buildSystemPrompt()`, replace `actionAwarenessPolicy` import (line 11) and call with `planningProtocol` from the new module.
@@ -1512,6 +1552,21 @@ describe("archetype in bootstrap payload", () => {
   });
 });
 
+describe("archetype → soul proposal (circuito A)", () => {
+  it("proposes initial soul when no soul exists and archetype is not generalist", () => {
+    // no soul profile, archetype = "developer"
+    // → proposeSoulChange called with toneHint + communicationStyle
+  });
+
+  it("does NOT propose soul when one already exists", () => {
+    // existing soul profile → proposeSoulChange NOT called
+  });
+
+  it("does NOT propose soul for generalist archetype", () => {
+    // archetype = "generalist" → no proposal (too generic)
+  });
+});
+
 describe("archetype context injection", () => {
   it("injects archetype block in onboarding mode", () => {
     // assembleContext in onboarding mode → systemPrompt contains "ARCHETYPE:"
@@ -1521,8 +1576,13 @@ describe("archetype context injection", () => {
     // assembleContext in steady_state → no "ARCHETYPE:" in systemPrompt
   });
 
-  it("includes exploration order and coverage", () => {
-    // archetype block should show which areas are explored vs empty
+  it("uses archetype-weighted exploration priorities (circuito C)", () => {
+    // developer archetype, projects: empty, skills: thin
+    // → prompt contains "EXPLORATION PRIORITIES" with projects before skills
+  });
+
+  it("includes richness classification per exploration category", () => {
+    // each priority line should show empty/thin/adequate
   });
 });
 ```
@@ -1540,9 +1600,45 @@ Expected: FAIL
    - Save to session metadata via `mergeSessionMeta(sessionId, { archetype })` (from Task 1b)
    - Return archetype in payload
 
-2. `src/lib/agent/context.ts`: in `assembleContext()`, if mode is onboarding/returning_no_page and bootstrap has archetype, build archetype context block (~150 tokens) with explorationOrder, toneHint, and coverage (which categories have facts vs empty).
+2. **Circuito A: Archetype → Soul.** In `assembleBootstrapPayload`, after archetype detection:
 
-3. `src/app/api/chat/route.ts`: extract last user message text from `messages` array, pass to `assembleBootstrapPayload()`.
+```typescript
+// Propose initial soul from archetype when no soul exists
+const soul = getActiveSoul(ownerKey);
+if (!soul && archetype !== "generalist") {
+  const strategy = ARCHETYPE_STRATEGIES[archetype];
+  proposeSoulChange(ownerKey, {
+    tone: strategy.toneHint,
+    communicationStyle: strategy.communicationStyle, // NEW field in ARCHETYPE_STRATEGIES
+  }, `Auto-suggested from detected archetype: ${archetype}`);
+}
+```
+
+> Requires adding `communicationStyle: string` to each entry in `ARCHETYPE_STRATEGIES` (Task 4). Examples: developer → "technical, concrete", designer → "visual, evocative", academic → "precise, nuanced".
+
+3. **Circuito C: Archetype × Richness → Weighted Exploration.** In `src/lib/agent/context.ts`, replace the static richnessBlock with archetype-weighted exploration priorities:
+
+```typescript
+// BEFORE (static):
+// "SECTION RICHNESS: skills: thin, projects: empty, experience: rich"
+
+// AFTER (archetype-weighted):
+const archetype = bootstrap?.archetype ?? "generalist";
+const strategy = ARCHETYPE_STRATEGIES[archetype];
+const weighted = strategy.explorationOrder
+  .map(category => ({ category, richness: classifySectionRichness(publishable, category) }))
+  .filter(x => x.richness !== "rich");
+
+// Output format:
+// "EXPLORATION PRIORITIES (developer profile):
+//  1. projects: empty ← central to a developer's identity
+//  2. skills: thin ← explore specific technologies
+//  3. experience: adequate"
+```
+
+This replaces the existing richnessBlock in `assembleContext()`. The exploration order comes from the archetype strategy, not a static list.
+
+4. `src/app/api/chat/route.ts`: extract last user message text from `messages` array, pass to `assembleBootstrapPayload()`.
 
 **Step 4: Run tests**
 
@@ -1654,6 +1750,8 @@ git commit -m "feat: operation journal — tool call tracking + resume on step e
 
 ### Task 14: Page Coherence Check
 
+> **Integration circuits:** I (soul-aware coherence), D1 (coherence issues → proposals instead of session.metadata)
+
 **Files:**
 - Create: `src/lib/services/coherence-check.ts`
 - Modify: `src/lib/agent/tools.ts` (wire into generate_page)
@@ -1667,6 +1765,7 @@ git commit -m "feat: operation journal — tool call tracking + resume on step e
 // tests/evals/coherence-check.test.ts
 import { describe, it, expect } from "vitest";
 import { checkPageCoherence, quickCoherenceCheck, type CoherenceIssue } from "@/lib/services/coherence-check";
+import type { FactRow } from "@/lib/services/kb-service";
 
 describe("quickCoherenceCheck — deterministic", () => {
   it("detects timeline_overlap: two current experiences with overlapping dates", () => {
@@ -1730,6 +1829,25 @@ describe("checkPageCoherence — hybrid", () => {
 
   it("deduplicates issues from deterministic + LLM by type+affectedSections", () => {
     // both layers find role_mismatch for same sections → keep one
+  });
+
+  it("passes soulCompiled to LLM prompt when provided (circuit I)", () => {
+    // soul tone="professional" → coherence check considers tone alignment
+    // mock generateObject, verify prompt includes soul context
+  });
+
+  it("works without soulCompiled (backward compat)", () => {
+    // checkPageCoherence(sections, facts) without 3rd arg → no error
+  });
+});
+
+describe("coherence → proposals integration (circuit D1)", () => {
+  it("warning-severity issues create proposals instead of session.metadata", () => {
+    // verify createProposal() called for each warning-severity issue
+  });
+
+  it("info-severity issues stored in session.metadata only (not proposals)", () => {
+    // verify mergeSessionMeta called, createProposal NOT called for info issues
   });
 });
 
@@ -1873,7 +1991,7 @@ const coherenceSchema = z.object({
  *   (Pages with 3-4 sections rarely have nuanced cross-section issues worth an LLM call.)
  * - Deduplicates results by type+affectedSections. Cap: 3 issues total.
  */
-export async function checkPageCoherence(sections: Section[], facts: FactRow[]): Promise<CoherenceIssue[]> {
+export async function checkPageCoherence(sections: Section[], facts: FactRow[], soulCompiled?: string): Promise<CoherenceIssue[]> {
   const contentSections = sections.filter(s => s.type !== "hero" && s.type !== "footer" && Object.keys(s.content).length > 0);
   if (contentSections.length < 3) return [];
 
@@ -1886,10 +2004,11 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[]):
   // Phase 2: LLM only for richer pages (≥5 content sections)
   if (contentSections.length < 5) return deterministicIssues;
 
+  // Circuit I: pass soul context so LLM can check tone/style coherence
   const { object } = await generateObject({
     model: getModel(),
     schema: coherenceSchema,
-    prompt: buildCoherencePrompt(sections),
+    prompt: buildCoherencePrompt(sections, soulCompiled),
   });
 
   // Force severity rules on LLM output
@@ -1915,17 +2034,35 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[]):
 
 **Step 4: Wire into generate_page**
 
-In `src/lib/agent/tools.ts`, in the `generate_page` tool execute, after the personalization fire-and-forget block: add another fire-and-forget for coherence. Note: `checkPageCoherence` now requires both sections and facts:
+In `src/lib/agent/tools.ts`, in the `generate_page` tool execute, after the personalization fire-and-forget block: add another fire-and-forget for coherence.
+
+> **Circuit I:** Pass soul context to `checkPageCoherence` so LLM can detect tone/style misalignment.
+> **Circuit D1:** Warning-severity issues become proposals (user-reviewable), not session.metadata. Info-severity issues still go to session.metadata for agent context only.
 
 ```typescript
 if (mode === "steady_state") {
   (async () => {
     try {
       const activeFacts = getActiveFacts(sessionId, readKeys);
-      const issues = await checkPageCoherence(config.sections, activeFacts);
+      // Circuit I: pass compiled soul for tone-aware coherence
+      const soulCompiled = getActiveSoul(ownerKey)?.compiled;
+      const issues = await checkPageCoherence(config.sections, activeFacts, soulCompiled);
       if (issues.length > 0) {
-        // Save to session metadata (via Task 1b helper)
-        mergeSessionMeta(sessionId, { coherenceIssues: issues });
+        // Circuit D1: warning issues → proposals (user-visible, reviewable)
+        const warnings = issues.filter(i => i.severity === "warning");
+        for (const issue of warnings) {
+          createProposal(ownerKey, {
+            type: "coherence",
+            description: issue.description,
+            suggestion: issue.suggestion,
+            affectedSections: issue.affectedSections,
+          }, `Coherence: ${issue.type}`);
+        }
+        // Info issues → session metadata only (agent context, not user-facing)
+        const infos = issues.filter(i => i.severity === "info");
+        if (infos.length > 0) {
+          mergeSessionMeta(sessionId, { coherenceIssues: infos });
+        }
       }
     } catch (err) {
       console.error("[generate_page] coherence check error:", err);
@@ -2237,6 +2374,553 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 
 ---
 
+## Layer 5b: Integration Circuits
+
+> Tasks 19-23 close feedback loops between new v2 systems and existing Phase 1 infrastructure.
+> These are the "connective tissue" that makes the agent truly learn from its own behavior.
+
+### Task 19: Archetype-Weighted Personalization Priority (Circuit B)
+
+> **Circuit B:** Archetype drives personalization priority — "developer" prioritizes projects/skills, "creative" prioritizes portfolio/interests.
+
+**Files:**
+- Modify: `src/lib/services/section-personalizer.ts` (priority ordering)
+- Modify: `src/lib/agent/tools.ts` (pass archetype to personalizeSections in generate_page)
+- Test: `tests/evals/archetype-personalization.test.ts`
+
+**Step 1: Write failing test**
+
+```typescript
+// tests/evals/archetype-personalization.test.ts
+import { describe, it, expect } from "vitest";
+
+describe("archetype-weighted personalization", () => {
+  it("developer archetype prioritizes projects and skills sections", () => {
+    // archetype = "developer"
+    // → personalizeSections receives priority order: ["projects", "skills", "experience", ...]
+    // → first sections personalized are projects + skills
+  });
+
+  it("creative archetype prioritizes interests and portfolio sections", () => {
+    // archetype = "creative"
+    // → priority order: ["interests", "projects", "skills", ...]
+  });
+
+  it("generalist uses default section order (no reordering)", () => {
+    // archetype = "generalist" or undefined
+    // → sections processed in original order
+  });
+
+  it("priority only affects personalization order, not page layout", () => {
+    // archetype reorders personalization calls, NOT section positions
+    // → page layout unchanged
+  });
+});
+```
+
+**Step 2: Run test to verify fail**
+
+Run: `npx vitest run tests/evals/archetype-personalization.test.ts`
+Expected: FAIL
+
+**Step 3: Implement priority ordering**
+
+In `src/lib/services/section-personalizer.ts`, add archetype-based priority:
+
+```typescript
+import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetype"; // from Task 4
+
+/**
+ * Reorder sections for personalization priority based on archetype.
+ * Archetype-priority sections are processed first (more LLM budget),
+ * remaining sections follow in original order.
+ */
+function prioritizeSections(sections: Section[], archetype?: string): Section[] {
+  if (!archetype || archetype === "generalist") return sections;
+  const strategy = ARCHETYPE_STRATEGIES[archetype as keyof typeof ARCHETYPE_STRATEGIES];
+  if (!strategy) return sections;
+
+  const priorityTypes = new Set(strategy.explorationOrder);
+  const priority = sections.filter(s => priorityTypes.has(s.type));
+  const rest = sections.filter(s => !priorityTypes.has(s.type));
+  return [...priority, ...rest];
+}
+```
+
+Wire in `personalizeSections()`:
+```typescript
+export async function personalizeSections(
+  sections: Section[],
+  facts: FactRow[],
+  soul: Soul | null,
+  archetype?: string,  // new param
+): Promise<Section[]> {
+  const ordered = prioritizeSections(sections, archetype);
+  // ... existing personalization loop over `ordered` instead of `sections`
+}
+```
+
+**Step 4: Wire in generate_page**
+
+In `src/lib/agent/tools.ts`, in the personalization fire-and-forget block:
+```typescript
+// existing: personalizeSections(config.sections, activeFacts, soul);
+// updated: pass archetype from bootstrap
+const archetype = bootstrap?.archetype;
+personalizeSections(config.sections, activeFacts, soul, archetype);
+```
+
+**Step 5: Run tests**
+
+Run: `npx vitest run tests/evals/archetype-personalization.test.ts`
+Expected: PASS
+
+**Step 6: Commit**
+
+```bash
+git commit -m "feat: archetype-weighted personalization priority (circuit B)"
+```
+
+---
+
+### Task 20: Coherence Check in Deep Heartbeat → Proposals (Circuit D2)
+
+> **Circuit D2:** Deep heartbeat runs coherence check and creates proposals for the user to review. This is the "self-improvement" loop — the agent reflects on its own output periodically.
+
+**Files:**
+- Modify: `src/lib/worker/heartbeat.ts` (add coherence check to deep heartbeat)
+- Test: `tests/evals/heartbeat-coherence.test.ts`
+
+**Step 1: Write failing test**
+
+```typescript
+// tests/evals/heartbeat-coherence.test.ts
+import { describe, it, expect, vi } from "vitest";
+
+describe("deep heartbeat coherence check", () => {
+  it("runs checkPageCoherence on latest draft and creates proposals for warnings", () => {
+    // setup: draft with role_mismatch (hero title ≠ experience role)
+    // run deep heartbeat
+    // → createProposal called with type "coherence"
+  });
+
+  it("skips coherence check when no draft exists", () => {
+    // no draft → checkPageCoherence NOT called
+  });
+
+  it("does not duplicate proposals already created by generate_page (circuit D1)", () => {
+    // existing proposal for same coherence type+sections
+    // → heartbeat skips creating duplicate
+  });
+
+  it("marks stale proposals before creating new ones", () => {
+    // old coherence proposals exist
+    // → markStaleProposals called first, then new proposals created
+  });
+});
+```
+
+**Step 2: Run test to verify fail**
+
+Run: `npx vitest run tests/evals/heartbeat-coherence.test.ts`
+Expected: FAIL
+
+**Step 3: Implement coherence in deep heartbeat**
+
+In `src/lib/worker/heartbeat.ts`, in `handleHeartbeatDeep()`, after the conformity check block:
+
+```typescript
+// Circuit D2: coherence check → proposals
+const draft = getDraft(ownerKey);
+if (draft?.config) {
+  const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;
+  const activeFacts = getActiveFacts(ownerKey, readKeys);
+  const soulCompiled = getActiveSoul(ownerKey)?.compiled;
+  const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], activeFacts, soulCompiled);
+  const warnings = coherenceIssues.filter(i => i.severity === "warning");
+  if (warnings.length > 0) {
+    // Mark old coherence proposals stale before creating new ones
+    markStaleProposals(ownerKey, "coherence");
+    for (const issue of warnings) {
+      createProposal(ownerKey, {
+        type: "coherence",
+        description: issue.description,
+        suggestion: issue.suggestion,
+        affectedSections: issue.affectedSections,
+      }, `Heartbeat coherence: ${issue.type}`);
+    }
+  }
+}
+```
+
+**Step 4: Run tests**
+
+Run: `npx vitest run tests/evals/heartbeat-coherence.test.ts`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git commit -m "feat: coherence check in deep heartbeat → proposals (circuit D2)"
+```
+
+---
+
+### Task 21: Journal Enrichment in Summary Generation (Circuit F1)
+
+> **Circuit F1:** Operation journal entries feed into conversation summaries. When generateSummary runs, it includes a digest of recent tool operations so summaries capture what the agent *did*, not just what was said.
+
+**Files:**
+- Modify: `src/lib/services/summary-service.ts` (inject journal digest into summary prompt)
+- Test: `tests/evals/journal-summary.test.ts`
+
+**Step 1: Write failing test**
+
+```typescript
+// tests/evals/journal-summary.test.ts
+import { describe, it, expect } from "vitest";
+
+describe("journal enrichment in summaries", () => {
+  it("includes journal digest in summary when journal entries exist", () => {
+    // messages: user asked to update bio
+    // journal: [create_fact(identity/role), generate_page]
+    // → summary includes "Updated identity role and regenerated page"
+  });
+
+  it("omits journal section when no journal entries", () => {
+    // pure conversation, no tool calls
+    // → summary has no "Actions taken" section
+  });
+
+  it("journal digest is max 3 lines regardless of entry count", () => {
+    // 10 journal entries → digest compressed to 3 lines
+  });
+});
+```
+
+**Step 2: Run test to verify fail**
+
+Run: `npx vitest run tests/evals/journal-summary.test.ts`
+Expected: FAIL
+
+**Step 3: Implement journal digest injection**
+
+In `src/lib/services/summary-service.ts`, before the LLM call in `generateSummary()`:
+
+```typescript
+/**
+ * Compress journal entries into a max-3-line digest for summary enrichment.
+ */
+function buildJournalDigest(journal: JournalEntry[]): string {
+  if (journal.length === 0) return "";
+  // Group by tool name, count operations
+  const toolCounts = new Map<string, number>();
+  for (const entry of journal) {
+    toolCounts.set(entry.toolName, (toolCounts.get(entry.toolName) ?? 0) + 1);
+  }
+  const lines = Array.from(toolCounts.entries())
+    .map(([tool, count]) => `${tool}: ${count}x`)
+    .slice(0, 3);
+  return `\nActions taken in this conversation:\n${lines.join("\n")}`;
+}
+
+// In generateSummary(), append to the summary prompt:
+const journalDigest = buildJournalDigest(journal);
+const prompt = `Summarize this conversation...${journalDigest}`;
+```
+
+Update `generateSummary` signature to accept optional journal:
+```typescript
+export async function generateSummary(
+  messages: Message[],
+  journal?: JournalEntry[],  // from Task 13: getJournal()
+): Promise<string> {
+```
+
+**Step 4: Run tests**
+
+Run: `npx vitest run tests/evals/journal-summary.test.ts`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git commit -m "feat: journal digest in conversation summaries (circuit F1)"
+```
+
+---
+
+### Task 22: Journal Pattern Analysis → Meta-memories (Circuit F2)
+
+> **Circuit F2:** Deep heartbeat analyzes recent journal entries across conversations to detect behavioral patterns and saves them as meta-memories. This is the "intuition" loop — the agent learns from what it repeatedly does.
+
+**Files:**
+- Create: `src/lib/services/journal-patterns.ts`
+- Modify: `src/lib/worker/heartbeat.ts` (wire into deep heartbeat)
+- Test: `tests/evals/journal-patterns.test.ts`
+
+**Step 1: Write failing test**
+
+```typescript
+// tests/evals/journal-patterns.test.ts
+import { describe, it, expect } from "vitest";
+import { detectJournalPatterns, type JournalPattern } from "@/lib/services/journal-patterns";
+
+describe("detectJournalPatterns", () => {
+  it("detects repeated_tool: same tool called 5+ times across sessions", () => {
+    // 3 sessions, each with 2+ create_fact calls
+    // → pattern: { type: "repeated_tool", tool: "create_fact", frequency: 7 }
+  });
+
+  it("detects tool_sequence: same A→B pattern 3+ times", () => {
+    // pattern: create_fact → generate_page appears 3 times
+    // → { type: "tool_sequence", sequence: ["create_fact", "generate_page"], count: 3 }
+  });
+
+  it("detects correction_pattern: update immediately after create for same category", () => {
+    // create_fact(skills/x) → update_fact(skills/x) within same conversation, 2+ times
+    // → { type: "correction_pattern", category: "skills", suggestion: "Ask for confirmation before saving skills" }
+  });
+
+  it("returns max 2 patterns per analysis", () => {
+    // many patterns → capped at 2 most significant
+  });
+
+  it("returns empty when journal has <5 entries total", () => {
+    // too little data → no patterns
+  });
+});
+
+describe("journal patterns → meta-memories", () => {
+  it("saves detected patterns as meta-memories via saveMemory", () => {
+    // pattern detected → saveMemory called with type "behavioral_pattern"
+  });
+
+  it("deduplicates: does not save pattern if identical meta-memory exists", () => {
+    // same pattern already in meta-memories → skip
+  });
+});
+```
+
+**Step 2: Run test to verify fail**
+
+Run: `npx vitest run tests/evals/journal-patterns.test.ts`
+Expected: FAIL
+
+**Step 3: Implement detectJournalPatterns**
+
+Create `src/lib/services/journal-patterns.ts`:
+
+```typescript
+import type { JournalEntry } from "@/lib/services/session-metadata"; // from Task 1b/13
+
+export type JournalPattern = {
+  type: "repeated_tool" | "tool_sequence" | "correction_pattern";
+  description: string;
+  suggestion: string;
+  evidence: { tool?: string; sequence?: string[]; category?: string; frequency?: number };
+};
+
+/**
+ * Analyze journal entries across recent conversations to detect behavioral patterns.
+ * Deterministic — no LLM. Designed for deep heartbeat.
+ *
+ * @param entries Journal entries from multiple recent sessions
+ * @returns Max 2 most significant patterns
+ */
+export function detectJournalPatterns(entries: JournalEntry[]): JournalPattern[] {
+  if (entries.length < 5) return [];
+  const patterns: JournalPattern[] = [];
+
+  // 1. repeated_tool: same tool 5+ times
+  const toolCounts = new Map<string, number>();
+  for (const e of entries) {
+    toolCounts.set(e.toolName, (toolCounts.get(e.toolName) ?? 0) + 1);
+  }
+  for (const [tool, count] of toolCounts) {
+    if (count >= 5) {
+      patterns.push({
+        type: "repeated_tool",
+        description: `Tool "${tool}" called ${count} times across recent sessions`,
+        suggestion: `Consider batch operations or ask if the user wants to do multiple ${tool} ops at once.`,
+        evidence: { tool, frequency: count },
+      });
+    }
+  }
+
+  // 2. tool_sequence: A→B pattern 3+ times
+  const seqCounts = new Map<string, number>();
+  for (let i = 0; i < entries.length - 1; i++) {
+    const key = `${entries[i].toolName}→${entries[i + 1].toolName}`;
+    seqCounts.set(key, (seqCounts.get(key) ?? 0) + 1);
+  }
+  for (const [seq, count] of seqCounts) {
+    if (count >= 3) {
+      const [a, b] = seq.split("→");
+      patterns.push({
+        type: "tool_sequence",
+        description: `Sequence ${a} → ${b} repeated ${count} times`,
+        suggestion: `This is a common workflow. Consider combining these steps proactively.`,
+        evidence: { sequence: [a, b], frequency: count },
+      });
+    }
+  }
+
+  // 3. correction_pattern: create→update for same category within conversation
+  const corrections = new Map<string, number>();
+  for (let i = 0; i < entries.length - 1; i++) {
+    if (entries[i].toolName === "create_fact" && entries[i + 1].toolName === "update_fact") {
+      const cat = entries[i].args?.category ?? "unknown";
+      corrections.set(cat, (corrections.get(cat) ?? 0) + 1);
+    }
+  }
+  for (const [cat, count] of corrections) {
+    if (count >= 2) {
+      patterns.push({
+        type: "correction_pattern",
+        description: `Frequently corrects ${cat} facts right after creating them (${count}x)`,
+        suggestion: `Ask for confirmation before saving ${cat} facts.`,
+        evidence: { category: cat, frequency: count },
+      });
+    }
+  }
+
+  // Return top 2 by frequency
+  return patterns
+    .sort((a, b) => (b.evidence.frequency ?? 0) - (a.evidence.frequency ?? 0))
+    .slice(0, 2);
+}
+```
+
+**Step 4: Wire into deep heartbeat**
+
+In `src/lib/worker/heartbeat.ts`, in `handleHeartbeatDeep()`:
+
+```typescript
+// Circuit F2: journal patterns → meta-memories
+const recentJournals = getRecentJournalEntries(ownerKey, 5); // last 5 sessions
+const patterns = detectJournalPatterns(recentJournals);
+for (const pattern of patterns) {
+  saveMemory(ownerKey, {
+    type: "behavioral_pattern",
+    content: `${pattern.description}. ${pattern.suggestion}`,
+    source: "journal_analysis",
+  });
+}
+```
+
+> **Note:** `getRecentJournalEntries` aggregates journal from `sessions.metadata` across the N most recent sessions for the owner. This is a simple SQL query joining sessions → parsing metadata → extracting journal arrays.
+
+**Step 5: Run tests**
+
+Run: `npx vitest run tests/evals/journal-patterns.test.ts`
+Expected: PASS
+
+**Step 6: Commit**
+
+```bash
+git commit -m "feat: journal pattern analysis → meta-memories (circuit F2)"
+```
+
+---
+
+### Task 23: reverse_batch Undo Handler (Circuit G Undo)
+
+> **Circuit G Undo:** Trust ledger can reverse batch_facts operations. Each batch stores reverseOps in undoPayload; this task implements the handler that executes them.
+
+**Files:**
+- Modify: `src/lib/services/trust-ledger-service.ts` (add reverse_batch case)
+- Test: `tests/evals/trust-ledger-batch.test.ts`
+
+**Step 1: Write failing test**
+
+```typescript
+// tests/evals/trust-ledger-batch.test.ts
+import { describe, it, expect } from "vitest";
+
+describe("reverse_batch undo handler", () => {
+  it("reverses a batch: deletes created facts, restores updated facts, recreates deleted facts", () => {
+    // batch created 2 facts, updated 1, deleted 1
+    // → reverse_batch: delete 2 created, restore 1 updated to old value, recreate 1 deleted
+  });
+
+  it("handles empty reverseOps gracefully", () => {
+    // undoPayload.reverseOps = []
+    // → no error, no DB changes
+  });
+
+  it("triggers recomposeAfterMutation after reverse", () => {
+    // → recomposeAfterMutation called once at the end
+  });
+
+  it("reverse is idempotent: second undo is a no-op", () => {
+    // undo twice → no error, same state
+  });
+});
+```
+
+**Step 2: Run test to verify fail**
+
+Run: `npx vitest run tests/evals/trust-ledger-batch.test.ts`
+Expected: FAIL
+
+**Step 3: Implement reverse_batch handler**
+
+In `src/lib/services/trust-ledger-service.ts`, in the `executeUndo` switch:
+
+```typescript
+case "reverse_batch": {
+  const reverseOps = payload.reverseOps as Array<{
+    action: "delete" | "restore" | "recreate";
+    factId: string;
+    previousValue?: unknown;
+    previousFact?: Record<string, unknown>;
+  }>;
+
+  db.transaction(() => {
+    for (const op of reverseOps) {
+      switch (op.action) {
+        case "delete":
+          // Undo a create → delete the created fact
+          db.delete(factsTable).where(eq(factsTable.id, op.factId)).run();
+          break;
+        case "restore":
+          // Undo an update → restore previous value
+          db.update(factsTable)
+            .set({ value: op.previousValue, updatedAt: new Date().toISOString() })
+            .where(eq(factsTable.id, op.factId))
+            .run();
+          break;
+        case "recreate":
+          // Undo a delete → re-insert the fact
+          if (op.previousFact) {
+            db.insert(factsTable).values(op.previousFact).onConflictDoNothing().run();
+          }
+          break;
+      }
+    }
+  })();
+
+  recomposeAfterMutation();
+  break;
+}
+```
+
+> **Note:** `factsTable` alias (from R5-C4 fix) avoids collision with any local `facts` variable.
+
+**Step 4: Run tests**
+
+Run: `npx vitest run tests/evals/trust-ledger-batch.test.ts`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git commit -m "feat: reverse_batch undo handler in trust ledger (circuit G undo)"
+```
+
+---
+
 ## Summary
 
 | Task | Layer | Description | Depends On |
@@ -2249,28 +2933,50 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | 5 | L2 | sortOrder in composer | T1 |
 | 6 | L2 | parentFactId grouping in composer | T1 |
 | 7 | L2 | Slot carry-over + soft-pin (single-run via composeOptimisticPage) | T1 |
-| 8a | L2 | batch_facts tool (REPLACES create_facts, kb-service direct, atomic) | T2, T3 |
-| 8b | L2 | archive_fact, unarchive_fact, reorder_items (REPLACES reorder_section_items) | T2 |
+| 8a | L2 | batch_facts tool (REPLACES create_facts, kb-service direct, atomic) + trust ledger (G) | T2, T3 |
+| 8b | L2 | archive_fact, unarchive_fact, reorder_items (REPLACES reorder_section_items) + trust ledger (E) | T2 |
 | 9 | L3 | move_section tool | T7 |
 | 10 | L3 | Fix reorder_sections + maxSteps 10→8 | — |
-| 11 | L3 | Planning Protocol | — |
-| 12 | L3 | Archetype wiring | T4, T1b |
+| 11 | L3 | Planning Protocol + memory directive (H) | — |
+| 12 | L3 | Archetype wiring + soul proposal (A) + weighted exploration (C) | T4, T1b |
 | 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b |
-| 14 | L4 | Page Coherence Check | T1b |
+| 14 | L4 | Page Coherence Check + soul-aware (I) + proposals (D1) | T1b |
 | 15 | L4 | has_archivable_facts directive | T2 |
 | 16 | L4 | TOOL_POLICY + DATA_MODEL_REFERENCE update (merge with 1814e4b prompts) | T8a, T8b, T9 |
 | 17 | L5 | Integration tests | All |
 | 18 | L5 | Update existing tests (delete replaced test files from 1814e4b) | All |
+| 19 | L5b | Archetype-weighted personalization priority (B) | T4, T12 |
+| 20 | L5b | Coherence check in deep heartbeat → proposals (D2) | T14 |
+| 21 | L5b | Journal enrichment in summaries (F1) | T13 |
+| 22 | L5b | Journal pattern analysis → meta-memories (F2) | T13 |
+| 23 | L5b | reverse_batch undo handler (G undo) | T8a |
 
 **Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict.
 
-**Estimated tests:** ~100 new + ~35 updated = ~1260 total (from 1151 current).
+**Estimated tests:** ~120 new + ~35 updated = ~1280 total (from 1151 current).
+
+**Integration circuit map:**
+
+| Circuit | What it connects | Task(s) |
+|---------|-----------------|---------|
+| A | Archetype → Soul (propose initial soul) | T12 |
+| B | Archetype → Personalizer (weighted priority) | T19 |
+| C | Archetype × Richness → Dynamic Exploration | T12 |
+| D1 | Coherence → Proposals (in generate_page) | T14 |
+| D2 | Coherence → Proposals (in heartbeat) | T20 |
+| E | Archive → Trust Ledger (reversible archival) | T8b |
+| F1 | Journal → Summaries (digest enrichment) | T21 |
+| F2 | Journal → Meta-memories (pattern detection) | T22 |
+| G | batch_facts → Trust Ledger (reversible batch) | T8a |
+| G undo | Trust Ledger → reverse_batch handler | T23 |
+| H | Planning Protocol → Memory Tier 3 | T11 |
+| I | Coherence → Soul (soul-aware checks) | T14 |
 
 ---
 
 ### Delivery Strategy
 
-Split implementation into two delivery scopes to reduce cumulative risk and ship core value sooner.
+Split implementation into three delivery scopes. The integration circuits (v2.2) form a separate scope because they connect v2 systems to existing Phase 1 infrastructure and benefit from stable foundations.
 
 **v2 core (11 tasks):** 1, 1b, 2, 3, 5, 8a, 8b, 11, 16, 17, 18
 
@@ -2280,33 +2986,46 @@ Split implementation into two delivery scopes to reduce cumulative risk and ship
 | 2 | Archived fact filtering — `getActiveFacts()` replaces `getAllFacts()` across codebase |
 | 3 | Constraint layer — CURRENT_UNIQUE_CATEGORIES enforcement in create + update, cascade warnings, orphan cleanup |
 | 5 | Sort order in composer — facts ordered by sortOrder ASC, createdAt ASC |
-| 8a | `batch_facts` tool — atomic multi-operation with single recompose (replaces `create_facts`) |
-| 8b | `archive_fact`, `unarchive_fact`, `reorder_items` tools (replaces `reorder_section_items`) |
-| 11 | Planning Protocol — SIMPLE/COMPOUND/STRUCTURAL classification (replaces `actionAwarenessPolicy`) |
+| 8a | `batch_facts` tool — atomic multi-operation with single recompose + trust ledger (circuit G) |
+| 8b | `archive_fact`, `unarchive_fact`, `reorder_items` tools + trust ledger (circuit E) |
+| 11 | Planning Protocol — SIMPLE/COMPOUND/STRUCTURAL classification + memory directive (circuit H) |
 | 16 | TOOL_POLICY + DATA_MODEL_REFERENCE updated for new tools and fact fields |
 | 17, 18 | Integration tests + existing test updates |
 
-These are the highest-impact features: the enriched data model, batch operations, archived facts, sort order, and the planning protocol. They have no forward dependencies on the deferred tasks — v2.1 features build on top of what v2 core delivers, never the reverse.
+These are the highest-impact features: the enriched data model, batch operations, archived facts, sort order, and the planning protocol. Integration circuits G, E, and H are embedded here because they're 5-15 lines each inside code already being written.
 
 **v2.1 (7 tasks):** 4, 6, 7, 9, 12, 13, 14, 15
 
 | Task | What it delivers |
 |------|------------------|
-| 4, 12 | Archetype detection + wiring — multilingual role classification, strategy templates, context injection |
+| 4, 12 | Archetype detection + wiring + soul proposal (circuit A) + weighted exploration (circuit C) |
 | 6 | Parent-child grouping in composer — projects nested under parent experience |
 | 7, 9 | Slot carry-over + move_section — section position persistence across recompose, cross-slot movement |
 | 13 | Operation Journal — tool call tracking, resume on step exhaustion |
-| 14 | Page Coherence Check — deterministic + LLM hybrid cross-section consistency validation |
+| 14 | Page Coherence Check — deterministic + LLM hybrid + soul-aware (circuit I) + proposals (circuit D1) |
 | 15 | `has_archivable_facts` directive — relevance-based archival suggestions |
 
-All v2.1 tasks rely on columns already created by migration 0022 (parentFactId, archivedAt, sessions.metadata). No schema changes needed — they can be implemented in a follow-up sprint without breaking changes or additional migrations.
+All v2.1 tasks rely on columns already created by migration 0022. No schema changes needed. Circuits A, C, I, and D1 are embedded in tasks already being written (12 and 14).
 
-**Why this split works:**
+**v2.2 — Integration Circuits (5 tasks):** 19, 20, 21, 22, 23
 
-1. **Risk reduction.** v2 core is 11 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features (archetype, coherence, journal) that are more experimental and benefit from running against a stabilized v2 core.
-2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful in conversation. Archetype detection and coherence checks are refinements that improve quality but aren't blocking.
-3. **Independent deployment.** v2.1 tasks have no schema migrations — they only add code. A v2.1 deployment is pure additive and can be rolled back without data loss.
-4. **Task 10 (reorder_sections fix + maxSteps 10→8)** fits either scope. Include in v2 core if touched during Task 8b work, or defer to v2.1 if the change is isolated.
+| Task | What it delivers |
+|------|------------------|
+| 19 | Archetype-weighted personalization priority (circuit B) — archetype drives LLM budget allocation |
+| 20 | Coherence check in deep heartbeat → proposals (circuit D2) — self-improvement loop |
+| 21 | Journal enrichment in summaries (circuit F1) — summaries capture agent actions |
+| 22 | Journal pattern analysis → meta-memories (circuit F2) — agent learns from behavioral patterns |
+| 23 | reverse_batch undo handler (circuit G undo) — trust ledger can reverse batch operations |
+
+These tasks close the remaining feedback loops. All are pure additive — no schema changes, no breaking changes. They depend on v2.1 tasks (T19→T12, T20→T14, T21/T22→T13, T23→T8a) but not on each other. Can be implemented in parallel within v2.2.
+
+**Why this three-tier split works:**
+
+1. **Risk reduction.** v2 core is 11 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features. v2.2 wires the feedback loops.
+2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful. Archetype and coherence are refinements. Integration circuits are the "agent learns" layer — highest ambition, lowest urgency.
+3. **Independent deployment.** Each scope is pure additive on the previous one. v2.2 tasks can be rolled back without data loss.
+4. **Embedded circuits.** 5 of 12 circuits (A, C, E, G, H, I, D1) are embedded in existing tasks because they're small enough. The remaining 5 (B, D2, F1, F2, G-undo) are standalone because they introduce new patterns.
+5. **Task 10 (reorder_sections fix + maxSteps 10→8)** fits either v2 core or v2.1 scope. Include in v2 core if touched during Task 8b work, or defer to v2.1 if the change is isolated.
 
 ---
 
@@ -2377,3 +3096,20 @@ All v2.1 tasks rely on columns already created by migration 0022 (parentFactId, 
 | R5-S5 | Significant | mergeSessionMeta read-modify-write race condition noted (safe for single-user SQLite, document for future) | Task 1b |
 | R5-M1 | Minor | Edge-case tests added: batch 0 ops, single op, archive idempotent, unarchive no-op, reorder 0/1 facts, move to same slot | Tasks 8a, 8b, 9 |
 | R5-M2 | Minor | Architecture note: spaced ranks for sortOrder as future optimization (not needed now) | Task 8b |
+
+**Round 6 — integration circuits (12 circuits across 10 tasks):**
+
+| Circuit | Description | Location |
+|---------|-------------|----------|
+| A | Archetype → Soul: propose initial soul when archetype detected and no soul exists | T12 |
+| B | Archetype → Personalizer: weighted section priority for LLM budget allocation | T19 (new) |
+| C | Archetype × Richness → Dynamic Exploration: replace static richnessBlock with archetype-driven priorities | T12 |
+| D1 | Coherence → Proposals: warning-severity issues become proposals (user-reviewable), not session.metadata | T14 |
+| D2 | Coherence in heartbeat → Proposals: deep heartbeat runs coherence check periodically | T20 (new) |
+| E | Archive → Trust Ledger: reversible archival with undo handler | T8b |
+| F1 | Journal → Summaries: operation journal digest enriches conversation summaries | T21 (new) |
+| F2 | Journal → Meta-memories: pattern detection across sessions → behavioral meta-memories | T22 (new) |
+| G | batch_facts → Trust Ledger: reversible batch operations with reverseOps | T8a |
+| G undo | Trust Ledger → reverse_batch: handler to execute batch reversal | T23 (new) |
+| H | Planning Protocol → Memory Tier 3: prompt directive to save strategies as meta-memories | T11 |
+| I | Coherence → Soul: soul-aware coherence checks (soulCompiled parameter) | T14 |
