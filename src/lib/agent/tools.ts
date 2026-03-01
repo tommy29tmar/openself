@@ -198,6 +198,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, updated: 0, deleted: 0 };
       }
       let created = 0, updated = 0, deleted = 0;
+      const warnings: string[] = [];
       const reverseOps: Array<{
         action: "delete" | "restore" | "recreate";
         factId?: string;
@@ -229,7 +230,11 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
               const old = getFactById(op.factId, sessionId, readKeys);
               if (old) reverseOps.push({ action: "restore", factId: op.factId, previousValue: old.value });
               const updatedRow = updateFact({ factId: op.factId, value: op.value }, sessionId, readKeys);
-              if (updatedRow) updated++;
+              if (updatedRow) {
+                updated++;
+                const w = (updatedRow as any)._warnings as string[] | undefined;
+                if (w) warnings.push(...w);
+              }
               break;
             }
             case "delete": {
@@ -254,7 +259,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         try { recomposeAfterMutation(); } catch (e) {
           console.warn("[tools] recomposeAfterMutation after batch failed:", e);
         }
-        return { success: true, created, updated, deleted };
+        return { success: true, created, updated, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (err) {
         if (reverseOps.length > 0) {
           try {
@@ -297,12 +302,14 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
+        const warnings = (fact as any)._warnings as string[] | undefined;
         return {
           success: true,
           factId: fact.id,
           visibility: fact.visibility,
           pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
           recomposeOk,
+          ...(warnings ? { warnings } : {}),
         };
       } catch (error) {
         if (error instanceof FactValidationError) {

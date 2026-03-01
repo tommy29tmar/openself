@@ -173,4 +173,47 @@ describe("batch_facts tool", () => {
       if (f.key.endsWith(suffix)) createdIds.push(f.id);
     }
   });
+
+  it("stops at first validation error, earlier ops are persisted", async () => {
+    const tool = getTools();
+    const suffix = randomUUID().slice(0, 8);
+    const result = await tool.execute({
+      operations: [
+        { action: "create" as const, category: "skill", key: `ok-${suffix}`, value: { name: "Valid" } },
+        // Empty value triggers FactValidationError for experience (missing required fields)
+        { action: "create" as const, category: "experience", key: `bad-${suffix}`, value: { role: "Dev", company: "N/A" } },
+      ],
+    }, { toolCallId: "test", messages: [] });
+
+    // First op succeeded, second failed
+    expect(result.success).toBe(false);
+    expect((result as any).error).toBe("VALIDATION_ERROR");
+    expect(result.created).toBe(1);
+
+    // First fact was persisted
+    const active = getActiveFacts(sessionId);
+    const persisted = active.find(f => f.key === `ok-${suffix}`);
+    expect(persisted).toBeDefined();
+  });
+
+  it("respects constraint layer within batch (two current experiences)", async () => {
+    const tool = getTools();
+    const suffix = randomUUID().slice(0, 8);
+    const result = await tool.execute({
+      operations: [
+        { action: "create" as const, category: "experience", key: `first-${suffix}`, value: { role: "Dev", company: "Acme", status: "current" } },
+        { action: "create" as const, category: "experience", key: `second-${suffix}`, value: { role: "Lead", company: "Beta", status: "current" } },
+      ],
+    }, { toolCallId: "test", messages: [] });
+
+    // First op succeeded, second hit FactConstraintError
+    expect(result.success).toBe(false);
+    expect((result as any).code).toBe("EXISTING_CURRENT");
+    expect(result.created).toBe(1);
+
+    // First fact persisted
+    const active = getActiveFacts(sessionId);
+    const persisted = active.find(f => f.key === `first-${suffix}`);
+    expect(persisted).toBeDefined();
+  });
 });
