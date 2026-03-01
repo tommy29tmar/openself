@@ -990,12 +990,13 @@ batch_facts: tool({
       let created = 0, updated = 0, deleted = 0;
 
       // All-or-nothing: run in SQLite transaction
+      // NOTE: requires `import { db } from "@/lib/db"` at top of tools.ts
       db.transaction(() => {
         for (const op of operations) {
           switch (op.action) {
             case "create":
               // Call kb-service createFact directly (NOT the tool wrapper)
-              createFact({ category: op.category!, key: op.key!, value: op.value!, source: op.source, confidence: op.confidence }, sessionId, profileId);
+              createFact({ category: op.category!, key: op.key!, value: op.value!, source: op.source, confidence: op.confidence }, sessionId);
               created++;
               break;
             case "update":
@@ -1292,7 +1293,7 @@ Expected: PASS
 **Step 4: Commit**
 
 ```bash
-git commit -m "fix: reorder_sections slot validation + maxSteps 5→8"
+git commit -m "fix: reorder_sections slot validation + maxSteps 10→8"
 ```
 
 ---
@@ -1302,8 +1303,7 @@ git commit -m "fix: reorder_sections slot validation + maxSteps 5→8"
 **Files:**
 - Create: `src/lib/agent/policies/planning-protocol.ts`
 - Modify: `src/lib/agent/policies/action-awareness.ts` → DELETE
-- Modify: `src/lib/agent/policies/index.ts` (remove actionAwareness import/export)
-- Modify: `src/lib/agent/prompts.ts:277-333` (buildSystemPrompt — replace actionAwarenessPolicy with planningProtocol)
+- Modify: `src/lib/agent/prompts.ts:277-333` (buildSystemPrompt — replace actionAwarenessPolicy import+call with planningProtocol)
 - Test: `tests/evals/planning-protocol.test.ts`
 
 **Step 1: Write test**
@@ -1347,9 +1347,9 @@ Create `src/lib/agent/policies/planning-protocol.ts` with the Planning Protocol 
 
 Delete `src/lib/agent/policies/action-awareness.ts`.
 
-Update `src/lib/agent/policies/index.ts`: remove `actionAwarenessPolicy` import/export.
+Update `src/lib/agent/prompts.ts:277-333`: in `buildSystemPrompt()`, replace `actionAwarenessPolicy` import (line 11) and call with `planningProtocol` from the new module.
 
-Update `src/lib/agent/prompts.ts:277-333`: in `buildSystemPrompt()`, replace `actionAwarenessPolicy()` call with `planningProtocol()`.
+> Note: `actionAwarenessPolicy` is imported directly in `prompts.ts`, NOT re-exported from `policies/index.ts`. No changes needed to `index.ts`.
 
 **Step 3: Run tests**
 
@@ -1517,7 +1517,9 @@ Expected: FAIL
 
 2. In `src/app/api/chat/route.ts`: in `onFinish`, detect step exhaustion. In Vercel AI SDK v4, when `maxSteps` is exhausted while the model wanted another tool call, `finishReason === "tool-calls"` (NOT `"length"` — that's token limit). Use the robust check:
 ```typescript
-if (steps.length >= maxSteps && finishReason === "tool-calls" && getJournal().length > 0) {
+// Extract constant before streamText call: const MAX_STEPS = 8;
+// Then in onFinish:
+if (steps.length >= MAX_STEPS && finishReason === "tool-calls" && getJournal().length > 0) {
   mergeSessionMeta(sessionId, {
     pendingOperations: { journal: getJournal(), timestamp: new Date().toISOString() },
   });
@@ -2030,3 +2032,12 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | R3-S3 | Significant | sortFacts() annotated as defense-in-depth (DB already orders) | Task 5 |
 | R3-M1 | Minor | 3 test files from 1814e4b listed for deletion/verification in Task 18 | Task 18 |
 | R3-M2 | Minor | Prompt merge annotation: preserve anti-fabrication guards, remove create_facts/reorder_section_items refs | Task 16 |
+
+**Round 4 — final review (4 fixes):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R4-S1 | Significant | Removed `profileId` from batch_facts createFact call (not in closure) | Task 8a |
+| R4-S2 | Significant | Added `import { db }` note for batch transaction in tools.ts | Task 8a |
+| R4-M1 | Minor | Removed `policies/index.ts` from Task 11 files (actionAwareness imported directly in prompts.ts) | Task 11 |
+| R4-M2 | Minor | Extract `MAX_STEPS` constant for onFinish check (maxSteps is inline in streamText call) | Task 13 |
