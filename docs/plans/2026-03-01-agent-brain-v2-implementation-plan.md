@@ -418,11 +418,33 @@ if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
 
 **Step 5: Wire constraint check + cascade warning into updateFact()**
 
-> **NOTE (R5-S1):** The constraint check (CURRENT_UNIQUE_CATEGORIES) must also run in `updateFact()`, not just `createFact()`. If a user updates `status: "past"` → `status: "current"`, the uniqueness constraint should be enforced. Check if `existing.category` is in `CURRENT_UNIQUE_CATEGORIES` AND the new value sets `status: "current"` AND a different active fact with `status: "current"` already exists.
+> **NOTE (R5-S1):** The constraint check (CURRENT_UNIQUE_CATEGORIES) must also run in `updateFact()`, not just `createFact()`. If a user updates `status: "past"` → `status: "current"`, the uniqueness constraint should be enforced.
 
-In `src/lib/services/kb-service.ts`, inside `updateFact()`, after the existing fact lookup:
+In `src/lib/services/kb-service.ts`, inside `updateFact()`, after the existing fact lookup and `validateFactValue()` call:
 
 ```typescript
+// Current uniqueness check (R5-S1) — analogous to createFact, with self-exclusion
+if (CURRENT_UNIQUE_CATEGORIES.has(existing.category)) {
+  const newVal = typeof input.value === "object" ? input.value : {};
+  if ((newVal as Record<string, unknown>).status === "current") {
+    const existingCurrent = db.select().from(facts)
+      .where(and(
+        eq(facts.sessionId, existing.sessionId),
+        eq(facts.category, existing.category),
+        isNull(facts.archivedAt),
+        sql`json_extract(value, '$.status') = 'current'`,
+        sql`${facts.id} != ${input.factId}`,  // exclude self
+      )).get();
+    if (existingCurrent) {
+      throw new FactConstraintError({
+        code: "EXISTING_CURRENT",
+        existingFactId: existingCurrent.id,
+        suggestion: `Another fact (${existingCurrent.id}) already has status:"current". Update it to "past" first.`,
+      });
+    }
+  }
+}
+
 // Cascade warning: check if fact has children
 const children = db.select({ count: sql<number>`count(*)` })
   .from(facts)
@@ -1644,15 +1666,42 @@ git commit -m "feat: operation journal — tool call tracking + resume on step e
 ```typescript
 // tests/evals/coherence-check.test.ts
 import { describe, it, expect } from "vitest";
-import { checkPageCoherence, type CoherenceIssue } from "@/lib/services/coherence-check";
+import { checkPageCoherence, quickCoherenceCheck, type CoherenceIssue } from "@/lib/services/coherence-check";
 
-describe("page coherence check", () => {
-  it("returns empty issues for coherent page", () => {
-    // page with consistent role, skills, experience → no issues
+describe("quickCoherenceCheck — deterministic", () => {
+  it("detects timeline_overlap: two current experiences with overlapping dates", () => {
+    // experience A: 2022-01 to present (current), experience B: 2023-06 to present (current)
+    // → timeline_overlap warning
   });
 
-  it("detects ROLE_MISMATCH", () => {
-    // hero says "Senior Architect", experience only shows junior roles
+  it("does not flag non-overlapping current experiences", () => {
+    // experience A: 2020-01 to 2022-06 (past), experience B: 2023-01 to present (current)
+    // → no timeline_overlap
+  });
+
+  it("detects role_mismatch: hero title not found among experience titles", () => {
+    // hero title: "Senior Architect", experiences: ["Junior Dev", "Mid Dev"]
+    // → role_mismatch warning
+  });
+
+  it("does not flag role_mismatch when hero title appears in experience", () => {
+    // hero title: "Software Engineer", experiences: ["Software Engineer at Acme"]
+    // → no role_mismatch
+  });
+
+  it("detects completeness_gap: section with 1 item when category has ≥3 facts", () => {
+    // skills section shows 1 skill, but 3 skill facts exist (2 are low visibility)
+    // → completeness_gap info
+  });
+
+  it("returns max 3 issues", () => {
+    // many deterministic issues → capped at 3
+  });
+});
+
+describe("checkPageCoherence — hybrid", () => {
+  it("returns empty issues for coherent page", () => {
+    // page with consistent role, skills, experience → no issues
   });
 
   it("SKILL_GAP is always severity info", () => {
@@ -1663,12 +1712,24 @@ describe("page coherence check", () => {
     // seniority claim vs experience years → severity must be "info"
   });
 
-  it("returns max 3 issues", () => {
+  it("returns max 3 issues total (deterministic + LLM)", () => {
     // page with many inconsistencies → capped at 3
   });
 
   it("only runs on pages with 3+ content sections", () => {
     // page with only hero + footer → should return empty/skip
+  });
+
+  it("skips LLM when deterministic check already found ≥3 issues", () => {
+    // quickCoherenceCheck returns 3 issues → generateObject NOT called
+  });
+
+  it("skips LLM when page has <5 content sections", () => {
+    // 3-4 content sections → deterministic only, no LLM call
+  });
+
+  it("deduplicates issues from deterministic + LLM by type+affectedSections", () => {
+    // both layers find role_mismatch for same sections → keep one
   });
 });
 
@@ -1684,14 +1745,15 @@ describe("coherence situation directive", () => {
 Run: `npx vitest run tests/evals/coherence-check.test.ts`
 Expected: FAIL
 
-**Step 3: Implement coherence check service**
+**Step 3a: Implement deterministic quickCoherenceCheck**
 
-Create `src/lib/services/coherence-check.ts`:
+Create `src/lib/services/coherence-check.ts` with types and deterministic layer:
 
 ```typescript
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { Section } from "@/lib/page-config/schema";
+import type { FactRow } from "@/lib/services/kb-service";
 import { getModel } from "@/lib/ai/provider"; // NOTE (R5-C3): getModel is in provider.ts, not model.ts
 
 export type CoherenceIssue = {
@@ -1702,6 +1764,97 @@ export type CoherenceIssue = {
   affectedSections: string[];
 };
 
+/**
+ * Deterministic coherence checks — zero LLM cost, ~O(n) on facts.
+ * Catches structural inconsistencies via date math, string match, and counting.
+ */
+export function quickCoherenceCheck(sections: Section[], facts: FactRow[]): CoherenceIssue[] {
+  const issues: CoherenceIssue[] = [];
+
+  // 1. timeline_overlap: two experiences with status:"current" and overlapping date ranges
+  const currentExperiences = facts.filter(f =>
+    f.category === "experience" && !f.archivedAt &&
+    (f.value as Record<string, unknown>)?.status === "current"
+  );
+  if (currentExperiences.length >= 2) {
+    // Check pairwise for date overlap (startDate comparison)
+    for (let i = 0; i < currentExperiences.length; i++) {
+      for (let j = i + 1; j < currentExperiences.length; j++) {
+        const aVal = currentExperiences[i].value as Record<string, unknown>;
+        const bVal = currentExperiences[j].value as Record<string, unknown>;
+        const aStart = String(aVal.startDate ?? "");
+        const bStart = String(bVal.startDate ?? "");
+        // Both current with start dates → overlap (both run to present)
+        if (aStart && bStart) {
+          issues.push({
+            type: "timeline_overlap",
+            severity: "warning",
+            description: `Two concurrent current roles: "${aVal.role ?? aVal.company}" and "${bVal.role ?? bVal.company}"`,
+            suggestion: "Verify both roles are truly concurrent, or archive the ended one.",
+            affectedSections: ["experience"],
+          });
+          break; // one overlap is enough
+        }
+      }
+    }
+  }
+
+  // 2. role_mismatch (base): hero title not found among experience role titles
+  const heroSection = sections.find(s => s.type === "hero");
+  const heroTitle = heroSection ? String((heroSection.content as Record<string, unknown>)?.tagline ?? "") : "";
+  if (heroTitle) {
+    const expRoles = facts
+      .filter(f => f.category === "experience" && !f.archivedAt)
+      .map(f => String((f.value as Record<string, unknown>)?.role ?? "").toLowerCase());
+    const heroLower = heroTitle.toLowerCase();
+    const roleMatch = expRoles.some(r => r && (heroLower.includes(r) || r.includes(heroLower)));
+    if (expRoles.length > 0 && !roleMatch) {
+      issues.push({
+        type: "role_mismatch",
+        severity: "warning",
+        description: `Hero title "${heroTitle}" doesn't match any experience role`,
+        suggestion: "Update hero tagline to reflect current role, or add the matching experience.",
+        affectedSections: ["hero", "experience"],
+      });
+    }
+  }
+
+  // 3. completeness_gap: section with 1 item when category has ≥3 active facts
+  const categoryFactCounts = new Map<string, number>();
+  for (const f of facts) {
+    if (!f.archivedAt) {
+      categoryFactCounts.set(f.category, (categoryFactCounts.get(f.category) ?? 0) + 1);
+    }
+  }
+  for (const section of sections) {
+    if (section.type === "hero" || section.type === "footer") continue;
+    const content = section.content as Record<string, unknown>;
+    // Count items in section content (heuristic: arrays in content)
+    const arrays = Object.values(content).filter(v => Array.isArray(v));
+    const itemCount = arrays.reduce((sum, arr) => sum + (arr as unknown[]).length, 0);
+    // Map section type → likely category
+    const categoryForSection = section.type; // simplification: type ≈ category
+    const factCount = categoryFactCounts.get(categoryForSection) ?? 0;
+    if (itemCount === 1 && factCount >= 3) {
+      issues.push({
+        type: "completeness_gap",
+        severity: "info",
+        description: `Section "${section.type}" shows 1 item but ${factCount} facts exist`,
+        suggestion: "Check visibility settings — some facts may be hidden.",
+        affectedSections: [section.id],
+      });
+    }
+  }
+
+  return issues.slice(0, 3);
+}
+```
+
+**Step 3b: Implement hybrid checkPageCoherence (deterministic + LLM)**
+
+Below `quickCoherenceCheck` in the same file, add the LLM layer and the hybrid orchestrator:
+
+```typescript
 const coherenceSchema = z.object({
   issues: z.array(z.object({
     type: z.enum(["role_mismatch", "timeline_overlap", "skill_gap", "level_mismatch", "completeness_gap"]),
@@ -1712,9 +1865,26 @@ const coherenceSchema = z.object({
   })).max(3),
 });
 
-export async function checkPageCoherence(sections: Section[]): Promise<CoherenceIssue[]> {
+/**
+ * Hybrid coherence check: deterministic first, LLM only if needed.
+ *
+ * - Always runs quickCoherenceCheck (zero cost).
+ * - Invokes LLM only when deterministic found <3 issues AND page has ≥5 content sections.
+ *   (Pages with 3-4 sections rarely have nuanced cross-section issues worth an LLM call.)
+ * - Deduplicates results by type+affectedSections. Cap: 3 issues total.
+ */
+export async function checkPageCoherence(sections: Section[], facts: FactRow[]): Promise<CoherenceIssue[]> {
   const contentSections = sections.filter(s => s.type !== "hero" && s.type !== "footer" && Object.keys(s.content).length > 0);
   if (contentSections.length < 3) return [];
+
+  // Phase 1: deterministic
+  const deterministicIssues = quickCoherenceCheck(sections, facts);
+
+  // Short-circuit: if deterministic already found 3 issues, skip LLM
+  if (deterministicIssues.length >= 3) return deterministicIssues.slice(0, 3);
+
+  // Phase 2: LLM only for richer pages (≥5 content sections)
+  if (contentSections.length < 5) return deterministicIssues;
 
   const { object } = await generateObject({
     model: getModel(),
@@ -1722,23 +1892,37 @@ export async function checkPageCoherence(sections: Section[]): Promise<Coherence
     prompt: buildCoherencePrompt(sections),
   });
 
-  // Force severity rules
-  return object.issues.map(issue => ({
+  // Force severity rules on LLM output
+  const llmIssues = object.issues.map(issue => ({
     ...issue,
-    severity: (issue.type === "skill_gap" || issue.type === "level_mismatch") ? "info" : issue.severity,
+    severity: (issue.type === "skill_gap" || issue.type === "level_mismatch") ? "info" as const : issue.severity,
   }));
+
+  // Deduplicate: merge deterministic + LLM, dedup by type+affectedSections key
+  const seen = new Set(deterministicIssues.map(i => `${i.type}:${i.affectedSections.sort().join(",")}`));
+  const merged = [...deterministicIssues];
+  for (const issue of llmIssues) {
+    const key = `${issue.type}:${issue.affectedSections.sort().join(",")}`;
+    if (!seen.has(key)) {
+      merged.push(issue);
+      seen.add(key);
+    }
+  }
+
+  return merged.slice(0, 3);
 }
 ```
 
 **Step 4: Wire into generate_page**
 
-In `src/lib/agent/tools.ts`, in the `generate_page` tool execute, after the personalization fire-and-forget block: add another fire-and-forget for coherence:
+In `src/lib/agent/tools.ts`, in the `generate_page` tool execute, after the personalization fire-and-forget block: add another fire-and-forget for coherence. Note: `checkPageCoherence` now requires both sections and facts:
 
 ```typescript
 if (mode === "steady_state") {
   (async () => {
     try {
-      const issues = await checkPageCoherence(config.sections);
+      const activeFacts = getActiveFacts(sessionId, readKeys);
+      const issues = await checkPageCoherence(config.sections, activeFacts);
       if (issues.length > 0) {
         // Save to session metadata (via Task 1b helper)
         mergeSessionMeta(sessionId, { coherenceIssues: issues });
@@ -2081,6 +2265,50 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 **Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict.
 
 **Estimated tests:** ~100 new + ~35 updated = ~1260 total (from 1151 current).
+
+---
+
+### Delivery Strategy
+
+Split implementation into two delivery scopes to reduce cumulative risk and ship core value sooner.
+
+**v2 core (11 tasks):** 1, 1b, 2, 3, 5, 8a, 8b, 11, 16, 17, 18
+
+| Task | What it delivers |
+|------|------------------|
+| 1, 1b | Schema foundation — migration 0022 (parentFactId, archivedAt, sessions.metadata), FactRow type fix, session metadata helper |
+| 2 | Archived fact filtering — `getActiveFacts()` replaces `getAllFacts()` across codebase |
+| 3 | Constraint layer — CURRENT_UNIQUE_CATEGORIES enforcement in create + update, cascade warnings, orphan cleanup |
+| 5 | Sort order in composer — facts ordered by sortOrder ASC, createdAt ASC |
+| 8a | `batch_facts` tool — atomic multi-operation with single recompose (replaces `create_facts`) |
+| 8b | `archive_fact`, `unarchive_fact`, `reorder_items` tools (replaces `reorder_section_items`) |
+| 11 | Planning Protocol — SIMPLE/COMPOUND/STRUCTURAL classification (replaces `actionAwarenessPolicy`) |
+| 16 | TOOL_POLICY + DATA_MODEL_REFERENCE updated for new tools and fact fields |
+| 17, 18 | Integration tests + existing test updates |
+
+These are the highest-impact features: the enriched data model, batch operations, archived facts, sort order, and the planning protocol. They have no forward dependencies on the deferred tasks — v2.1 features build on top of what v2 core delivers, never the reverse.
+
+**v2.1 (7 tasks):** 4, 6, 7, 9, 12, 13, 14, 15
+
+| Task | What it delivers |
+|------|------------------|
+| 4, 12 | Archetype detection + wiring — multilingual role classification, strategy templates, context injection |
+| 6 | Parent-child grouping in composer — projects nested under parent experience |
+| 7, 9 | Slot carry-over + move_section — section position persistence across recompose, cross-slot movement |
+| 13 | Operation Journal — tool call tracking, resume on step exhaustion |
+| 14 | Page Coherence Check — deterministic + LLM hybrid cross-section consistency validation |
+| 15 | `has_archivable_facts` directive — relevance-based archival suggestions |
+
+All v2.1 tasks rely on columns already created by migration 0022 (parentFactId, archivedAt, sessions.metadata). No schema changes needed — they can be implemented in a follow-up sprint without breaking changes or additional migrations.
+
+**Why this split works:**
+
+1. **Risk reduction.** v2 core is 11 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features (archetype, coherence, journal) that are more experimental and benefit from running against a stabilized v2 core.
+2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful in conversation. Archetype detection and coherence checks are refinements that improve quality but aren't blocking.
+3. **Independent deployment.** v2.1 tasks have no schema migrations — they only add code. A v2.1 deployment is pure additive and can be rolled back without data loss.
+4. **Task 10 (reorder_sections fix + maxSteps 10→8)** fits either scope. Include in v2 core if touched during Task 8b work, or defer to v2.1 if the change is isolated.
+
+---
 
 ### Review Fixes Applied
 
