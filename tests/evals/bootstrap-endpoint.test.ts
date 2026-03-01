@@ -19,6 +19,7 @@ const mockBootstrapPayload = {
   thinSections: [],
   staleFacts: [],
   openConflicts: [],
+  archivableFacts: [],
   language: "en",
   conversationContext: null,
 };

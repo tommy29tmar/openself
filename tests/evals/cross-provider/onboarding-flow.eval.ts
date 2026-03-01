@@ -34,6 +34,7 @@ function buildOnboardingPrompt(language = "en"): string {
     thinSections: [],
     staleFacts: [],
     openConflicts: [],
+    archivableFacts: [],
     language,
     conversationContext: null,
   };

@@ -83,6 +83,7 @@ vi.mock("@/lib/agent/journey", () => ({
     thinSections: [],
     staleFacts: [],
     openConflicts: [],
+    archivableFacts: [],
     language: "en",
     conversationContext: null,
   })),

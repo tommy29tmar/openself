@@ -22,6 +22,7 @@ const mockBootstrapPayload = {
   thinSections: [] as string[],
   staleFacts: [] as string[],
   openConflicts: [] as string[],
+  archivableFacts: [],
   language: "en",
   conversationContext: null,
   archetype: "generalist" as const,

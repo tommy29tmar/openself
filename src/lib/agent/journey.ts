@@ -41,7 +41,8 @@ export type Situation =
   | "has_stale_facts"
   | "has_open_conflicts"
   | "has_name"
-  | "has_soul";
+  | "has_soul"
+  | "has_archivable_facts";
 
 export type ExpertiseLevel = "novice" | "familiar" | "expert";
 
@@ -56,6 +57,7 @@ export interface BootstrapPayload {
   thinSections: string[];
   staleFacts: string[];
   openConflicts: string[];
+  archivableFacts: string[];
   language: string;
   conversationContext: string | null;
   archetype: Archetype;
@@ -70,6 +72,25 @@ const STALE_FACT_DAYS = 30;
 
 /** Published page updated more recently than this is "fresh". */
 const FRESH_PAGE_DAYS = 7;
+
+/** Relevance threshold below which a fact is considered archivable. */
+const ARCHIVABLE_RELEVANCE_THRESHOLD = 0.3;
+
+/** Minimum active facts to keep — never suggest archival below this floor. */
+const ARCHIVABLE_SAFETY_FLOOR = 5;
+
+/**
+ * Recency factor for relevance scoring.
+ * <30d: 1.0, 30-90d: 0.7, 90-180d: 0.4, >180d: 0.2
+ */
+export function recencyFactor(updatedAt: string | null): number {
+  if (!updatedAt) return 0.2;
+  const days = daysBetween(new Date(updatedAt), new Date());
+  if (days < 30) return 1.0;
+  if (days < 90) return 0.7;
+  if (days < 180) return 0.4;
+  return 0.2;
+}
 
 // ---------------------------------------------------------------------------
 // Detection: Journey State
@@ -204,6 +225,7 @@ export function detectSituations(
     pendingProposalCount?: number;
     openConflicts?: Array<{ category: string; key: string }>;
     publishableFacts?: FactRow[];
+    childCountMap?: Map<string, number>;
   },
 ): Situation[] {
   const situations: Situation[] = [];
@@ -256,6 +278,23 @@ export function detectSituations(
     situations.push("has_soul");
   }
 
+  // Archivable facts: relevance-based detection
+  const activeFacts = facts.filter(f => !f.archivedAt);
+  if (activeFacts.length > ARCHIVABLE_SAFETY_FLOOR) {
+    const childCountMap = opts?.childCountMap;
+    const archivable = activeFacts.filter(f => {
+      const recency = recencyFactor(f.updatedAt);
+      const children = childCountMap?.get(f.id) ?? 0;
+      const relevance = (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
+      return relevance < ARCHIVABLE_RELEVANCE_THRESHOLD;
+    });
+
+    // Safety floor: don't suggest if it would leave fewer than 5 active facts
+    if (archivable.length > 0 && activeFacts.length - archivable.length >= ARCHIVABLE_SAFETY_FLOOR) {
+      situations.push("has_archivable_facts");
+    }
+  }
+
   return situations;
 }
 
@@ -296,10 +335,25 @@ export function assembleBootstrapPayload(
   const openConflictRecords = getOpenConflicts(ownerKey);
   const publishable = filterPublishableFacts(facts);
 
+  // Pre-compute child counts for relevance scoring (scoped by readKeys)
+  const childCountMap = new Map<string, number>();
+  if (readKeys.length > 0) {
+    const placeholders = readKeys.map(() => "?").join(",");
+    const rows = sqlite
+      .prepare(
+        `SELECT parent_fact_id, COUNT(*) as cnt FROM facts WHERE parent_fact_id IS NOT NULL AND archived_at IS NULL AND session_id IN (${placeholders}) GROUP BY parent_fact_id`,
+      )
+      .all(...readKeys) as Array<{ parent_fact_id: string; cnt: number }>;
+    for (const row of rows) {
+      childCountMap.set(row.parent_fact_id, row.cnt);
+    }
+  }
+
   const situations = detectSituations(facts, ownerKey, {
     pendingProposalCount,
     openConflicts: openConflictRecords,
     publishableFacts: publishable,
+    childCountMap,
   });
   const expertiseLevel = detectExpertiseLevel(readKeys);
 
@@ -336,6 +390,20 @@ export function assembleBootstrapPayload(
   const openConflicts: string[] = openConflictRecords.map(
     (c) => `${c.category}/${c.key}`,
   );
+
+  // Archivable facts list (category/key for directive rendering)
+  const archivableFacts: string[] = [];
+  if (situations.includes("has_archivable_facts")) {
+    const activeFacts = facts.filter(f => !f.archivedAt);
+    for (const f of activeFacts) {
+      const recency = recencyFactor(f.updatedAt);
+      const children = childCountMap.get(f.id) ?? 0;
+      const relevance = (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
+      if (relevance < ARCHIVABLE_RELEVANCE_THRESHOLD) {
+        archivableFacts.push(`${f.category}/${f.key}`);
+      }
+    }
+  }
 
   // Conversation context (latest summary or null)
   // Lightweight — we don't load the full summary here, just indicate if one exists
@@ -379,6 +447,7 @@ export function assembleBootstrapPayload(
     thinSections,
     staleFacts,
     openConflicts,
+    archivableFacts,
     language,
     conversationContext,
     archetype,

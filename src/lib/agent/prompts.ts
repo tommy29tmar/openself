@@ -301,7 +301,8 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
     pendingProposalSections: [], // Will be populated when proposals carry section info
     thinSections: bootstrap.thinSections,
     staleFacts: bootstrap.staleFacts,
-    openConflicts: bootstrap.openConflicts ?? []
+    openConflicts: bootstrap.openConflicts ?? [],
+    archivableFacts: bootstrap.archivableFacts ?? [],
   };
 
   const situationDirectives = getSituationDirectives(
