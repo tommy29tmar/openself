@@ -266,12 +266,22 @@ Use Drizzle's `isNull(facts.archivedAt)` in WHERE clauses.
 Run: `npx vitest run tests/evals/archived-facts.test.ts`
 Expected: PASS
 
-**Step 5: Update existing tests**
+**Step 5: Update production callers**
+
+Run: `grep -r "getAllFacts" src/` to find all production code importing `getAllFacts`. Key callers to migrate to `getActiveFacts`:
+- `src/lib/services/page-projection.ts`
+- `src/lib/agent/context.ts`
+- `src/lib/worker/heartbeat.ts`
+- Any other files in `src/` that import `getAllFacts`
+
+Replace all production imports with `getActiveFacts`. Only `_getAllFactsIncludingArchived()` should remain (internal to kb-service).
+
+**Step 6: Update existing tests**
 
 Run: `npx vitest run`
 Fix any tests that broke due to `getAllFacts` being made private — change imports to `getActiveFacts`.
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
 git commit -m "feat: archived fact filtering — getActiveFacts() replaces getAllFacts()"
@@ -961,33 +971,43 @@ batch_facts: tool({
     })).max(20),
   }),
   execute: async ({ operations }) => {
-    let created = 0, updated = 0, deleted = 0;
+    try {
+      let created = 0, updated = 0, deleted = 0;
 
-    // All-or-nothing: run in SQLite transaction
-    db.transaction(() => {
-      for (const op of operations) {
-        switch (op.action) {
-          case "create":
-            // Call kb-service createFact directly (NOT the tool wrapper)
-            createFact({ category: op.category!, key: op.key!, value: op.value!, source: op.source, confidence: op.confidence }, sessionId, profileId);
-            created++;
-            break;
-          case "update":
-            updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
-            updated++;
-            break;
-          case "delete":
-            deleteFact(op.factId!, sessionId, readKeys);
-            deleted++;
-            break;
+      // All-or-nothing: run in SQLite transaction
+      db.transaction(() => {
+        for (const op of operations) {
+          switch (op.action) {
+            case "create":
+              // Call kb-service createFact directly (NOT the tool wrapper)
+              createFact({ category: op.category!, key: op.key!, value: op.value!, source: op.source, confidence: op.confidence }, sessionId, profileId);
+              created++;
+              break;
+            case "update":
+              updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
+              updated++;
+              break;
+            case "delete":
+              deleteFact(op.factId!, sessionId, readKeys);
+              deleted++;
+              break;
+          }
         }
+      })();
+
+      // Single recompose after entire batch
+      recomposeAfterMutation();
+
+      return { success: true, created, updated, deleted };
+    } catch (err) {
+      if (err instanceof FactValidationError) {
+        return { success: false, error: "VALIDATION_ERROR", message: err.message, hint: "Entire batch rolled back — no operations were applied" };
       }
-    })();
-
-    // Single recompose after entire batch
-    recomposeAfterMutation();
-
-    return { success: true, created, updated, deleted };
+      if (err instanceof FactConstraintError) {
+        return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, hint: "Entire batch rolled back — no operations were applied" };
+      }
+      throw err;
+    }
   },
 }),
 ```
@@ -1386,7 +1406,11 @@ Expected: FAIL
 
 **Step 3: Implement**
 
-1. `src/lib/agent/journey.ts`: update `assembleBootstrapPayload` signature to accept `lastUserMessage?: string`. After detecting journey state, call `detectArchetypeFromSignals()`. Save to session metadata via `mergeSessionMeta(sessionId, { archetype })` (from Task 1b). Return archetype in payload.
+1. `src/lib/agent/journey.ts`: update `assembleBootstrapPayload` signature to accept `lastUserMessage?: string`. After detecting journey state:
+   - Call `detectArchetypeFromSignals(role, lastUserMessage)` for initial detection
+   - Call `refineArchetype(facts, rawArchetype)` to refine based on accumulated facts (only meaningful when ≥5 facts exist; identity function otherwise)
+   - Save to session metadata via `mergeSessionMeta(sessionId, { archetype })` (from Task 1b)
+   - Return archetype in payload
 
 2. `src/lib/agent/context.ts`: in `assembleContext()`, if mode is onboarding/returning_no_page and bootstrap has archetype, build archetype context block (~150 tokens) with explorationOrder, toneHint, and coverage (which categories have facts vs empty).
 
@@ -1470,7 +1494,14 @@ Expected: FAIL
 > ```
 > Update all callers of `createAgentTools()` — currently only `src/app/api/chat/route.ts` — to destructure: `const { tools, getJournal } = createAgentTools(...)`.
 
-2. In `src/app/api/chat/route.ts`: in `onFinish`, check `finishReason`. If `finishReason === "length"` (step limit hit) and `getJournal().length > 0`, save to `sessions.metadata.pendingOperations` via `mergeSessionMeta()`.
+2. In `src/app/api/chat/route.ts`: in `onFinish`, detect step exhaustion. In Vercel AI SDK v4, when `maxSteps` is exhausted while the model wanted another tool call, `finishReason === "tool-calls"` (NOT `"length"` — that's token limit). Use the robust check:
+```typescript
+if (steps.length >= maxSteps && finishReason === "tool-calls" && getJournal().length > 0) {
+  mergeSessionMeta(sessionId, {
+    pendingOperations: { journal: getJournal(), timestamp: new Date().toISOString() },
+  });
+}
+```
 
 3. In `src/lib/agent/context.ts`: use `getSessionMeta()` to read `pendingOperations`. If exists and timestamp < 1 hour: inject INCOMPLETE_OPERATION block. If timestamp > 1 hour: delete via `mergeSessionMeta(sessionId, { pendingOperations: undefined })`.
 
@@ -1670,24 +1701,34 @@ describe("has_archivable_facts situation", () => {
 
 **Step 2: Implement**
 
-In `detectSituations()`, add relevance calculation:
+> **M3 — Preserve separation of concerns:** `detectSituations()` is a pure detection function that receives data from its caller — it should not query the DB directly. Pre-calculate `childCounts` in `assembleBootstrapPayload()` and pass as parameter.
+
+In `assembleBootstrapPayload()` (the caller), compute `childCounts` and pass to `detectSituations`:
 
 ```typescript
-// Archivable facts detection
-const activeFacts = getActiveFacts(ownerKey);
-if (activeFacts.length > 5) {
-  const childCounts = db.select({
-    parentId: facts.parentFactId,
-    count: sql<number>`count(*)`,
-  }).from(facts)
-    .where(and(isNotNull(facts.parentFactId), isNull(facts.archivedAt)))
-    .groupBy(facts.parentFactId)
-    .all();
-  const childMap = new Map(childCounts.map(r => [r.parentId, r.count]));
+// In assembleBootstrapPayload, before calling detectSituations:
+const childCounts = db.select({
+  parentId: facts.parentFactId,
+  count: sql<number>`count(*)`,
+}).from(facts)
+  .where(and(isNotNull(facts.parentFactId), isNull(facts.archivedAt)))
+  .groupBy(facts.parentFactId)
+  .all();
+const childCountMap = new Map(childCounts.map(r => [r.parentId!, r.count]));
 
+// Pass to detectSituations
+const situations = detectSituations(...existingArgs, childCountMap);
+```
+
+In `detectSituations()`, add parameter and relevance calculation:
+
+```typescript
+// detectSituations signature gains: childCountMap?: Map<string, number>
+// Archivable facts detection
+if (activeFacts.length > 5) {
   const archivable = activeFacts.filter(f => {
     const recency = recencyFactor(f.updatedAt);
-    const children = childMap.get(f.id) ?? 0;
+    const children = childCountMap?.get(f.id) ?? 0;
     const relevance = (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
     return relevance < 0.3;
   });
@@ -1897,7 +1938,7 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | 10 | L3 | Fix reorder_sections + maxSteps→8 | — |
 | 11 | L3 | Planning Protocol | — |
 | 12 | L3 | Archetype wiring | T4, T1b |
-| 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b, T10 |
+| 13 | L4 | Operation Journal (createAgentTools returns {tools, getJournal}) | T1b |
 | 14 | L4 | Page Coherence Check | T1b |
 | 15 | L4 | has_archivable_facts directive | T2 |
 | 16 | L4 | TOOL_POLICY + DATA_MODEL_REFERENCE update | T8a, T8b, T9 |
@@ -1909,6 +1950,8 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 **Estimated tests:** ~100 new + ~35 updated = ~1260 total (from 1151 current).
 
 ### Review Fixes Applied
+
+**Round 1 (11 fixes):**
 
 | ID | Severity | Fix | Location |
 |----|----------|-----|----------|
@@ -1923,3 +1966,14 @@ git commit -m "test: update existing tests for Smart Facts model — getActiveFa
 | M2 | Minor | isSlotValid helper defined with full signature | Task 7, Step 3 |
 | M3 | Minor | FACT_SCHEMA_REFERENCE compression noted as opportunistic, not a task | Header |
 | M4 | Minor | Test that experience is NOT in CATEGORY_TO_ARCHETYPE | Task 4 |
+
+**Round 2 (6 fixes):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R2-S1 | Significant | finishReason === "tool-calls" (not "length") for step exhaustion detection | Task 13 |
+| R2-S2 | Significant | batch_facts try/catch with structured error responses + "batch rolled back" hint | Task 8a |
+| R2-M1 | Minor | Production callers of getAllFacts explicitly listed for migration | Task 2, Step 5 |
+| R2-M2 | Minor | refineArchetype() wired into assembleBootstrapPayload (was dead code) | Task 12 |
+| R2-M3 | Minor | childCounts pre-computed in caller, not in detectSituations (separation of concerns) | Task 15 |
+| R2-M4 | Minor | T10 removed from T13 dependencies (journal works with any maxSteps) | Summary table |
