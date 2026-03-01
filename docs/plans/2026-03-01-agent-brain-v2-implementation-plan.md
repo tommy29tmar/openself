@@ -1151,12 +1151,19 @@ batch_facts: tool({
     } catch (err) {
       // Partial failure: some ops may have been applied before the error.
       // Log trust ledger for undo of applied ops, then recompose.
+      // R14-S2: trust ledger + recompose wrapped in try/catch to avoid
+      // masking the original error or duplicating side effects.
       if (reverseOps.length > 0) {
-        logTrustAction(effectiveOwnerKey, "batch_facts",
-          `Batch (partial): ${created} created, ${updated} updated, ${deleted} deleted — stopped by error`,
-          { undoPayload: { action: "reverse_batch", reverseOps } },
-        );
-        recomposeAfterMutation();
+        try {
+          logTrustAction(effectiveOwnerKey, "batch_facts",
+            `Batch (partial): ${created} created, ${updated} updated, ${deleted} deleted — stopped by error`,
+            { undoPayload: { action: "reverse_batch", reverseOps } },
+          );
+          recomposeAfterMutation();
+        } catch (cleanupErr) {
+          console.error("[batch_facts] cleanup failed after partial batch:", cleanupErr);
+          // Don't rethrow — the original error is more important
+        }
       }
 
       if (err instanceof FactValidationError) {
@@ -3724,11 +3731,19 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 import { describe, it, expect } from "vitest";
 import { filterToolsByJourneyState, TOOL_SETS } from "@/lib/agent/tool-filter";
 
+// Complete v2 tool inventory (existing + new from T8a/T8b/T9)
 const ALL_TOOL_NAMES = [
-  "create_fact", "update_fact", "delete_fact", "search_facts", "batch_facts",
+  // Existing tools
+  "create_fact", "update_fact", "delete_fact", "search_facts",
   "set_fact_visibility", "save_memory", "resolve_conflict",
   "generate_page", "update_page_style", "set_theme", "set_layout",
   "reorder_sections", "propose_lock", "request_publish", "propose_soul_change",
+  // New v2 tools
+  "batch_facts",       // T8a
+  "archive_fact",      // T8b
+  "unarchive_fact",    // T8b
+  "reorder_items",     // T8b (replaces reorder_section_items)
+  "move_section",      // T9
 ];
 
 describe("tool filtering by journey state", () => {
@@ -3802,12 +3817,16 @@ import type { JourneyState } from "@/lib/agent/journey";
  * - ONBOARDING (first_visit, returning_no_page) → fact + generate tools only
  * - FULL (draft_ready, active_fresh, active_stale) → all tools
  */
+// Includes v2 tools from T8a/T8b. Excludes style/layout/publish/lock tools.
 const ONBOARDING_TOOLS = [
   "create_fact",
   "update_fact",
   "delete_fact",
   "search_facts",
-  "batch_facts",
+  "batch_facts",       // T8a
+  "archive_fact",      // T8b — user may say "actually remove that"
+  "unarchive_fact",    // T8b
+  "reorder_items",     // T8b — ordering facts within a section
   "save_memory",
   "resolve_conflict",
   "generate_page",
@@ -3845,7 +3864,7 @@ In `src/app/api/chat/route.ts`, after `createAgentTools()` and before `streamTex
 ```typescript
 import { filterToolsByJourneyState } from "@/lib/agent/tool-filter";
 
-// After:
+// After (requires Task 13 — createAgentTools returns { tools, getJournal }):
 const { tools: allTools, getJournal } = createAgentTools(...);
 const tools = filterToolsByJourneyState(allTools, bootstrap.journeyState);
 
@@ -3909,9 +3928,9 @@ git commit -m "perf: journey-state tool filtering — reduce input tokens for on
 | 24 | L6 | Conditional context injection by journey state (-30% tokens) | T1b |
 | 25 | L6 | Bootstrap → context data passthrough (DB dedup) | T24 |
 | 26 | L6 | Systematic model tiering (fast/standard/reasoning) | — |
-| 27 | L6 | Journey-state tool filtering (token optimization + hard guardrail) | — |
+| 27 | L6 | Journey-state tool filtering (token optimization + hard guardrail) | T13 |
 
-**Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict. Exception: T24 and T25 both modify `context.ts` — implement T24 first, T25 on top. T26 and T27 are independent of both and of each other.
+**Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict. Exception: T24 and T25 both modify `context.ts` — implement T24 first, T25 on top. T26 is independent. T27 depends on T13 (which changes `createAgentTools` return type to `{ tools, getJournal }`).
 
 **Estimated tests:** ~140 new + ~35 updated = ~1438 total (from ~1263 current).
 
@@ -4009,7 +4028,7 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful. Archetype and coherence are refinements. Integration circuits are the "agent learns" layer. Efficiency is the "scale without breaking the bank" layer.
 3. **Independent deployment.** Each scope is pure additive on the previous one. v2.2 and v2.3 tasks can be rolled back without data loss.
 4. **Embedded circuits.** 7 of 12 circuits (A, C, E, G, H, I, D1) are embedded in existing tasks because they're small enough. The remaining 5 (B, D2, F1, F2, G-undo) are standalone because they introduce new patterns.
-5. **T26 and T27 are scope-independent.** Model tiering and tool filtering can be deployed at any point — T26 only changes model IDs, T27 only filters the tools object before `streamText`. Zero code structure change.
+5. **T26 is scope-independent.** Model tiering can be deployed at any point — it only changes model IDs. T27 depends on T13 (destructured return type) but is otherwise additive.
 6. **Task 10 (reorder_sections fix + maxSteps 10→8)** is in v2 core — small, touches files already in scope (tools.ts), maxSteps reduction has immediate cost impact.
 
 ---
@@ -4037,7 +4056,7 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 | ID | Severity | Fix | Location |
 |----|----------|-----|----------|
 | R2-S1 | Significant | finishReason === "tool-calls" (not "length") for step exhaustion detection | Task 13 |
-| R2-S2 | Significant | batch_facts try/catch with structured error responses + "batch rolled back" hint | Task 8a |
+| R2-S2 | Significant | ~~batch_facts try/catch with structured error responses + "batch rolled back" hint~~ **SUPERSEDED by R12-C2 / R14-S2:** sequential semantics with trust ledger undo + protected recompose in catch block. | Task 8a |
 | R2-M1 | Minor | Production callers of getAllFacts explicitly listed for migration | Task 2, Step 5 |
 | R2-M2 | Minor | refineArchetype() wired into assembleBootstrapPayload (was dead code) | Task 12 |
 | R2-M3 | Minor | childCounts pre-computed in caller, not in detectSituations (separation of concerns) | Task 15 |
@@ -4172,3 +4191,13 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 | R13-S5 | Significant | Task 21 data flow gap promoted from NOTE to operative steps: `enqueueSummaryJob` signature change + route.ts caller update + tests for data flow. Was only a comment, now has Files/Steps/Tests. | T21 Steps 1/3 |
 | R13-S6 | Significant | Event name mismatch: test said `coherence_check`, cross-cutting table said `heartbeat_coherence`. Aligned both test and implementation to `heartbeat_coherence`. Payload aligned to table schema (`warningsFound`, `durationMs`). | T20 Steps 1/3 |
 | R13-M7 | Minor | Task 13 journal wrapper now explicitly shows `args` field in example code (with `category`/`key`). Task 22 depends on `entries[i].args?.category` — without systematic `args` logging, pattern detection degrades. | T13 Step 3 |
+
+**Round 14 — findings (5 issues, 1 already fixed):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R14-C1 | Critical | **Already fixed in R13-C1.** Verified: `created`/`updated`/`deleted`/`reverseOps` are at lines 1076-1082, `try` starts at 1084. Variable scope is correct. User reported stale line numbers. | T8a Step 3 |
+| R14-S2 | Significant | `recomposeAfterMutation()` in catch block now wrapped in `try/catch` to prevent cleanup errors from masking the original error. `logTrustAction` + `recomposeAfterMutation` both protected. | T8a Step 3 |
+| R14-S3 | Significant | Task 27 dependency corrected: `Depends On: —` → `Depends On: T13`. Snippet uses `{ tools: allTools, getJournal }` destructuring (Task 13 return shape). Parallelism note and "scope-independent" claim updated. | T27 summary table, delivery strategy |
+| R14-S4 | Significant | Task 27 tool inventory expanded: added `archive_fact`, `unarchive_fact`, `reorder_items` (T8b), `move_section` (T9). `ONBOARDING_TOOLS` updated to include T8b tools. Test `ALL_TOOL_NAMES` includes full v2 inventory. | T27 Steps 1/3 |
+| R14-M5 | Minor | R2-S2 changelog entry ("batch rolled back" hint) marked as ~~SUPERSEDED~~ by R12-C2/R14-S2 — incompatible with sequential semantics. | Changelog R2 |
