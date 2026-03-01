@@ -52,6 +52,7 @@ export type CreateFactInput = {
   value: Record<string, unknown>;
   source?: string;
   confidence?: number;
+  parentFactId?: string;
 };
 
 export type UpdateFactInput = {
@@ -67,6 +68,9 @@ export type FactRow = {
   source: string | null;
   confidence: number | null;
   visibility: string | null;
+  sortOrder: number | null;
+  parentFactId: string | null;
+  archivedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -158,6 +162,7 @@ export async function createFact(
       confidence,
       visibility,
       sortOrder,
+      parentFactId: input.parentFactId ?? null,
       createdAt: now,
       updatedAt: now,
     })
