@@ -30,6 +30,9 @@ import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry"
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
+import { toSlotAssignments } from "@/lib/layout/validate-adapter";
+import { validateLayoutComposition } from "@/lib/layout/quality";
+import { WIDGET_REGISTRY } from "@/lib/layout/widgets";
 import { isSectionComplete } from "@/lib/page-config/section-completeness";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
@@ -501,8 +504,18 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           ...existing,
           sections: reordered as PageConfig["sections"],
         };
+        // Run slot validation on reordered config
+        const warnings: string[] = [];
+        try {
+          const template = resolveLayoutTemplate(updated);
+          const { assignments } = toSlotAssignments(updated.sections);
+          const validation = validateLayoutComposition(template, assignments, WIDGET_REGISTRY);
+          for (const w of validation.warnings) {
+            warnings.push(w.message);
+          }
+        } catch { /* validation is advisory, don't block reorder */ }
         upsertDraft(username, updated, sessionId);
-        return { success: true };
+        return { success: true, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (error) {
         return { success: false, error: String(error) };
       }
