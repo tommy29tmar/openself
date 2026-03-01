@@ -197,6 +197,19 @@ import { sessions } from "@/lib/db/schema";
 
 export type SessionMeta = Record<string, unknown>;
 
+/**
+ * Single operation journal entry. Recorded per tool call in createAgentTools (Task 13).
+ * Stored in sessions.metadata.journal (array). Read by Tasks 21, 22.
+ */
+export type JournalEntry = {
+  toolName: string;
+  timestamp: string;         // ISO 8601
+  durationMs: number;
+  success: boolean;
+  summary?: string;          // brief output description (optional)
+  batchSize?: number;        // for batch_facts
+};
+
 export function getSessionMeta(sessionId: string): SessionMeta {
   const row = db.select({ metadata: sessions.metadata })
     .from(sessions)
@@ -1032,7 +1045,7 @@ In `src/lib/agent/tools.ts`, inside the `createAgentTools()` closure:
 
 ```typescript
 batch_facts: tool({
-  description: "Execute multiple fact operations atomically (all-or-nothing).",
+  description: "Execute multiple fact operations in order. Operations are applied sequentially (create, update, delete) and a single recompose runs at the end.",
   parameters: z.object({
     operations: z.array(z.object({
       action: z.enum(["create", "update", "delete"]),
@@ -1052,62 +1065,71 @@ batch_facts: tool({
     try {
       let created = 0, updated = 0, deleted = 0;
 
-      // DESIGN (R10-C3): Delegate to existing kb-service functions instead of
-      // raw DB inserts. This preserves all guardrails: visibility policy,
-      // experience key collision guard, upsert semantics, event logging.
+      // DESIGN (R10-C3 / R11-C1): Delegate to existing kb-service functions.
+      // Preserves all guardrails: visibility policy, experience key collision
+      // guard, upsert semantics, event logging.
       //
-      // createFact is async (normalizeCategory), so we cannot wrap creates
-      // in a sync db.transaction(). Instead: run creates sequentially (async),
-      // then run sync update/delete in a transaction.
+      // Operations are processed IN ORDER (not grouped by type). This supports
+      // the "job change" pattern: [update old role → create new role] in one batch.
       //
-      // Trade-off: creates are not atomically grouped with updates/deletes.
-      // Acceptable because (a) batch_facts is a convenience tool, not a
-      // transactional API, and (b) trust ledger provides undo for recovery.
+      // createFact is async (normalizeCategory), so the loop is async.
+      // Not wrapped in a db.transaction — batch_facts is a convenience tool,
+      // not a transactional API. Trust ledger provides undo for recovery.
+      //
+      // reverseOps use the SAME action names as the undo handler (Task 23):
+      //   create→"delete", update→"restore", delete→"recreate"
 
-      const reverseOps: Array<Record<string, unknown>> = [];
+      const reverseOps: Array<{
+        action: "delete" | "restore" | "recreate";
+        factId?: string;
+        previousValue?: unknown;
+        previousFact?: Record<string, unknown>;
+      }> = [];
 
-      // Phase 1: Creates (async, one by one — each goes through createFact)
       for (const op of operations) {
-        if (op.action !== "create") continue;
-        const result = await createFact(
-          {
-            category: op.category!,
-            key: op.key!,
-            value: op.value!,
-            source: op.source ?? "chat",
-            confidence: op.confidence,
-            parentFactId: op.parentFactId,  // R7-C3: pass through
-          },
-          sessionId,
-          profileId,
-        );
-        reverseOps.push({ action: "delete", factId: result.id });
-        created++;
-      }
-
-      // Phase 2: Updates + Deletes (sync — safe for db.transaction)
-      db.transaction(() => {
-        for (const op of operations) {
-          if (op.action === "update") {
+        switch (op.action) {
+          case "create": {
+            const result = await createFact(
+              {
+                category: op.category!,
+                key: op.key!,
+                value: op.value!,
+                source: op.source ?? "chat",
+                confidence: op.confidence,
+                parentFactId: op.parentFactId,  // R7-C3: pass through
+              },
+              sessionId,
+              effectiveOwnerKey,  // R11-C2: use effectiveOwnerKey (not profileId)
+            );
+            reverseOps.push({ action: "delete", factId: result.id });
+            created++;
+            break;
+          }
+          case "update": {
             // Capture old value for undo before updating
             const old = getFactById(op.factId!, sessionId, readKeys);
-            if (old) reverseOps.push({ action: "update", factId: op.factId, value: old.value });
+            if (old) reverseOps.push({ action: "restore", factId: op.factId!, previousValue: old.value });
             updateFact({ factId: op.factId!, value: op.value! }, sessionId, readKeys);
             updated++;
-          } else if (op.action === "delete") {
+            break;
+          }
+          case "delete": {
             // Capture full row for undo before deleting
             const old = getFactById(op.factId!, sessionId, readKeys);
-            if (old) reverseOps.push({ action: "create", category: old.category, key: old.key, value: old.value });
+            if (old) {
+              const { id, ...rest } = old;
+              reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
+            }
             deleteFact(op.factId!, sessionId, readKeys);
             deleted++;
+            break;
           }
         }
-      })();
+      }
 
       // Circuito G: Trust ledger — log batch with reverse payload
-      // reverseOps is built during the transaction: collect created factIds for
-      // delete, old values for update, old facts for re-create on delete.
-      logTrustAction(ownerKey, "batch_facts",
+      // R11-C2: effectiveOwnerKey is always string (ownerKey ?? sessionId at closure top)
+      logTrustAction(effectiveOwnerKey, "batch_facts",
         `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
         { undoPayload: { action: "reverse_batch", reverseOps } },
       );
@@ -1118,10 +1140,10 @@ batch_facts: tool({
       return { success: true, created, updated, deleted };
     } catch (err) {
       if (err instanceof FactValidationError) {
-        return { success: false, error: "VALIDATION_ERROR", message: err.message, hint: "Entire batch rolled back — no operations were applied" };
+        return { success: false, error: "VALIDATION_ERROR", message: err.message, hint: "Batch stopped at failing operation — earlier operations were applied" };
       }
       if (err instanceof FactConstraintError) {
-        return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, hint: "Entire batch rolled back — no operations were applied" };
+        return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, hint: "Batch stopped at failing operation — earlier operations were applied" };
       }
       throw err;
     }
@@ -1748,8 +1770,9 @@ Expected: FAIL
 > }
 > ```
 > Update ALL callers of `createAgentTools()` to destructure: `const { tools, getJournal } = createAgentTools(...)`.
-> **NOTE (R5-S4):** Run `grep -r "createAgentTools" src/ tests/` to find all callers. Known callers:
+> **NOTE (R5-S4 / R11-S5):** Run `grep -r "createAgentTools\|agentTools" src/ tests/` to find all callers. Known callers:
 > - `src/app/api/chat/route.ts` (production caller)
+> - `src/lib/agent/tools.ts:1082` — `export const agentTools = createAgentTools("en", "__default__")` static export for backward compat. Must be updated to destructure: `export const agentTools = createAgentTools("en", "__default__").tools;`
 > - Test files that construct tools for testing (may use `createAgentTools` directly)
 > All must be updated or they will get a type error (receiving `{tools, getJournal}` where they expect a tools record).
 
@@ -2784,7 +2807,7 @@ describe("detectJournalPatterns", () => {
 
 describe("journal patterns → meta-memories", () => {
   it("saves detected patterns as meta-memories via saveMemory", () => {
-    // pattern detected → saveMemory called with type "behavioral_pattern"
+    // pattern detected → saveMemory(ownerKey, content, "pattern", "journal_analysis")
   });
 
   it("deduplicates: does not save pattern if identical meta-memory exists", () => {
@@ -2803,7 +2826,7 @@ Expected: FAIL
 Create `src/lib/services/journal-patterns.ts`:
 
 ```typescript
-import type { JournalEntry } from "@/lib/services/session-metadata"; // from Task 1b/13
+import type { JournalEntry } from "@/lib/services/session-metadata"; // defined in Task 1b, populated in Task 13
 
 export type JournalPattern = {
   type: "repeated_tool" | "tool_sequence" | "correction_pattern";
@@ -2965,31 +2988,37 @@ In `src/lib/services/trust-ledger-service.ts`, in the `executeUndo` switch:
 
 ```typescript
 case "reverse_batch": {
+  // Shape matches producer in batch_facts (Task 8a):
+  //   create → { action: "delete", factId }
+  //   update → { action: "restore", factId, previousValue }
+  //   delete → { action: "recreate", factId, previousFact }
   const reverseOps = payload.reverseOps as Array<{
     action: "delete" | "restore" | "recreate";
-    factId: string;
+    factId?: string;
     previousValue?: unknown;
     previousFact?: Record<string, unknown>;
   }>;
 
-  db.transaction(() => {
+  // R11-C4: Use sqlite.transaction (better-sqlite3 pattern), not db.transaction (Drizzle).
+  // Codebase convention: sqlite.transaction(() => { ... })() returns callable.
+  sqlite.transaction(() => {
     for (const op of reverseOps) {
       switch (op.action) {
         case "delete":
           // Undo a create → delete the created fact
-          db.delete(factsTable).where(eq(factsTable.id, op.factId)).run();
+          db.delete(factsTable).where(eq(factsTable.id, op.factId!)).run();
           break;
         case "restore":
           // Undo an update → restore previous value
           db.update(factsTable)
             .set({ value: op.previousValue, updatedAt: new Date().toISOString() })
-            .where(eq(factsTable.id, op.factId))
+            .where(eq(factsTable.id, op.factId!))
             .run();
           break;
         case "recreate":
           // Undo a delete → re-insert the fact
           if (op.previousFact) {
-            db.insert(factsTable).values(op.previousFact).onConflictDoNothing().run();
+            db.insert(factsTable).values({ id: op.factId, ...op.previousFact }).onConflictDoNothing().run();
           }
           break;
       }
@@ -3603,7 +3632,7 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 | 5 | L2 | sortOrder in composer | T1 |
 | 6 | L2 | parentFactId grouping in composer | T1 |
 | 7 | L2 | Slot carry-over + soft-pin (single-run via composeOptimisticPage) | T1 |
-| 8a | L2 | batch_facts tool (REPLACES create_facts, kb-service direct, atomic) + trust ledger (G) | T2, T3 |
+| 8a | L2 | batch_facts tool (REPLACES create_facts, delegates to kb-service, sequential) + trust ledger (G) | T2, T3 |
 | 8b | L2 | archive_fact, unarchive_fact, reorder_items (REPLACES reorder_section_items) + trust ledger (E) | T2 |
 | 9 | L3 | move_section tool | T7 |
 | 10 | L3 | Fix reorder_sections + maxSteps 10→8 + validateLayoutComposition | — |
@@ -3659,7 +3688,7 @@ Split implementation into three delivery scopes. The integration circuits (v2.2)
 | 2 | Archived fact filtering — `getActiveFacts()` replaces `getAllFacts()` across codebase |
 | 3 | Constraint layer — CURRENT_UNIQUE_CATEGORIES enforcement in create + update, cascade warnings, orphan cleanup |
 | 5 | Sort order in composer — facts ordered by sortOrder ASC, createdAt ASC |
-| 8a | `batch_facts` tool — atomic multi-operation with single recompose + trust ledger (circuit G) |
+| 8a | `batch_facts` tool — sequential multi-operation with single recompose + trust ledger (circuit G) |
 | 8b | `archive_fact`, `unarchive_fact`, `reorder_items` tools + trust ledger (circuit E) |
 | 10 | Fix reorder_sections slot validation + maxSteps 10→8 (immediate cost reduction) |
 | 11 | Planning Protocol — SIMPLE/COMPOUND/STRUCTURAL classification + memory directive (circuit H) |
@@ -3668,7 +3697,7 @@ Split implementation into three delivery scopes. The integration circuits (v2.2)
 
 These are the highest-impact features: the enriched data model, batch operations, archived facts, sort order, and the planning protocol. Integration circuits G, E, and H are embedded here because they're 5-15 lines each inside code already being written. Task 10 is included because the reorder_sections fix and maxSteps reduction are small, touch files already in scope (tools.ts), and maxSteps 10→8 has immediate cost impact.
 
-**v2.1 (7 tasks):** 4, 6, 7, 9, 12, 13, 14, 15
+**v2.1 (8 tasks):** 4, 6, 7, 9, 12, 13, 14, 15
 
 | Task | What it delivers |
 |------|------------------|
@@ -3717,12 +3746,12 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 
 **Why this four-tier split works:**
 
-1. **Risk reduction.** v2 core is 11 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features. v2.2 wires the feedback loops. v2.3 optimizes cost/latency.
+1. **Risk reduction.** v2 core is 12 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features. v2.2 wires the feedback loops. v2.3 optimizes cost/latency.
 2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful. Archetype and coherence are refinements. Integration circuits are the "agent learns" layer. Efficiency is the "scale without breaking the bank" layer.
 3. **Independent deployment.** Each scope is pure additive on the previous one. v2.2 and v2.3 tasks can be rolled back without data loss.
 4. **Embedded circuits.** 7 of 12 circuits (A, C, E, G, H, I, D1) are embedded in existing tasks because they're small enough. The remaining 5 (B, D2, F1, F2, G-undo) are standalone because they introduce new patterns.
 5. **T26 is scope-independent.** Model tiering can be deployed at any point — it only changes which model ID is passed to existing calls. Zero code structure change.
-6. **Task 10 (reorder_sections fix + maxSteps 10→8)** fits either v2 core or v2.1 scope. Include in v2 core if touched during Task 8b work, or defer to v2.1 if the change is isolated.
+6. **Task 10 (reorder_sections fix + maxSteps 10→8)** is in v2 core — small, touches files already in scope (tools.ts), maxSteps reduction has immediate cost impact.
 
 ---
 
@@ -3845,3 +3874,16 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 | R10-S7 | Significant | `relatedProjects` removed from experience scope — `ExperienceItem` and `Experience.tsx` don't support it. parentFactId grouping only used for project filtering in `buildProjectsSection()`. Inline display is out of scope. | T6 Step 3 |
 | R10-S8 | Significant | Model tier rename: added `LegacyModelTier` alias, runtime `TIER_ALIAS` mapping, and env var fallbacks (`AI_MODEL_MEDIUM` → `AI_MODEL_STANDARD`, `AI_MODEL_CAPABLE` → `AI_MODEL_REASONING`). Zero breaking change for existing deployments. | T26 Step 3 |
 | R10-M9 | Minor | Archetype naming: `"creative"` → `"creator"` (consistent with Task 4 list: developer, designer, executive, student, creator, consultant, academic, generalist). | T19 Step 1 |
+
+**Round 11 — findings (8 issues):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R11-C1 | Critical | batch_facts: removed false "atomic" claim. Operations now run IN ORDER (not grouped by type), supporting "job change" pattern (update old→create new in same batch). No `db.transaction` wrapper — sequential async loop with trust ledger undo for recovery. | T8a Step 3, T17 |
+| R11-C2 | Critical | `profileId` → `effectiveOwnerKey` in createFact call (profileId doesn't exist in createAgentTools closure). `logTrustAction(ownerKey, ...)` → `logTrustAction(effectiveOwnerKey, ...)` — ownerKey is `string?` but effectiveOwnerKey is `string`. | T8a Step 3 |
+| R11-C3 | Critical | reverseOps shape aligned: producer uses `"delete"/"restore"/"recreate"` (matching undo handler). Producer captures `previousValue` for updates, `previousFact` (with `id`) for deletes. Consumer shape matches exactly. | T8a Step 3, T23 Step 3 |
+| R11-C4 | Critical | `db.transaction(() => {...})()` → `sqlite.transaction(() => {...})()` in Task 23 undo handler. Drizzle `db.transaction` doesn't return a callable — codebase uses better-sqlite3 `sqlite.transaction` pattern (confirmed in trust-ledger-service.ts, summary-service.ts, register/route.ts). | T23 Step 3 |
+| R11-S5 | Significant | `agentTools` static export at `tools.ts:1082` added to backward-compat note — must be updated to `createAgentTools(...).tools` when return type changes. | T13 Step 3 |
+| R11-S6 | Significant | `JournalEntry` type defined explicitly in `session-metadata.ts` (Task 1b) with `toolName`, `timestamp`, `durationMs`, `success`, `summary?`, `batchSize?`. Exported and consumed by Tasks 13, 21, 22. | T1b Step 3 |
+| R11-M7 | Minor | Task 22 test: `"behavioral_pattern"` → `"pattern"` (aligned with R10-C2 fix). | T22 Step 1 |
+| R11-M8 | Minor | Delivery counts: v2.1 "7 tasks" → "8 tasks" (list has 8: 4,6,7,9,12,13,14,15). "v2 core is 11 tasks" → "12 tasks" (includes T10). Task 10 note updated to definitive. | Delivery strategy |
