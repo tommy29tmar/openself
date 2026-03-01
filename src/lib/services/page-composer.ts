@@ -1222,6 +1222,7 @@ export function composeOptimisticPage(
   username: string,
   language: string = "en",
   layoutTemplate?: LayoutTemplateId,
+  draftSlots?: Map<string, string>,
 ): PageConfig {
   // Global privacy gate: only compose from public/proposed facts
   const visibleFacts = facts.filter(
@@ -1327,7 +1328,7 @@ export function composeOptimisticPage(
   // Slot assignment: distribute sections into layout slots
   const resolvedTemplate = layoutTemplate ?? "vertical";
   const template = getLayoutTemplate(resolvedTemplate);
-  const { sections: assigned, issues } = assignSlotsFromFacts(template, sections);
+  const { sections: assigned, issues } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
 
   const finalSections = assigned;
   const finalTemplate = resolvedTemplate;
