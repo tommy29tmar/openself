@@ -2921,6 +2921,536 @@ git commit -m "feat: reverse_batch undo handler in trust ledger (circuit G undo)
 
 ---
 
+## Layer 6: Efficiency & Cost
+
+> Tasks 24-26 reduce token waste, eliminate duplicate DB queries, and systematize model tier selection.
+> These are pure optimizations — zero behavior change, measurable cost reduction.
+
+### Task 24: Conditional Context Injection by Journey State
+
+> **Problem:** `assembleContext()` injects ALL blocks (facts, soul, summary, memories, conflicts, richness, layout intelligence) into every message regardless of journey state. ~7700 tokens of system prompt per message. Most of it is irrelevant to what the agent needs to do in the current state.
+>
+> **Solution:** Define a `CONTEXT_PROFILE` per JourneyState that specifies which blocks to include and at what budget. Estimated -30/40% input tokens.
+
+**Files:**
+- Modify: `src/lib/agent/context.ts` (conditional block injection)
+- Test: `tests/evals/conditional-context.test.ts`
+
+**Step 1: Write failing tests**
+
+```typescript
+// tests/evals/conditional-context.test.ts
+import { describe, it, expect } from "vitest";
+import { assembleContext, estimateTokens } from "@/lib/agent/context";
+
+describe("conditional context by journey state", () => {
+  it("first_visit: includes FACT_SCHEMA_REFERENCE but omits richness/layout intelligence", () => {
+    // bootstrap.journeyState = "first_visit"
+    // → systemPrompt contains FACT_SCHEMA_REFERENCE
+    // → systemPrompt does NOT contain "SECTION RICHNESS" or "PAGE LAYOUT INTELLIGENCE"
+  });
+
+  it("draft_ready: omits FACT_SCHEMA_REFERENCE, includes soul + style", () => {
+    // bootstrap.journeyState = "draft_ready"
+    // → systemPrompt does NOT contain FACT_SCHEMA_REFERENCE
+    // → systemPrompt contains "SOUL PROFILE" (if soul exists)
+  });
+
+  it("active_fresh: includes only topic-relevant facts (not all 50)", () => {
+    // bootstrap.journeyState = "active_fresh"
+    // → facts block is smaller than full dump
+    // → contains recent summary
+  });
+
+  it("active_stale: includes stale facts + soul + summary", () => {
+    // bootstrap.journeyState = "active_stale"
+    // → systemPrompt contains stale fact references
+  });
+
+  it("blocked: minimal context (auth info only, ~200 tokens)", () => {
+    // bootstrap.journeyState = "blocked"
+    // → systemPrompt is very short
+    // → no facts, no soul, no memories
+  });
+
+  it("returning_no_page: same as first_visit (needs onboarding)", () => {
+    // bootstrap.journeyState = "returning_no_page"
+    // → includes FACT_SCHEMA_REFERENCE
+  });
+
+  it("conditional context saves ≥25% tokens vs unconditional (steady_state)", () => {
+    // Compare: assembleContext with draft_ready bootstrap vs without bootstrap
+    // → conditional version uses ≤75% of unconditional tokens
+    const unconditional = assembleContext(scope, "en", messages);
+    const conditional = assembleContext(scope, "en", messages, authInfo, bootstrapDraftReady);
+    const savings = 1 - estimateTokens(conditional.systemPrompt) / estimateTokens(unconditional.systemPrompt);
+    expect(savings).toBeGreaterThanOrEqual(0.25);
+  });
+});
+```
+
+**Step 2: Run tests to verify fail**
+
+Run: `npx vitest run tests/evals/conditional-context.test.ts`
+Expected: FAIL
+
+**Step 3: Define CONTEXT_PROFILE**
+
+In `src/lib/agent/context.ts`, add before `assembleContext`:
+
+```typescript
+/**
+ * Context profile per journey state.
+ * Controls which blocks are injected and their budgets.
+ * Omitted blocks are not loaded from DB at all (saves both tokens AND queries).
+ */
+type ContextProfile = {
+  facts: { include: boolean; budget: number; filterStaleOnly?: boolean };
+  soul: { include: boolean; budget: number };
+  summary: { include: boolean; budget: number };
+  memories: { include: boolean; budget: number };
+  conflicts: { include: boolean; budget: number };
+  richness: { include: boolean };
+  layoutIntelligence: { include: boolean };
+};
+
+const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
+  first_visit: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: false, budget: 0 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: false, budget: 0 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+  },
+  returning_no_page: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: true, budget: 800 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+  },
+  draft_ready: {
+    facts: { include: true, budget: 1500 },
+    soul: { include: true, budget: 1500 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: true },
+  },
+  active_fresh: {
+    facts: { include: true, budget: 1500 },
+    soul: { include: true, budget: 1000 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: true },
+  },
+  active_stale: {
+    facts: { include: true, budget: 2000, filterStaleOnly: true },
+    soul: { include: true, budget: 1000 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: false },
+  },
+  blocked: {
+    facts: { include: false, budget: 0 },
+    soul: { include: false, budget: 0 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: false, budget: 0 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+  },
+};
+```
+
+**Step 4: Refactor assembleContext to use profiles**
+
+In `assembleContext`, when `bootstrap` is available, use the profile to conditionally skip blocks:
+
+```typescript
+// Determine context profile
+const profile = bootstrap
+  ? CONTEXT_PROFILES[bootstrap.journeyState]
+  : null; // null = legacy unconditional path
+
+// Facts block — conditional
+let factsBlock = "";
+if (!profile || profile.facts.include) {
+  const existingFacts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+  let relevantFacts = existingFacts;
+  if (profile?.facts.filterStaleOnly) {
+    const now = new Date();
+    relevantFacts = existingFacts.filter(f =>
+      f.updatedAt && daysBetween(new Date(f.updatedAt), now) > 30
+    );
+  }
+  const topFacts = relevantFacts.slice(0, 50);
+  factsBlock = topFacts.length > 0
+    ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts
+        .map((f) => `- [${f.category}/${f.key}]: ${JSON.stringify(f.value)}`)
+        .join("\n")}`
+    : "";
+  factsBlock = truncateToTokenBudget(factsBlock, profile?.facts.budget ?? BUDGET.facts);
+}
+
+// Soul block — conditional
+let soulBlock = "";
+if (!profile || profile.soul.include) {
+  const activeSoul = getActiveSoul(scope.cognitiveOwnerKey);
+  soulBlock = activeSoul?.compiled ?? "";
+  soulBlock = truncateToTokenBudget(soulBlock, profile?.soul.budget ?? BUDGET.soul);
+}
+
+// Summary, memories, conflicts — same pattern...
+// Richness, layout intelligence — same pattern...
+```
+
+> **Key:** When `profile.X.include === false`, the DB query is not executed at all. This saves both tokens AND query latency.
+
+**Step 5: Run tests**
+
+Run: `npx vitest run tests/evals/conditional-context.test.ts`
+Expected: PASS
+
+**Step 6: Run full suite**
+
+Run: `npx vitest run`
+Expected: ALL pass (no behavior change for existing tests — they don't provide bootstrap)
+
+**Step 7: Commit**
+
+```bash
+git commit -m "perf: conditional context injection by journey state — ~30% token reduction"
+```
+
+---
+
+### Task 25: Bootstrap → Context Data Passthrough (DB Dedup)
+
+> **Problem:** `assembleBootstrapPayload()` reads `getAllFacts()`, `getOpenConflicts()`, `filterPublishableFacts()`, `classifySectionRichness()`. Then `assembleContext()` re-reads `getAllFacts()`, `getActiveSoul()`, `getOpenConflicts()`. Facts and conflicts are queried twice per message.
+>
+> **Solution:** Bootstrap collects all shared data, passes it to `assembleContext` via a `BootstrapData` struct. Zero behavior change, fewer DB queries per message.
+>
+> **Ref:** `src/app/api/chat/route.ts:123-124` TODO comment.
+
+**Files:**
+- Modify: `src/lib/agent/journey.ts` (return shared data alongside payload)
+- Modify: `src/lib/agent/context.ts` (accept shared data, skip re-query)
+- Modify: `src/app/api/chat/route.ts` (pass shared data through)
+- Test: `tests/evals/context-data-passthrough.test.ts`
+
+**Step 1: Write failing tests**
+
+```typescript
+// tests/evals/context-data-passthrough.test.ts
+import { describe, it, expect, vi } from "vitest";
+
+describe("bootstrap → context data passthrough", () => {
+  it("assembleContext does not call getAllFacts when bootstrapData.facts provided", () => {
+    // spy on getAllFacts
+    // call assembleContext with bootstrapData containing facts
+    // → getAllFacts NOT called
+  });
+
+  it("assembleContext does not call getActiveSoul when bootstrapData.soul provided", () => {
+    // spy on getActiveSoul
+    // → NOT called when bootstrapData.soul is present
+  });
+
+  it("assembleContext does not call getOpenConflicts when bootstrapData.conflicts provided", () => {
+    // spy on getOpenConflicts
+    // → NOT called
+  });
+
+  it("falls back to DB query when bootstrapData is not provided", () => {
+    // no bootstrapData → getAllFacts IS called (backward compat)
+  });
+
+  it("produces identical system prompt with and without passthrough", () => {
+    // same scope, same data
+    // assembleContext(scope, lang, msgs, auth, bootstrap) vs
+    // assembleContext(scope, lang, msgs, auth, bootstrap, bootstrapData)
+    // → systemPrompt is identical
+  });
+});
+```
+
+**Step 2: Run tests to verify fail**
+
+Run: `npx vitest run tests/evals/context-data-passthrough.test.ts`
+Expected: FAIL
+
+**Step 3: Define BootstrapData type**
+
+In `src/lib/agent/journey.ts`:
+
+```typescript
+import type { FactRow } from "@/lib/services/kb-service";
+import type { SoulProfile } from "@/lib/services/soul-service";
+
+/**
+ * Shared data collected during bootstrap, passed to assembleContext
+ * to avoid duplicate DB queries. Pure optimization — same data, fewer reads.
+ */
+export type BootstrapData = {
+  facts: FactRow[];
+  soul: SoulProfile | null;
+  conflicts: Array<{ id: string; category: string; key: string; factAId: string; sourceA: string; factBId?: string; sourceB?: string }>;
+  publishableFacts: FactRow[];
+};
+```
+
+**Step 4: Return BootstrapData from assembleBootstrapPayload**
+
+Change return type to `{ payload: BootstrapPayload; data: BootstrapData }`:
+
+```typescript
+export function assembleBootstrapPayload(
+  scope: OwnerScope,
+  language: string,
+  authInfo?: AuthInfo,
+): { payload: BootstrapPayload; data: BootstrapData } {
+  const facts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+  const soul = getActiveSoul(scope.cognitiveOwnerKey);      // NEW: also read soul here
+  const openConflictRecords = getOpenConflicts(scope.cognitiveOwnerKey);
+  const publishable = filterPublishableFacts(facts);
+  // ... existing payload assembly ...
+
+  return {
+    payload: { /* existing BootstrapPayload */ },
+    data: { facts, soul, conflicts: openConflictRecords, publishableFacts: publishable },
+  };
+}
+```
+
+> **Note:** `getActiveSoul` is added to bootstrap. Previously only read in `assembleContext`. This centralizes all shared reads.
+
+**Step 5: Update assembleContext signature**
+
+```typescript
+export function assembleContext(
+  scope: OwnerScope,
+  language: string,
+  clientMessages: Array<{ role: string; content: string }>,
+  authInfo?: AuthInfo,
+  bootstrap?: BootstrapPayload,
+  bootstrapData?: BootstrapData,  // NEW: pre-fetched data from bootstrap
+): ContextResult {
+  // ...
+  // Facts: use passthrough or query
+  const existingFacts = bootstrapData?.facts
+    ?? getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+
+  // Soul: use passthrough or query
+  const activeSoul = bootstrapData?.soul
+    ?? getActiveSoul(scope.cognitiveOwnerKey);
+
+  // Conflicts: use passthrough or query
+  const openConflicts = bootstrapData?.conflicts
+    ?? getOpenConflicts(scope.cognitiveOwnerKey);
+
+  // Richness: use passthrough publishable or re-filter
+  const publishable = bootstrapData?.publishableFacts
+    ?? filterPublishableFacts(existingFacts);
+  // ...
+}
+```
+
+**Step 6: Update chat route**
+
+In `src/app/api/chat/route.ts`:
+
+```typescript
+// Before:
+const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+
+// After:
+const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(
+  effectiveScope, sessionLanguage, authInfoForBootstrap
+);
+
+// Pass data through to assembleContext:
+const { systemPrompt, trimmedMessages, mode } = assembleContext(
+  effectiveScope, sessionLanguage, messages, authInfo, bootstrap, bootstrapData
+);
+```
+
+**Step 7: Remove TODO comment**
+
+Delete the TODO at `route.ts:123-124`:
+```typescript
+// TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
+// Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
+```
+
+**Step 8: Run tests**
+
+Run: `npx vitest run tests/evals/context-data-passthrough.test.ts`
+Expected: PASS
+
+**Step 9: Run full suite**
+
+Run: `npx vitest run`
+Expected: ALL pass
+
+**Step 10: Commit**
+
+```bash
+git commit -m "perf: bootstrap → context data passthrough — eliminate duplicate DB queries"
+```
+
+---
+
+### Task 26: Systematic Model Tiering
+
+> **Problem:** Model tier infrastructure exists (`getModelForTier` with cheap/medium/capable in `provider.ts`) but 5 of 7 LLM call sites use `getModel()` (= cheap tier) directly. Schema-constrained `generateObject` calls don't need reasoning quality — they should use the cheapest tier. Conversational `streamText` may benefit from a higher tier.
+>
+> **Solution:** Assign explicit tiers to every LLM call site. Rename tiers to be more intentional: `fast` (cheapest, mechanical tasks), `standard` (default chat), `reasoning` (complex analysis). No behavior change if env vars unchanged — tiers resolve to the same model by default.
+
+**Files:**
+- Modify: `src/lib/ai/provider.ts` (rename tiers, add `fast` tier)
+- Modify: `src/lib/ai/translate.ts` (use `fast` tier)
+- Modify: `src/lib/services/section-personalizer.ts` (use `fast` tier)
+- Modify: `src/lib/services/conformity-analyzer.ts` (use `reasoning` tier)
+- Modify: `src/lib/services/summary-service.ts` (already uses `medium` → rename to `standard`)
+- Modify: `src/app/api/chat/route.ts` (use `standard` tier for chat, `fast` for title generation)
+- Test: `tests/evals/model-tiering.test.ts`
+
+**Step 1: Write failing tests**
+
+```typescript
+// tests/evals/model-tiering.test.ts
+import { describe, it, expect } from "vitest";
+import { getModelForTier } from "@/lib/ai/provider";
+
+describe("model tiering", () => {
+  it("fast tier returns a valid model", () => {
+    const model = getModelForTier("fast");
+    expect(model).toBeDefined();
+  });
+
+  it("standard tier returns a valid model", () => {
+    const model = getModelForTier("standard");
+    expect(model).toBeDefined();
+  });
+
+  it("reasoning tier returns a valid model", () => {
+    const model = getModelForTier("reasoning");
+    expect(model).toBeDefined();
+  });
+
+  it("all tiers resolve to same model when no env overrides (single-model setup)", () => {
+    // default config: all tiers use same model
+    // → all 3 return the same model ID
+  });
+
+  it("AI_MODEL_FAST env override is respected", () => {
+    // set AI_MODEL_FAST=custom-model
+    // → getModelForTier("fast") returns custom model
+  });
+});
+```
+
+**Step 2: Run tests to verify fail**
+
+Run: `npx vitest run tests/evals/model-tiering.test.ts`
+Expected: FAIL
+
+**Step 3: Update tier definitions**
+
+In `src/lib/ai/provider.ts`, update the tier system:
+
+```typescript
+/**
+ * Model tier for cost-aware routing.
+ *
+ * | Tier      | Use case                                    | Default model      |
+ * |-----------|---------------------------------------------|--------------------|
+ * | fast      | Schema-constrained generateObject,          | Same as AI_MODEL   |
+ * |           | translation, mechanical tasks               |                    |
+ * | standard  | Chat conversation, summaries,               | Same as AI_MODEL   |
+ * |           | text compression                            |                    |
+ * | reasoning | Conformity analysis, complex multi-step     | gemini-2.5-pro /   |
+ * |           | evaluation                                  | claude-sonnet-4-6  |
+ *
+ * By default, fast and standard resolve to AI_MODEL (= cheapest).
+ * Override per tier with AI_MODEL_FAST, AI_MODEL_STANDARD, AI_MODEL_REASONING.
+ * In single-model setups, all tiers use the same model and the system is a no-op.
+ */
+export type ModelTier = "fast" | "standard" | "reasoning";
+```
+
+Update tier model tables:
+```typescript
+const FAST_MODELS: Record<Provider, string> = {
+  google: "gemini-2.0-flash",     // cheapest
+  openai: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001",
+  ollama: "llama3.3",
+};
+
+const STANDARD_MODELS: Record<Provider, string> = {
+  google: "gemini-2.0-flash",     // same as fast by default
+  openai: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001",
+  ollama: "llama3.3",
+};
+
+const REASONING_MODELS: Record<Provider, string> = {
+  google: "gemini-2.5-pro",
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-6",
+  ollama: "llama3.3",
+};
+```
+
+> **Backward compat:** The existing `"cheap"` and `"medium"` types are replaced. `summary-service.ts` already uses `getModelForTier("medium")` — update to `"standard"`. If any external code references old tiers, a deprecation alias can be added.
+
+**Step 4: Update all LLM call sites**
+
+| File | Current | New tier | Rationale |
+|------|---------|----------|-----------|
+| `src/app/api/chat/route.ts:253` | `getModel()` | `getModelForTier("standard")` | Conversational, needs tone |
+| `src/app/api/chat/route.ts:262` | `getModel()` (title gen) | `getModelForTier("fast")` | One-line title, mechanical |
+| `src/lib/ai/translate.ts:162` | `getModel()` | `getModelForTier("fast")` | Mechanical translation |
+| `src/lib/services/section-personalizer.ts:92` | `getModel()` | `getModelForTier("fast")` | Schema-constrained, Zod output |
+| `src/lib/services/conformity-analyzer.ts:44` | `getModel()` | `getModelForTier("reasoning")` | Qualitative judgment |
+| `src/lib/services/conformity-analyzer.ts:100` | `getModel()` | `getModelForTier("reasoning")` | Rewrite requires reasoning |
+| `src/lib/services/summary-service.ts:143` | `getModelForTier("medium")` | `getModelForTier("standard")` | Text compression |
+
+New call sites from v2 plan:
+| File | Tier | Rationale |
+|------|------|-----------|
+| `coherence-check.ts` (Task 14) | `fast` | Schema-constrained, 3 fields |
+| `journal-patterns.ts` (Task 22) | N/A | Deterministic, no LLM |
+
+**Step 5: Run tests**
+
+Run: `npx vitest run tests/evals/model-tiering.test.ts`
+Expected: PASS
+
+**Step 6: Run full suite**
+
+Run: `npx vitest run`
+Expected: ALL pass
+
+**Step 7: Commit**
+
+```bash
+git commit -m "perf: systematic model tiering — fast/standard/reasoning across all LLM call sites"
+```
+
+---
+
 ## Summary
 
 | Task | Layer | Description | Depends On |
@@ -2950,10 +3480,13 @@ git commit -m "feat: reverse_batch undo handler in trust ledger (circuit G undo)
 | 21 | L5b | Journal enrichment in summaries (F1) | T13 |
 | 22 | L5b | Journal pattern analysis → meta-memories (F2) | T13 |
 | 23 | L5b | reverse_batch undo handler (G undo) | T8a |
+| 24 | L6 | Conditional context injection by journey state (-30% tokens) | T1b |
+| 25 | L6 | Bootstrap → context data passthrough (DB dedup) | T24 |
+| 26 | L6 | Systematic model tiering (fast/standard/reasoning) | — |
 
-**Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict.
+**Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict. Exception: T24 and T25 both modify `context.ts` — implement T24 first, T25 on top. T26 is independent of both.
 
-**Estimated tests:** ~120 new + ~35 updated = ~1280 total (from 1151 current).
+**Estimated tests:** ~135 new + ~35 updated = ~1300 total (from 1151 current).
 
 **Integration circuit map:**
 
@@ -3019,13 +3552,24 @@ All v2.1 tasks rely on columns already created by migration 0022. No schema chan
 
 These tasks close the remaining feedback loops. All are pure additive — no schema changes, no breaking changes. They depend on v2.1 tasks (T19→T12, T20→T14, T21/T22→T13, T23→T8a) but not on each other. Can be implemented in parallel within v2.2.
 
-**Why this three-tier split works:**
+**v2.3 — Efficiency (3 tasks):** 24, 25, 26
 
-1. **Risk reduction.** v2 core is 11 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features. v2.2 wires the feedback loops.
-2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful. Archetype and coherence are refinements. Integration circuits are the "agent learns" layer — highest ambition, lowest urgency.
-3. **Independent deployment.** Each scope is pure additive on the previous one. v2.2 tasks can be rolled back without data loss.
-4. **Embedded circuits.** 5 of 12 circuits (A, C, E, G, H, I, D1) are embedded in existing tasks because they're small enough. The remaining 5 (B, D2, F1, F2, G-undo) are standalone because they introduce new patterns.
-5. **Task 10 (reorder_sections fix + maxSteps 10→8)** fits either v2 core or v2.1 scope. Include in v2 core if touched during Task 8b work, or defer to v2.1 if the change is isolated.
+| Task | What it delivers |
+|------|------------------|
+| 24 | Conditional context injection — journey-state-aware block selection, -30% input tokens |
+| 25 | Bootstrap → context data passthrough — zero duplicate DB queries per message |
+| 26 | Systematic model tiering — fast/standard/reasoning across all 7+ LLM call sites |
+
+These are pure optimizations. T26 is independent and can be done anytime (even before v2 core). T24 and T25 modify `context.ts` and should be done in order. T25 resolves the existing `route.ts:123-124` TODO.
+
+**Why this four-tier split works:**
+
+1. **Risk reduction.** v2 core is 11 tasks with straightforward data-layer + tool-layer changes. v2.1 adds intelligence features. v2.2 wires the feedback loops. v2.3 optimizes cost/latency.
+2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful. Archetype and coherence are refinements. Integration circuits are the "agent learns" layer. Efficiency is the "scale without breaking the bank" layer.
+3. **Independent deployment.** Each scope is pure additive on the previous one. v2.2 and v2.3 tasks can be rolled back without data loss.
+4. **Embedded circuits.** 7 of 12 circuits (A, C, E, G, H, I, D1) are embedded in existing tasks because they're small enough. The remaining 5 (B, D2, F1, F2, G-undo) are standalone because they introduce new patterns.
+5. **T26 is scope-independent.** Model tiering can be deployed at any point — it only changes which model ID is passed to existing calls. Zero code structure change.
+6. **Task 10 (reorder_sections fix + maxSteps 10→8)** fits either v2 core or v2.1 scope. Include in v2 core if touched during Task 8b work, or defer to v2.1 if the change is isolated.
 
 ---
 
