@@ -1,4 +1,4 @@
-import { eq, and, like, or, sql, inArray, asc, isNull } from "drizzle-orm";
+import { eq, and, like, or, sql, inArray, asc, isNull, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   facts,
@@ -14,6 +14,7 @@ import { initialVisibility, isSensitiveCategory, type Visibility } from "@/lib/v
 import { logEvent } from "@/lib/services/event-service";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
 import { validateFactValue } from "@/lib/services/fact-validation";
+import { FactConstraintError, CURRENT_UNIQUE_CATEGORIES } from "@/lib/services/fact-constraints";
 
 // -- Taxonomy store backed by DB
 
@@ -108,6 +109,29 @@ export async function createFact(
 
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
+
+  // Current uniqueness check — only one "current" per category (e.g. experience)
+  // Exclude same key to avoid blocking idempotent upserts.
+  if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
+    const val = typeof input.value === "object" ? input.value : {};
+    if ((val as Record<string, unknown>).status === "current") {
+      const existingCurrent = db.select().from(facts)
+        .where(and(
+          eq(facts.sessionId, sessionId),
+          eq(facts.category, normalized.canonical),
+          isNull(facts.archivedAt),
+          sql`json_extract(value, '$.status') = 'current'`,
+          ne(facts.key, input.key),
+        )).get();
+      if (existingCurrent) {
+        throw new FactConstraintError({
+          code: "EXISTING_CURRENT",
+          existingFactId: existingCurrent.id,
+          suggestion: `Update existing fact ${existingCurrent.id} to status:"past" first, then create the new one.`,
+        });
+      }
+    }
+  }
 
   // Experience key collision guardrail: prevent accidental data loss
   if (normalized.canonical === "experience") {
@@ -234,6 +258,35 @@ export function updateFact(
   // Validate new value before persisting
   validateFactValue(existing.category, existing.key, input.value);
 
+  // Current uniqueness check (analogous to createFact, with self-exclusion)
+  if (CURRENT_UNIQUE_CATEGORIES.has(existing.category)) {
+    const newVal = typeof input.value === "object" ? input.value : {};
+    if ((newVal as Record<string, unknown>).status === "current") {
+      const existingCurrent = db.select().from(facts)
+        .where(and(
+          eq(facts.sessionId, existing.sessionId),
+          eq(facts.category, existing.category),
+          isNull(facts.archivedAt),
+          sql`json_extract(value, '$.status') = 'current'`,
+          sql`${facts.id} != ${input.factId}`,
+        )).get();
+      if (existingCurrent) {
+        throw new FactConstraintError({
+          code: "EXISTING_CURRENT",
+          existingFactId: existingCurrent.id,
+          suggestion: `Another fact (${existingCurrent.id}) already has status:"current". Update it to "past" first.`,
+        });
+      }
+    }
+  }
+
+  // Cascade warning: check if fact has children
+  const children = db.select({ count: sql<number>`count(*)` })
+    .from(facts)
+    .where(and(eq(facts.parentFactId, input.factId), isNull(facts.archivedAt)))
+    .get();
+  const hasChildren = (children?.count ?? 0) > 0;
+
   const now = new Date().toISOString();
   db.update(facts)
     .set({ value: input.value, updatedAt: now })
@@ -248,7 +301,12 @@ export function updateFact(
     entityId: input.factId,
   });
 
-  return { ...existing, value: input.value, updatedAt: now } as FactRow;
+  return {
+    ...existing,
+    value: input.value,
+    updatedAt: now,
+    ...(hasChildren ? { _warnings: [`This fact has ${children!.count} child fact(s) that may need updating`] } : {}),
+  } as FactRow;
 }
 
 /**
@@ -277,6 +335,12 @@ export function deleteFact(
   if (!existing) return false;
 
   db.delete(facts).where(eq(facts.id, factId)).run();
+
+  // Orphan cleanup: detach children
+  db.update(facts)
+    .set({ parentFactId: null })
+    .where(eq(facts.parentFactId, factId))
+    .run();
 
   logEvent({
     eventType: "fact_deleted",
