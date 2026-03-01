@@ -6,10 +6,13 @@ import {
   deleteFact,
   searchFacts,
   getAllFacts,
+  getFactById,
   setFactVisibility,
   VisibilityTransitionError,
   updateFactSortOrder,
 } from "@/lib/services/kb-service";
+import { FactConstraintError } from "@/lib/services/fact-constraints";
+import { logTrustAction } from "@/lib/services/trust-ledger-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
@@ -153,6 +156,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         if (error instanceof FactValidationError) {
           return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
         }
+        if (error instanceof FactConstraintError) {
+          return { success: false, code: error.code, existingFactId: error.existingFactId, suggestion: error.suggestion };
+        }
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
@@ -163,39 +169,113 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
-  create_facts: tool({
-    description:
-      "Store multiple facts at once. Use when the user shares several pieces of information in one message.",
+  batch_facts: tool({
+    description: "Execute multiple fact operations in order. Operations are applied sequentially (create, update, delete) and a single recompose runs at the end. Max 20 operations.",
     parameters: z.object({
-      facts: z.array(z.object({
-        category: z.string(),
-        key: z.string(),
-        value: z.record(z.unknown()),
-        confidence: z.number().optional().default(1.0),
-      })),
+      operations: z.array(z.discriminatedUnion("action", [
+        z.object({
+          action: z.literal("create"),
+          category: z.string(),
+          key: z.string(),
+          value: z.record(z.unknown()),
+          source: z.string().optional(),
+          confidence: z.number().optional(),
+          parentFactId: z.string().optional(),
+        }),
+        z.object({
+          action: z.literal("update"),
+          factId: z.string(),
+          value: z.record(z.unknown()),
+        }),
+        z.object({
+          action: z.literal("delete"),
+          factId: z.string(),
+        }),
+      ])).max(20),
     }),
-    execute: async ({ facts: inputs }) => {
-      const results = [];
-      for (const input of inputs) {
-        try {
-          const fact = await createFact(input, sessionId);
-          results.push({
-            success: true,
-            factId: fact.id,
-            key: input.key,
-            visibility: fact.visibility,
-            pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
-          });
-        } catch (error) {
-          results.push({ success: false, key: input.key, error: String(error) });
-          logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "create_facts", key: input.key, error: String(error) } });
+    execute: async ({ operations }) => {
+      if (operations.length > 20) {
+        return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, updated: 0, deleted: 0 };
+      }
+      let created = 0, updated = 0, deleted = 0;
+      const reverseOps: Array<{
+        action: "delete" | "restore" | "recreate";
+        factId?: string;
+        previousValue?: unknown;
+        previousFact?: Record<string, unknown>;
+      }> = [];
+
+      try {
+        for (const op of operations) {
+          switch (op.action) {
+            case "create": {
+              const result = await createFact(
+                {
+                  category: op.category,
+                  key: op.key,
+                  value: op.value,
+                  source: op.source ?? "chat",
+                  confidence: op.confidence,
+                  parentFactId: op.parentFactId,
+                },
+                sessionId,
+                effectiveOwnerKey,
+              );
+              reverseOps.push({ action: "delete", factId: result.id });
+              created++;
+              break;
+            }
+            case "update": {
+              const old = getFactById(op.factId, sessionId, readKeys);
+              if (old) reverseOps.push({ action: "restore", factId: op.factId, previousValue: old.value });
+              const updatedRow = updateFact({ factId: op.factId, value: op.value }, sessionId, readKeys);
+              if (updatedRow) updated++;
+              break;
+            }
+            case "delete": {
+              const old = getFactById(op.factId, sessionId, readKeys);
+              if (old) {
+                const { id, ...rest } = old;
+                reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
+              }
+              const didDelete = deleteFact(op.factId, sessionId, readKeys);
+              if (didDelete) deleted++;
+              break;
+            }
+          }
         }
+
+        if (reverseOps.length > 0) {
+          logTrustAction(effectiveOwnerKey, "batch_facts",
+            `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
+            { undoPayload: { action: "reverse_batch", reverseOps } },
+          );
+        }
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation after batch failed:", e);
+        }
+        return { success: true, created, updated, deleted };
+      } catch (err) {
+        if (reverseOps.length > 0) {
+          try {
+            logTrustAction(effectiveOwnerKey, "batch_facts",
+              `Batch (partial): ${created} created, ${updated} updated, ${deleted} deleted — stopped by error`,
+              { undoPayload: { action: "reverse_batch", reverseOps } },
+            );
+            recomposeAfterMutation();
+          } catch (cleanupErr) {
+            console.error("[batch_facts] cleanup failed after partial batch:", cleanupErr);
+          }
+        }
+
+        if (err instanceof FactValidationError) {
+          return { success: false, error: "VALIDATION_ERROR", message: err.message, created, updated, deleted, hint: "Batch stopped — earlier operations were applied" };
+        }
+        if (err instanceof FactConstraintError) {
+          return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, created, updated, deleted, hint: "Batch stopped — earlier operations were applied" };
+        }
+        throw err;
       }
-      // Single recomposition at end
-      try { recomposeAfterMutation(); } catch (e) {
-        console.warn("[tools] recomposeAfterMutation after batch create failed:", e);
-      }
-      return { results, totalCreated: results.filter(r => r.success).length };
     },
   }),
 
@@ -227,6 +307,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       } catch (error) {
         if (error instanceof FactValidationError) {
           return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
+        }
+        if (error instanceof FactConstraintError) {
+          return { success: false, code: error.code, existingFactId: error.existingFactId, suggestion: error.suggestion };
         }
         logEvent({
           eventType: "tool_call_error",
