@@ -92,6 +92,17 @@ export function recencyFactor(updatedAt: string | null): number {
   return 0.2;
 }
 
+/**
+ * Compute relevance score for a fact.
+ * Used by both detectSituations (flag) and assembleBootstrapPayload (list).
+ * Single source of truth for the relevance formula.
+ */
+export function computeRelevance(f: FactRow, childCountMap?: Map<string, number>): number {
+  const recency = recencyFactor(f.updatedAt);
+  const children = childCountMap?.get(f.id) ?? 0;
+  return (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
+}
+
 // ---------------------------------------------------------------------------
 // Detection: Journey State
 // ---------------------------------------------------------------------------
@@ -282,12 +293,9 @@ export function detectSituations(
   const activeFacts = facts.filter(f => !f.archivedAt);
   if (activeFacts.length > ARCHIVABLE_SAFETY_FLOOR) {
     const childCountMap = opts?.childCountMap;
-    const archivable = activeFacts.filter(f => {
-      const recency = recencyFactor(f.updatedAt);
-      const children = childCountMap?.get(f.id) ?? 0;
-      const relevance = (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
-      return relevance < ARCHIVABLE_RELEVANCE_THRESHOLD;
-    });
+    const archivable = activeFacts.filter(f =>
+      computeRelevance(f, childCountMap) < ARCHIVABLE_RELEVANCE_THRESHOLD,
+    );
 
     // Safety floor: don't suggest if it would leave fewer than 5 active facts
     if (archivable.length > 0 && activeFacts.length - archivable.length >= ARCHIVABLE_SAFETY_FLOOR) {
@@ -396,10 +404,7 @@ export function assembleBootstrapPayload(
   if (situations.includes("has_archivable_facts")) {
     const activeFacts = facts.filter(f => !f.archivedAt);
     for (const f of activeFacts) {
-      const recency = recencyFactor(f.updatedAt);
-      const children = childCountMap.get(f.id) ?? 0;
-      const relevance = (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
-      if (relevance < ARCHIVABLE_RELEVANCE_THRESHOLD) {
+      if (computeRelevance(f, childCountMap) < ARCHIVABLE_RELEVANCE_THRESHOLD) {
         archivableFacts.push(`${f.category}/${f.key}`);
       }
     }

@@ -241,8 +241,8 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
     } catch { /* best-effort */ }
   }
 
-  // --- Coherence issues injection (circuit D1) ---
-  if (sessionId) {
+  // --- Coherence issues injection (circuit D1, steady_state only) ---
+  if (sessionId && mode === "steady_state") {
     try {
       const meta = getSessionMeta(sessionId);
       const warnings = (meta.coherenceWarnings ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
