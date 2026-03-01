@@ -1072,9 +1072,16 @@ batch_facts: tool({
     ])).max(20),
   }),
   execute: async ({ operations }) => {
-    try {
-      let created = 0, updated = 0, deleted = 0;
+    // Counters + undo log declared OUTSIDE try so catch can access them.
+    let created = 0, updated = 0, deleted = 0;
+    const reverseOps: Array<{
+      action: "delete" | "restore" | "recreate";
+      factId?: string;
+      previousValue?: unknown;
+      previousFact?: Record<string, unknown>;
+    }> = [];
 
+    try {
       // DESIGN (R10-C3 / R11-C1): Delegate to existing kb-service functions.
       // Preserves all guardrails: visibility policy, experience key collision
       // guard, upsert semantics, event logging.
@@ -1088,13 +1095,6 @@ batch_facts: tool({
       //
       // reverseOps use the SAME action names as the undo handler (Task 23):
       //   create→"delete", update→"restore", delete→"recreate"
-
-      const reverseOps: Array<{
-        action: "delete" | "restore" | "recreate";
-        factId?: string;
-        previousValue?: unknown;
-        previousFact?: Record<string, unknown>;
-      }> = [];
 
       // Discriminated union ensures fields are present per action — no ! assertions needed.
       for (const op of operations) {
@@ -1776,7 +1776,34 @@ Expected: FAIL
 
 **Step 3: Implement**
 
-1. In `src/lib/agent/tools.ts`: add `operationJournal: JournalEntry[]` array at closure level. Each tool execute wraps its result with `operationJournal.push(...)`.
+1. In `src/lib/agent/tools.ts`: add `operationJournal: JournalEntry[]` array at closure level. Each tool's `execute` pushes a journal entry after running. **Always include `args`** — Task 22 pattern detection depends on `entries[i].args?.category`:
+
+```typescript
+// Example journal wrapper for create_fact:
+const start = Date.now();
+try {
+  const result = await createFact(...);
+  operationJournal.push({
+    toolName: "create_fact",
+    timestamp: new Date().toISOString(),
+    durationMs: Date.now() - start,
+    success: true,
+    args: { category: input.category, key: input.key },  // R13-M7: always log args
+    summary: `Created ${input.category}/${input.key}`,
+  });
+  return result;
+} catch (err) {
+  operationJournal.push({
+    toolName: "create_fact",
+    timestamp: new Date().toISOString(),
+    durationMs: Date.now() - start,
+    success: false,
+    args: { category: input.category, key: input.key },
+  });
+  throw err;
+}
+// For batch_facts, also include: batchSize: operations.length
+```
 
 > **S2 — Journal export mechanism:** `createAgentTools()` currently returns just the tools record. Change the return type to expose the journal:
 > ```typescript
@@ -2146,7 +2173,8 @@ if (mode === "steady_state") {
     try {
       const activeFacts = getActiveFacts(sessionId, readKeys);
       // Circuit I: pass compiled soul for tone-aware coherence
-      const soulCompiled = getActiveSoul(ownerKey)?.compiled;
+      // R13-S4: use effectiveOwnerKey (string), not ownerKey (string?)
+      const soulCompiled = getActiveSoul(effectiveOwnerKey)?.compiled;
       const issues = await checkPageCoherence(config.sections, activeFacts, soulCompiled);
       if (issues.length > 0) {
         // Circuit D1: warning issues → session metadata (coherenceWarnings)
@@ -2579,7 +2607,8 @@ const archetype = typeof meta.archetype === "string" ? meta.archetype : undefine
 const orderedSections = prioritizeSections(config.sections, archetype);
 // Then iterate over orderedSections instead of config.sections
 for (const section of orderedSections) {
-  await personalizeSection({ section, ownerKey, language, publishableFacts, soulCompiled, username });
+  // R13-S4: use effectiveOwnerKey (string), not ownerKey (string?)
+  await personalizeSection({ section, ownerKey: effectiveOwnerKey, language, publishableFacts, soulCompiled, username });
 }
 ```
 
@@ -2626,8 +2655,8 @@ describe("deep heartbeat coherence check", () => {
     // NOT with ownerKey directly
   });
 
-  it("logs coherence_check event on warnings", () => {
-    // → logEvent called with eventType "coherence_check"
+  it("logs heartbeat_coherence event on warnings", () => {
+    // → logEvent called with eventType "heartbeat_coherence"
   });
 });
 ```
@@ -2660,9 +2689,9 @@ if (draft?.config) {
     mergeSessionMeta(anchorSession, { coherenceWarnings: warnings });
 
     logEvent({
-      eventType: "coherence_check",
+      eventType: "heartbeat_coherence",
       actor: "worker",
-      payload: { ownerKey, issues: coherenceIssues.length, warnings: warnings.length },
+      payload: { ownerKey, warningsFound: warnings.length, durationMs: 0 /* TODO: measure */ },
     });
   }
 }
@@ -2688,7 +2717,8 @@ git commit -m "feat: coherence check in deep heartbeat → session metadata (cir
 > **Circuit F1:** Operation journal entries feed into conversation summaries. When generateSummary runs, it includes a digest of recent tool operations so summaries capture what the agent *did*, not just what was said.
 
 **Files:**
-- Modify: `src/lib/services/summary-service.ts` (inject journal digest into summary prompt)
+- Modify: `src/lib/services/summary-service.ts` (inject journal digest into summary prompt + update `enqueueSummaryJob` signature)
+- Modify: `src/app/api/chat/route.ts` (pass `knowledgeReadKeys` to `enqueueSummaryJob`)
 - Test: `tests/evals/journal-summary.test.ts`
 
 **Step 1: Write failing test**
@@ -2711,6 +2741,16 @@ describe("journal enrichment in summaries", () => {
 
   it("journal digest is max 3 lines regardless of entry count", () => {
     // 10 journal entries → digest compressed to 3 lines
+  });
+});
+
+describe("enqueueSummaryJob data flow", () => {
+  it("passes knowledgeReadKeys so worker can read journal from correct session", () => {
+    // enqueueSummaryJob(ownerKey, readKeys) → job payload contains messageKeys = readKeys
+  });
+
+  it("worker defaults messageKeys to [ownerKey] when not provided (backward compat)", () => {
+    // enqueueSummaryJob(ownerKey) without readKeys → messageKeys = [ownerKey]
   });
 });
 ```
@@ -2748,8 +2788,26 @@ const prompt = `Summarize this conversation...${journalDigest}`;
 
 Keep `generateSummary` signature unchanged (`(ownerKey: string, messageKeys: string[])`).
 
-> **NOTE (R7-S7): Data flow.** The journal lives in `sessions.metadata` (from Task 1b/13). The worker job `memory_summary` in `src/lib/worker/index.ts:30-34` calls `generateSummary(ownerKey, messageKeys)`. To get journal entries, the summary service reads `sessions.metadata.journal` from the DB for the session(s) being summarized — it does NOT depend on the caller to provide journal data. This keeps the worker job unchanged.
+> **NOTE (R7-S7): Data flow.** The journal lives in `sessions.metadata` (from Task 1b/13). The worker job `memory_summary` in `src/lib/worker/index.ts:30-34` calls `generateSummary(ownerKey, messageKeys)`. To get journal entries, the summary service reads `sessions.metadata.journal` from the DB for the session(s) being summarized — it does NOT depend on the caller to provide journal data.
 
+**R13-S5: Fix `enqueueSummaryJob` data flow.** Currently `enqueueSummaryJob(ownerKey)` passes only `ownerKey`, and the worker defaults `messageKeys = [ownerKey]`. But journal lives in `sessions.metadata` for `currentSessionId` (not `cognitiveOwnerKey` in multi-user mode). Fix:
+
+1. Update `enqueueSummaryJob` signature in `summary-service.ts`:
+```typescript
+export function enqueueSummaryJob(ownerKey: string, messageKeys?: string[]): void {
+  enqueueJob("memory_summary", { ownerKey, messageKeys: messageKeys ?? [ownerKey] });
+}
+```
+
+2. Update caller in `route.ts` `onFinish`:
+```typescript
+// Before:
+enqueueSummaryJob(effectiveScope.cognitiveOwnerKey);
+// After:
+enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys);
+```
+
+3. In `generateSummary`, read journal from session metadata:
 ```typescript
 export async function generateSummary(
   ownerKey: string,
@@ -2759,22 +2817,6 @@ export async function generateSummary(
 
   // Circuit F1: read journal from session metadata (Task 1b provides getSessionMeta)
   // Journal entries are per-session — aggregate from all messageKeys sessions.
-  //
-  // NOTE (R12-S6): messageKeys come from the worker job payload. Currently,
-  // enqueueSummaryJob(ownerKey) passes only ownerKey, and the worker defaults
-  // messageKeys = [ownerKey]. But journal lives in sessions.metadata for
-  // currentSessionId (not cognitiveOwnerKey). Fix: enqueueSummaryJob must
-  // pass knowledgeReadKeys so the worker iterates the correct session IDs.
-  //
-  // In route.ts onFinish, change:
-  //   enqueueSummaryJob(effectiveScope.cognitiveOwnerKey)
-  // to:
-  //   enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys)
-  //
-  // In summary-service.ts, update enqueueSummaryJob signature:
-  //   export function enqueueSummaryJob(ownerKey: string, messageKeys?: string[]): void {
-  //     enqueueJob("memory_summary", { ownerKey, messageKeys: messageKeys ?? [ownerKey] });
-  //   }
   const journalEntries: JournalEntry[] = [];
   for (const sessionKey of messageKeys) {
     const meta = getSessionMeta(sessionKey);
@@ -3256,7 +3298,8 @@ const profile = bootstrap
 // Facts block — conditional
 let factsBlock = "";
 if (!profile || profile.facts.include) {
-  const existingFacts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+  // NOTE: getActiveFacts (from Task 2) — getAllFacts was privatized.
+  const existingFacts = getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
   let relevantFacts = existingFacts;
   if (profile?.facts.filterStaleOnly) {
     const now = new Date();
@@ -3307,7 +3350,7 @@ git commit -m "perf: conditional context injection by journey state — ~30% tok
 
 ### Task 25: Bootstrap → Context Data Passthrough (DB Dedup)
 
-> **Problem:** `assembleBootstrapPayload()` reads `getAllFacts()`, `getOpenConflicts()`, `filterPublishableFacts()`, `classifySectionRichness()`. Then `assembleContext()` re-reads `getAllFacts()`, `getActiveSoul()`, `getOpenConflicts()`. Facts and conflicts are queried twice per message.
+> **Problem:** `assembleBootstrapPayload()` reads `getActiveFacts()`, `getOpenConflicts()`, `filterPublishableFacts()`, `classifySectionRichness()`. Then `assembleContext()` re-reads `getActiveFacts()`, `getActiveSoul()`, `getOpenConflicts()`. Facts and conflicts are queried twice per message.
 >
 > **Solution:** Bootstrap collects all shared data, passes it to `assembleContext` via a `BootstrapData` struct. Zero behavior change, fewer DB queries per message.
 >
@@ -3326,10 +3369,10 @@ git commit -m "perf: conditional context injection by journey state — ~30% tok
 import { describe, it, expect, vi } from "vitest";
 
 describe("bootstrap → context data passthrough", () => {
-  it("assembleContext does not call getAllFacts when bootstrapData.facts provided", () => {
-    // spy on getAllFacts
+  it("assembleContext does not call getActiveFacts when bootstrapData.facts provided", () => {
+    // spy on getActiveFacts (Task 2 renamed getAllFacts)
     // call assembleContext with bootstrapData containing facts
-    // → getAllFacts NOT called
+    // → getActiveFacts NOT called
   });
 
   it("assembleContext does not call getActiveSoul when bootstrapData.soul provided", () => {
@@ -3343,7 +3386,7 @@ describe("bootstrap → context data passthrough", () => {
   });
 
   it("falls back to DB query when bootstrapData is not provided", () => {
-    // no bootstrapData → getAllFacts IS called (backward compat)
+    // no bootstrapData → getActiveFacts IS called (backward compat)
   });
 
   it("produces identical system prompt with and without passthrough", () => {
@@ -3389,8 +3432,10 @@ export function assembleBootstrapPayload(
   scope: OwnerScope,
   language: string,
   authInfo?: AuthInfo,
+  lastUserMessage?: string,  // Added by Task 12 (archetype detection)
 ): { payload: BootstrapPayload; data: BootstrapData } {
-  const facts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+  // NOTE: getActiveFacts (from Task 2) — getAllFacts was privatized.
+  const facts = getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
   const soul = getActiveSoul(scope.cognitiveOwnerKey);      // NEW: also read soul here
   const openConflictRecords = getOpenConflicts(scope.cognitiveOwnerKey);
   const publishable = filterPublishableFacts(facts);
@@ -3419,7 +3464,7 @@ export function assembleContext(
   // ...
   // Facts: use passthrough or query
   const existingFacts = bootstrapData?.facts
-    ?? getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+    ?? getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
 
   // Soul: use passthrough or query
   const activeSoul = bootstrapData?.soul
@@ -3441,12 +3486,12 @@ export function assembleContext(
 In `src/app/api/chat/route.ts`:
 
 ```typescript
-// Before:
-const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+// Before (after Task 12, which added lastUserMessage):
+const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessage);
 
-// After:
+// After (Task 25 adds return type split + passthrough):
 const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(
-  effectiveScope, sessionLanguage, authInfoForBootstrap
+  effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessage
 );
 
 // Pass data through to assembleContext:
@@ -3942,3 +3987,15 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 | R12-S7 | Significant | Task 8b: `logTrustAction(ownerKey, ...)` → `logTrustAction(effectiveOwnerKey, ...)` — `ownerKey` is `string?` but `logTrustAction` requires `string`. | T8b Step 3 |
 | R12-M8 | Minor | Historical fixes R5-C1, R10-C3, R11-C1 marked as ~~SUPERSEDED~~ with cross-references to their replacements. | Changelog |
 | R12-M9 | Minor | "creative archetype" → "creator archetype" in test title. Test count updated to ~1263 (was 1151). | T22 Step 1 |
+
+**Round 13 — findings (7 issues):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R13-C1 | Critical | `created`/`updated`/`deleted`/`reverseOps` moved OUTSIDE `try` block — were declared inside `try` but referenced in `catch` (would not compile). | T8a Step 3 |
+| R13-S2 | Significant | `getAllFacts` → `getActiveFacts` in Tasks 24/25 snippets and tests. Task 2 privatizes `getAllFacts` — later tasks must use the new public API. Problem description also updated. | T24 Step 4, T25 Steps 1/4/5 |
+| R13-S3 | Significant | Task 25 `assembleBootstrapPayload` signature updated to include `lastUserMessage` param (added by Task 12). Route.ts caller passes `lastUserMessage` through. | T25 Steps 4/6 |
+| R13-S4 | Significant | `ownerKey` (optional) → `effectiveOwnerKey` (string) in Task 14 (`getActiveSoul`) and Task 19 (`personalizeSection`). Both functions require `string`, not `string?`. | T14 Step 3, T19 Step 4 |
+| R13-S5 | Significant | Task 21 data flow gap promoted from NOTE to operative steps: `enqueueSummaryJob` signature change + route.ts caller update + tests for data flow. Was only a comment, now has Files/Steps/Tests. | T21 Steps 1/3 |
+| R13-S6 | Significant | Event name mismatch: test said `coherence_check`, cross-cutting table said `heartbeat_coherence`. Aligned both test and implementation to `heartbeat_coherence`. Payload aligned to table schema (`warningsFound`, `durationMs`). | T20 Steps 1/3 |
+| R13-M7 | Minor | Task 13 journal wrapper now explicitly shows `args` field in example code (with `category`/`key`). Task 22 depends on `entries[i].args?.category` — without systematic `args` logging, pattern detection degrades. | T13 Step 3 |
