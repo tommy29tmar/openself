@@ -20,6 +20,24 @@ import {
 import { upsertState } from "@/lib/services/section-copy-state-service";
 import { logEvent } from "@/lib/services/event-service";
 
+import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
+
+/**
+ * Reorder sections for personalization priority based on archetype.
+ * Archetype-priority sections are processed first (more LLM budget),
+ * remaining sections follow in original order.
+ */
+export function prioritizeSections(sections: Section[], archetype?: string): Section[] {
+  if (!archetype || archetype === "generalist") return sections;
+  const strategy = ARCHETYPE_STRATEGIES[archetype as keyof typeof ARCHETYPE_STRATEGIES];
+  if (!strategy) return sections;
+
+  const priorityTypes = new Set(strategy.explorationOrder);
+  const priority = sections.filter(s => priorityTypes.has(s.type));
+  const rest = sections.filter(s => !priorityTypes.has(s.type));
+  return [...priority, ...rest];
+}
+
 export type PersonalizeSectionInput = {
   section: Section;
   ownerKey: string;

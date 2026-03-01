@@ -37,7 +37,7 @@ import { isSectionComplete } from "@/lib/page-config/section-completeness";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { validateUsernameFormat } from "@/lib/page-config/usernames";
-import { personalizeSection } from "@/lib/services/section-personalizer";
+import { personalizeSection, prioritizeSections } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
@@ -717,11 +717,16 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
               // Fire-and-forget: don't await, don't block tool response
               (async () => {
                 try {
-                  for (const sectionType of impacted) {
-                    const section = config.sections.find((s: any) => s.type === sectionType);
-                    if (!section) continue;
+                  // Circuit B: archetype-weighted personalization priority
+                  const meta = getSessionMeta(sessionId);
+                  const archetype = typeof meta.archetype === "string" ? meta.archetype : undefined;
+                  const impactedSections = impacted
+                    .map(type => config.sections.find((s: any) => s.type === type))
+                    .filter((s): s is typeof config.sections[number] => !!s);
+                  const orderedSections = prioritizeSections(impactedSections, archetype);
+                  for (const section of orderedSections) {
                     await personalizeSection({
-                      section, ownerKey, language: factLang,
+                      section, ownerKey: effectiveOwnerKey, language: factLang,
                       publishableFacts: publishable,
                       soulCompiled: soul.compiled, username,
                     });
