@@ -3706,6 +3706,177 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 
 ---
 
+### Task 27: Journey-State Tool Filtering (Token Optimization)
+
+> **Goal:** Reduce input token costs by sending only relevant tools to the LLM based on the current `journeyState`. Secondary benefit: hard guardrail against prompt injection (physically absent tools cannot be called).
+
+**Files:**
+- Create: `src/lib/agent/tool-filter.ts` (static mapping + filter function)
+- Modify: `src/app/api/chat/route.ts` (apply filter before `streamText`)
+- Test: `tests/evals/tool-filter.test.ts`
+
+**Design rationale:** This is defense-in-depth, not behavior control. The journey policies already instruct the LLM on which tools to use. This task removes tools the LLM should never need in a given state, saving input tokens (tool schemas are verbose) and preventing edge-case misuse. No regex, no intent detection, no LLM router — purely static mapping.
+
+**Step 1: Write failing tests**
+
+```typescript
+// tests/evals/tool-filter.test.ts
+import { describe, it, expect } from "vitest";
+import { filterToolsByJourneyState, TOOL_SETS } from "@/lib/agent/tool-filter";
+
+const ALL_TOOL_NAMES = [
+  "create_fact", "update_fact", "delete_fact", "search_facts", "batch_facts",
+  "set_fact_visibility", "save_memory", "resolve_conflict",
+  "generate_page", "update_page_style", "set_theme", "set_layout",
+  "reorder_sections", "propose_lock", "request_publish", "propose_soul_change",
+];
+
+describe("tool filtering by journey state", () => {
+  it("first_visit: returns only core fact + generate tools (no style/publish)", () => {
+    const tools = mockTools(ALL_TOOL_NAMES);
+    const filtered = filterToolsByJourneyState(tools, "first_visit");
+    const names = Object.keys(filtered);
+    expect(names).toContain("create_fact");
+    expect(names).toContain("generate_page");
+    expect(names).not.toContain("set_theme");
+    expect(names).not.toContain("set_layout");
+    expect(names).not.toContain("request_publish");
+    expect(names).not.toContain("propose_lock");
+  });
+
+  it("blocked: returns empty tools", () => {
+    const tools = mockTools(ALL_TOOL_NAMES);
+    const filtered = filterToolsByJourneyState(tools, "blocked");
+    expect(Object.keys(filtered)).toHaveLength(0);
+  });
+
+  it("active_fresh: returns all tools", () => {
+    const tools = mockTools(ALL_TOOL_NAMES);
+    const filtered = filterToolsByJourneyState(tools, "active_fresh");
+    expect(Object.keys(filtered)).toEqual(ALL_TOOL_NAMES);
+  });
+
+  it("draft_ready: returns all tools", () => {
+    const tools = mockTools(ALL_TOOL_NAMES);
+    const filtered = filterToolsByJourneyState(tools, "draft_ready");
+    expect(Object.keys(filtered)).toEqual(ALL_TOOL_NAMES);
+  });
+
+  it("unknown state falls back to all tools", () => {
+    const tools = mockTools(ALL_TOOL_NAMES);
+    const filtered = filterToolsByJourneyState(tools, "unknown_state" as any);
+    expect(Object.keys(filtered)).toEqual(ALL_TOOL_NAMES);
+  });
+
+  it("filters gracefully when tool set references tools not in input", () => {
+    // Input has only 3 tools, TOOL_SETS.first_visit references more
+    const tools = mockTools(["create_fact", "save_memory"]);
+    const filtered = filterToolsByJourneyState(tools, "first_visit");
+    expect(Object.keys(filtered)).toEqual(["create_fact", "save_memory"]);
+  });
+});
+
+function mockTools(names: string[]): Record<string, unknown> {
+  return Object.fromEntries(names.map(n => [n, { description: n }]));
+}
+```
+
+**Step 2: Run tests to verify fail**
+
+Run: `npx vitest run tests/evals/tool-filter.test.ts`
+Expected: FAIL
+
+**Step 3: Implement**
+
+In `src/lib/agent/tool-filter.ts`:
+
+```typescript
+import type { JourneyState } from "@/lib/agent/journey";
+
+/**
+ * Static tool availability per journey state.
+ * States not listed here → all tools available (permissive default).
+ *
+ * Three tiers:
+ * - BLOCKED → no tools (quota exhausted, agent can only talk)
+ * - ONBOARDING (first_visit, returning_no_page) → fact + generate tools only
+ * - FULL (draft_ready, active_fresh, active_stale) → all tools
+ */
+const ONBOARDING_TOOLS = [
+  "create_fact",
+  "update_fact",
+  "delete_fact",
+  "search_facts",
+  "batch_facts",
+  "save_memory",
+  "resolve_conflict",
+  "generate_page",
+  "propose_soul_change",
+] as const;
+
+export const TOOL_SETS: Partial<Record<JourneyState, readonly string[]>> = {
+  first_visit: ONBOARDING_TOOLS,
+  returning_no_page: ONBOARDING_TOOLS,
+  blocked: [],
+  // draft_ready, active_fresh, active_stale → not listed = all tools
+};
+
+/**
+ * Filter tools record by journey state. Returns a new object with only
+ * the allowed tools. Unknown states → all tools (safe fallback).
+ */
+export function filterToolsByJourneyState<T>(
+  tools: Record<string, T>,
+  journeyState: string,
+): Record<string, T> {
+  const allowed = TOOL_SETS[journeyState as JourneyState];
+  if (allowed === undefined) return tools; // permissive default
+  if (allowed.length === 0) return {};     // blocked
+
+  const allowedSet = new Set(allowed);
+  return Object.fromEntries(
+    Object.entries(tools).filter(([name]) => allowedSet.has(name)),
+  );
+}
+```
+
+In `src/app/api/chat/route.ts`, after `createAgentTools()` and before `streamText()`:
+
+```typescript
+import { filterToolsByJourneyState } from "@/lib/agent/tool-filter";
+
+// After:
+const { tools: allTools, getJournal } = createAgentTools(...);
+const tools = filterToolsByJourneyState(allTools, bootstrap.journeyState);
+
+// Pass `tools` (filtered) to streamText, not `allTools`
+const result = streamText({
+  model,
+  system: systemPrompt,
+  messages: safeMessages,
+  tools,
+  // ...
+});
+```
+
+**Step 4: Run tests**
+
+Run: `npx vitest run tests/evals/tool-filter.test.ts`
+Expected: PASS
+
+**Step 5: Run full suite**
+
+Run: `npx vitest run`
+Expected: ALL pass
+
+**Step 6: Commit**
+
+```bash
+git commit -m "perf: journey-state tool filtering — reduce input tokens for onboarding/blocked states"
+```
+
+---
+
 ## Summary
 
 | Task | Layer | Description | Depends On |
@@ -3738,10 +3909,11 @@ git commit -m "perf: systematic model tiering — fast/standard/reasoning across
 | 24 | L6 | Conditional context injection by journey state (-30% tokens) | T1b |
 | 25 | L6 | Bootstrap → context data passthrough (DB dedup) | T24 |
 | 26 | L6 | Systematic model tiering (fast/standard/reasoning) | — |
+| 27 | L6 | Journey-state tool filtering (token optimization + hard guardrail) | — |
 
-**Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict. Exception: T24 and T25 both modify `context.ts` — implement T24 first, T25 on top. T26 is independent of both.
+**Parallelism:** Within each layer, tasks are independent and can be done in parallel. Cross-layer dependencies are strict. Exception: T24 and T25 both modify `context.ts` — implement T24 first, T25 on top. T26 and T27 are independent of both and of each other.
 
-**Estimated tests:** ~135 new + ~35 updated = ~1430 total (from ~1263 current).
+**Estimated tests:** ~140 new + ~35 updated = ~1438 total (from ~1263 current).
 
 **Integration circuit map:**
 
@@ -3808,15 +3980,16 @@ All v2.1 tasks rely on columns already created by migration 0022. No schema chan
 
 These tasks close the remaining feedback loops. All are pure additive — no schema changes, no breaking changes. They depend on v2.1 tasks (T19→T12, T20→T14, T21/T22→T13, T23→T8a) but not on each other. Can be implemented in parallel within v2.2.
 
-**v2.3 — Efficiency (3 tasks):** 24, 25, 26
+**v2.3 — Efficiency (4 tasks):** 24, 25, 26, 27
 
 | Task | What it delivers |
 |------|------------------|
 | 24 | Conditional context injection — journey-state-aware block selection, -30% input tokens |
 | 25 | Bootstrap → context data passthrough — zero duplicate DB queries per message |
 | 26 | Systematic model tiering — fast/standard/reasoning across all 7+ LLM call sites |
+| 27 | Journey-state tool filtering — static tool subset per state, token savings + hard guardrail |
 
-These are pure optimizations. T26 is independent and can be done anytime (even before v2 core). T24 and T25 modify `context.ts` and should be done in order. T25 resolves the existing `route.ts:123-124` TODO.
+These are pure optimizations. T26 and T27 are independent and can be done anytime (even before v2 core). T24 and T25 modify `context.ts` and should be done in order. T25 resolves the existing `route.ts:123-124` TODO. T27 modifies `route.ts` but only adds a filter call after `createAgentTools` — no conflict with T25.
 
 **Cross-cutting: observability.** Add `logEvent()` calls (using the existing event-service + requestId infrastructure) in the following tasks. Not a separate task — 5-10 lines each, inline with the code being written:
 
@@ -3836,7 +4009,7 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 2. **Faster feedback.** Batch operations, archived facts, and sort order are immediately useful. Archetype and coherence are refinements. Integration circuits are the "agent learns" layer. Efficiency is the "scale without breaking the bank" layer.
 3. **Independent deployment.** Each scope is pure additive on the previous one. v2.2 and v2.3 tasks can be rolled back without data loss.
 4. **Embedded circuits.** 7 of 12 circuits (A, C, E, G, H, I, D1) are embedded in existing tasks because they're small enough. The remaining 5 (B, D2, F1, F2, G-undo) are standalone because they introduce new patterns.
-5. **T26 is scope-independent.** Model tiering can be deployed at any point — it only changes which model ID is passed to existing calls. Zero code structure change.
+5. **T26 and T27 are scope-independent.** Model tiering and tool filtering can be deployed at any point — T26 only changes model IDs, T27 only filters the tools object before `streamText`. Zero code structure change.
 6. **Task 10 (reorder_sections fix + maxSteps 10→8)** is in v2 core — small, touches files already in scope (tools.ts), maxSteps reduction has immediate cost impact.
 
 ---
