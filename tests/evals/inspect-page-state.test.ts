@@ -170,11 +170,11 @@ function makeDraft(overrides?: any) {
 }
 
 describe("inspect_page_state tool", () => {
-  let tools: ReturnType<typeof createAgentTools>;
+  let tools: ReturnType<typeof createAgentTools>["tools"];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
     mockResolveLayoutTemplate.mockReturnValue(verticalTemplate);
     mockGroupSectionsBySlot.mockReturnValue({
       hero: [{ id: "hero-1", type: "hero" }],

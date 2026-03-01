@@ -17,6 +17,7 @@ import {
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 import { enqueueSummaryJob } from "@/lib/services/summary-service";
+import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 
 /**
@@ -256,11 +257,12 @@ export async function POST(req: Request) {
 
   try {
     const model = getModel();
+    const { tools: agentTools, getJournal } = createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode);
     const result = streamText({
       model,
       system: systemPrompt,
       messages: safeMessages,
-      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode),
+      tools: agentTools,
       maxSteps: 8, // batch_facts reduces per-turn tool calls; 8 is sufficient
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
@@ -285,7 +287,7 @@ export async function POST(req: Request) {
           return null;
         }
       },
-      onFinish: async ({ text, usage }) => {
+      onFinish: async ({ text, usage, finishReason }) => {
         if (text) {
           db.insert(messagesTable)
             .values({
@@ -302,6 +304,23 @@ export async function POST(req: Request) {
         const outputTokens = usage?.completionTokens ?? 0;
         if (inputTokens > 0 || outputTokens > 0) {
           recordUsage(provider, modelId, inputTokens, outputTokens);
+        }
+
+        // Persist operation journal + detect step exhaustion
+        const journal = getJournal();
+        if (journal.length > 0) {
+          const metaUpdate: Record<string, unknown> = { journal };
+          // Step exhaustion: model wanted more tool calls but hit maxSteps
+          if (finishReason === "tool-calls") {
+            metaUpdate.pendingOperations = {
+              timestamp: new Date().toISOString(),
+              journal,
+              finishReason: "step_exhaustion",
+            };
+          }
+          try { mergeSessionMeta(writeSessionId, metaUpdate); } catch (e) {
+            console.warn("[chat] journal persistence failed:", e);
+          }
         }
 
         // Enqueue summary generation (best-effort, non-blocking)

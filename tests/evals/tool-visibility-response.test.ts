@@ -134,7 +134,7 @@ describe("tool visibility response enrichment", () => {
       mockCreateFact.mockReturnValue({
         id: "f2", category: "skill", key: "react", visibility: "proposed",
       });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.create_fact.execute(
         { category: "skill", key: "react", value: { name: "React" } },
         toolCallOpts,
@@ -149,7 +149,7 @@ describe("tool visibility response enrichment", () => {
       mockCreateFact.mockReturnValue({
         id: "f3", category: "contact", key: "phone", visibility: "private",
       });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.create_fact.execute(
         { category: "contact", key: "phone", value: { type: "phone", value: "+1234567890" } },
         toolCallOpts,
@@ -163,7 +163,7 @@ describe("tool visibility response enrichment", () => {
       mockCreateFact.mockReturnValue({
         id: "f4", category: "identity", key: "name", visibility: "public",
       });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.create_fact.execute(
         { category: "identity", key: "name", value: { full: "Alice" } },
         toolCallOpts,
@@ -179,7 +179,7 @@ describe("tool visibility response enrichment", () => {
       });
       // Make getAllFacts throw — recomposeAfterMutation calls it internally
       mockGetAllFacts.mockImplementation(() => { throw new Error("DB read error"); });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.create_fact.execute(
         { category: "skill", key: "ts", value: { name: "TypeScript" } },
         toolCallOpts,
@@ -195,7 +195,7 @@ describe("tool visibility response enrichment", () => {
       mockUpdateFact.mockReturnValue({
         id: "f1", category: "identity", key: "name", visibility: "public",
       });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.update_fact.execute(
         { factId: "f1", value: { full: "Alice Updated" } },
         toolCallOpts,
@@ -210,7 +210,7 @@ describe("tool visibility response enrichment", () => {
       mockUpdateFact.mockReturnValue({
         id: "f1", category: "contact", key: "phone", visibility: "private",
       });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.update_fact.execute(
         { factId: "f1", value: { type: "phone", value: "+9876543210" } },
         toolCallOpts,
@@ -225,7 +225,7 @@ describe("tool visibility response enrichment", () => {
         id: "f1", category: "identity", key: "name", visibility: "proposed",
       });
       mockGetAllFacts.mockImplementation(() => { throw new Error("DB error"); });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.update_fact.execute(
         { factId: "f1", value: { full: "Bob" } },
         toolCallOpts,
@@ -238,7 +238,7 @@ describe("tool visibility response enrichment", () => {
   describe("delete_fact", () => {
     it("returns recomposeOk: true on successful delete and recompose", async () => {
       mockDeleteFact.mockReturnValue(true);
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.delete_fact.execute(
         { factId: "f1" },
         toolCallOpts,
@@ -250,7 +250,7 @@ describe("tool visibility response enrichment", () => {
     it("returns recomposeOk: false when recomposition fails after delete", async () => {
       mockDeleteFact.mockReturnValue(true);
       mockGetAllFacts.mockImplementation(() => { throw new Error("DB error"); });
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.delete_fact.execute(
         { factId: "f1" },
         toolCallOpts,
@@ -261,7 +261,7 @@ describe("tool visibility response enrichment", () => {
 
     it("returns recomposeOk: true when delete returns false (no recompose attempted)", async () => {
       mockDeleteFact.mockReturnValue(false);
-      const tools = createAgentTools("en", "sess1");
+      const { tools } = createAgentTools("en", "sess1");
       const result = await tools.delete_fact.execute(
         { factId: "nonexistent" },
         toolCallOpts,

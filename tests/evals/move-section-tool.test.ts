@@ -77,7 +77,7 @@ describe("move_section tool", () => {
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] }, slot: "main", widgetId: "skills-grid" },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "skills-1", targetSlot: "sidebar" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -102,7 +102,7 @@ describe("move_section tool", () => {
       ],
     };
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "skills-1", targetSlot: "card-1" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -120,7 +120,7 @@ describe("move_section tool", () => {
       { id: "projects-1", type: "projects", variant: "grid", content: { items: [] }, slot: "main", widgetId: "projects-grid" },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "projects-1", targetSlot: "sidebar" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -145,7 +145,7 @@ describe("move_section tool", () => {
       { id: "interests-1", type: "interests", variant: "grid", content: { items: [] }, slot: "main", widgetId: "interests-grid" },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "interests-1", targetSlot: "sidebar" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -163,7 +163,7 @@ describe("move_section tool", () => {
       },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "skills-1", targetSlot: "sidebar" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -178,7 +178,7 @@ describe("move_section tool", () => {
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] }, slot: "sidebar", widgetId: "skills-grid" },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "skills-1", targetSlot: "sidebar" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -192,7 +192,7 @@ describe("move_section tool", () => {
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "does-not-exist", targetSlot: "sidebar" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -207,7 +207,7 @@ describe("move_section tool", () => {
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] }, slot: "main" },
     ]);
 
-    const tools = createAgentTools("en", "sess1");
+    const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
       { sectionId: "skills-1", targetSlot: "nonexistent" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },

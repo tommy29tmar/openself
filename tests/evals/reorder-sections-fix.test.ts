@@ -25,7 +25,7 @@ afterAll(() => {
 });
 
 function getTools() {
-  return createAgentTools("en", sessionId);
+  return createAgentTools("en", sessionId).tools;
 }
 
 describe("reorder_sections — slot validation", () => {

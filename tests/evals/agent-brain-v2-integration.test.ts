@@ -29,7 +29,7 @@ afterAll(() => {
 });
 
 function getTools() {
-  return createAgentTools("en", sessionId);
+  return createAgentTools("en", sessionId).tools;
 }
 
 describe("Agent Brain v2 — end-to-end", () => {

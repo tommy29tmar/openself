@@ -42,9 +42,11 @@ import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import { updateJourneyStatePin } from "@/lib/agent/journey";
+import type { JournalEntry } from "@/lib/services/session-metadata";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
+  const operationJournal: JournalEntry[] = [];
 
   /** Auto-compose draft from facts if none exists yet. */
   function ensureDraft(): PageConfig {
@@ -106,7 +108,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }
   }
 
-  return {
+  const tools = {
   create_fact: tool({
     description:
       "Store a new fact about the user in the knowledge base. Use this whenever the user shares information about themselves (name, job, skills, interests, projects, etc). Break complex info into separate atomic facts.",
@@ -1351,6 +1353,62 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
   };
+
+  // --- Journal recording wrapper ---
+  // Wraps each tool's execute to record journal entries for every call.
+  function summarizeArgs(toolName: string, args: Record<string, unknown>): Record<string, unknown> {
+    const { value, operations, ...light } = args;
+    if (operations && Array.isArray(operations)) return { ...light, batchSize: operations.length };
+    return light;
+  }
+  function summarizeTool(toolName: string, args: Record<string, unknown>, result: unknown): string {
+    const r = result as Record<string, unknown> | null;
+    switch (toolName) {
+      case "create_fact": return `${args.category}/${args.key}`;
+      case "update_fact": return `updated ${args.factId}`;
+      case "delete_fact": return `deleted ${args.factId}`;
+      case "search_facts": return `searched "${args.query}" (${r?.count ?? 0} results)`;
+      case "batch_facts": return `batch ${(args.operations as unknown[])?.length ?? 0} ops`;
+      case "generate_page": return "composed page";
+      case "set_theme": return `theme=${args.theme}`;
+      case "set_layout": return `layout=${args.layout}`;
+      case "reorder_sections": return "reordered sections";
+      case "move_section": return `moved ${args.sectionId} → ${args.targetSlot}`;
+      case "request_publish": return `publish ${args.username}`;
+      default: return toolName;
+    }
+  }
+  for (const [name, t] of Object.entries(tools)) {
+    const originalExecute = (t as { execute: Function }).execute;
+    (t as { execute: Function }).execute = async function (this: unknown, args: Record<string, unknown>, context: unknown) {
+      const start = Date.now();
+      try {
+        const result = await originalExecute.call(this, args, context);
+        operationJournal.push({
+          toolName: name,
+          timestamp: new Date().toISOString(),
+          durationMs: Date.now() - start,
+          success: typeof result === "object" && result !== null ? (result as Record<string, unknown>).success !== false : true,
+          args: summarizeArgs(name, args),
+          summary: summarizeTool(name, args, result),
+          ...(name === "batch_facts" && args.operations ? { batchSize: (args.operations as unknown[]).length } : {}),
+        });
+        return result;
+      } catch (error) {
+        operationJournal.push({
+          toolName: name,
+          timestamp: new Date().toISOString(),
+          durationMs: Date.now() - start,
+          success: false,
+          args: summarizeArgs(name, args),
+          summary: `${name} failed: ${(error as Error).message ?? String(error)}`,
+        });
+        throw error;
+      }
+    };
+  }
+
+  return { tools, getJournal: () => operationJournal };
 }
 
 /**
@@ -1377,4 +1435,4 @@ function mergeSectionLocks(
 }
 
 // Backward compatibility for tests/imports that expect a static object.
-export const agentTools = createAgentTools("en", "__default__");
+export const agentTools = createAgentTools("en", "__default__").tools;

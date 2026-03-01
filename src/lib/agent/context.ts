@@ -11,6 +11,7 @@ import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import type { JourneyState, BootstrapPayload } from "@/lib/agent/journey";
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
+import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import type { PromptMode } from "./promptAssembler";
 
 /**
@@ -213,6 +214,30 @@ Section priority: ${strategy.sectionPriority.join(" → ")}
 
 Before proposing a reorder, explain reasoning and ask for confirmation.`;
     contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+  }
+
+  // --- Resume injection: incomplete operation from previous turn ---
+  const PENDING_OPS_TTL_MS = 60 * 60 * 1000; // 1 hour
+  const sessionId = scope.currentSessionId;
+  if (sessionId) {
+    try {
+      const meta = getSessionMeta(sessionId);
+      const pending = meta.pendingOperations as { timestamp: string; journal: unknown[]; finishReason: string } | undefined;
+      if (pending?.timestamp) {
+        const age = Date.now() - new Date(pending.timestamp).getTime();
+        if (age < PENDING_OPS_TTL_MS && pending.journal?.length > 0) {
+          const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
+            .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)
+            .join("\n");
+          contextParts.push(
+            `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
+          );
+        } else if (age >= PENDING_OPS_TTL_MS) {
+          // Stale — clean up
+          mergeSessionMeta(sessionId, { pendingOperations: undefined });
+        }
+      }
+    } catch { /* best-effort */ }
   }
 
   let systemPrompt = contextParts.join("");

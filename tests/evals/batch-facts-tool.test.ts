@@ -33,7 +33,7 @@ describe("batch_facts tool", () => {
   beforeEach(cleanup);
 
   function getTools() {
-    const tools = createAgentTools("en", sessionId);
+    const { tools } = createAgentTools("en", sessionId);
     return tools.batch_facts;
   }
 
@@ -63,7 +63,7 @@ describe("batch_facts tool", () => {
     const suffix = randomUUID().slice(0, 8);
 
     // Pre-create a fact to update and one to delete
-    const tools = createAgentTools("en", sessionId);
+    const { tools } = createAgentTools("en", sessionId);
     const createResult = await tools.create_fact.execute(
       { category: "skill", key: `pre-update-${suffix}`, value: { name: "Old" } },
       { toolCallId: "pre1", messages: [] },

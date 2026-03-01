@@ -29,7 +29,7 @@ vi.mock("@/lib/ai/provider", () => ({
 }));
 
 vi.mock("@/lib/agent/tools", () => ({
-  createAgentTools: vi.fn(() => ({})),
+  createAgentTools: vi.fn(() => ({ tools: {} })),
 }));
 
 vi.mock("@/lib/db", () => ({

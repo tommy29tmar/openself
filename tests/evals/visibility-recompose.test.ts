@@ -155,7 +155,7 @@ describe("set_fact_visibility triggers recomposition", () => {
   });
 
   it("calls recomposeAfterMutation (upsertDraft) after visibility change", async () => {
-    const tools = createAgentTools("en", "sess1", "owner1", "req1", ["sess1"]);
+    const { tools } = createAgentTools("en", "sess1", "owner1", "req1", ["sess1"]);
     const result = await tools.set_fact_visibility.execute(
       { factId: "f1", visibility: "proposed" },
       { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
@@ -167,7 +167,7 @@ describe("set_fact_visibility triggers recomposition", () => {
 
   it("passes readKeys as 5th argument to setFactVisibility", async () => {
     const readKeys = ["sess1", "sess2"];
-    const tools = createAgentTools("en", "sess1", "owner1", "req1", readKeys);
+    const { tools } = createAgentTools("en", "sess1", "owner1", "req1", readKeys);
     await tools.set_fact_visibility.execute(
       { factId: "f1", visibility: "proposed" },
       { toolCallId: "tc2", messages: [], abortSignal: new AbortController().signal },

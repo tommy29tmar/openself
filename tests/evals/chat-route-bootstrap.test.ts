@@ -80,7 +80,7 @@ vi.mock("ai", () => ({
 }));
 
 vi.mock("@/lib/agent/tools", () => ({
-  createAgentTools: vi.fn(() => ({})),
+  createAgentTools: vi.fn(() => ({ tools: {} })),
 }));
 
 vi.mock("@/lib/db", () => ({

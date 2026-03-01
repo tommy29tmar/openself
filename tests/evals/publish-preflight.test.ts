@@ -168,11 +168,11 @@ function makeFact(overrides?: any) {
 }
 
 describe("publish_preflight tool", () => {
-  let tools: ReturnType<typeof createAgentTools>;
+  let tools: ReturnType<typeof createAgentTools>["tools"];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
   });
 
   it("exists in the tools object", () => {
@@ -347,11 +347,11 @@ describe("publish_preflight tool", () => {
 });
 
 describe("request_publish username guard", () => {
-  let tools: ReturnType<typeof createAgentTools>;
+  let tools: ReturnType<typeof createAgentTools>["tools"];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
   });
 
   it("rejects empty username", async () => {

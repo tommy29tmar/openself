@@ -20,7 +20,7 @@ afterAll(() => {
 });
 
 function getTools() {
-  const tools = createAgentTools("en", sessionId);
+  const { tools } = createAgentTools("en", sessionId);
   return tools;
 }
 

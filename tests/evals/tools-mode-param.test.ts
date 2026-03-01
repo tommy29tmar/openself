@@ -75,25 +75,25 @@ import { createAgentTools } from "@/lib/agent/tools";
 
 describe("createAgentTools mode parameter", () => {
   it("accepts mode as 6th parameter without error", () => {
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     expect(tools).toHaveProperty("generate_page");
     expect(tools).toHaveProperty("create_fact");
     expect(tools).toHaveProperty("request_publish");
   });
 
   it("accepts mode as undefined (backward compatible)", () => {
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"]);
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"]);
     expect(tools).toHaveProperty("generate_page");
     expect(tools).toHaveProperty("create_fact");
   });
 
   it("accepts onboarding mode", () => {
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "onboarding");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "onboarding");
     expect(tools).toHaveProperty("generate_page");
   });
 
   it("works with minimal arguments (backward compatible)", () => {
-    const tools = createAgentTools();
+    const { tools } = createAgentTools();
     expect(tools).toHaveProperty("generate_page");
   });
 });
