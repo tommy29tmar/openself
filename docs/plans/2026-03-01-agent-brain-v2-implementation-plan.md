@@ -169,8 +169,8 @@ describe("session-metadata helper", () => {
 
   it("mergeSessionMeta merges without overwriting existing keys", () => {
     // session has metadata='{"archetype":"developer"}'
-    // mergeSessionMeta(sessionId, { coherenceIssues: [...] })
-    // result → { archetype: "developer", coherenceIssues: [...] }
+    // mergeSessionMeta(sessionId, { coherenceWarnings: [...] })
+    // result → { archetype: "developer", coherenceWarnings: [...] }
   });
 
   it("mergeSessionMeta can delete a key by setting to undefined", () => {
@@ -423,16 +423,21 @@ In `src/lib/services/kb-service.ts:76-176`, after `validateFactValue()` call:
 
 ```typescript
 // Current uniqueness check
+// NOTE: Exclude same key to avoid blocking idempotent upserts.
+// createFact uses onConflictDoUpdate on (sessionId, category, key) — a create
+// with the same key is an upsert, not a duplicate. Without the ne(key) exclusion,
+// the check would find the upsert target row itself and throw EXISTING_CURRENT.
 if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
   const val = typeof input.value === "object" ? input.value : {};
   if ((val as Record<string, unknown>).status === "current") {
-    // Search for existing current fact in same category
+    // Search for ANOTHER current fact in same category (exclude same key = upsert target)
     const existingCurrent = db.select().from(facts)
       .where(and(
         eq(facts.sessionId, sessionId),
         eq(facts.category, normalized.canonical),
         isNull(facts.archivedAt),
         sql`json_extract(value, '$.status') = 'current'`,
+        ne(facts.key, input.key),  // exclude upsert target
       )).get();
     if (existingCurrent) {
       throw new FactConstraintError({
@@ -1961,13 +1966,18 @@ describe("coherence → session metadata integration (circuit D1)", () => {
     // verify mergeSessionMeta called with { coherenceWarnings: [...] }
   });
 
-  it("info-severity issues stored in coherenceIssues key", () => {
-    // verify mergeSessionMeta called with { coherenceIssues: [...] }
+  it("info-severity issues stored in coherenceInfos key", () => {
+    // verify mergeSessionMeta called with { coherenceInfos: [...] }
   });
 
   it("both warning and info issues stored separately", () => {
     // page with 1 warning + 1 info
-    // → coherenceWarnings has 1 entry, coherenceIssues has 1 entry
+    // → coherenceWarnings has 1 entry, coherenceInfos has 1 entry
+  });
+
+  it("stale data cleared when no issues found", () => {
+    // previous run stored coherenceWarnings + coherenceInfos
+    // new run finds 0 issues → both keys set to null
   });
 });
 
@@ -2104,6 +2114,29 @@ const coherenceSchema = z.object({
 });
 
 /**
+ * Build prompt for LLM coherence analysis.
+ * Summarizes sections (truncated content) + optional soul context for tone checking.
+ */
+function buildCoherencePrompt(sections: Section[], soulCompiled?: string): string {
+  const sectionSummaries = sections
+    .filter(s => s.type !== "hero" && s.type !== "footer")
+    .map(s => `- ${s.type} (${s.id}): ${JSON.stringify(s.content).slice(0, 200)}`)
+    .join("\n");
+
+  return [
+    "Analyze this personal page for cross-section coherence issues.",
+    "Look for: role mismatches between sections, timeline overlaps in experience/education,",
+    "skill gaps (skills claimed but not evidenced), level mismatches (junior role + senior skills).",
+    "",
+    "Sections:",
+    sectionSummaries,
+    soulCompiled ? `\nOwner voice/tone profile:\n${soulCompiled}` : "",
+    "",
+    "Return up to 3 issues. Only flag clear inconsistencies, not style preferences.",
+  ].filter(Boolean).join("\n");
+}
+
+/**
  * Hybrid coherence check: deterministic first, LLM only if needed.
  *
  * - Always runs quickCoherenceCheck (zero cost).
@@ -2130,7 +2163,9 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[], 
   const COHERENCE_TIMEOUT_MS = 3000;
 
   // Circuit I: pass soul context so LLM can check tone/style coherence
-  const { object } = await Promise.race([
+  // NOTE: intermediate variable avoids `const { object } = null` crash —
+  // destructuring null throws TypeError before the guard can execute.
+  const llmResult = await Promise.race([
     generateObject({
       model: getModel(),
       schema: coherenceSchema,
@@ -2144,7 +2179,8 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[], 
     return null;
   });
 
-  if (!object) return deterministicIssues; // timeout or error → deterministic only
+  if (!llmResult) return deterministicIssues; // timeout or error → deterministic only
+  const { object } = llmResult;
 
   // Force severity rules on LLM output
   const llmIssues = object.issues.map(issue => ({
@@ -2172,7 +2208,7 @@ export async function checkPageCoherence(sections: Section[], facts: FactRow[], 
 In `src/lib/agent/tools.ts`, in the `generate_page` tool execute, after the personalization fire-and-forget block: add another fire-and-forget for coherence.
 
 > **Circuit I:** Pass soul context to `checkPageCoherence` so LLM can detect tone/style misalignment.
-> **Circuit D1:** Store warning/info issues in `session.metadata` (`coherenceWarnings`, `coherenceIssues`) and surface them via directives.
+> **Circuit D1:** Store warning/info issues in `session.metadata` (`coherenceWarnings`, `coherenceInfos`) and surface them via directives. Null out keys when empty to prevent stale data.
 
 ```typescript
 if (mode === "steady_state") {
@@ -2183,27 +2219,20 @@ if (mode === "steady_state") {
       // R13-S4: use effectiveOwnerKey (string), not ownerKey (string?)
       const soulCompiled = getActiveSoul(effectiveOwnerKey)?.compiled;
       const issues = await checkPageCoherence(config.sections, activeFacts, soulCompiled);
-      if (issues.length > 0) {
-        // Circuit D1: warning issues → session metadata (coherenceWarnings)
-        // NOTE (R7-C1): proposal-service.createProposal expects CreateProposalInput
-        // (section_copy_proposals table shape). Coherence issues are NOT section copy
-        // proposals — they need a different storage path.
-        // Option: use `logEvent` + `mergeSessionMeta` for all issues (warnings are
-        // surfaced via situation directive), OR extend proposal system with a
-        // generic proposal table in a pre-requisite migration.
-        // Chosen approach: store coherence warnings in session metadata (like infos)
-        // and flag them for the ProposalBanner via a dedicated `coherenceWarnings`
-        // key. This avoids coupling to the section_copy_proposals schema.
-        const warnings = issues.filter(i => i.severity === "warning");
-        if (warnings.length > 0) {
-          mergeSessionMeta(sessionId, { coherenceWarnings: warnings });
-        }
-        // Info issues → session metadata only (agent context, not user-facing)
-        const infos = issues.filter(i => i.severity === "info");
-        if (infos.length > 0) {
-          mergeSessionMeta(sessionId, { coherenceIssues: infos });
-        }
-      }
+      // Circuit D1: store both warning + info issues in session metadata.
+      // Warnings → coherenceWarnings (surfaced via situation directive + ProposalBanner).
+      // Infos → coherenceInfos (agent context only, not user-facing).
+      // NOTE (R7-C1): proposal-service expects section_copy_proposals shape —
+      // coherence issues use session metadata, not the proposal table.
+      //
+      // IMPORTANT: always write both keys (null when empty) to prevent stale data
+      // from a previous check persisting across generate_page calls.
+      const warnings = issues.filter(i => i.severity === "warning");
+      const infos = issues.filter(i => i.severity === "info");
+      mergeSessionMeta(sessionId, {
+        coherenceWarnings: warnings.length > 0 ? warnings : null,
+        coherenceInfos: infos.length > 0 ? infos : null,
+      });
     } catch (err) {
       console.error("[generate_page] coherence check error:", err);
     }
@@ -2223,7 +2252,7 @@ export function coherenceIssuesDirective(issues: CoherenceIssue[]): string {
 }
 ```
 
-Wire in `src/lib/agent/context.ts`: read coherenceIssues via `getSessionMeta(sessionId).coherenceIssues` (from Task 1b), inject via directive.
+Wire in `src/lib/agent/context.ts`: read both `coherenceWarnings` and `coherenceInfos` via `getSessionMeta(sessionId)` (from Task 1b), merge into a single `CoherenceIssue[]`, inject via `coherenceIssuesDirective`. Both keys are nullable — when null, treat as empty array.
 
 **Step 6: Run tests**
 
@@ -2283,11 +2312,16 @@ In `assembleBootstrapPayload()` (the caller), compute `childCounts` and pass to 
 ```typescript
 // In assembleBootstrapPayload, before calling detectSituations:
 // Use factsTable (aliased import) to avoid collision with local `facts` variable
+// IMPORTANT: scope by readKeys to prevent cross-tenant child count leakage in multi-user mode
 const childCounts = db.select({
   parentId: factsTable.parentFactId,
   count: sql<number>`count(*)`,
 }).from(factsTable)
-  .where(and(isNotNull(factsTable.parentFactId), isNull(factsTable.archivedAt)))
+  .where(and(
+    isNotNull(factsTable.parentFactId),
+    isNull(factsTable.archivedAt),
+    inArray(factsTable.sessionId, readKeys),  // scope: only this owner's facts
+  ))
   .groupBy(factsTable.parentFactId)
   .all();
 const childCountMap = new Map(childCounts.map(r => [r.parentId!, r.count]));
@@ -2647,10 +2681,10 @@ git commit -m "feat: archetype-weighted personalization priority (circuit B)"
 import { describe, it, expect, vi } from "vitest";
 
 describe("deep heartbeat coherence check", () => {
-  it("runs checkPageCoherence on latest draft and stores warnings in session metadata", () => {
+  it("runs checkPageCoherence on latest draft and stores warnings + infos in session metadata", () => {
     // setup: draft with role_mismatch (hero title ≠ experience role)
     // run deep heartbeat
-    // → mergeSessionMeta called with coherenceWarnings
+    // → mergeSessionMeta called with coherenceWarnings + coherenceInfos (null when empty)
   });
 
   it("skips coherence check when no draft exists", () => {
@@ -2690,15 +2724,20 @@ if (draft?.config) {
   const soulCompiled = getActiveSoul(ownerKey)?.compiled;
   const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], activeFacts, soulCompiled);
   const warnings = coherenceIssues.filter(i => i.severity === "warning");
-  if (warnings.length > 0) {
-    // Store in session metadata (agent context for next conversation)
-    const anchorSession = scope.knowledgePrimaryKey;
-    mergeSessionMeta(anchorSession, { coherenceWarnings: warnings });
+  const infos = coherenceIssues.filter(i => i.severity === "info");
+  // Store both keys; null when empty to clear stale data from previous checks.
+  // Mirrors D1 lifecycle in generate_page (Task 14 Step 4).
+  const anchorSession = scope.knowledgePrimaryKey;
+  mergeSessionMeta(anchorSession, {
+    coherenceWarnings: warnings.length > 0 ? warnings : null,
+    coherenceInfos: infos.length > 0 ? infos : null,
+  });
 
+  if (warnings.length > 0 || infos.length > 0) {
     logEvent({
       eventType: "heartbeat_coherence",
       actor: "worker",
-      payload: { ownerKey, warningsFound: warnings.length, durationMs: 0 /* TODO: measure */ },
+      payload: { ownerKey, warningsFound: warnings.length, infosFound: infos.length, durationMs: 0 /* TODO: measure */ },
     });
   }
 }
@@ -2860,6 +2899,7 @@ git commit -m "feat: journal digest in conversation summaries (circuit F1)"
 
 **Files:**
 - Create: `src/lib/services/journal-patterns.ts`
+- Modify: `src/lib/services/session-metadata.ts` (add `getRecentJournalEntries`)
 - Modify: `src/lib/worker/heartbeat.ts` (wire into deep heartbeat)
 - Test: `tests/evals/journal-patterns.test.ts`
 
@@ -3016,7 +3056,55 @@ for (const pattern of patterns) {
 }
 ```
 
-> **Note:** `getRecentJournalEntries` aggregates journal from `sessions.metadata` across the N most recent sessions for the owner. This is a simple SQL query joining sessions → parsing metadata → extracting journal arrays.
+**Step 4b: Implement `getRecentJournalEntries`**
+
+In `src/lib/services/session-metadata.ts`, add:
+
+```typescript
+// JournalEntry is defined earlier in THIS file (Task 1b) — no import needed.
+
+/**
+ * Aggregate journal entries from the N most recent sessions for the given owner.
+ * Reads `sessions.metadata.journal` (stored by Task 13 onFinish) for each session,
+ * flattens into a single array ordered newest-first.
+ *
+ * NOTE: ownerKey is cognitiveOwnerKey — profileId for auth users, sessionId for
+ * anon/single-user. Sessions table has `profile_id` (auth) and `id` (anon) — we
+ * match on both to cover both cases in a single query.
+ *
+ * Uses `sqlite.prepare()` (raw better-sqlite3) because:
+ *   - `db` is Drizzle ORM and has no `.prepare()` for raw SQL
+ *   - sessions.metadata is a JSON text column added by migration 0022 (Task 1),
+ *     not yet in the Drizzle schema — Drizzle would not type it correctly
+ *   - This matches the pattern used in journey.ts:90 (`sqlite.prepare(...)`)
+ */
+export function getRecentJournalEntries(ownerKey: string, sessionCount: number): JournalEntry[] {
+  const rows = sqlite.prepare(`
+    SELECT metadata FROM sessions
+    WHERE (profile_id = ? OR id = ?)
+    AND metadata IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(ownerKey, ownerKey, sessionCount) as Array<{ metadata: string }>;
+
+  const entries: JournalEntry[] = [];
+  for (const row of rows) {
+    try {
+      const meta = JSON.parse(row.metadata);
+      if (Array.isArray(meta.journal)) {
+        entries.push(...meta.journal);
+      }
+    } catch {
+      // Skip malformed metadata
+    }
+  }
+  return entries;
+}
+```
+
+> **Import:** Add `import { sqlite } from "@/lib/db"` at the top of `session-metadata.ts` (same pattern as `journey.ts`).
+>
+> **Note:** Query matches on `profile_id = ? OR id = ?` (both bound to ownerKey) to handle both authenticated users (cognitiveOwnerKey = profileId → matches profile_id) and anonymous/single-user (cognitiveOwnerKey = sessionId → matches id). The `journal` key is written by Task 13 `onFinish` via `mergeSessionMeta`.
 
 **Step 5: Run tests**
 
@@ -3193,9 +3281,12 @@ describe("conditional context by journey state", () => {
     // → no facts, no soul, no memories
   });
 
-  it("returning_no_page: same as first_visit (needs onboarding)", () => {
+  it("returning_no_page: includes soul + summary + memories + conflicts (returning user with data, no page yet)", () => {
     // bootstrap.journeyState = "returning_no_page"
-    // → includes FACT_SCHEMA_REFERENCE
+    // → includes FACT_SCHEMA_REFERENCE (still needs onboarding)
+    // → BUT unlike first_visit, loads existing soul, summary, memories, conflicts
+    //   because returning user has prior conversation data
+    // → context profile: facts(2000) + soul(800) + summary(800) + memories(400) + conflicts(200)
   });
 
   it("conditional context saves ≥25% tokens vs unconditional (steady_state)", () => {
@@ -3955,7 +4046,7 @@ git commit -m "perf: journey-state tool filtering — reduce input tokens for on
 
 ### Delivery Strategy
 
-Split implementation into three delivery scopes. The integration circuits (v2.2) form a separate scope because they connect v2 systems to existing Phase 1 infrastructure and benefit from stable foundations.
+Split implementation into four delivery scopes: v2 core (foundations + tools), v2.1 (intelligence layers), v2.2 (integration circuits connecting v2 to Phase 1 infrastructure), and v2.3 (efficiency optimizations).
 
 **v2 core (12 tasks):** 1, 1b, 2, 3, 5, 8a, 8b, 10, 11, 16, 17, 18
 
@@ -4008,7 +4099,7 @@ These tasks close the remaining feedback loops. All are pure additive — no sch
 | 26 | Systematic model tiering — fast/standard/reasoning across all 7+ LLM call sites |
 | 27 | Journey-state tool filtering — static tool subset per state, token savings + hard guardrail |
 
-These are pure optimizations. T26 and T27 are independent and can be done anytime (even before v2 core). T24 and T25 modify `context.ts` and should be done in order. T25 resolves the existing `route.ts:123-124` TODO. T27 modifies `route.ts` but only adds a filter call after `createAgentTools` — no conflict with T25.
+These are pure optimizations. T26 is independent and can be done anytime (even before v2 core). T27 depends on T13 (v2.1) because it destructures `{ tools, getJournal }` from `createAgentTools()` — cannot be done before v2.1. T24 and T25 modify `context.ts` and should be done in order. T25 resolves the existing `route.ts:123-124` TODO. T27 modifies `route.ts` but only adds a filter call after `createAgentTools` — no conflict with T25.
 
 **Cross-cutting: observability.** Add `logEvent()` calls (using the existing event-service + requestId infrastructure) in the following tasks. Not a separate task — 5-10 lines each, inline with the code being written:
 
@@ -4122,7 +4213,7 @@ This enables answering: "How many tokens does a first_visit session consume vs a
 
 | ID | Severity | Fix | Location |
 |----|----------|-----|----------|
-| R7-C1 | Critical | Coherence issues use `mergeSessionMeta` (coherenceWarnings/coherenceIssues keys), NOT `createProposal` — proposal-service expects `CreateProposalInput` with section_copy fields (sectionType, currentContent, proposedContent, hashes) incompatible with coherence shape | T14 Step 4, T20 Step 3 |
+| R7-C1 | Critical | Coherence issues use `mergeSessionMeta` (coherenceWarnings/coherenceInfos keys), NOT `createProposal` — proposal-service expects `CreateProposalInput` with section_copy fields (sectionType, currentContent, proposedContent, hashes) incompatible with coherence shape | T14 Step 4, T20 Step 3 |
 | R7-C2 | Critical | `recomposeAfterMutation()` removed from trust-ledger undo handlers — it's a closure inside `createAgentTools()`, not importable. Caller of `reverseTrustAction()` handles recompose. | T8b Step 4, T23 Step 3 |
 | R7-C3 | Critical | `parentFactId` end-to-end write path: added to `CreateFactInput` type, `createFact()` insert, and `batch_facts` tool Zod schema. Without this, Task 6 grouping is dead code. | T1 Step 4, T8a Step 3 |
 | R7-S4 | Significant | `validateLayout()` → `validateLayoutComposition()` — the actual export name in `quality.ts:83` | T10 Step 2 |
@@ -4201,3 +4292,25 @@ D1/D2 session.metadata alignment, T20 `getDraft(scope.knowledgePrimaryKey)`, T13
 | R14-S3 | Significant | Task 27 dependency corrected: `Depends On: —` → `Depends On: T13`. Snippet uses `{ tools: allTools, getJournal }` destructuring (Task 13 return shape). Parallelism note and "scope-independent" claim updated. | T27 summary table, delivery strategy |
 | R14-S4 | Significant | Task 27 tool inventory expanded: added `archive_fact`, `unarchive_fact`, `reorder_items` (T8b), `move_section` (T9). `ONBOARDING_TOOLS` updated to include T8b tools. Test `ALL_TOOL_NAMES` includes full v2 inventory. | T27 Steps 1/3 |
 | R14-M5 | Minor | R2-S2 changelog entry ("batch rolled back" hint) marked as ~~SUPERSEDED~~ by R12-C2/R14-S2 — incompatible with sequential semantics. | Changelog R2 |
+
+**Round 15 — findings (7 reported, 6 applied):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R15-C1 | Critical | **Already fixed in R13-C1/R14-C1.** Re-verified: `created`/`updated`/`deleted`/`reverseOps` at lines 1076-1082, `try` at 1084. Variable scope is correct. No change needed. | T8a Step 3 |
+| R15-S2 | Significant | Added `buildCoherencePrompt()` implementation — was called at line 2137 but never defined. New helper builds prompt from section summaries (truncated content) + optional soul context for tone checking. | T14 Step 3b |
+| R15-S3 | Significant | Added `getRecentJournalEntries()` implementation as Step 4b — was called in heartbeat wiring but never defined. SQL query on `sessions.metadata.journal` across N most recent sessions by `profile_id OR id`. File `session-metadata.ts` added to Task 22 files list. | T22 Step 4b, Files |
+| R15-S4 | Significant | D1/D2 lifecycle metadata harmonized end-to-end. (a) T14 Step 4: saves both `coherenceWarnings` + `coherenceInfos`; nulls out when empty to prevent stale data. (b) T14 Step 5 context wiring: reads both keys, merges. (c) T20: saves both keys + null cleanup, matching D1. (d) logEvent payload includes `infosFound`. Eliminated asymmetry where D1 saved 2 keys, D2 saved 1, and context read 1. | T14 Steps 4-5, T20 Step 3 |
+| R15-S5 | Significant | Task 24 test: `returning_no_page` test description changed from "same as first\_visit" to accurate description. Profile includes soul(800) + summary(800) + memories(400) + conflicts(200) unlike first\_visit which has none. | T24 Step 1 |
+| R15-S6 | Significant | Delivery strategy v2.3 text: "T26 and T27 are independent" → "T26 is independent; T27 depends on T13 (v2.1)". R14-S3 fixed the summary table but this prose was missed. | Delivery strategy |
+| R15-M7 | Minor | Delivery strategy header: "three delivery scopes" → "four delivery scopes" (v2 core, v2.1, v2.2, v2.3). | Delivery strategy |
+
+**Round 16 — findings (5 issues):**
+
+| ID | Severity | Fix | Location |
+|----|----------|-----|----------|
+| R16-C1 | Critical | **Coherence graceful degradation crash:** `const { object } = await Promise.race([...]).catch(() => null)` — if catch returns null, destructuring null throws TypeError before the `if (!object)` guard executes. Fixed: intermediate `llmResult` variable, null check before destructuring. | T14 Step 3b |
+| R16-C2 | Critical | **`getRecentJournalEntries` won't compile:** (a) `db.prepare(...)` — `db` is Drizzle ORM (no `.prepare()` method); must use `sqlite.prepare(...)` (raw better-sqlite3, matching journey.ts:90 pattern). (b) `cognitive_owner_key` column doesn't exist in sessions table — it's a computed OwnerScope field. Fixed: `sqlite.prepare()` + `WHERE (profile_id = ? OR id = ?)` to handle both auth (cognitiveOwnerKey = profileId → matches profile_id) and anon (cognitiveOwnerKey = sessionId → matches id). Added `import { sqlite }` note. (c) Self-import `import { JournalEntry } from "./session-metadata"` removed — type is defined in the same file. | T22 Step 4b |
+| R16-S3 | Significant | **childCounts cross-tenant leak:** Query in `assembleBootstrapPayload` counted children across ALL owners' facts. Added `inArray(factsTable.sessionId, readKeys)` scope filter — `readKeys` is already available as `scope.knowledgeReadKeys` in the caller. | T15 Step 2 |
+| R16-S4 | Significant | **Self-import in session-metadata.ts:** `import { JournalEntry } from "./session-metadata"` inside the file where JournalEntry is defined. Removed import, added comment that type is defined earlier in same file. | T22 Step 4b |
+| R16-S5 | Significant | **Uniqueness check blocks idempotent upserts:** `createFact` uses `onConflictDoUpdate` on `(sessionId, category, key)` — a create with the same key is an upsert. But the new CURRENT_UNIQUE check found the upsert target row itself and threw EXISTING_CURRENT. Fixed: added `ne(facts.key, input.key)` to exclude the row being upserted. Comment explains the interaction with onConflictDoUpdate. | T3 Step 4 |
