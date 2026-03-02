@@ -31,9 +31,11 @@ console.log(`[backfill-architect-slots] Mode: ${mode}\n`);
 
 // config is already a parsed object (Drizzle mode: "json")
 const allPages = db
-  .select({ id: page.id, config: page.config, configHash: page.configHash })
+  .select({ id: page.id, config: page.config, configHash: page.configHash, status: page.status })
   .from(page)
   .all();
+
+const template = getLayoutTemplate("architect");
 
 let totalPages = 0;
 let changedPages = 0;
@@ -41,11 +43,10 @@ let skippedLocked = 0;
 
 for (const row of allPages) {
   const config = row.config as PageConfig;
-  if (config.layoutTemplate !== "architect") continue;
+  if (!config?.layoutTemplate || config.layoutTemplate !== "architect") continue;
+  if (!config.sections?.length) continue;
 
   totalPages++;
-
-  const template = getLayoutTemplate("architect");
 
   // Check for user locks — skip entire page if any section has user lock
   const hasUserLock = config.sections.some(
@@ -90,7 +91,7 @@ for (const row of allPages) {
   }
 
   changedPages++;
-  console.log(`  CHANGED ${row.id}:`);
+  console.log(`  CHANGED ${row.id} [${row.status}]:`);
   for (const d of diffs) console.log(d);
   if (issues.length > 0) {
     console.log(`    Issues: ${issues.map((i) => i.message).join("; ")}`);
