@@ -94,7 +94,6 @@ vi.mock("@/lib/services/page-service", () => ({
 const mockGetActiveFacts = vi.fn(() => []);
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
-  getAllFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
 const mockCheckPageCoherence = vi.fn(async () => []);

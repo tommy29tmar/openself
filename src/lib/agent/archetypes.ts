@@ -31,17 +31,21 @@ type SignalEntry = { archetype: Archetype; pattern: RegExp };
 /**
  * Ordered detection rules. First match wins.
  * Patterns cover en, it, de, fr, es keywords.
+ *
+ * NOTE: Patterns use agent-noun forms (developer, not develop) to avoid
+ * false-matching verb uses ("I developed a product"). Detection is cached
+ * per session so first-match risk is bounded.
  */
 const ARCHETYPE_SIGNALS: SignalEntry[] = [
   {
     archetype: "designer",
     pattern:
-      /\b(designer|design(?:er)?|UX|UI|graphic|visual|illustrat|art\s*director|creative\s*director|grafikdesign|gestalt|concepteur|diseñador|disegnator)/i,
+      /\b(designer|UX|UI|graphic\s*design|visual\s*design|illustrat(?:or|eur|ore)|art\s*director|creative\s*director|grafikdesigner|gestalt(?:er|ung)|concepteur|diseñador|disegnator)/i,
   },
   {
     archetype: "academic",
     pattern:
-      /\b(professor|profess(?:or|eur|ore)|researcher|ricercat|forscher|chercheur|investigador|lecturer|dozent|docente|PhD|postdoc|tenure)/i,
+      /\b(professor|profess(?:or|eur|ore)|researcher|ricercat(?:ore|rice)|forscher|chercheur|investigador|lecturer|dozent|docente|PhD|postdoc|tenure)/i,
   },
   {
     archetype: "executive",
@@ -51,12 +55,12 @@ const ARCHETYPE_SIGNALS: SignalEntry[] = [
   {
     archetype: "consultant",
     pattern:
-      /\b(consultant|consult|advisor|advisory|freelance\s*consult|berater|consulente|conseil|consultor|strategist|strateg)/i,
+      /\b(consultant|consulting|advisor|advisory|freelance\s*consult(?:ant|ing)|berater|consulente|conseil(?:ler)?|consultor|strategist)/i,
   },
   {
     archetype: "developer",
     pattern:
-      /\b(develop|engineer|programm|software|fullstack|full-stack|frontend|front-end|backend|back-end|devops|cloud|data\s*engineer|ingegnere|entwickler|développeur|desarrollador|codeur|coder|hacker)/i,
+      /\b(developer|engineer|programmer|software|fullstack|full-stack|frontend|front-end|backend|back-end|devops|cloud\s*engineer|data\s*engineer|ingegnere|entwickler|développeur|desarrollador|codeur|coder|hacker|programmier|programmat(?:ore|eur|eur))/i,
   },
   {
     archetype: "creator",

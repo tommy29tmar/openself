@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hoist mock functions needed by fire-and-forget personalization
 const {
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
@@ -16,9 +15,6 @@ const {
   mockComputeHash,
   mockPersonalizeSection,
 } = vi.hoisted(() => ({
-  mockGetAllFacts: vi.fn().mockReturnValue([
-    { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
-  ]),
   mockGetActiveFacts: vi.fn().mockReturnValue([
     { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
   ]),
@@ -49,8 +45,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: vi.fn(),
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -119,7 +114,7 @@ import { createAgentTools } from "@/lib/agent/tools";
 describe("generate_page fire-and-forget personalization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
     ]);
     mockGetDraft.mockReturnValue(null);

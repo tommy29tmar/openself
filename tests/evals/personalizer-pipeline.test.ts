@@ -5,7 +5,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGenerateObject,
   mockGetModel,
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockGetActiveSoul,
   mockGetAllActiveCopies,
@@ -21,7 +20,6 @@ const {
 } = vi.hoisted(() => ({
   mockGenerateObject: vi.fn(),
   mockGetModel: vi.fn(() => "mock-model"),
-  mockGetAllFacts: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockGetActiveSoul: vi.fn(),
   mockGetAllActiveCopies: vi.fn(),
@@ -48,8 +46,7 @@ vi.mock("@/lib/ai/provider", () => ({
 
 // Mock kb-service
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
-  getActiveFacts: (...args: unknown[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
 }));
 
 // Mock soul-service
@@ -166,7 +163,7 @@ describe("personalizer pipeline (integration)", () => {
     vi.clearAllMocks();
 
     // Default stub return values
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
     mockGetActiveSoul.mockReturnValue(null);
     mockGetAllActiveCopies.mockReturnValue([]);
     mockGetActiveCopy.mockReturnValue(null);
@@ -196,7 +193,7 @@ describe("personalizer pipeline (integration)", () => {
     const allFacts = [nameFact, skillFact];
     const publishableFacts = [nameFact, skillFact];
 
-    mockGetAllFacts.mockReturnValue(allFacts);
+    mockGetActiveFacts.mockReturnValue(allFacts);
     mockFilterPublishableFacts.mockReturnValue(publishableFacts);
 
     // Mock soul
@@ -245,7 +242,7 @@ describe("personalizer pipeline (integration)", () => {
 
     // Verify the mocked services were called correctly
     expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "en");
-    expect(mockGetAllFacts).toHaveBeenCalledWith("owner1");
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("owner1");
     expect(mockFilterPublishableFacts).toHaveBeenCalledWith(allFacts);
     expect(mockGetActiveSoul).toHaveBeenCalledWith("owner1");
     expect(mockComputeHash).toHaveBeenCalledWith("Warm, creative, and enthusiastic about open source.");
@@ -266,7 +263,7 @@ describe("personalizer pipeline (integration)", () => {
     mockComputeSectionFactsHash.mockReturnValue("NEW-facts-hash");
     mockComputeHash.mockReturnValue("soul-hash-xyz");
 
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       makeFact({ category: "identity", key: "name", value: { full: "Alice" } }),
     ]);
     mockFilterPublishableFacts.mockReturnValue([

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hoist all mocks before imports
 const {
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
@@ -24,7 +23,6 @@ const {
   mockComputeHash,
   mockRequestPublish,
 } = vi.hoisted(() => ({
-  mockGetAllFacts: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
@@ -52,8 +50,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: mockUpdateFact,
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));
@@ -128,7 +125,7 @@ describe("auto-recompose after fact mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetFactLanguage.mockReturnValue("it");
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       { id: "f1", category: "identity", key: "name", value: { name: "Elena" }, visibility: "public" },
     ]);
     mockGetDraft.mockReturnValue({
@@ -205,7 +202,7 @@ describe("auto-recompose after fact mutations", () => {
 
   it("skips recompose when no facts remain after delete", async () => {
     mockDeleteFact.mockReturnValue(true);
-    mockGetAllFacts.mockReturnValue([]); // no facts left
+    mockGetActiveFacts.mockReturnValue([]); // no facts left
     const { tools } = createAgentTools("it", "sess1");
     await tools.delete_fact.execute(
       { factId: "f1" },

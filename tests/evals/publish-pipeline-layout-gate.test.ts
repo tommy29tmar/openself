@@ -10,10 +10,9 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/services/kb-service", () => {
-  const mockGetAllFacts = vi.fn();
+  const mockGetActiveFacts = vi.fn();
   return {
-    getAllFacts: mockGetAllFacts,
-    getActiveFacts: mockGetAllFacts,
+    getActiveFacts: mockGetActiveFacts,
     setFactVisibility: vi.fn(),
   };
 });
@@ -86,7 +85,7 @@ vi.mock("@/lib/services/personalization-projection", () => ({
   mergeActiveSectionCopy: vi.fn((config: unknown) => config),
 }));
 
-import { getAllFacts } from "@/lib/services/kb-service";
+import { getActiveFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 
@@ -133,7 +132,7 @@ function makeFacts() {
 describe("prepareAndPublish layout gate status mapping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getAllFacts).mockReturnValue(makeFacts() as any);
+    vi.mocked(getActiveFacts).mockReturnValue(makeFacts() as any);
     vi.mocked(getDraft).mockReturnValue(makeDraft() as any);
   });
 

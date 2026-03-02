@@ -93,6 +93,7 @@ const ARCHIVABLE_SAFETY_FLOOR = 5;
 /**
  * Recency factor for relevance scoring.
  * <30d: 1.0, 30-90d: 0.7, 90-180d: 0.4, >180d: 0.2
+ * @internal Exported for testing — not part of the public API.
  */
 export function recencyFactor(updatedAt: string | null): number {
   if (!updatedAt) return 0.2;
@@ -107,6 +108,7 @@ export function recencyFactor(updatedAt: string | null): number {
  * Compute relevance score for a fact.
  * Used by both detectSituations (flag) and assembleBootstrapPayload (list).
  * Single source of truth for the relevance formula.
+ * @internal Exported for testing — not part of the public API.
  */
 export function computeRelevance(f: FactRow, childCountMap?: Map<string, number>): number {
   const recency = recencyFactor(f.updatedAt);
@@ -545,11 +547,13 @@ function getPublishedUpdatedAt(sessionIds: string[]): string | null {
 }
 
 /**
- * Calculate whole days between two dates.
+ * Calculate whole days between two dates (rounded to nearest day).
+ * Math.round avoids the up-to-23h59m underestimate of Math.floor.
+ * @internal Exported for testing — not part of the public API.
  */
 export function daysBetween(earlier: Date, later: Date): number {
   const diffMs = later.getTime() - earlier.getTime();
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 /**

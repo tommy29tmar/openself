@@ -10,7 +10,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/services/kb-service", () => {
   const mockFn = vi.fn(() => []);
   return {
-    getAllFacts: mockFn,
     getActiveFacts: mockFn,
     countFacts: vi.fn(() => 0),
   };
@@ -43,7 +42,7 @@ vi.mock("@/lib/agent/journey", () => ({
 
 import { estimateTokens, detectMode, assembleContext } from "@/lib/agent/context";
 import type { OwnerScope } from "@/lib/auth/session";
-import { countFacts, getAllFacts } from "@/lib/services/kb-service";
+import { countFacts, getActiveFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemories } from "@/lib/services/memory-service";
@@ -64,7 +63,7 @@ beforeEach(() => {
   // Reset defaults
   vi.mocked(countFacts).mockReturnValue(0);
   vi.mocked(hasAnyPublishedPage).mockReturnValue(false);
-  vi.mocked(getAllFacts).mockReturnValue([]);
+  vi.mocked(getActiveFacts).mockReturnValue([]);
   vi.mocked(getSummary).mockReturnValue(null);
   vi.mocked(getActiveMemories).mockReturnValue([]);
   vi.mocked(getActiveSoul).mockReturnValue(null);
@@ -134,7 +133,7 @@ describe("assembleContext", () => {
   });
 
   it("includes facts block when facts exist", () => {
-    vi.mocked(getAllFacts).mockReturnValue([
+    vi.mocked(getActiveFacts).mockReturnValue([
       { id: "f1", sessionId: "s", profileId: null, category: "identity", key: "name", value: '{"full":"Alice"}', source: "chat", confidence: 1, visibility: "public", createdAt: "", updatedAt: "" },
     ] as any);
 
@@ -190,7 +189,7 @@ describe("assembleContext", () => {
       source: "chat", confidence: 1, visibility: "public",
       createdAt: "", updatedAt: "",
     }));
-    vi.mocked(getAllFacts).mockReturnValue(bigFacts as any);
+    vi.mocked(getActiveFacts).mockReturnValue(bigFacts as any);
 
     const result = assembleContext(SCOPE, "en", []);
     // The facts portion should not exceed its budget (2000 tokens = 8000 chars)
@@ -210,7 +209,7 @@ describe("assembleContext", () => {
 describe("post-assembly guard", () => {
   it("truncates when total system prompt exceeds 7500 tokens", () => {
     // Inject large content into multiple blocks to blow past 7500 tokens (30000 chars)
-    vi.mocked(getAllFacts).mockReturnValue(
+    vi.mocked(getActiveFacts).mockReturnValue(
       Array.from({ length: 50 }, (_, i) => ({
         id: `f${i}`, sessionId: "s", profileId: null,
         category: "bio", key: `k${i}`,

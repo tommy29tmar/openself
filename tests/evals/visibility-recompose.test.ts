@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hoist all mocks before imports
 const {
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
@@ -24,7 +23,6 @@ const {
   mockComputeHash,
   mockRequestPublish,
 } = vi.hoisted(() => ({
-  mockGetAllFacts: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
@@ -52,8 +50,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: mockUpdateFact,
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));
@@ -134,7 +131,7 @@ describe("set_fact_visibility triggers recomposition", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetFactLanguage.mockReturnValue("en");
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       { id: "f1", category: "identity", key: "name", value: { name: "Test" }, visibility: "public" },
     ]);
     mockGetDraft.mockReturnValue({

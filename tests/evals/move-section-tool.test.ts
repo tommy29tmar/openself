@@ -16,7 +16,6 @@ vi.mock("@/lib/services/page-service", () => ({
   getPublishedUsername: vi.fn(() => null),
 }));
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: vi.fn(() => []),
   getActiveFacts: vi.fn(() => []),
   searchFacts: vi.fn(() => []),
   createFact: vi.fn(),

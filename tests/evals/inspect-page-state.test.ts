@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── hoisted mocks ──────────────────────────────────────────
 const {
   mockGetDraft,
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockResolveLayoutTemplate,
   mockGroupSectionsBySlot,
@@ -11,7 +10,6 @@ const {
   mockClassifySectionRichness,
 } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
-  mockGetAllFacts: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockResolveLayoutTemplate: vi.fn(),
   mockGroupSectionsBySlot: vi.fn(),
@@ -30,8 +28,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: vi.fn(),
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -189,7 +186,7 @@ describe("inspect_page_state tool", () => {
     });
     mockIsSectionComplete.mockReturnValue(true);
     mockClassifySectionRichness.mockReturnValue("rich");
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
   });
 
   it("exists in the tools object", () => {
@@ -294,7 +291,7 @@ describe("inspect_page_state tool", () => {
     mockClassifySectionRichness.mockImplementation(
       (_f: any, type: string) => (type === "skills" ? "thin" : "rich"),
     );
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
 
     const result = await tools.inspect_page_state.execute(
       {},
@@ -307,7 +304,7 @@ describe("inspect_page_state tool", () => {
 
   it("warns about missing public contact information", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       { id: "f1", category: "identity", visibility: "public" },
       // No contact facts
     ]);
@@ -322,7 +319,7 @@ describe("inspect_page_state tool", () => {
 
   it("does not warn about contact when public contact exists", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       { id: "f1", category: "contact", visibility: "proposed" },
     ]);
 

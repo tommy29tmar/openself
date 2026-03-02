@@ -47,7 +47,7 @@ function setupDb() {
 
 // Mock external dependencies
 const mockComputeSectionFactsHash = vi.fn().mockReturnValue("facts-hash-1");
-const mockGetAllFacts = vi.fn().mockReturnValue([]);
+const mockGetActiveFacts = vi.fn().mockReturnValue([]);
 const mockFilterPublishableFacts = vi.fn().mockReturnValue([]);
 const mockGetActiveSoul = vi.fn().mockReturnValue({ compiled: "Warm tone" });
 const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
@@ -66,8 +66,7 @@ vi.mock("@/lib/services/personalization-hashing", () => ({
 }));
 
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
-  getActiveFacts: (...args: unknown[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
 }));
 
 vi.mock("@/lib/services/page-projection", () => ({

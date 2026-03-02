@@ -13,7 +13,7 @@ const {
   mockGetSessionMeta,
   mockMergeSessionMeta,
   mockCountFacts,
-  mockGetAllFacts,
+  mockGetActiveFacts,
   mockHasAnyPublishedPage,
   mockGetDraft,
   mockGetPublishedUsername,
@@ -28,7 +28,7 @@ const {
   mockGetSessionMeta: vi.fn().mockReturnValue({}),
   mockMergeSessionMeta: vi.fn(),
   mockCountFacts: vi.fn().mockReturnValue(5),
-  mockGetAllFacts: vi.fn().mockReturnValue([]),
+  mockGetActiveFacts: vi.fn().mockReturnValue([]),
   mockHasAnyPublishedPage: vi.fn().mockReturnValue(false),
   mockGetDraft: vi.fn().mockReturnValue(null),
   mockGetPublishedUsername: vi.fn().mockReturnValue(null),
@@ -56,8 +56,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/services/kb-service", () => ({
   countFacts: mockCountFacts,
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
@@ -117,7 +116,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Defaults: 5 facts → not first_visit, no published page → returning_no_page
   mockCountFacts.mockReturnValue(5);
-  mockGetAllFacts.mockReturnValue([
+  mockGetActiveFacts.mockReturnValue([
     { id: "f1", category: "identity", key: "role", value: { role: "Software Engineer" }, source: "chat", confidence: 1, visibility: "public", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
   ]);
   mockHasAnyPublishedPage.mockReturnValue(false);
@@ -160,7 +159,7 @@ describe("Circuito A: archetype → soul auto-proposal", () => {
 
   it("does NOT propose soul for generalist archetype", () => {
     // No role fact → generalist
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
     mockCountFacts.mockReturnValue(5);
 
     assembleBootstrapPayload(SCOPE, "en");

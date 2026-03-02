@@ -45,7 +45,12 @@ export function projectCanonicalConfig(
   // 1. Filter to publishable facts only
   const publishable = filterPublishableFacts(facts);
 
-  // 2. Build draftSlots map for carry-over (soft-pin)
+  // 2. Build draftSlots map for slot carry-over (soft-pin).
+  //    When a draft exists, we preserve each section's current slot assignment
+  //    so that recomposition doesn't shuffle layout positions. The map is passed
+  //    to assignSlotsFromFacts() which uses it as a preference hint — sections
+  //    keep their slot if still valid for the template, otherwise normal
+  //    assignment rules apply. This prevents layout jumps on fact mutations.
   const draftSlots = new Map<string, string>();
   if (draftMeta) {
     for (const ds of draftMeta.sections) {

@@ -24,7 +24,6 @@ vi.mock("@/lib/services/kb-service", () => {
   const mockFn = vi.fn(() => []);
   return {
     countFacts: vi.fn(() => 0),
-    getAllFacts: mockFn,
     getActiveFacts: mockFn,
   };
 });
@@ -172,10 +171,16 @@ describe("daysBetween", () => {
     expect(daysBetween(a, b)).toBe(30);
   });
 
-  it("floors partial days", () => {
+  it("rounds partial days to nearest whole day", () => {
+    // 36h → rounds to 2 (nearest day)
     const a = new Date("2026-02-26T00:00:00Z");
     const b = new Date("2026-02-27T12:00:00Z");
-    expect(daysBetween(a, b)).toBe(1);
+    expect(daysBetween(a, b)).toBe(2);
+
+    // 30h → rounds to 1
+    const c = new Date("2026-02-26T00:00:00Z");
+    const d = new Date("2026-02-27T06:00:00Z");
+    expect(daysBetween(c, d)).toBe(1);
   });
 });
 
@@ -382,8 +387,8 @@ describe("assembleBootstrapPayload", () => {
   });
 
   it("includes userName when name fact exists", async () => {
-    const { getAllFacts } = await import("@/lib/services/kb-service");
-    vi.mocked(getAllFacts).mockReturnValue([
+    const { getActiveFacts } = await import("@/lib/services/kb-service");
+    vi.mocked(getActiveFacts).mockReturnValue([
       {
         id: "f1",
         category: "identity",
@@ -402,8 +407,8 @@ describe("assembleBootstrapPayload", () => {
   });
 
   it("includes userName from legacy full-name fact", async () => {
-    const { getAllFacts } = await import("@/lib/services/kb-service");
-    vi.mocked(getAllFacts).mockReturnValue([
+    const { getActiveFacts } = await import("@/lib/services/kb-service");
+    vi.mocked(getActiveFacts).mockReturnValue([
       {
         id: "f1",
         category: "identity",
@@ -443,8 +448,8 @@ describe("assembleBootstrapPayload", () => {
   it("lists stale facts", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
-    const { getAllFacts } = await import("@/lib/services/kb-service");
-    vi.mocked(getAllFacts).mockReturnValue([
+    const { getActiveFacts } = await import("@/lib/services/kb-service");
+    vi.mocked(getActiveFacts).mockReturnValue([
       {
         id: "f1",
         category: "skill",

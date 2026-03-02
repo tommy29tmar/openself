@@ -9,8 +9,11 @@ import type { JourneyState } from "@/lib/agent/journey";
  * - ONBOARDING (first_visit, returning_no_page) → fact + generate tools only
  * - FULL (draft_ready, active_fresh, active_stale) → all tools
  */
-// SYNC: When adding tools to createAgentTools (tools.ts), review this list.
-// Tools NOT here are excluded from onboarding states (first_visit, returning_no_page).
+// SYNC: Keep in sync with createAgentTools() in tools.ts.
+// When adding a new tool to tools.ts, decide whether it belongs in onboarding:
+// - YES → add to ONBOARDING_TOOLS below
+// - NO  → it's automatically excluded from first_visit / returning_no_page
+// Full-state tools (style, layout, reorder, move, lock, request_publish) are intentionally excluded.
 const ONBOARDING_TOOLS = [
   "create_fact",
   "update_fact",

@@ -17,10 +17,8 @@ vi.mock("@/lib/services/personalization-hashing", () => ({
 }));
 
 // Mock KB service
-const mockGetAllFacts = vi.fn().mockReturnValue([]);
 const mockGetActiveFacts = vi.fn().mockReturnValue([]);
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
   getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
 }));
 
@@ -66,7 +64,7 @@ describe("mergeActiveSectionCopy", () => {
     vi.clearAllMocks();
     // Defaults
     mockGetAllActiveCopies.mockReturnValue([]);
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
     mockFilterPublishableFacts.mockReturnValue([]);
     mockGetActiveSoul.mockReturnValue({ compiled: "mock-soul" });
     mockComputeSectionFactsHash.mockReturnValue("mock-facts-hash");

@@ -8,7 +8,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // --- Mock all service dependencies before importing the module under test ---
 
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: vi.fn(() => []),
   getActiveFacts: vi.fn(() => []),
   countFacts: vi.fn(() => 0),
 }));
@@ -37,7 +36,7 @@ vi.mock("@/lib/services/session-metadata", () => ({
 
 import { assembleContext } from "@/lib/agent/context";
 import type { OwnerScope } from "@/lib/auth/session";
-import { countFacts, getAllFacts } from "@/lib/services/kb-service";
+import { countFacts, getActiveFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage } from "@/lib/services/page-service";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 
@@ -53,7 +52,7 @@ beforeEach(() => {
   // Defaults: steady_state via published page
   vi.mocked(countFacts).mockReturnValue(10);
   vi.mocked(hasAnyPublishedPage).mockReturnValue(true);
-  vi.mocked(getAllFacts).mockReturnValue([]);
+  vi.mocked(getActiveFacts).mockReturnValue([]);
   vi.mocked(filterPublishableFacts).mockReturnValue([]);
 });
 
@@ -70,7 +69,7 @@ describe("drill-down context block", () => {
       createdAt: "2026-01-01",
       updatedAt: "2026-01-01",
     };
-    vi.mocked(getAllFacts).mockReturnValue([identityFact] as any);
+    vi.mocked(getActiveFacts).mockReturnValue([identityFact] as any);
     vi.mocked(filterPublishableFacts).mockReturnValue([identityFact] as any);
 
     const { systemPrompt, mode } = assembleContext(SCOPE, "en", [
@@ -90,7 +89,7 @@ describe("drill-down context block", () => {
       { id: "f3", category: "skill", key: "ts", value: { name: "TS" }, source: "chat", confidence: 1, visibility: "public", createdAt: "", updatedAt: "" },
       { id: "f4", category: "skill", key: "py", value: { name: "Python" }, source: "chat", confidence: 1, visibility: "public", createdAt: "", updatedAt: "" },
     ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    vi.mocked(getActiveFacts).mockReturnValue(facts as any);
     vi.mocked(filterPublishableFacts).mockReturnValue(facts as any);
 
     const { systemPrompt } = assembleContext(SCOPE, "en", [
@@ -181,7 +180,7 @@ describe("drill-down context block", () => {
       { id: "f111", category: "activity", key: "act2", value: {}, source: "chat", confidence: 1, visibility: "public", createdAt: "", updatedAt: "" },
       { id: "f112", category: "activity", key: "act3", value: {}, source: "chat", confidence: 1, visibility: "public", createdAt: "", updatedAt: "" },
     ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    vi.mocked(getActiveFacts).mockReturnValue(facts as any);
     vi.mocked(filterPublishableFacts).mockReturnValue(facts as any);
 
     const { systemPrompt } = assembleContext(SCOPE, "en", [

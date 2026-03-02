@@ -150,7 +150,7 @@ function deleteFact(factId: string, sessionId: string): boolean {
   return true;
 }
 
-function getAllFacts(sessionId: string) {
+function getActiveFacts(sessionId: string) {
   return testDb
     .select()
     .from(schema.facts)
@@ -194,8 +194,8 @@ describe("kb-service session isolation (real SQLite)", () => {
       createFact({ category: "identity", key: "full-name", value: { full: "Alice" } }, "session-a");
       createFact({ category: "identity", key: "full-name", value: { full: "Bob" } }, "session-b");
 
-      const factsA = getAllFacts("session-a");
-      const factsB = getAllFacts("session-b");
+      const factsA = getActiveFacts("session-a");
+      const factsB = getActiveFacts("session-b");
 
       expect(factsA).toHaveLength(1);
       expect(factsB).toHaveLength(1);
@@ -217,7 +217,7 @@ describe("kb-service session isolation (real SQLite)", () => {
       expect(result).toBeNull();
 
       // Verify original is untouched
-      const factsA = getAllFacts("session-a");
+      const factsA = getActiveFacts("session-a");
       expect((factsA[0].value as any).full).toBe("Alice");
     });
 
@@ -230,7 +230,7 @@ describe("kb-service session isolation (real SQLite)", () => {
       const result = updateFact({ factId: factA.id, value: { full: "Alice Smith" } }, "session-a");
 
       expect(result).not.toBeNull();
-      const factsA = getAllFacts("session-a");
+      const factsA = getActiveFacts("session-a");
       expect((factsA[0].value as any).full).toBe("Alice Smith");
     });
   });
@@ -248,7 +248,7 @@ describe("kb-service session isolation (real SQLite)", () => {
       expect(deleted).toBe(false);
 
       // Verify still exists
-      const factsA = getAllFacts("session-a");
+      const factsA = getActiveFacts("session-a");
       expect(factsA).toHaveLength(1);
     });
 
@@ -261,18 +261,18 @@ describe("kb-service session isolation (real SQLite)", () => {
       const deleted = deleteFact(factA.id, "session-a");
 
       expect(deleted).toBe(true);
-      expect(getAllFacts("session-a")).toHaveLength(0);
+      expect(getActiveFacts("session-a")).toHaveLength(0);
     });
   });
 
-  describe("getAllFacts / searchFacts scoping", () => {
-    it("getAllFacts only returns facts for the given session", () => {
+  describe("getActiveFacts / searchFacts scoping", () => {
+    it("getActiveFacts only returns facts for the given session", () => {
       createFact({ category: "skill", key: "ts", value: { name: "TypeScript" } }, "session-a");
       createFact({ category: "skill", key: "rust", value: { name: "Rust" } }, "session-a");
       createFact({ category: "skill", key: "go", value: { name: "Go" } }, "session-b");
 
-      expect(getAllFacts("session-a")).toHaveLength(2);
-      expect(getAllFacts("session-b")).toHaveLength(1);
+      expect(getActiveFacts("session-a")).toHaveLength(2);
+      expect(getActiveFacts("session-b")).toHaveLength(1);
     });
 
     it("searchFacts only returns facts for the given session", () => {
@@ -308,7 +308,7 @@ describe("kb-service session isolation (real SQLite)", () => {
       );
 
       expect(deleteFact(factA.id, "session-b")).toBe(false);
-      expect(getAllFacts("session-a")).toHaveLength(1);
+      expect(getActiveFacts("session-a")).toHaveLength(1);
     });
   });
 });

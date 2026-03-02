@@ -10,12 +10,11 @@ vi.mock("@/lib/services/event-service", () => ({
   logEvent: vi.fn(),
 }));
 
-const mockGetAllFacts = vi.fn();
+const mockGetActiveFacts = vi.fn();
 const mockSetFactVisibility = vi.fn();
 
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: (...args: any[]) => mockGetAllFacts(...args),
-  getActiveFacts: (...args: any[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
   setFactVisibility: (...args: any[]) => mockSetFactVisibility(...args),
 }));
 
@@ -135,7 +134,7 @@ beforeEach(() => {
 
 describe("prepareAndPublish", () => {
   it("throws NO_FACTS when facts are empty", async () => {
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
 
     await expect(
       prepareAndPublish("testuser", "session-1", { mode: "register" }),
@@ -152,7 +151,7 @@ describe("prepareAndPublish", () => {
 
   it("throws NO_PUBLISHABLE_FACTS when all facts are private", async () => {
     const facts = [makeFact({ category: "skill", key: "js", visibility: "private" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
 
     try {
       await prepareAndPublish("testuser", "session-1", { mode: "register" });
@@ -166,7 +165,7 @@ describe("prepareAndPublish", () => {
 
   it("always recomposes from facts (never uses cached draft.config)", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -189,7 +188,7 @@ describe("prepareAndPublish", () => {
       makeFact({ category: "identity", key: "name", visibility: "proposed" }),
       makeFact({ category: "skill", key: "js", visibility: "public" }),
     ];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -211,7 +210,7 @@ describe("prepareAndPublish", () => {
     const facts = [
       makeFact({ category: "skill", key: "js", visibility: "public" }),
     ];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -227,7 +226,7 @@ describe("prepareAndPublish", () => {
 
   it("publishes from zero when no draft exists", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue(null);
 
     const result = await prepareAndPublish("testuser", "session-1", { mode: "register" });
@@ -238,7 +237,7 @@ describe("prepareAndPublish", () => {
 
   it("preserves theme/style from existing draft metadata", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig({ theme: "warm", style: { colorScheme: "dark", primaryColor: "#ff0000", fontFamily: "serif", layout: "centered" } }),
       username: "testuser",
@@ -259,7 +258,7 @@ describe("prepareAndPublish", () => {
 
   it("rejects with STALE_PREVIEW_HASH when expectedHash doesn't match", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -284,7 +283,7 @@ describe("prepareAndPublish", () => {
 
   it("passes when expectedHash matches canonical config hash", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -306,7 +305,7 @@ describe("prepareAndPublish", () => {
     const facts = [
       makeFact({ category: "identity", key: "name", visibility: "proposed" }),
     ];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "testuser",
@@ -334,7 +333,7 @@ describe("prepareAndPublish", () => {
 
   it("USERNAME_MISMATCH in publish mode when body.username ≠ draft.username", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "alice", // draft says alice
@@ -356,7 +355,7 @@ describe("prepareAndPublish", () => {
 
   it("USERNAME_MISMATCH NOT enforced in register mode", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
       config: makeConfig(),
       username: "draft", // draft still has placeholder username
@@ -375,7 +374,7 @@ describe("prepareAndPublish", () => {
       makeFact({ category: "compensation", key: "salary", visibility: "proposed" }), // sensitive
       makeFact({ category: "skill", key: "js", visibility: "proposed" }), // non-sensitive
     ];
-    mockGetAllFacts.mockReturnValue(facts);
+    mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue(null);
 
     await prepareAndPublish("testuser", "session-1", { mode: "register" });

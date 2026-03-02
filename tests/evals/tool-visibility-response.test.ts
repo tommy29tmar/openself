@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hoist all mocks before imports
 const {
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
@@ -24,7 +23,6 @@ const {
   mockComputeHash,
   mockRequestPublish,
 } = vi.hoisted(() => ({
-  mockGetAllFacts: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
@@ -52,8 +50,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: mockUpdateFact,
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));
@@ -118,7 +115,7 @@ describe("tool visibility response enrichment", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetFactLanguage.mockReturnValue("en");
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public" },
     ]);
     mockGetDraft.mockReturnValue({
@@ -180,8 +177,8 @@ describe("tool visibility response enrichment", () => {
       mockCreateFact.mockReturnValue({
         id: "f5", category: "skill", key: "ts", visibility: "proposed",
       });
-      // Make getAllFacts throw — recomposeAfterMutation calls it internally
-      mockGetAllFacts.mockImplementation(() => { throw new Error("DB read error"); });
+      // Make getActiveFacts throw — recomposeAfterMutation calls it internally
+      mockGetActiveFacts.mockImplementation(() => { throw new Error("DB read error"); });
       const { tools } = createAgentTools("en", "sess1");
       const result = await tools.create_fact.execute(
         { category: "skill", key: "ts", value: { name: "TypeScript" } },
@@ -227,7 +224,7 @@ describe("tool visibility response enrichment", () => {
       mockUpdateFact.mockReturnValue({
         id: "f1", category: "identity", key: "name", visibility: "proposed",
       });
-      mockGetAllFacts.mockImplementation(() => { throw new Error("DB error"); });
+      mockGetActiveFacts.mockImplementation(() => { throw new Error("DB error"); });
       const { tools } = createAgentTools("en", "sess1");
       const result = await tools.update_fact.execute(
         { factId: "f1", value: { full: "Bob" } },
@@ -252,7 +249,7 @@ describe("tool visibility response enrichment", () => {
 
     it("returns recomposeOk: false when recomposition fails after delete", async () => {
       mockDeleteFact.mockReturnValue(true);
-      mockGetAllFacts.mockImplementation(() => { throw new Error("DB error"); });
+      mockGetActiveFacts.mockImplementation(() => { throw new Error("DB error"); });
       const { tools } = createAgentTools("en", "sess1");
       const result = await tools.delete_fact.execute(
         { factId: "f1" },

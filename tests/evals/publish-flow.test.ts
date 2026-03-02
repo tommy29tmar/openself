@@ -14,10 +14,9 @@ vi.mock("@/lib/services/page-service", () => ({
 }));
 
 vi.mock("@/lib/services/kb-service", () => {
-  const mockGetAllFacts = vi.fn();
+  const mockGetActiveFacts = vi.fn();
   return {
-    getAllFacts: mockGetAllFacts,
-    getActiveFacts: mockGetAllFacts,
+    getActiveFacts: mockGetActiveFacts,
     createFact: vi.fn(),
     updateFact: vi.fn(),
     deleteFact: vi.fn(),
@@ -34,7 +33,7 @@ import {
   confirmPublish,
   getPublishedPage,
 } from "@/lib/services/page-service";
-import { getAllFacts } from "@/lib/services/kb-service";
+import { getActiveFacts } from "@/lib/services/kb-service";
 
 function makeValidConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
@@ -89,7 +88,7 @@ describe("Tool level — generate_page", () => {
     const facts = [
       makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
     ];
-    vi.mocked(getAllFacts).mockReturnValue(facts as any);
+    vi.mocked(getActiveFacts).mockReturnValue(facts as any);
     vi.mocked(upsertDraft).mockImplementation(() => {});
 
     const result = await agentTools.generate_page.execute(
@@ -143,8 +142,8 @@ describe("Tool level — request_publish", () => {
 
     // Should NOT call upsertDraft (no recomposition)
     expect(upsertDraft).not.toHaveBeenCalled();
-    // Should NOT call getAllFacts (no fact reading needed)
-    expect(getAllFacts).not.toHaveBeenCalled();
+    // Should NOT call getActiveFacts (no fact reading needed)
+    expect(getActiveFacts).not.toHaveBeenCalled();
   });
 
   it("fails when no draft exists", async () => {

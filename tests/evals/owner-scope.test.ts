@@ -110,7 +110,7 @@ function allSessionIdsForProfile(profileId: string): string[] {
   return rows.map((r) => r.id);
 }
 
-function getAllFactsMultiKey(sessionIds: string[]) {
+function getActiveFactsMultiKey(sessionIds: string[]) {
   if (sessionIds.length === 0) return [];
   return testDb
     .select()
@@ -194,7 +194,7 @@ describe("Multi-session fact reads", () => {
     testSqlite.exec(`INSERT INTO facts(id, session_id, category, key, value) VALUES ('f2', '${SESSION_B}', 'skill', 'typescript', '{"name":"TypeScript"}')`);
 
     const readKeys = allSessionIdsForProfile(PROFILE_ID);
-    const facts = getAllFactsMultiKey(readKeys);
+    const facts = getActiveFactsMultiKey(readKeys);
     expect(facts).toHaveLength(2);
   });
 
@@ -204,7 +204,7 @@ describe("Multi-session fact reads", () => {
     testSqlite.exec(`INSERT INTO facts(id, session_id, category, key, value) VALUES ('f3', '${orphan}', 'identity', 'email', '{"email":"test"}')`);
 
     const readKeys = [...allSessionIdsForProfile(PROFILE_ID), orphan];
-    const facts = getAllFactsMultiKey(readKeys);
+    const facts = getActiveFactsMultiKey(readKeys);
     expect(facts.length).toBeGreaterThanOrEqual(1);
     expect(facts.some((f) => f.id === "f3")).toBe(true);
   });

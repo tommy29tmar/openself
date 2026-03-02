@@ -385,8 +385,7 @@ export function getActiveFacts(sessionId: string = "__default__", sessionIds?: s
   return db.select().from(facts).where(and(eq(facts.sessionId, sessionId), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
 }
 
-/** @deprecated Use getActiveFacts() instead. Kept for backward compatibility during migration. */
-export const getAllFacts = getActiveFacts;
+// S1: getAllFacts alias removed — all production code now uses getActiveFacts directly.
 
 export function getFactsByCategory(category: string, sessionId: string = "__default__"): FactRow[] {
   return db

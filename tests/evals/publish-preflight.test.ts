@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted mocks ──────────────────────────────────────────
-const { mockGetDraft, mockGetAllFacts, mockGetActiveFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
+const { mockGetDraft, mockGetActiveFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
-  mockGetAllFacts: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockIsMultiUserEnabled: vi.fn(() => false),
   mockValidateUsernameFormat: vi.fn(() => ({ ok: true })),
@@ -21,8 +20,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: vi.fn(),
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
-  getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -184,7 +182,7 @@ describe("publish_preflight tool", () => {
 
   it("returns readyToPublish=false when no draft exists", async () => {
     mockGetDraft.mockReturnValue(null);
-    mockGetAllFacts.mockReturnValue([]);
+    mockGetActiveFacts.mockReturnValue([]);
 
     const result = await tools.publish_preflight.execute(
       { username: "testuser" },
@@ -198,7 +196,7 @@ describe("publish_preflight tool", () => {
 
   it("returns readyToPublish=true with valid draft and username (single-user mode)", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       makeFact(),
       makeFact({ id: "fact-2", category: "skill", key: "ts", value: { name: "TS" } }),
       makeFact({ id: "fact-3", category: "contact", key: "email", value: { type: "email", value: "a@b.com" } }),
@@ -217,7 +215,7 @@ describe("publish_preflight tool", () => {
 
   it("returns readyToPublish=false when username is empty", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([makeFact()]);
+    mockGetActiveFacts.mockReturnValue([makeFact()]);
     mockIsMultiUserEnabled.mockReturnValue(false);
 
     const result = await tools.publish_preflight.execute(
@@ -231,7 +229,7 @@ describe("publish_preflight tool", () => {
 
   it("reports incomplete sections in quality.incompleteSections", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([makeFact()]);
+    mockGetActiveFacts.mockReturnValue([makeFact()]);
     mockIsMultiUserEnabled.mockReturnValue(false);
     vi.mocked(isSectionComplete).mockImplementation(
       (s: any) => s.type === "hero" || s.type === "footer",
@@ -249,7 +247,7 @@ describe("publish_preflight tool", () => {
 
   it("reports thin sections in quality.thinSections", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([makeFact()]);
+    mockGetActiveFacts.mockReturnValue([makeFact()]);
     mockIsMultiUserEnabled.mockReturnValue(false);
     vi.mocked(classifySectionRichness).mockImplementation(
       (_facts: any, type: string) => (type === "skills" ? "thin" : "rich"),
@@ -266,7 +264,7 @@ describe("publish_preflight tool", () => {
 
   it("reports proposed fact count in quality.proposedFacts", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       makeFact({ visibility: "proposed" }),
       makeFact({ id: "f2", visibility: "proposed" }),
       makeFact({ id: "f3", visibility: "public" }),
@@ -283,7 +281,7 @@ describe("publish_preflight tool", () => {
 
   it("reports missing contact in quality.missingContact", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       makeFact({ category: "identity" }),
       // No contact facts
     ]);
@@ -299,7 +297,7 @@ describe("publish_preflight tool", () => {
 
   it("reports contact present when public contact fact exists", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       makeFact({ category: "contact", key: "email", visibility: "proposed" }),
     ]);
     mockIsMultiUserEnabled.mockReturnValue(false);
@@ -314,7 +312,7 @@ describe("publish_preflight tool", () => {
 
   it("returns readyToPublish=false when username format is invalid", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([makeFact()]);
+    mockGetActiveFacts.mockReturnValue([makeFact()]);
     mockIsMultiUserEnabled.mockReturnValue(false);
     mockValidateUsernameFormat.mockReturnValue({ ok: false, message: "Username must be 3-30 characters" });
 
@@ -331,7 +329,7 @@ describe("publish_preflight tool", () => {
 
   it("returns section and fact counts in info", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
-    mockGetAllFacts.mockReturnValue([
+    mockGetActiveFacts.mockReturnValue([
       makeFact(),
       makeFact({ id: "f2" }),
       makeFact({ id: "f3" }),

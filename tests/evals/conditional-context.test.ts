@@ -6,10 +6,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
-const mockGetAllFacts = vi.fn(() => []);
+const mockGetActiveFacts = vi.fn(() => []);
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: (...args: any[]) => mockGetAllFacts(...args),
-  getActiveFacts: (...args: any[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
   countFacts: vi.fn(() => 0),
 }));
 vi.mock("@/lib/services/page-service", () => ({
@@ -88,7 +87,7 @@ function makeBootstrap(journeyState: string): BootstrapPayload {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetAllFacts.mockReturnValue([]);
+  mockGetActiveFacts.mockReturnValue([]);
   mockGetSummary.mockReturnValue("A conversation summary");
   mockGetActiveMemories.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
   mockGetActiveSoul.mockReturnValue({ compiled: "Soul: creative person" });
@@ -101,7 +100,7 @@ describe("conditional context by journey state", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("first_visit"));
 
     // Facts query IS called
-    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveFacts).toHaveBeenCalled();
 
     // Soul, summary, memories, conflicts queries are NOT called
     expect(mockGetActiveSoul).not.toHaveBeenCalled();
@@ -137,7 +136,7 @@ describe("conditional context by journey state", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("active_fresh"));
 
     // All queries are called
-    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
     expect(mockGetActiveMemories).toHaveBeenCalled();
@@ -153,7 +152,7 @@ describe("conditional context by journey state", () => {
   it("blocked: minimal context — no DB queries for facts/soul/summary/memories/conflicts", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("blocked"));
 
-    expect(mockGetAllFacts).not.toHaveBeenCalled();
+    expect(mockGetActiveFacts).not.toHaveBeenCalled();
     expect(mockGetActiveSoul).not.toHaveBeenCalled();
     expect(mockGetSummary).not.toHaveBeenCalled();
     expect(mockGetActiveMemories).not.toHaveBeenCalled();
@@ -163,7 +162,7 @@ describe("conditional context by journey state", () => {
   it("returning_no_page: includes facts + soul + summary + memories + conflicts", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("returning_no_page"));
 
-    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
     expect(mockGetActiveMemories).toHaveBeenCalled();
@@ -180,7 +179,7 @@ describe("conditional context by journey state", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES);
 
     // All queries are called in the legacy path
-    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
     expect(mockGetActiveMemories).toHaveBeenCalled();

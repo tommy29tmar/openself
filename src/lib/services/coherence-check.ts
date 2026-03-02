@@ -173,8 +173,12 @@ function buildCoherencePrompt(sections: Section[], soulCompiled?: string): strin
   ].filter(Boolean).join("\n");
 }
 
-/** Timeout for LLM coherence call. Prevents blocking page generation. */
-const COHERENCE_TIMEOUT_MS = 3000;
+/**
+ * Timeout for LLM coherence call. Prevents blocking page generation.
+ * 8s accommodates reasoning-heavy models (o1, Claude Opus) that need
+ * more time than fast completion models.
+ */
+const COHERENCE_TIMEOUT_MS = 8000;
 
 /**
  * Hybrid coherence check: deterministic first, LLM only if needed.

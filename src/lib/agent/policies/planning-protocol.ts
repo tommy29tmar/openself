@@ -35,7 +35,9 @@ Expertise modulation:
 - expert: act silently, confirm after ("Done — closed old job, added new one.")
 
 After completing a COMPOUND or STRUCTURAL operation:
-- Use save_memory to record the strategy and outcome
-- Example: "User asked to reorganize projects by date. Used batch_facts to reorder + archive 2 old projects. Outcome: cleaner projects section."
-- This helps you learn which approaches work for this user.`;
+- Use save_memory ONLY for novel strategies or user preferences, not for routine operations
+- Skip save_memory if the approach is standard (e.g., "added a fact", "changed theme")
+- Good: "User prefers projects ordered by date, not impact. Reorganized accordingly."
+- Bad: "Created 3 facts about work experience." (routine, adds no learning)
+- Limit: max 1 save_memory per conversation turn to prevent memory bloat.`;
 }

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hoist all mocks
 const {
-  mockGetAllFacts,
   mockGetActiveFacts,
   mockSetFactVisibility,
   mockGetDraft,
@@ -34,9 +33,6 @@ const {
   };
 
   return {
-    mockGetAllFacts: vi.fn().mockReturnValue([
-      { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
-    ]),
     mockGetActiveFacts: vi.fn().mockReturnValue([
       { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
     ]),
@@ -76,7 +72,6 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: mockGetAllFacts,
   getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
 }));
