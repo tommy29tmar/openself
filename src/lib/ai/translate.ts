@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { getModel, getModelId, getModelForTier } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier } from "@/lib/ai/provider";
 import { db } from "@/lib/db";
 import { translationCache } from "@/lib/db/schema";
 import type { PageConfig } from "@/lib/page-config/schema";
@@ -32,6 +32,24 @@ const TranslationResultSchema = z.array(
 function computeContentHash(sections: SectionPayload[]): string {
   return createHash("sha256")
     .update(JSON.stringify(sections))
+    .digest("hex");
+}
+
+/**
+ * Derive a composite cache key from content hash, source language,
+ * target language, and translation model id.
+ *
+ * This prevents stale hits when the same content is translated from a
+ * different source language or with a different model version.
+ */
+export function computeCompositeCacheKey(
+  contentHash: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+  modelId: string,
+): string {
+  return createHash("sha256")
+    .update(`${contentHash}:${sourceLanguage}:${targetLanguage}:${modelId}`)
     .digest("hex");
 }
 
@@ -88,8 +106,16 @@ export async function translatePageContent(
     return config;
   }
 
-  // Check translation cache
+  // Build composite cache key (content + source + target + model)
   const contentHash = computeContentHash(toTranslate);
+  const normalizedSource = sourceLanguage ?? "unknown";
+  const modelId = getModelIdForTier("fast");
+  const cacheKey = computeCompositeCacheKey(
+    contentHash,
+    normalizedSource,
+    targetLanguage,
+    modelId,
+  );
 
   try {
     const cached = db
@@ -97,7 +123,7 @@ export async function translatePageContent(
       .from(translationCache)
       .where(
         and(
-          eq(translationCache.contentHash, contentHash),
+          eq(translationCache.contentHash, cacheKey),
           eq(translationCache.targetLanguage, targetLanguage),
         ),
       )
@@ -107,7 +133,7 @@ export async function translatePageContent(
       logEvent({
         eventType: "translation_cache_hit",
         actor: "system",
-        payload: { targetLanguage, contentHash },
+        payload: { targetLanguage, cacheKey, sourceLanguage: normalizedSource },
       });
       const cachedSections = cached.translatedSections as SectionPayload[];
       return mergeSections(config, cachedSections);
@@ -119,7 +145,7 @@ export async function translatePageContent(
   logEvent({
     eventType: "translation_cache_miss",
     actor: "system",
-    payload: { targetLanguage, contentHash },
+    payload: { targetLanguage, cacheKey, sourceLanguage: normalizedSource },
   });
 
   const targetName =
@@ -170,16 +196,16 @@ ${JSON.stringify(toTranslate, null, 2)}`;
     try {
       db.insert(translationCache)
         .values({
-          contentHash,
+          contentHash: cacheKey,
           targetLanguage,
           translatedSections: translated as any,
-          model: getModelId(),
+          model: modelId,
         })
         .onConflictDoUpdate({
           target: [translationCache.contentHash, translationCache.targetLanguage],
           set: {
             translatedSections: translated as any,
-            model: getModelId(),
+            model: modelId,
           },
         })
         .run();
