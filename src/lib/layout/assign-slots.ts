@@ -1,6 +1,6 @@
 import type { Section, SectionLock, ComponentType } from "@/lib/page-config/schema";
 import type { LayoutTemplateDefinition, FullSlotDefinition } from "./types";
-import type { LayoutValidationIssue } from "./quality";
+import type { LayoutValidationIssue, LayoutIssueType } from "./quality";
 import { validateLayoutComposition } from "./quality";
 import { getBestWidget, getCompatibleWidgets, buildWidgetMap } from "./widgets";
 import { canMutateSection } from "./lock-policy";
@@ -42,6 +42,7 @@ export function assignSlotsFromFacts(
 ): { sections: Section[]; issues: LayoutValidationIssue[] } {
   const doRepair = options?.repair !== false;
   const result: Section[] = [];
+  const unplaceableIssues: LayoutValidationIssue[] = [];
 
   // Build slot capacity tracker
   const slotCapacity = new Map<string, number>();
@@ -166,25 +167,16 @@ export function assignSlotsFromFacts(
       }
     }
 
-    // Fallback: any slot with capacity
-    if (!placed) {
-      for (const slot of template.slots) {
-        if (slot.id === template.heroSlot || slot.id === template.footerSlot) continue;
-        if (hasCapacity(slot.id)) {
-          const s = { ...section, slot: slot.id };
-          const widget = getBestWidget(sectionType, slot.size);
-          if (widget && !s.widgetId) s.widgetId = widget.id;
-          consumeSlot(slot.id);
-          result.push(s);
-          placed = true;
-          break;
-        }
-      }
-    }
-
-    // Last resort: append without slot assignment
+    // No compatible slot found — section is unplaceable
     if (!placed) {
       result.push({ ...section });
+      unplaceableIssues.push({
+        slotId: "",
+        issue: "unplaceable_section" as LayoutIssueType,
+        severity: "warning",
+        message: `Section '${section.id}' (type '${section.type}') has no compatible slot in template '${template.id}'.`,
+        suggestion: "Add this section type to a slot's accepts list, or remove the section.",
+      });
     }
   }
 
@@ -260,6 +252,8 @@ export function assignSlotsFromFacts(
     const repairValidation = validateLayoutComposition(template, repairAssignments, widgetMap);
     issues = repairValidation.all;
   }
+
+  issues = [...unplaceableIssues, ...issues];
 
   return { sections: result, issues };
 }

@@ -112,6 +112,46 @@ describe("assignSlotsFromFacts", () => {
     expect(Array.isArray(issues)).toBe(true);
   });
 
+  it("emits unplaceable_section when section type has no compatible slot", () => {
+    const sections = [
+      makeSection({ id: "h1", type: "hero" }),
+      makeSection({ id: "c1", type: "custom" }),
+      makeSection({ id: "f1", type: "footer" }),
+    ];
+    const tinyTemplate = {
+      id: "architect" as const,
+      name: "Test",
+      description: "Test",
+      heroSlot: "hero",
+      footerSlot: "footer",
+      slots: [
+        { id: "hero", size: "wide" as const, required: true, maxSections: 1, accepts: ["hero" as const], order: 0, mobileOrder: 0 },
+        { id: "card-1", size: "third" as const, required: false, maxSections: 1, accepts: ["skills" as const], order: 1, mobileOrder: 1 },
+        { id: "footer", size: "wide" as const, required: true, maxSections: 1, accepts: ["footer" as const], order: 99, mobileOrder: 99 },
+      ],
+    };
+    const { sections: result, issues } = assignSlotsFromFacts(tinyTemplate, sections);
+    const custom = result.find(s => s.id === "c1");
+    expect(custom).toBeDefined();
+    expect(custom!.slot).toBeUndefined();
+    const unplaceable = issues.find(i => i.issue === "unplaceable_section");
+    expect(unplaceable).toBeDefined();
+    expect(unplaceable!.severity).toBe("warning");
+    expect(unplaceable!.message).toContain("custom");
+  });
+
+  it("does not emit unplaceable_section for sections with compatible slots", () => {
+    const sections = [
+      makeSection({ id: "h1", type: "hero" }),
+      makeSection({ id: "b1", type: "bio" }),
+      makeSection({ id: "s1", type: "skills", content: { groups: [{ label: "A", skills: ["x"] }] } }),
+      makeSection({ id: "f1", type: "footer" }),
+    ];
+    const { issues } = assignSlotsFromFacts(architect, sections);
+    const unplaceable = issues.filter(i => i.issue === "unplaceable_section");
+    expect(unplaceable).toHaveLength(0);
+  });
+
   it("post-assign invariant: all core sections have slot + widgetId", () => {
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
