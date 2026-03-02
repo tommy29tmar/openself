@@ -51,8 +51,19 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getActiveFacts: mockGetActiveFacts,
+  getFactById: vi.fn(),
   setFactVisibility: mockSetFactVisibility,
+  factExistsAcrossReadKeys: vi.fn(() => false),
   VisibilityTransitionError: class extends Error {},
+}));
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(),
+  setSessionMeta: vi.fn(),
+}));
+vi.mock("@/lib/services/confirmation-service", () => ({
+  hashValue: vi.fn(() => "mock-hash"),
+  pruneUnconfirmedPendings: vi.fn(),
 }));
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: mockGetDraft,

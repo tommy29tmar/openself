@@ -58,6 +58,8 @@ const TOOL_POLICY = `Tool usage rules:
 - Use propose_soul_change when you notice consistent patterns in voice/tone/values — the user must approve soul changes
 - Use resolve_conflict when you detect contradictory facts and can propose which to keep or how to merge them
 - Use set_fact_visibility to control which facts appear on the page: "proposed" = visible in preview, "private" = hidden. You cannot set "public" — only publishing does that
+- IDENTITY PROTECTION: Modifying existing identity facts (name, role, tagline, etc.) requires explicit user confirmation in a new message. System enforces this — cannot be bypassed. If the tool returns REQUIRES_CONFIRMATION, ask the user to confirm and retry only after they do.
+- BULK DELETION: 2nd+ deletion in a turn is blocked. Use batch_facts for multi-deletes (blocks ALL ≥2). Always list items and get explicit confirmation first.
 - When the user shares 3 or more facts in one message, prefer batch_facts over multiple create_fact calls. batch_facts runs operations sequentially — if one fails, earlier ones persist. Trust ledger provides undo for the entire batch.
 - Use move_section to move a section between layout slots (auto-switches widget if needed). Use inspect_page_state first to see current slot assignments.
 - Use reorder_items to change the order of items within a section (pass factIds in desired order). Not for composite sections: hero, bio, at-a-glance, footer.
@@ -86,13 +88,13 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 
 | Category | Key format | Value shape |
 |----------|-----------|-------------|
-| identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} |
-| experience | company-kebab | {role: "...", company: "...", start: "YYYY-MM", end: "YYYY-MM"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | type: "employment" (default if omitted), "freelance", or "client". Use "client" for project clients (e.g. Barilla branding). Clients appear in Projects section. |
-| education | institution-kebab | {institution: "...", degree?: "...", field?: "...", period?: "YYYY-YYYY"} | Create education facts even without dates — period can be added later. |
+| identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} | CRITICAL: identity/name.full = ONLY the person's name (e.g. "Marco Rossi"). Max 5 words. Never store a bio sentence in a name field. |
+| experience | company-kebab | {role: "...", company: "...", start: "2020-03", end: "2023-06"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | type: "employment" (default if omitted), "freelance", or "client". Use "client" for project clients (e.g. Barilla branding). Clients appear in Projects section. Use real dates like "2020-03", never placeholders like "YYYY-MM". |
+| education | institution-kebab | {institution: "...", degree?: "...", field?: "...", period?: "2016-2020"} | Create education facts even without dates — period can be added later. Use real years, never "YYYY-YYYY". |
 | project | project-kebab | {name: "...", description: "...", url?: "...", status: "active"|"completed", role?: "..."} |
 | skill | skill-kebab | {name: "...", level?: "beginner"|"intermediate"|"advanced"|"expert"} |
 | interest | interest-kebab | {name: "...", detail?: "..."} |
-| achievement | achievement-kebab | {title: "...", description?: "...", date?: "YYYY-MM-DD", issuer?: "..."} |
+| achievement | achievement-kebab | {title: "...", description?: "...", date?: "2024-03-15", issuer?: "..."} |
 | stat | stat-kebab | {label: "...", value: "..."} |
 | activity | activity-kebab | {name: "...", activityType?: "sport"|"volunteering"|"event"|"club"|"other", frequency?: "...", description?: "..."} |
 | social | platform-kebab | {platform: "...", url: "...", username?: "..."} |
@@ -150,8 +152,8 @@ Workflows:
 
 Value object schemas (must pass the FULL object, not partial):
 - experience: { role, company, period?, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
-- education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders
-- identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }
+- education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders like "YYYY-YYYY"
+- identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }  — CRITICAL: full = ONLY the person's name (max 5 words)
 - project: { name, description?, url?, status?: "active"|"completed" }
 - skill: { name, level?: "beginner"|"intermediate"|"advanced"|"expert" }
 - stat: { label, value }

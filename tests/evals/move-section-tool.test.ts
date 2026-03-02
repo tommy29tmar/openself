@@ -22,11 +22,21 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: vi.fn(),
   deleteFact: vi.fn(),
   getFactById: vi.fn(),
+  factExistsAcrossReadKeys: vi.fn(() => false),
   setFactVisibility: vi.fn(),
   archiveFact: vi.fn(),
   unarchiveFact: vi.fn(),
   batchFactOperations: vi.fn(),
   reorderFacts: vi.fn(),
+}));
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(),
+  setSessionMeta: vi.fn(),
+}));
+vi.mock("@/lib/services/confirmation-service", () => ({
+  hashValue: vi.fn(() => "mock-hash"),
+  pruneUnconfirmedPendings: vi.fn(),
 }));
 vi.mock("@/lib/services/memory-service", () => ({
   saveMemory: vi.fn(),

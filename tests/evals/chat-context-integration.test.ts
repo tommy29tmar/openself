@@ -72,6 +72,9 @@ vi.mock("@/lib/services/session-service", () => ({
 vi.mock("@/lib/services/summary-service", () => ({
   enqueueSummaryJob: vi.fn(),
 }));
+vi.mock("@/lib/services/confirmation-service", () => ({
+  pruneUnconfirmedPendings: vi.fn(),
+}));
 
 vi.mock("@/lib/agent/journey", () => ({
   assembleBootstrapPayload: vi.fn(() => ({

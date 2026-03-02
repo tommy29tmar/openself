@@ -389,10 +389,14 @@ function buildHeroSection(
   let name: string | undefined;
   let tagline: string | undefined;
 
+  const isNameLike = (s: string | undefined): boolean =>
+    s !== undefined && s.split(/\s+/).length <= 5;
+
   for (const fact of identityFacts) {
     const v = val(fact);
     if (fact.key === "full-name" || fact.key === "name") {
-      name = str(v.full) ?? str(v.name) ?? str(v.value) ?? str(v.full_name);
+      const raw = str(v.full) ?? str(v.name) ?? str(v.value) ?? str(v.full_name);
+      if (isNameLike(raw)) name = raw;
     }
     if (fact.key === "tagline") {
       tagline = str(v.tagline) ?? str(v.text) ?? str(v.value);
@@ -404,7 +408,7 @@ function buildHeroSection(
     for (const fact of identityFacts) {
       const v = val(fact);
       const candidate = str(v.full) ?? str(v.name) ?? str(v.full_name);
-      if (candidate) {
+      if (isNameLike(candidate)) {
         name = candidate;
         break;
       }
@@ -420,7 +424,7 @@ function buildHeroSection(
     const roleFact = identityFacts.find((f) => f.key === "role" || f.key === "title");
     if (roleFact) {
       const rv = val(roleFact);
-      const role = str(rv.role) ?? str(rv.title) ?? str(rv.value);
+      const role = str(rv.role) ?? str(rv.title) ?? str(rv.text) ?? str(rv.value);
       if (role) {
         tagline = role;
       }
@@ -556,12 +560,30 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
     }
   }
 
-  // Also check experience facts for role/company
+  // Also check experience facts for role/company — single winner-fact approach
+  // Priority: current/freelance > recent start date > original order
   if (!role || !company) {
-    for (const fact of experienceFacts) {
-      const v = val(fact);
-      if (!role) role = str(v.role) ?? str(v.title);
-      if (!company) company = str(v.company) ?? str(v.organization);
+    const sorted = [...experienceFacts].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      // current beats past
+      const aCurrent = str(va.status) === "current" ? 1 : 0;
+      const bCurrent = str(vb.status) === "current" ? 1 : 0;
+      if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+      // freelance beats non-freelance
+      const aFreelance = FREELANCE_MARKERS.has((str(va.company) ?? "").toLowerCase()) ? 1 : 0;
+      const bFreelance = FREELANCE_MARKERS.has((str(vb.company) ?? "").toLowerCase()) ? 1 : 0;
+      if (aFreelance !== bFreelance) return bFreelance - aFreelance;
+      // more recent start date first
+      const aStart = str(va.start) ?? str(va.period) ?? "";
+      const bStart = str(vb.start) ?? str(vb.period) ?? "";
+      if (aStart !== bStart) return bStart.localeCompare(aStart);
+      return 0;
+    });
+    const winner = sorted[0];
+    if (winner) {
+      const wv = val(winner);
+      if (!role) role = str(wv.role) ?? str(wv.title);
+      if (!company) company = str(wv.company) ?? str(wv.organization);
     }
   }
 

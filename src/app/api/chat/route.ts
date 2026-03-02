@@ -20,6 +20,7 @@ import {
 import { enqueueSummaryJob } from "@/lib/services/summary-service";
 import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
+import { pruneUnconfirmedPendings } from "@/lib/services/confirmation-service";
 
 /** Fallback messages when step exhaustion leaves no text reply. Keyed by language. */
 const STEP_EXHAUSTION_FALLBACK: Record<string, string> = {
@@ -142,6 +143,9 @@ export async function POST(req: Request) {
   const lastUserMessageText = lastUserMsg
     ? (typeof lastUserMsg.content === "string" ? lastUserMsg.content : null)
     : null;
+  // Layer 0: clear stale pending confirmations if user's message is NOT confirmatory
+  pruneUnconfirmedPendings(writeSessionId, lastUserMessageText, sessionLanguage);
+
   const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessageText ?? undefined);
 
   // Quota enforcement

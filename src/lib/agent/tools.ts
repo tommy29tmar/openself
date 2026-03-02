@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 import {
   createFact,
   updateFact,
@@ -9,6 +10,7 @@ import {
   getFactById,
   setFactVisibility,
   VisibilityTransitionError,
+  factExistsAcrossReadKeys,
 } from "@/lib/services/kb-service";
 import { db } from "@/lib/db";
 import { facts } from "@/lib/db/schema";
@@ -45,10 +47,113 @@ import { updateJourneyStatePin } from "@/lib/agent/journey";
 import { checkPageCoherence } from "@/lib/services/coherence-check";
 import { mergeSessionMeta, getSessionMeta } from "@/lib/services/session-metadata";
 import type { JournalEntry } from "@/lib/services/session-metadata";
+import { hashValue, type PendingConfirmation } from "@/lib/services/confirmation-service";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
   const operationJournal: JournalEntry[] = [];
+
+  // --- Layer 2+3: Cross-turn pending confirmations with TTL ---
+  const TTL_MS = 5 * 60 * 1000;
+  const meta = getSessionMeta(sessionId);
+  let pendings: PendingConfirmation[] = (Array.isArray(meta?.pendingConfirmations) ? meta.pendingConfirmations : []) as PendingConfirmation[];
+  const now = Date.now();
+  const originalLength = pendings.length;
+  pendings = pendings.filter(p => now - new Date(p.createdAt).getTime() < TTL_MS);
+  if (pendings.length !== originalLength) {
+    mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length > 0 ? pendings : null });
+  }
+
+  // --- Layer 1: Intra-turn latches ---
+  let _identityBlockedThisTurn = false;
+  let _deleteBlockedThisTurn = false;
+  let _deletionCountThisTurn = 0;
+
+  /**
+   * Identity overwrite gate. Returns null if allowed, or a message object if blocked.
+   */
+  function identityGate(
+    category: string,
+    key: string,
+    proposedValue: Record<string, unknown>,
+    factId?: string,
+  ): { requiresConfirmation: true; message: string } | null {
+    if (category !== "identity") return null;
+    if (_identityBlockedThisTurn) {
+      return { requiresConfirmation: true, message: "Identity changes blocked this turn — wait for user confirmation in a new message." };
+    }
+
+    // Determine if this is an overwrite (existing identity fact)
+    let isOverwrite = false;
+    if (factId) {
+      const existing = getFactById(factId, sessionId, readKeys);
+      isOverwrite = existing?.category === "identity";
+    } else {
+      isOverwrite = factExistsAcrossReadKeys(sessionId, readKeys, category, key);
+    }
+    if (!isOverwrite) return null; // first creation (onboarding) — allow
+
+    // Check pending (exact match: type + category + key + valueHash)
+    const vh = hashValue(proposedValue);
+    const matchIdx = pendings.findIndex(p =>
+      p.type === "identity_overwrite" &&
+      p.category === category &&
+      p.key === key &&
+      p.valueHash === vh
+    );
+    if (matchIdx >= 0) {
+      pendings.splice(matchIdx, 1); // consume
+      mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
+      return null; // allowed
+    }
+
+    // Block
+    _identityBlockedThisTurn = true;
+    pendings.push({
+      id: randomUUID(),
+      type: "identity_overwrite",
+      category,
+      key,
+      valueHash: vh,
+      createdAt: new Date().toISOString(),
+    });
+    mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+    return { requiresConfirmation: true, message: `Changing identity/${key} requires explicit user confirmation. Ask the user to confirm in their next message.` };
+  }
+
+  /**
+   * Bulk delete gate. Returns null if allowed, or a message object if blocked.
+   */
+  function deleteGate(factId: string): { requiresConfirmation: true; message: string } | null {
+    if (_deleteBlockedThisTurn) {
+      return { requiresConfirmation: true, message: "Further deletions blocked this turn — wait for user confirmation in a new message." };
+    }
+
+    // Check pending (confirmed delete from previous turn)
+    const matchIdx = pendings.findIndex(p => p.type === "bulk_delete" && p.factIds?.includes(factId));
+    if (matchIdx >= 0) {
+      pendings.splice(matchIdx, 1);
+      mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
+      _deletionCountThisTurn++; // count it, so 2nd+ delete in same turn still blocks
+      return null; // allowed
+    }
+
+    // Unconfirmed: allow first, block 2nd+
+    if (_deletionCountThisTurn >= 1) {
+      _deleteBlockedThisTurn = true;
+      pendings.push({
+        id: randomUUID(),
+        type: "bulk_delete",
+        factIds: [factId],
+        createdAt: new Date().toISOString(),
+      });
+      mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+      return { requiresConfirmation: true, message: "2nd+ deletion in this turn requires confirmation. List the items to delete and ask the user to confirm." };
+    }
+
+    _deletionCountThisTurn++;
+    return null; // first delete — allowed
+  }
 
   /** Auto-compose draft from facts if none exists yet. */
   function ensureDraft(): PageConfig {
@@ -102,7 +207,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
       // Idempotency: skip write if hash matches
       const composedHash = computeConfigHash(composed);
-      if (composedHash === currentDraft?.configHash) return;
+      if (composedHash === currentDraft?.configHash) {
+        logEvent({ eventType: "recompose_skip", actor: "system", payload: { requestId, reason: "hash_match", hash: composedHash } });
+        return;
+      }
 
       upsertDraft(currentDraft?.username ?? "draft", composed, sessionId);
     } finally {
@@ -141,6 +249,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ category, key, value, confidence }) => {
       try {
+        // Identity overwrite gate
+        const blocked = identityGate(category, key, value);
+        if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
+
         const fact = await createFact({
           category,
           key,
@@ -150,7 +262,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
-          console.warn("[tools] recomposeAfterMutation failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
         }
         return {
           success: true,
@@ -206,6 +318,37 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       if (operations.length > 20) {
         return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, updated: 0, deleted: 0 };
       }
+
+      // Pre-flight: batch with ≥2 deletes → all blocked (zero execute)
+      const deleteOps = operations.filter(op => op.action === "delete");
+      if (deleteOps.length >= 2) {
+        const factIds = deleteOps.map(op => (op as { factId: string }).factId);
+        _deleteBlockedThisTurn = true;
+        pendings.push({
+          id: randomUUID(),
+          type: "bulk_delete",
+          factIds,
+          createdAt: new Date().toISOString(),
+        });
+        mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+        return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, message: "Batch with 2+ deletions requires explicit user confirmation. List the items and ask the user to confirm.", created: 0, updated: 0, deleted: 0 };
+      }
+
+      // Pre-flight: identity overwrites
+      for (const op of operations) {
+        if (op.action === "create" && op.category === "identity") {
+          const blocked = identityGate(op.category, op.key, op.value);
+          if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked, created: 0, updated: 0, deleted: 0 };
+        }
+        if (op.action === "update") {
+          const existing = getFactById(op.factId, sessionId, readKeys);
+          if (existing?.category === "identity") {
+            const blocked = identityGate(existing.category, existing.key, op.value, op.factId);
+            if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked, created: 0, updated: 0, deleted: 0 };
+          }
+        }
+      }
+
       let created = 0, updated = 0, deleted = 0;
       const warnings: string[] = [];
       const reverseOps: Array<{
@@ -247,6 +390,12 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
               break;
             }
             case "delete": {
+              // Single delete within batch — apply delete gate
+              const dBlocked = deleteGate(op.factId);
+              if (dBlocked) {
+                warnings.push(`Delete of ${op.factId} blocked: ${dBlocked.message}`);
+                break;
+              }
               const old = getFactById(op.factId, sessionId, readKeys);
               if (old) {
                 const { id, ...rest } = old;
@@ -266,7 +415,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           );
         }
         try { recomposeAfterMutation(); } catch (e) {
-          console.warn("[tools] recomposeAfterMutation after batch failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e), source: "batch_facts" } });
         }
         return { success: true, created, updated, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (err) {
@@ -304,12 +453,19 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId, value }) => {
       try {
+        // Identity overwrite gate — look up existing fact for category/key
+        const existing = getFactById(factId, sessionId, readKeys);
+        if (existing) {
+          const blocked = identityGate(existing.category, existing.key, value, factId);
+          if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
+        }
+
         const fact = updateFact({ factId, value }, sessionId, readKeys);
         if (!fact) return { success: false, error: "Fact not found" };
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
-          console.warn("[tools] recomposeAfterMutation failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
         }
         const warnings = (fact as any)._warnings as string[] | undefined;
         return {
@@ -345,12 +501,16 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ factId }) => {
       try {
+        // Bulk delete gate
+        const blocked = deleteGate(factId);
+        if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
+
         const deleted = deleteFact(factId, sessionId, readKeys);
         let recomposeOk = true;
         if (deleted) {
           try { recomposeAfterMutation(); } catch (e) {
             recomposeOk = false;
-            console.warn("[tools] recomposeAfterMutation failed:", e);
+            logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
           }
         }
         return { success: deleted, recomposeOk };
@@ -1081,7 +1241,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       try {
         const fact = setFactVisibility(factId, visibility, "assistant", sessionId, readKeys);
         try { recomposeAfterMutation(); } catch (e) {
-          console.warn("[tools] recomposeAfterMutation after visibility change failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e), source: "visibility_change" } });
         }
         return {
           success: true,
@@ -1209,7 +1369,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
-          console.warn("[tools] recomposeAfterMutation failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
         }
         return { success: true, factId, recomposeOk };
       } catch (error) {
@@ -1239,7 +1399,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
-          console.warn("[tools] recomposeAfterMutation failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
         }
         return { success: true, factId, recomposeOk };
       } catch (error) {
@@ -1290,7 +1450,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
-          console.warn("[tools] recomposeAfterMutation failed:", e);
+          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
         }
         return { success: true, reordered: resolved.length, category, recomposeOk };
       } catch (error) {

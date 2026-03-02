@@ -66,4 +66,25 @@ describe("hero tagline from identity role", () => {
     const hero = page.sections.find((s) => s.type === "hero");
     expect((hero!.content as { tagline: string }).tagline).toBe("Freelance Architect");
   });
+
+  it("uses rv.text as tagline fallback (Bug #9)", () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", value: { full: "Maria Bianchi" } }),
+      makeFact({ category: "identity", key: "role", value: { text: "Creative Director" } }),
+    ];
+    const page = composeOptimisticPage(facts, "draft", "en");
+    const hero = page.sections.find((s) => s.type === "hero");
+    expect((hero!.content as { tagline: string }).tagline).toBe("Creative Director");
+  });
+
+  it("rejects name > 5 words in hero (Bug #1 composer defense)", () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", value: { full: "Marco Rossi è un designer di talento incredibile" } }),
+    ];
+    const page = composeOptimisticPage(facts, "draft", "it");
+    const hero = page.sections.find((s) => s.type === "hero");
+    // Name should NOT contain the long sentence
+    const name = (hero!.content as { name: string }).name;
+    expect(name.split(/\s+/).length).toBeLessThanOrEqual(5);
+  });
 });

@@ -49,6 +49,34 @@ describe("bio template — freelance", () => {
     expect(text.toLowerCase()).toMatch(/freelance/);
   });
 
+  it("picks winner fact by priority: current > past (Bug #3)", () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", value: { name: "Marco Rossi" } }),
+      makeFact({ category: "experience", key: "frog-design", value: { role: "UX Researcher", company: "Frog Design", status: "past", start: "2015-01" } }),
+      makeFact({ category: "experience", key: "google", value: { role: "Staff Designer", company: "Google", status: "current", start: "2022-03" } }),
+    ];
+    const page = composeOptimisticPage(facts, "draft", "it");
+    const bio = page.sections.find((s) => s.type === "bio");
+    const text = (bio!.content as { text: string }).text;
+    // Should use Google (current), not Frog Design (past)
+    expect(text).toContain("Google");
+    expect(text).not.toContain("Frog Design");
+  });
+
+  it("picks winner fact by start date when both past (Bug #3)", () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", value: { name: "Marco Rossi" } }),
+      makeFact({ category: "experience", key: "old-job", value: { role: "Junior Dev", company: "OldCo", status: "past", start: "2010-01" } }),
+      makeFact({ category: "experience", key: "recent-job", value: { role: "Senior Dev", company: "RecentCo", status: "past", start: "2020-06" } }),
+    ];
+    const page = composeOptimisticPage(facts, "draft", "en");
+    const bio = page.sections.find((s) => s.type === "bio");
+    const text = (bio!.content as { text: string }).text;
+    // Should use RecentCo (more recent start)
+    expect(text).toContain("RecentCo");
+    expect(text).not.toContain("OldCo");
+  });
+
   it("uses standard template for real companies", () => {
     const facts = [
       makeFact({ category: "identity", key: "name", value: { name: "Elena Rossi" } }),

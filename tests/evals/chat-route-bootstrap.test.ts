@@ -98,6 +98,9 @@ vi.mock("@/lib/db/schema", () => ({
 vi.mock("@/lib/services/summary-service", () => ({
   enqueueSummaryJob: vi.fn(),
 }));
+vi.mock("@/lib/services/confirmation-service", () => ({
+  pruneUnconfirmedPendings: vi.fn(),
+}));
 
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { assembleContext } from "@/lib/agent/context";

@@ -4,6 +4,7 @@
  * Usage:
  *   EXTENDED_SECTIONS=true INVITE_CODES=code1 npx tsx scripts/seed-uat-profiles.ts
  *   EXTENDED_SECTIONS=true INVITE_CODES=code1 npx tsx scripts/seed-uat-profiles.ts --count=10 --tag=round1
+ *   EXTENDED_SECTIONS=true INVITE_CODES=code1 npx tsx scripts/seed-uat-profiles.ts --count=10 --tag=round1 --mix-layouts
  *
  * Outputs:
  *   - docs/uat/profiles/latest.json
@@ -1669,6 +1670,7 @@ function parseArgs() {
   let count = 10;
   let tag = "";
   let screenshots = true;
+  let mixLayouts = false;
 
   for (const arg of args) {
     if (arg.startsWith("--count=")) {
@@ -1684,6 +1686,9 @@ function parseArgs() {
     if (arg === "--skip-screenshots" || arg === "--no-screenshots") {
       screenshots = false;
     }
+    if (arg === "--mix-layouts" || arg === "--layout-cycle") {
+      mixLayouts = true;
+    }
   }
 
   if (count > PROFILE_BLUEPRINTS.length) {
@@ -1694,6 +1699,7 @@ function parseArgs() {
     count,
     tag: sanitizeUsername(tag).slice(0, 12),
     screenshots,
+    mixLayouts,
   };
 }
 
@@ -2144,12 +2150,22 @@ async function createProfileFromBlueprint(
 }
 
 async function main() {
-  const { count, tag, screenshots } = parseArgs();
-  const selected = PROFILE_BLUEPRINTS.slice(0, count);
+  const { count, tag, screenshots, mixLayouts } = parseArgs();
+  const selected = PROFILE_BLUEPRINTS.slice(0, count).map((profile, idx) => {
+    if (!mixLayouts) return profile;
+    const cycle: LayoutTemplateId[] = ["monolith", "cinematic", "curator", "architect"];
+    return {
+      ...profile,
+      layoutTemplate: cycle[idx % cycle.length],
+    };
+  });
   const baseUrl = await resolveBaseUrl();
 
   console.log(`🌱 Seeding ${selected.length} UAT profiles...`);
   console.log(`   Base URL: ${baseUrl}`);
+  if (mixLayouts) {
+    console.log("   Layout mix: monolith / cinematic / curator / architect (cycled)");
+  }
 
   const runIdBase = new Date().toISOString().replace(/[:.]/g, "-");
   const runId = tag ? `${runIdBase}-${tag}` : runIdBase;

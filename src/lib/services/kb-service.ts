@@ -518,6 +518,22 @@ export function setFactVisibility(
 /**
  * Get a single fact by ID (scoped to readKeys).
  */
+/**
+ * Check if a non-archived fact exists for the given category+key across read keys.
+ * Used by the identity confirmation gate.
+ */
+export function factExistsAcrossReadKeys(
+  sessionId: string,
+  readKeys: string[] | undefined,
+  category: string,
+  key: string,
+): boolean {
+  const ids = readKeys?.length ? readKeys : [sessionId];
+  return !!db.select({ id: facts.id }).from(facts)
+    .where(and(inArray(facts.sessionId, ids), eq(facts.category, category), eq(facts.key, key), isNull(facts.archivedAt)))
+    .limit(1).get();
+}
+
 export function getFactById(
   factId: string,
   sessionId: string,

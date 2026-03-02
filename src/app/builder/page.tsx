@@ -64,8 +64,11 @@ export default function BuilderPage() {
 
   // Lightweight auth refresh — only updates auth-related state, no language or loading side effects
   const refreshAuth = useCallback(async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const res = await fetch("/api/preferences", { cache: "no-store" });
+      const res = await fetch("/api/preferences", { cache: "no-store", signal: controller.signal });
+      clearTimeout(timeout);
       if (!res.ok) return;
       const data = await res.json();
       setAuthState({
@@ -76,7 +79,7 @@ export default function BuilderPage() {
         authV2: !!data.authV2,
       });
       setPublishedConfigHash(data.publishedConfigHash ?? null);
-    } catch { /* silent */ }
+    } catch { /* silent — includes abort */ }
   }, []);
 
   useEffect(() => {
@@ -84,9 +87,12 @@ export default function BuilderPage() {
 
     const bootstrap = async () => {
       const localLanguage = readStoredLanguage();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
       try {
-        const res = await fetch("/api/preferences", { cache: "no-store" });
+        const res = await fetch("/api/preferences", { cache: "no-store", signal: controller.signal });
+        clearTimeout(timeout);
         if (res.status === 401) {
           window.location.href = "/invite";
           return;

@@ -130,11 +130,13 @@ export function SplitView({
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     (async () => {
       try {
         const [bRes, mRes] = await Promise.all([
-          fetch("/api/chat/bootstrap", { cache: "no-store" }),
-          fetch("/api/messages", { cache: "no-store" }),
+          fetch("/api/chat/bootstrap", { cache: "no-store", signal: controller.signal }),
+          fetch("/api/messages", { cache: "no-store", signal: controller.signal }),
         ]);
         if (cancelled) return;
         // Redirect to invite page on 401 (unauthenticated)
@@ -159,10 +161,11 @@ export function SplitView({
       } catch (err) {
         console.warn("[SplitView] chat data prefetch failed:", err);
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setChatDataReady(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [language]);
 
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);

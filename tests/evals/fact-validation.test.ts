@@ -337,6 +337,108 @@ describe("fact-validation", () => {
     });
   });
 
+  describe("date placeholder detection (Bug #2)", () => {
+    it("rejects YYYY-YYYY in period", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", period: "YYYY-YYYY" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects YYYY-MM in start field", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", start: "YYYY-MM" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects YYYY in start field", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", start: "YYYY" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects YYYY-MM-DD in end field", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", end: "YYYY-MM-DD" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects XX-XX in period", () => {
+      expect(() =>
+        validateFactValue("education", "mit", { institution: "MIT", period: "XX-XX" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("accepts real dates in period", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", period: "2018-2022" }),
+      ).not.toThrow();
+    });
+
+    it("accepts real dates in start/end", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", start: "2020-03", end: "2023-06" }),
+      ).not.toThrow();
+    });
+
+    it("accepts year-only in start", () => {
+      expect(() =>
+        validateFactValue("experience", "acme", { role: "Engineer", start: "2020" }),
+      ).not.toThrow();
+    });
+  });
+
+  describe("identity name length validation (Bug #1)", () => {
+    it("rejects name with > 5 words in full field", () => {
+      expect(() =>
+        validateFactValue("identity", "name", { full: "Marco Rossi è un designer di talento straordinario" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects name with > 80 chars in full field", () => {
+      expect(() =>
+        validateFactValue("identity", "name", { full: "A".repeat(81) }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("accepts normal name in full field", () => {
+      expect(() =>
+        validateFactValue("identity", "name", { full: "Marco Rossi" }),
+      ).not.toThrow();
+    });
+
+    it("accepts up to 5 words in full field", () => {
+      expect(() =>
+        validateFactValue("identity", "name", { full: "Maria de la Cruz Hernandez" }),
+      ).not.toThrow();
+    });
+
+    it("validates full_name on any identity key", () => {
+      expect(() =>
+        validateFactValue("identity", "location", { full_name: "This is way too long for a name field" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("validates name field only when key is 'name'", () => {
+      // key='name' → name field is checked
+      expect(() =>
+        validateFactValue("identity", "name", { name: "This is way too long for a name field" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("does NOT validate name field when key is 'role'", () => {
+      // key='role' → name field is NOT checked (it could hold role text)
+      expect(() =>
+        validateFactValue("identity", "role", { name: "Senior Software Engineer at Large Corporation" }),
+      ).not.toThrow();
+    });
+
+    it("does NOT validate value field when key is 'tagline'", () => {
+      expect(() =>
+        validateFactValue("identity", "tagline", { value: "I am a passionate designer specializing in user experience and interaction" }),
+      ).not.toThrow();
+    });
+  });
+
   describe("FactValidationError properties", () => {
     it("has correct code, category, and key", () => {
       try {
