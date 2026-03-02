@@ -318,6 +318,7 @@ export function buildSystemPrompt(
     staleFacts: bootstrap.staleFacts,
     openConflicts: bootstrap.openConflicts ?? [],
     archivableFacts: bootstrap.archivableFacts ?? [],
+    importGapReport: bootstrap.importGapReport,
   };
 
   const situationDirectives = getSituationDirectives(

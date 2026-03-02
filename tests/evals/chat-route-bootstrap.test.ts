@@ -83,7 +83,11 @@ vi.mock("ai", () => ({
 }));
 
 vi.mock("@/lib/agent/tools", () => ({
-  createAgentTools: vi.fn(() => ({ tools: {} })),
+  createAgentTools: vi.fn(() => ({ tools: {}, getJournal: () => [] })),
+}));
+
+vi.mock("@/lib/agent/tool-filter", () => ({
+  filterToolsByJourneyState: vi.fn((tools: unknown) => tools),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -100,6 +104,20 @@ vi.mock("@/lib/services/summary-service", () => ({
 }));
 vi.mock("@/lib/services/confirmation-service", () => ({
   pruneUnconfirmedPendings: vi.fn(),
+}));
+
+vi.mock("@/lib/connectors/import-event", () => ({
+  consumeImportEvent: vi.fn(() => null),
+  markImportEventConsumed: vi.fn(),
+  revertImportEvent: vi.fn(),
+}));
+
+vi.mock("@/lib/connectors/import-gap-analyzer", () => ({
+  analyzeImportGaps: vi.fn(() => ({ summary: {}, gaps: [] })),
+}));
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getActiveFacts: vi.fn(() => []),
 }));
 
 import { assembleBootstrapPayload } from "@/lib/agent/journey";

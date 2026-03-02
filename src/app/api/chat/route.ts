@@ -21,6 +21,9 @@ import { enqueueSummaryJob } from "@/lib/services/summary-service";
 import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 import { pruneUnconfirmedPendings } from "@/lib/services/confirmation-service";
+import { consumeImportEvent, markImportEventConsumed, revertImportEvent, type ImportEventFlag } from "@/lib/connectors/import-event";
+import { analyzeImportGaps, type ImportGapReport } from "@/lib/connectors/import-gap-analyzer";
+import { getActiveFacts } from "@/lib/services/kb-service";
 
 /** Fallback messages when step exhaustion leaves no text reply. Keyed by language. */
 const STEP_EXHAUSTION_FALLBACK: Record<string, string> = {
@@ -128,6 +131,11 @@ export async function POST(req: Request) {
 
   const requestId = randomUUID();
   const sessionLanguage = language || "en";
+
+  // Log auto-import trigger for telemetry (G4)
+  if (body.metadata?.source === "auto_import_trigger") {
+    console.info("[chat] auto-import trigger message", { requestId });
+  }
 
   // Resolve auth for context injection
   const chatAuthCtx = multiUser ? getAuthContext(req) : null;
@@ -241,6 +249,22 @@ export async function POST(req: Request) {
       extraHeaders["X-Message-Count"] = String(postCount);
       extraHeaders["X-Message-Limit"] = String(limit);
       quotaInfo = { remaining: Math.max(0, limit - postCount), limit };
+    }
+  }
+
+  // --- Import event: consume flag if pending (after quota checks) ---
+  let importGapReport: ImportGapReport | undefined;
+  const importFlag: ImportEventFlag | null = consumeImportEvent(writeSessionId);
+  if (importFlag) {
+    const allFacts = getActiveFacts(writeSessionId, effectiveScope.knowledgeReadKeys);
+    importGapReport = analyzeImportGaps(allFacts);
+  }
+
+  if (importGapReport) {
+    bootstrap.importGapReport = importGapReport;
+    // Ensure situation is present even if createdAt-based detection missed it (re-import/upsert)
+    if (!bootstrap.situations.includes("has_recent_import")) {
+      bootstrap.situations.push("has_recent_import");
     }
   }
 
@@ -369,6 +393,17 @@ export async function POST(req: Request) {
           }
         }
 
+        // Import event: mark consumed on success, revert on error (G2)
+        if (importFlag) {
+          try {
+            if (finishReason === "error") {
+              revertImportEvent(writeSessionId);
+            } else {
+              markImportEventConsumed(writeSessionId);
+            }
+          } catch { /* best-effort */ }
+        }
+
         // Enqueue summary generation (best-effort, non-blocking)
         enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys);
       },
@@ -378,12 +413,20 @@ export async function POST(req: Request) {
       headers: { ...extraHeaders, "X-Request-Id": requestId },
       getErrorMessage: (error) => {
         console.error("[chat] Stream error:", error);
+        // Revert import event flag on stream error (G2)
+        if (importFlag) {
+          try { revertImportEvent(writeSessionId); } catch { /* best-effort */ }
+        }
         if (error instanceof Error) return error.message;
         return String(error);
       },
     });
   } catch (error) {
     console.error("[chat] Error:", error, { requestId });
+    // Revert import event flag on pre-stream error (G2)
+    if (importFlag) {
+      try { revertImportEvent(writeSessionId); } catch { /* best-effort */ }
+    }
     return new Response(
       JSON.stringify({ error: String(error) }),
       { status: 500, headers: { "Content-Type": "application/json", "X-Request-Id": requestId } },

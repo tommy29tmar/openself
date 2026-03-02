@@ -62,6 +62,7 @@ export interface BootstrapPayload {
   language: string;
   conversationContext: string | null;
   archetype: Archetype;
+  importGapReport?: import("@/lib/connectors/import-gap-analyzer").ImportGapReport;
 }
 
 /**
