@@ -209,7 +209,7 @@ export function SettingsPanel({
                 {/* Layout */}
                 <div className="flex flex-col gap-2.5">
                   <SectionLabel>Layout</SectionLabel>
-                  <OptionGroup>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {LAYOUT_TEMPLATES.map((t) => {
                       const tmpl = getLayoutTemplate(t);
                       return (
@@ -222,7 +222,7 @@ export function SettingsPanel({
                         </OptionButton>
                       );
                     })}
-                  </OptionGroup>
+                  </div>
                 </div>
               </>
             )}
