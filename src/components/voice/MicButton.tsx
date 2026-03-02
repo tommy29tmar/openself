@@ -5,6 +5,17 @@ import { useVoice } from "./VoiceProvider";
 import { VoiceState } from "@/hooks/useVoiceManager";
 import { cn } from "@/lib/utils";
 
+const STATE_LABEL: Record<VoiceState, string> = {
+  [VoiceState.IDLE]: "Start voice",
+  [VoiceState.LISTENING]: "Listening...",
+  [VoiceState.TRANSCRIBING]: "Transcribing...",
+  [VoiceState.WAITING]: "Thinking...",
+  [VoiceState.SPEAKING]: "Speaking...",
+  [VoiceState.ERROR]: "Error — tap to retry",
+  [VoiceState.PERMISSION_DENIED]: "Mic blocked",
+  [VoiceState.UNAVAILABLE]: "Voice unavailable",
+};
+
 type MicButtonProps = {
   size?: "default" | "large";
   className?: string;
@@ -19,7 +30,6 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
   const isActive = voiceMode && voiceState !== VoiceState.IDLE;
 
   const handleClick = () => {
-    // If in an active state (listening/transcribing/speaking), abort first
     if (
       voiceState === VoiceState.LISTENING ||
       voiceState === VoiceState.TRANSCRIBING ||
@@ -31,23 +41,13 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
     toggleVoiceMode();
   };
 
-  const stateLabel: Record<VoiceState, string> = {
-    [VoiceState.IDLE]: "Start voice",
-    [VoiceState.LISTENING]: "Listening...",
-    [VoiceState.TRANSCRIBING]: "Transcribing...",
-    [VoiceState.WAITING]: "Thinking...",
-    [VoiceState.SPEAKING]: "Speaking...",
-    [VoiceState.ERROR]: "Error — tap to retry",
-    [VoiceState.PERMISSION_DENIED]: "Mic blocked",
-    [VoiceState.UNAVAILABLE]: "Voice unavailable",
-  };
-
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={voiceState === VoiceState.UNAVAILABLE || voiceState === VoiceState.PERMISSION_DENIED}
-      aria-label={stateLabel[voiceState]}
-      title={stateLabel[voiceState]}
+      aria-label={STATE_LABEL[voiceState]}
+      title={STATE_LABEL[voiceState]}
       className={cn(
         "relative flex items-center justify-center rounded-full transition-all",
         isLarge ? "h-14 w-14" : "h-9 w-9",
@@ -76,6 +76,7 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
     >
       {/* Mic icon */}
       <svg
+        aria-hidden="true"
         width={isLarge ? 24 : 16}
         height={isLarge ? 24 : 16}
         viewBox="0 0 24 24"
