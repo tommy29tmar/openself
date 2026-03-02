@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       config.style = style;
     }
 
-    // Merge layoutTemplate if provided (resolve aliases like "bento" → "bento-standard")
+    // Merge layoutTemplate if provided (resolve aliases like "bento" → "architect")
     const resolvedLayout = typeof body.layoutTemplate === "string" ? resolveLayoutAlias(body.layoutTemplate) : undefined;
     if (
       resolvedLayout &&

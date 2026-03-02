@@ -126,7 +126,7 @@ describe("getExpertiseCalibration — enhanced", () => {
     });
 
     it("provides shorthand example", () => {
-      expect(expert).toMatch(/check preview|bento/i);
+      expect(expert).toMatch(/check preview|architect/i);
     });
   });
 

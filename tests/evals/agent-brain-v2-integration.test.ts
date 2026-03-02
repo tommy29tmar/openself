@@ -137,7 +137,7 @@ describe("Agent Brain v2 — end-to-end", () => {
     const tools = getTools();
     const suffix = randomUUID().slice(0, 8);
 
-    // 1. Create identity + activity facts (activities accepted in both main & sidebar)
+    // 1. Create identity + activity facts (activities accepted in both main & curator)
     await tools.create_fact.execute(
       { category: "identity", key: `name-mv-${suffix}`, value: { full: `Move User ${suffix}` } },
       toolCtx,
@@ -151,9 +151,9 @@ describe("Agent Brain v2 — end-to-end", () => {
       toolCtx,
     );
 
-    // 2. Set layout to sidebar-left (assigns slots)
+    // 2. Set layout to curator-left (assigns slots)
     const layoutResult = await tools.set_layout.execute(
-      { username: "draft", layoutTemplate: "sidebar-left" },
+      { username: "draft", layoutTemplate: "curator" },
       { toolCallId: "lay", messages: [], abortSignal: undefined as any },
     );
     expect(layoutResult.success).toBe(true);
@@ -167,7 +167,7 @@ describe("Agent Brain v2 — end-to-end", () => {
     const sectionId = activitiesSection.id;
     const originalSlot = activitiesSection.slot;
 
-    // 3. Move activities to the other slot (both main and sidebar accept activities)
+    // 3. Move activities to the other slot (both main and curator accept activities)
     const targetSlot = originalSlot === "sidebar" ? "main" : "sidebar";
     const moveResult = await tools.move_section.execute(
       { sectionId, targetSlot },

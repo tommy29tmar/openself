@@ -402,7 +402,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       username: z.string().describe("The username for the page"),
       theme: z.string().optional().describe(`Theme name: ${AVAILABLE_THEMES.join(" or ")}`),
       style: z.record(z.unknown()).optional().describe("Style object with colorScheme, primaryColor, fontFamily, layout"),
-      layoutTemplate: z.string().optional().describe("Layout template: vertical, sidebar-left, or bento-standard"),
+      layoutTemplate: z.string().optional().describe("Layout template: monolith, cinematic, curator, or architect"),
     }),
     execute: async ({ username, theme, style, layoutTemplate }) => {
       try {
@@ -554,7 +554,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         }
 
         // Resolve template
-        const templateId = draft.layoutTemplate ?? "vertical";
+        const templateId = draft.layoutTemplate ?? "monolith";
         const template = getLayoutTemplate(templateId);
         if (!template) {
           return { success: false, error: "NO_TEMPLATE" };
@@ -912,12 +912,12 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
   set_layout: tool({
     description:
-      "Change the page layout template. Available: vertical, sidebar-left (or \"sidebar\"), bento-standard (or \"bento\").",
+      "Change the page layout template. Available: monolith, cinematic, curator, architect.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       layoutTemplate: z
         .string()
-        .describe("Layout template: vertical, sidebar-left (or 'sidebar'), bento-standard (or 'bento')"),
+        .describe("Layout template: monolith, cinematic, curator, architect"),
     }),
     execute: async ({ username, layoutTemplate }) => {
       try {
@@ -1363,7 +1363,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
         return {
           layout: {
-            template: config.layoutTemplate ?? "vertical",
+            template: config.layoutTemplate ?? "monolith",
             theme: config.theme ?? "minimal",
             style: config.style ?? {},
           },

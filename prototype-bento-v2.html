@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bento Layout - OpenSelf</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Newsreader', 'serif'],
+                    },
+                    colors: {
+                        dark: '#050505',
+                        surface: '#111111',
+                        surfaceHover: '#1a1a1a',
+                        border: 'rgba(255, 255, 255, 0.08)',
+                        borderHover: 'rgba(255, 255, 255, 0.2)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: theme('colors.dark');
+            color: #ededed;
+            background-image: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.03) 0%, transparent 50%);
+        }
+        .bento-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid theme('colors.border');
+            border-radius: 24px;
+            backdrop-filter: blur(10px);
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .bento-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(800px circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.06), transparent 40%);
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+        .bento-card:hover {
+            transform: translateY(-4px) scale(1.01);
+            border-color: theme('colors.borderHover');
+            box-shadow: 0 20px 40px -20px rgba(0,0,0,0.5);
+        }
+        .bento-card:hover::before {
+            opacity: 1;
+        }
+        /* Reveal animation */
+        @keyframes reveal {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-reveal {
+            animation: reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-12 flex flex-col items-center justify-center font-sans antialiased selection:bg-white/20">
+
+    <main class="w-full max-w-5xl mx-auto">
+        <!-- Header -->
+        <header class="mb-12 animate-reveal" style="animation-delay: 0s;">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs text-white/70 mb-6 backdrop-blur-md">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Available for new opportunities
+            </div>
+            <h1 class="font-serif text-5xl md:text-7xl mb-4 font-light tracking-tight text-white">Alexander Chen</h1>
+            <p class="text-xl md:text-2xl text-white/50 max-w-2xl font-light leading-relaxed">
+                Crafting digital experiences through minimal design and robust engineering.
+            </p>
+        </header>
+
+        <!-- Bento Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 auto-rows-[minmax(200px,auto)]">
+
+            <!-- Intro / Main Card -->
+            <div class="bento-card md:col-span-2 md:row-span-2 p-8 flex flex-col justify-end animate-reveal group" style="animation-delay: 0.1s;">
+                <div class="absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-40 transition-opacity duration-700">
+                    <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div>
+                    <h2 class="text-3xl font-serif mb-4 leading-tight text-white/90">I believe software should be as invisible as it is powerful.</h2>
+                    <p class="text-white/50 font-light">Based in San Francisco, currently leading design systems at Apple.</p>
+                </div>
+            </div>
+
+            <!-- Experience -->
+            <div class="bento-card md:col-span-2 md:row-span-1 p-8 animate-reveal" style="animation-delay: 0.2s;">
+                <h3 class="text-sm font-medium text-white/40 uppercase tracking-widest mb-6">Experience</h3>
+                <div class="space-y-5">
+                    <div class="flex justify-between items-baseline group/item cursor-default">
+                        <div>
+                            <p class="text-white/90 font-medium group-hover/item:text-white transition-colors">Apple</p>
+                            <p class="text-sm text-white/50">Senior Designer</p>
+                        </div>
+                        <span class="text-sm text-white/40 font-serif italic">2021 — Present</span>
+                    </div>
+                    <div class="h-px w-full bg-white/5"></div>
+                    <div class="flex justify-between items-baseline group/item cursor-default">
+                        <div>
+                            <p class="text-white/90 font-medium group-hover/item:text-white transition-colors">Vogue Labs</p>
+                            <p class="text-sm text-white/50">Creative Director</p>
+                        </div>
+                        <span class="text-sm text-white/40 font-serif italic">2018 — 2021</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stack -->
+            <div class="bento-card md:col-span-1 md:row-span-1 p-8 flex flex-col justify-between animate-reveal" style="animation-delay: 0.3s;">
+                <h3 class="text-sm font-medium text-white/40 uppercase tracking-widest mb-4">Toolkit</h3>
+                <div class="flex flex-wrap gap-2">
+                    <span class="px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-sm text-white/70 hover:bg-white/10 transition-colors cursor-default">Figma</span>
+                    <span class="px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-sm text-white/70 hover:bg-white/10 transition-colors cursor-default">React</span>
+                    <span class="px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-sm text-white/70 hover:bg-white/10 transition-colors cursor-default">Next.js</span>
+                    <span class="px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-sm text-white/70 hover:bg-white/10 transition-colors cursor-default">SwiftUI</span>
+                </div>
+            </div>
+
+            <!-- Contact -->
+            <div class="bento-card md:col-span-1 md:row-span-1 p-8 flex flex-col justify-between bg-white text-black animate-reveal group cursor-pointer hover:bg-gray-100" style="animation-delay: 0.4s;">
+                <div>
+                    <h3 class="text-2xl font-serif mb-2">Let's Talk</h3>
+                    <p class="text-black/60 text-sm">Have a project in mind?</p>
+                </div>
+                <div class="flex items-center justify-between mt-8">
+                    <span class="font-medium">Get in touch</span>
+                    <div class="w-10 h-10 rounded-full bg-black flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Featured Project -->
+            <div class="bento-card md:col-span-4 md:row-span-1 p-8 flex flex-col md:flex-row items-center justify-between gap-8 animate-reveal cursor-pointer" style="animation-delay: 0.5s;">
+                <div class="flex-1">
+                    <h3 class="text-sm font-medium text-white/40 uppercase tracking-widest mb-2">Featured Work</h3>
+                    <h4 class="text-2xl font-serif text-white/90 mb-2">MacOS Vision</h4>
+                    <p class="text-white/50 max-w-md font-light">A conceptual exploration of spatial computing interfaces for desktop environments.</p>
+                </div>
+                <div class="w-full md:w-1/3 h-32 rounded-xl bg-gradient-to-br from-white/10 to-transparent border border-white/10 flex items-center justify-center relative overflow-hidden group/img">
+                    <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')] bg-cover bg-center opacity-40 group-hover/img:opacity-60 transition-opacity duration-500 group-hover/img:scale-105"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-16 text-center animate-reveal" style="animation-delay: 0.6s;">
+            <p class="text-sm text-white/30 font-light tracking-wide">© 2026 OpenSelf. Designed with purpose.</p>
+        </footer>
+    </main>
+
+    <script>
+        // Mouse glow effect
+        document.querySelectorAll('.bento-card').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+</body>
+</html>

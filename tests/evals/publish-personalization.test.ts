@@ -29,7 +29,7 @@ const {
     theme: "minimal",
     style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
     sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
-    layoutTemplate: "vertical",
+    layoutTemplate: "monolith",
   };
 
   return {
@@ -51,7 +51,7 @@ const {
     mockTranslatePageContent: vi.fn().mockImplementation((config: unknown) => Promise.resolve(config)),
     mockNormalizeConfigForWrite: vi.fn().mockImplementation((config: unknown) => config),
     mockSetProfileUsername: vi.fn(),
-    mockResolveLayoutTemplate: vi.fn().mockReturnValue({ id: "vertical", slots: [] }),
+    mockResolveLayoutTemplate: vi.fn().mockReturnValue({ id: "monolith", slots: [] }),
     mockAssignSlotsFromFacts: vi.fn().mockReturnValue({ sections: [], issues: [] }),
     mockValidateLayoutComposition: vi.fn().mockReturnValue({ all: [], errors: [], warnings: [] }),
     mockBuildWidgetMap: vi.fn().mockReturnValue(new Map()),
@@ -143,7 +143,7 @@ describe("publish pipeline personalization integration", () => {
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
       sections: [{ id: "hero", type: "hero", content: { name: "Personalized Test" } }],
-      layoutTemplate: "vertical",
+      layoutTemplate: "monolith",
     };
 
     mockMergeActiveSectionCopy.mockReturnValueOnce(personalizedConfig);
@@ -191,7 +191,7 @@ describe("publish pipeline personalization integration", () => {
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
       sections: [{ id: "hero", type: "hero", content: { name: "Different" } }],
-      layoutTemplate: "vertical",
+      layoutTemplate: "monolith",
     };
     mockMergeActiveSectionCopy.mockReturnValueOnce(personalizedConfig);
 

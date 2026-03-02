@@ -10,9 +10,9 @@ function makeSection(
 }
 
 describe("assignSlotsFromFacts", () => {
-  const vertical = getLayoutTemplate("vertical");
-  const bento = getLayoutTemplate("bento-standard");
-  const sidebar = getLayoutTemplate("sidebar-left");
+  const vertical = getLayoutTemplate("monolith");
+  const architect = getLayoutTemplate("architect");
+  const curator = getLayoutTemplate("curator");
 
   it("assigns hero to heroSlot and footer to footerSlot", () => {
     const sections = [
@@ -46,15 +46,15 @@ describe("assignSlotsFromFacts", () => {
     };
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
-      makeSection({ id: "s1", type: "skills", slot: "sidebar", lock }),
+      makeSection({ id: "s1", type: "skills", slot: "curator", lock }),
       makeSection({ id: "f1", type: "footer" }),
     ];
     const locks = new Map([["s1", lock]]);
-    const { sections: result } = assignSlotsFromFacts(sidebar, sections, locks);
-    expect(result.find((s) => s.id === "s1")?.slot).toBe("sidebar");
+    const { sections: result } = assignSlotsFromFacts(curator, sections, locks);
+    expect(result.find((s) => s.id === "s1")?.slot).toBe("curator");
   });
 
-  it("distributes sections across bento slots", () => {
+  it("distributes sections across architect slots", () => {
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "b1", type: "bio" }),
@@ -62,7 +62,7 @@ describe("assignSlotsFromFacts", () => {
       makeSection({ id: "p1", type: "projects", content: { items: [{ title: "X" }] } }),
       makeSection({ id: "f1", type: "footer" }),
     ];
-    const { sections: result } = assignSlotsFromFacts(bento, sections);
+    const { sections: result } = assignSlotsFromFacts(architect, sections);
     // All sections should have a slot
     for (const s of result) {
       expect(s.slot).toBeTruthy();

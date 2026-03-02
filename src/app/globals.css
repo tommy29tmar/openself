@@ -335,37 +335,37 @@
 
 /* --- Layout Template Engine — desktop order via CSS custom property --- */
 @media (min-width: 768px) {
-  .layout-bento-standard > * { order: var(--md-order, 0); }
-  .layout-sidebar-left > * { order: var(--md-order, 0); }
+  .layout-architect > * { order: var(--md-order, 0); }
+  .layout-curator > * { order: var(--md-order, 0); }
 }
 
-/* --- Slot spacing for compact layouts (non-vertical) --- */
+/* --- Slot spacing for compact layouts (non-monolith) --- */
 /* Scale down typography and spacing when sections are in half/third slots.
    Selectors scoped to [data-section] to avoid leaking into non-section UI. */
 
-.layout-bento-standard .slot-third [data-section] h2,
-.layout-sidebar-left .slot-third [data-section] h2 {
+.layout-architect .slot-third [data-section] h2,
+.layout-curator .slot-third [data-section] h2 {
   font-size: 0.7rem;
   margin-bottom: 0.75rem;
 }
-.layout-bento-standard .slot-third [data-section] h3,
-.layout-sidebar-left .slot-third [data-section] h3 {
+.layout-architect .slot-third [data-section] h3,
+.layout-curator .slot-third [data-section] h3 {
   font-size: 1.1rem;
 }
-.layout-bento-standard .slot-third [data-section] ul,
-.layout-sidebar-left .slot-third [data-section] ul {
+.layout-architect .slot-third [data-section] ul,
+.layout-curator .slot-third [data-section] ul {
   gap: 0.25rem;
 }
-.layout-bento-standard .slot-third .theme-reveal,
-.layout-sidebar-left .slot-third .theme-reveal {
+.layout-architect .slot-third .theme-reveal,
+.layout-curator .slot-third .theme-reveal {
   margin-bottom: 1rem;
 }
-.layout-bento-standard .slot-half [data-section] h3,
-.layout-sidebar-left .slot-half [data-section] h3 {
+.layout-architect .slot-half [data-section] h3,
+.layout-curator .slot-half [data-section] h3 {
   font-size: 1.4rem;
 }
-.layout-bento-standard .slot-half .theme-reveal,
-.layout-sidebar-left .slot-half .theme-reveal {
+.layout-architect .slot-half .theme-reveal,
+.layout-curator .slot-half .theme-reveal {
   margin-bottom: 1.5rem;
 }
 

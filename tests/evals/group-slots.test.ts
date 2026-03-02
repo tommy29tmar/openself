@@ -11,9 +11,9 @@ function makeSection(overrides: Partial<Section> & { id: string; type: string })
 }
 
 describe("groupSectionsBySlot", () => {
-  const vertical = getLayoutTemplate("vertical");
-  const bento = getLayoutTemplate("bento-standard");
-  const sidebar = getLayoutTemplate("sidebar-left");
+  const vertical = getLayoutTemplate("monolith");
+  const architect = getLayoutTemplate("architect");
+  const curator = getLayoutTemplate("curator");
 
   it("routes hero to heroSlot regardless of slot field", () => {
     const sections = [
@@ -42,7 +42,7 @@ describe("groupSectionsBySlot", () => {
       makeSection({ id: "s1", type: "skills", slot: "sidebar" }),
       makeSection({ id: "f1", type: "footer" }),
     ];
-    const result = groupSectionsBySlot(sections, sidebar);
+    const result = groupSectionsBySlot(sections, curator);
     expect(result["sidebar"].map((s) => s.id)).toContain("s1");
   });
 
@@ -77,22 +77,22 @@ describe("groupSectionsBySlot", () => {
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "f1", type: "footer" }),
     ];
-    const result = groupSectionsBySlot(sections, bento);
-    // All bento slots should exist as keys
-    for (const slot of bento.slots) {
+    const result = groupSectionsBySlot(sections, architect);
+    // All architect slots should exist as keys
+    for (const slot of architect.slots) {
       expect(result[slot.id]).toBeDefined();
       expect(Array.isArray(result[slot.id])).toBe(true);
     }
   });
 
-  it("distributes bento sections to feature slots", () => {
+  it("distributes architect sections to feature slots", () => {
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "b1", type: "bio", slot: "feature-left" }),
       makeSection({ id: "s1", type: "skills", slot: "feature-right" }),
       makeSection({ id: "f1", type: "footer" }),
     ];
-    const result = groupSectionsBySlot(sections, bento);
+    const result = groupSectionsBySlot(sections, architect);
     expect(result["feature-left"].map((s) => s.id)).toContain("b1");
     expect(result["feature-right"].map((s) => s.id)).toContain("s1");
   });
@@ -115,7 +115,7 @@ describe("groupSectionsBySlot", () => {
       makeSection({ id: "b2", type: "bio", slot: "feature-left" }), // overflow: feature-left maxSections=1
       makeSection({ id: "f1", type: "footer" }),
     ];
-    const result = groupSectionsBySlot(sections, bento);
+    const result = groupSectionsBySlot(sections, architect);
     expect(result["feature-left"]).toHaveLength(1);
     // b2 should overflow to another slot
     const allNonHeroFooter = Object.entries(result)

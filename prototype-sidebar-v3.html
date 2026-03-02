@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidebar V3 - Editorial</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200..900;1,9..144,200..900&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], serif: ['Fraunces', 'serif'] },
+                    colors: { paper: '#F9F8F6', ink: '#1A1A1A', muted: '#8C8C8C', accent: '#D94B2B' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: theme('colors.paper'); color: theme('colors.ink'); }
+        ::-webkit-scrollbar { width: 0; background: transparent; }
+        .cover-image {
+            background-image: url('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop');
+            background-size: cover; background-position: center;
+        }
+        .text-balance { text-wrap: balance; }
+        .nav-item { position: relative; display: inline-block; }
+        .nav-item::after {
+            content: ''; position: absolute; width: 0; height: 1px; bottom: 0; left: 0;
+            background-color: theme('colors.ink'); transition: width 0.3s ease;
+        }
+        .nav-item:hover::after { width: 100%; }
+        
+        /* Subtle noise texture overlay for the right panel */
+        .noise-overlay {
+            position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="selection:bg-accent selection:text-white">
+    <div class="noise-overlay"></div>
+    <div class="flex flex-col lg:flex-row min-h-screen">
+        
+        <!-- Left Panel: The Cover -->
+        <aside class="w-full lg:w-[45%] lg:h-screen lg:sticky top-0 bg-ink text-paper flex flex-col justify-between p-8 md:p-12 lg:p-16 relative overflow-hidden">
+            <div class="absolute inset-0 cover-image opacity-40 mix-blend-luminosity"></div>
+            <div class="absolute inset-0 bg-gradient-to-b from-ink/30 via-ink/60 to-ink"></div>
+            
+            <div class="relative z-10">
+                <p class="text-xs uppercase tracking-[0.2em] font-medium mb-12 opacity-80">Vol. 01 — Portfolio</p>
+                <h1 class="font-serif text-6xl md:text-8xl lg:text-9xl leading-[0.85] tracking-tighter mb-6 text-balance">
+                    Alexander<br><span class="italic text-accent">Chen.</span>
+                </h1>
+            </div>
+
+            <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
+                <p class="text-lg font-light max-w-sm opacity-90 leading-relaxed">
+                    Architecting digital spaces. Exploring the tension between brutalist function and poetic form.
+                </p>
+                <div class="flex gap-4 opacity-70">
+                    <a href="#" class="hover:text-accent transition-colors"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg></a>
+                    <a href="#" class="hover:text-accent transition-colors"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg></a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Panel: The Content -->
+        <main class="w-full lg:w-[55%] p-8 md:p-16 lg:p-24 xl:px-32 xl:py-24 max-w-4xl">
+            
+            <nav class="flex gap-8 text-sm uppercase tracking-[0.1em] font-medium mb-24 text-ink/60">
+                <a href="#manifesto" class="nav-item text-ink">Manifesto</a>
+                <a href="#work" class="nav-item hover:text-ink">Index</a>
+                <a href="#contact" class="nav-item hover:text-ink">Contact</a>
+            </nav>
+
+            <article id="manifesto" class="mb-32">
+                <h2 class="font-serif italic text-4xl md:text-5xl mb-12 text-accent">The Interface as an Extension of Thought.</h2>
+                <div class="prose prose-xl font-sans text-ink/80 leading-relaxed font-light">
+                    <p class="mb-8">We spend our lives navigating glass rectangles. Yet, most software treats us as operators of a machine, rather than humans engaging in a dialogue.</p>
+                    <p class="mb-8">My work is focused on reducing the friction between intent and execution. I believe in interfaces that are invisible when you are working, and beautiful when you pause to look at them.</p>
+                    <p>Currently, I am shaping the design systems at <strong>Apple</strong>. Before that, I explored the digital avant-garde at <strong>Vogue</strong>.</p>
+                </div>
+            </article>
+
+            <div class="w-full h-[1px] bg-ink/10 mb-24"></div>
+
+            <article id="work" class="mb-32">
+                <h3 class="text-xs uppercase tracking-[0.2em] font-medium text-ink/50 mb-12">Selected Index (2018—2026)</h3>
+                
+                <div class="flex flex-col">
+                    <!-- Project Row -->
+                    <a href="#" class="group flex flex-col sm:flex-row sm:items-baseline justify-between py-6 border-b border-ink/10 hover:border-ink transition-colors">
+                        <div class="mb-2 sm:mb-0">
+                            <h4 class="font-serif text-2xl group-hover:text-accent transition-colors">macOS Vision System</h4>
+                            <p class="text-sm text-ink/60 mt-1 font-light">Design Architecture, Apple</p>
+                        </div>
+                        <span class="text-sm font-serif italic text-ink/40 group-hover:text-ink transition-colors">2024</span>
+                    </a>
+                    <!-- Project Row -->
+                    <a href="#" class="group flex flex-col sm:flex-row sm:items-baseline justify-between py-6 border-b border-ink/10 hover:border-ink transition-colors">
+                        <div class="mb-2 sm:mb-0">
+                            <h4 class="font-serif text-2xl group-hover:text-accent transition-colors">Vogue Archive Interactive</h4>
+                            <p class="text-sm text-ink/60 mt-1 font-light">Creative Direction, Vogue Labs</p>
+                        </div>
+                        <span class="text-sm font-serif italic text-ink/40 group-hover:text-ink transition-colors">2021</span>
+                    </a>
+                    <!-- Project Row -->
+                    <a href="#" class="group flex flex-col sm:flex-row sm:items-baseline justify-between py-6 border-b border-ink/10 hover:border-ink transition-colors">
+                        <div class="mb-2 sm:mb-0">
+                            <h4 class="font-serif text-2xl group-hover:text-accent transition-colors">Stripe Terminal UI</h4>
+                            <p class="text-sm text-ink/60 mt-1 font-light">Product Design, Stripe</p>
+                        </div>
+                        <span class="text-sm font-serif italic text-ink/40 group-hover:text-ink transition-colors">2019</span>
+                    </a>
+                </div>
+            </article>
+
+            <footer id="contact" class="pt-12 flex justify-between items-end">
+                <div>
+                    <h3 class="font-serif text-3xl mb-4">Let's build something.</h3>
+                    <a href="mailto:hello@example.com" class="nav-item text-lg">alexander@openself.co</a>
+                </div>
+                <p class="text-xs text-ink/40 uppercase tracking-widest">© 2026</p>
+            </footer>
+
+        </main>
+    </div>
+</body>
+</html>

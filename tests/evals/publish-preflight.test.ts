@@ -63,13 +63,13 @@ vi.mock("@/lib/services/fact-validation", () => ({
 }));
 
 vi.mock("@/lib/layout/contracts", () => ({
-  LAYOUT_TEMPLATES: ["vertical", "sidebar-left", "bento-standard"] as const,
+  LAYOUT_TEMPLATES: ["monolith", "curator", "architect"] as const,
 }));
 
 vi.mock("@/lib/layout/registry", () => ({
   getLayoutTemplate: vi.fn(),
   resolveLayoutTemplate: vi.fn(() => ({
-    id: "vertical",
+    id: "monolith",
     slots: [{ id: "hero" }, { id: "main" }, { id: "footer" }],
   })),
 }));

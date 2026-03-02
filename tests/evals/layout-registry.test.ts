@@ -25,20 +25,20 @@ function makeConfig(overrides: Partial<PageConfig> = {}): PageConfig {
 
 describe("getLayoutTemplate", () => {
   it("returns vertical template", () => {
-    const t = getLayoutTemplate("vertical");
-    expect(t.id).toBe("vertical");
+    const t = getLayoutTemplate("monolith");
+    expect(t.id).toBe("monolith");
     expect(t.slots.length).toBeGreaterThan(0);
   });
 
-  it("returns sidebar-left template", () => {
-    const t = getLayoutTemplate("sidebar-left");
-    expect(t.id).toBe("sidebar-left");
+  it("returns curator template", () => {
+    const t = getLayoutTemplate("curator");
+    expect(t.id).toBe("curator");
     expect(t.slots.some((s) => s.id === "sidebar")).toBe(true);
   });
 
-  it("returns bento-standard template", () => {
-    const t = getLayoutTemplate("bento-standard");
-    expect(t.id).toBe("bento-standard");
+  it("returns architect-standard template", () => {
+    const t = getLayoutTemplate("architect");
+    expect(t.id).toBe("architect");
     expect(t.slots.some((s) => s.id === "feature-left")).toBe(true);
   });
 
@@ -68,48 +68,48 @@ describe("resolveLayoutTemplate", () => {
   it("returns vertical for config without layoutTemplate", () => {
     const config = makeConfig();
     const t = resolveLayoutTemplate(config);
-    expect(t.id).toBe("vertical");
+    expect(t.id).toBe("monolith");
   });
 
   it("returns vertical even when style.layout is split", () => {
     const config = makeConfig({ style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "split" } });
     const t = resolveLayoutTemplate(config);
-    expect(t.id).toBe("vertical");
+    expect(t.id).toBe("monolith");
   });
 
   it("returns vertical even when style.layout is stack", () => {
     const config = makeConfig({ style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "stack" } });
     const t = resolveLayoutTemplate(config);
-    expect(t.id).toBe("vertical");
+    expect(t.id).toBe("monolith");
   });
 
   it("returns requested template when layoutTemplate is valid", () => {
-    const config = makeConfig({ layoutTemplate: "bento-standard" });
+    const config = makeConfig({ layoutTemplate: "architect" });
     const t = resolveLayoutTemplate(config);
-    expect(t.id).toBe("bento-standard");
+    expect(t.id).toBe("architect");
   });
 
   it("returns vertical for unknown layoutTemplate", () => {
     const config = makeConfig();
     (config as Record<string, unknown>).layoutTemplate = "nonexistent";
     const t = resolveLayoutTemplate(config);
-    expect(t.id).toBe("vertical");
+    expect(t.id).toBe("monolith");
   });
 
   it("no LEGACY_LAYOUT_MAP — style.layout never maps to a template", () => {
     // Ensure that style.layout values like "split" and "stack"
-    // do NOT map to sidebar-left or any other template
+    // do NOT map to curator-left or any other template
     for (const layout of ["centered", "split", "stack"] as const) {
       const config = makeConfig({ style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout } });
       const t = resolveLayoutTemplate(config);
-      expect(t.id).toBe("vertical");
+      expect(t.id).toBe("monolith");
     }
   });
 });
 
 describe("Phase 1b: new types accepted in layout slots", () => {
   it("vertical main slot accepts experience, education, languages, activities", () => {
-    const t = getLayoutTemplate("vertical");
+    const t = getLayoutTemplate("monolith");
     const main = t.slots.find((s) => s.id === "main")!;
     expect(main.accepts).toContain("experience");
     expect(main.accepts).toContain("education");
@@ -117,38 +117,38 @@ describe("Phase 1b: new types accepted in layout slots", () => {
     expect(main.accepts).toContain("activities");
   });
 
-  it("sidebar-left main accepts experience, education, activities", () => {
-    const t = getLayoutTemplate("sidebar-left");
+  it("curator-left main accepts experience, education, activities", () => {
+    const t = getLayoutTemplate("curator");
     const main = t.slots.find((s) => s.id === "main")!;
     expect(main.accepts).toContain("experience");
     expect(main.accepts).toContain("education");
     expect(main.accepts).toContain("activities");
   });
 
-  it("sidebar-left sidebar accepts languages, activities", () => {
-    const t = getLayoutTemplate("sidebar-left");
-    const sidebar = t.slots.find((s) => s.id === "sidebar")!;
-    expect(sidebar.accepts).toContain("languages");
-    expect(sidebar.accepts).toContain("activities");
+  it("curator sidebar accepts languages, activities", () => {
+    const t = getLayoutTemplate("curator");
+    const curatorSlot = t.slots.find((s) => s.id === "sidebar")!;
+    expect(curatorSlot.accepts).toContain("languages");
+    expect(curatorSlot.accepts).toContain("activities");
   });
 
-  it("bento-standard feature-left accepts experience, education", () => {
-    const t = getLayoutTemplate("bento-standard");
+  it("architect-standard feature-left accepts experience, education", () => {
+    const t = getLayoutTemplate("architect");
     const featureLeft = t.slots.find((s) => s.id === "feature-left")!;
     expect(featureLeft.accepts).toContain("experience");
     expect(featureLeft.accepts).toContain("education");
   });
 
-  it("bento-standard full-row accepts experience, education, activities", () => {
-    const t = getLayoutTemplate("bento-standard");
+  it("architect-standard full-row accepts experience, education, activities", () => {
+    const t = getLayoutTemplate("architect");
     const fullRow = t.slots.find((s) => s.id === "full-row")!;
     expect(fullRow.accepts).toContain("experience");
     expect(fullRow.accepts).toContain("education");
     expect(fullRow.accepts).toContain("activities");
   });
 
-  it("bento-standard card slots accept languages, activities", () => {
-    const t = getLayoutTemplate("bento-standard");
+  it("architect-standard card slots accept languages, activities", () => {
+    const t = getLayoutTemplate("architect");
     for (const cardId of ["card-1", "card-2", "card-3"]) {
       const card = t.slots.find((s) => s.id === cardId)!;
       expect(card.accepts).toContain("languages");

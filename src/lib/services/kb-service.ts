@@ -472,6 +472,11 @@ export function setFactVisibility(
   const sensitive = isSensitiveCategory(existing.category);
   const from = (existing.visibility ?? "private") as Visibility;
 
+  // Idempotent: already at target → return normalized row, no DB write
+  if (from === targetVisibility) {
+    return { ...existing, visibility: from } as FactRow;
+  }
+
   // Enforce transition matrix
   if (actor === "assistant" && targetVisibility === "public") {
     throw new VisibilityTransitionError(

@@ -11,7 +11,7 @@ function makeSection(
 
 describe("layout capacity after maxSections increase", () => {
   it("vertical main slot accepts 12+ sections without overflow", () => {
-    const template = getLayoutTemplate("vertical");
+    const template = getLayoutTemplate("monolith");
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "b1", type: "bio" }),
@@ -37,8 +37,8 @@ describe("layout capacity after maxSections increase", () => {
     expect(issues.filter((i) => i.severity === "error")).toHaveLength(0);
   });
 
-  it("sidebar-left main slot accepts 10 sections after capacity increase", () => {
-    const template = getLayoutTemplate("sidebar-left");
+  it("curator-left main slot accepts 10 sections after capacity increase", () => {
+    const template = getLayoutTemplate("curator");
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "b1", type: "bio" }),
@@ -69,10 +69,10 @@ describe("layout capacity after maxSections increase", () => {
     expect(sidebarSections.length).toBeLessThanOrEqual(6);
   });
 
-  it("bento with overflow: unfit sections get no slot but template is preserved", () => {
-    const template = getLayoutTemplate("bento-standard");
+  it("architect with overflow: unfit sections get no slot but template is preserved", () => {
+    const template = getLayoutTemplate("architect");
 
-    // Create more sections than bento can hold
+    // Create more sections than architect can hold
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "b1", type: "bio" }),
@@ -97,7 +97,7 @@ describe("layout capacity after maxSections increase", () => {
     expect(result.find((s) => s.id === "h1")?.slot).toBe("hero");
     expect(result.find((s) => s.id === "f1")?.slot).toBe("footer");
 
-    // Some content sections may be unslotted (bento has limited capacity), that's OK
+    // Some content sections may be unslotted (architect has limited capacity), that's OK
     const slotted = result.filter((s) => s.slot);
     expect(slotted.length).toBeGreaterThanOrEqual(2); // at minimum hero + footer
   });

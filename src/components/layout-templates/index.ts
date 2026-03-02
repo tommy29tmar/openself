@@ -1,20 +1,22 @@
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import type { LayoutComponentProps } from "./types";
-import { VerticalLayout } from "./VerticalLayout";
-import { SidebarLayout } from "./SidebarLayout";
-import { BentoLayout } from "./BentoLayout";
+import { MonolithLayout } from "./MonolithLayout";
+import { CinematicLayout } from "./CinematicLayout";
+import { CuratorLayout } from "./CuratorLayout";
+import { ArchitectLayout } from "./ArchitectLayout";
 
 type LayoutComponent = React.ComponentType<LayoutComponentProps>;
 
 const LAYOUT_COMPONENTS: Record<LayoutTemplateId, LayoutComponent> = {
-  vertical: VerticalLayout,
-  "sidebar-left": SidebarLayout,
-  "bento-standard": BentoLayout,
+  monolith: MonolithLayout,
+  cinematic: CinematicLayout,
+  curator: CuratorLayout,
+  architect: ArchitectLayout,
 };
 
 export function getLayoutComponent(id: LayoutTemplateId): LayoutComponent {
-  return LAYOUT_COMPONENTS[id] ?? VerticalLayout;
+  return LAYOUT_COMPONENTS[id] ?? MonolithLayout;
 }
 
-export { VerticalLayout, SidebarLayout, BentoLayout };
+export { MonolithLayout, CinematicLayout, CuratorLayout, ArchitectLayout };
 export type { LayoutComponentProps } from "./types";

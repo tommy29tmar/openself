@@ -1,4 +1,4 @@
-# Sprint 5: Conversation Polish + Eval Matrix — Implementation Plan
+# Sprint 5: Conversation Polish + Eval Matrix — Implementation Plan [DONE]
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 

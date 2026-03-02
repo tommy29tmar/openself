@@ -33,6 +33,7 @@ import type {
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import { formatFactDate } from "@/lib/i18n/format-date";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
+import { TAGLINE_TEMPLATES } from "@/lib/i18n/hero-fallbacks";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 
@@ -48,7 +49,6 @@ const DEFAULT_THEME = "minimal";
 // --- Localized strings for page content ---
 
 type L10nStrings = {
-  welcomeTagline: (name: string) => string;
   bioRoleAt: (name: string, role: string, company: string) => string;
   bioRole: (name: string, role: string) => string;
   bioRoleAtFirstPerson: (role: string, company: string) => string;
@@ -80,7 +80,6 @@ type L10nStrings = {
 
 const L10N: Record<string, L10nStrings> = {
   en: {
-    welcomeTagline: (name) => `Hello, I'm ${name}`,
     bioRoleAt: (name, role, company) => `${name} is a ${role} at ${company}.`,
     bioRole: (name, role) => `${name} is a ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `I am a ${role} at ${company}.`,
@@ -110,7 +109,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "Into",
   },
   it: {
-    welcomeTagline: (name) => `Ciao, sono ${name}`,
     bioRoleAt: (name, role, company) => `${name} è ${role} presso ${company}.`,
     bioRole: (name, role) => `${name} è ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Sono ${role} presso ${company}.`,
@@ -140,7 +138,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "Appassionato di",
   },
   de: {
-    welcomeTagline: (name) => `Willkommen auf ${name}s Seite`,
     bioRoleAt: (name, role, company) => `${name} ist ${role} bei ${company}.`,
     bioRole: (name, role) => `${name} ist ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Ich bin ${role} bei ${company}.`,
@@ -170,7 +167,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "Begeistert von",
   },
   fr: {
-    welcomeTagline: (name) => `Bienvenue sur la page de ${name}`,
     bioRoleAt: (name, role, company) => `${name} est ${role} chez ${company}.`,
     bioRole: (name, role) => `${name} est ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Je suis ${role} chez ${company}.`,
@@ -200,7 +196,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "Passionné de",
   },
   es: {
-    welcomeTagline: (name) => `Bienvenido a la página de ${name}`,
     bioRoleAt: (name, role, company) => `${name} es ${role} en ${company}.`,
     bioRole: (name, role) => `${name} es ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Soy ${role} en ${company}.`,
@@ -230,7 +225,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "Apasionado de",
   },
   pt: {
-    welcomeTagline: (name) => `Bem-vindo à página de ${name}`,
     bioRoleAt: (name, role, company) => `${name} é ${role} na ${company}.`,
     bioRole: (name, role) => `${name} é ${role}.`,
     bioRoleAtFirstPerson: (role, company) => `Sou ${role} na ${company}.`,
@@ -260,7 +254,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "Apaixonado por",
   },
   ja: {
-    welcomeTagline: (name) => `${name}のページへようこそ`,
     bioRoleAt: (name, role, company) => `${name}は${company}の${role}です。`,
     bioRole: (name, role) => `${name}は${role}です。`,
     bioRoleAtFirstPerson: (role, company) => `${company}で${role}をしています。`,
@@ -290,7 +283,6 @@ const L10N: Record<string, L10nStrings> = {
     interestsInto: "興味",
   },
   zh: {
-    welcomeTagline: (name) => `欢迎来到${name}的页面`,
     bioRoleAt: (name, role, company) => `${name}是${company}的${role}。`,
     bioRole: (name, role) => `${name}是${role}。`,
     bioRoleAtFirstPerson: (role, company) => `我是${company}的${role}。`,
@@ -466,7 +458,8 @@ function buildHeroSection(
   // If only name and no tagline: leave empty (name is already shown in hero)
   const finalTagline = tagline ?? "";
 
-  const finalName = heroName ?? l.welcomeTagline("").replace(/,?\s*$/, "").trim();
+  const fallbackTemplate = TAGLINE_TEMPLATES[language] ?? TAGLINE_TEMPLATES.en;
+  const finalName = heroName ?? fallbackTemplate("").replace(/,?\s*$/, "").trim();
 
   // ContactBar data (injected from social, contact, language facts)
   const socialLinks: { platform: string; url: string; label?: string }[] = [];
@@ -512,10 +505,10 @@ function buildHeroSection(
   const languageItems: { language: string; proficiency?: string }[] = [];
   for (const f of languageFacts ?? []) {
     const v = val(f);
-    const lang = str(v.language) ?? str(v.name) ?? str(v.value);
-    if (lang) {
+    const rawLang = str(v.language) ?? str(v.name) ?? str(v.value);
+    if (rawLang) {
       languageItems.push({
-        language: lang,
+        language: localizeLanguageName(rawLang, language),
         proficiency: localizeProficiency(str(v.proficiency) ?? str(v.level), language),
       });
     }
@@ -923,9 +916,10 @@ function buildStatsSection(statFacts: FactRow[], language: string): Section | nu
 
   const mapped = sortFacts(statFacts).map((f) => {
     const v = val(f);
-    const label = str(v.label) ?? str(v.name);
+    const rawLabel = str(v.label) ?? str(v.name);
     const value = str(v.value) ?? str(v.number);
-    if (!label || !value) return null;
+    if (!rawLabel || !value) return null;
+    const label = localizeStatLabel(rawLabel, language);
     return { label, value, unit: str(v.unit) } as StatItem;
   });
   const items = mapped.filter((item): item is StatItem => item !== null);
@@ -1011,11 +1005,64 @@ const PROF_KEYS: Record<string, keyof L10nStrings> = {
   intermediate: "profIntermediate", beginner: "profBeginner",
 };
 
+/** Normalize non-standard proficiency values to canonical English keys. */
+const PROF_ALIASES: Record<string, string> = {
+  "base": "beginner",
+  "basico": "beginner",
+  "básico": "beginner",
+  "grundkenntnisse": "beginner",
+  "débutant": "beginner",
+  "principiante": "beginner",
+  "madrelingua": "native",
+  "muttersprache": "native",
+  "courant": "fluent",
+  "fließend": "fluent",
+  "avanzato": "advanced",
+  "intermedio": "intermediate",
+};
+
 function localizeProficiency(rawProf: string | undefined, language: string): string | undefined {
   if (!rawProf) return undefined;
-  const key = PROF_KEYS[rawProf.toLowerCase()];
+  const normalized = PROF_ALIASES[rawProf.toLowerCase()] ?? rawProf;
+  const key = PROF_KEYS[normalized.toLowerCase()];
   if (!key) return rawProf;
   return getL10n(language)[key] as string;
+}
+
+/** Map English stat labels to UiStrings keys for localization. */
+const STAT_LABEL_KEYS: Record<string, keyof import("@/lib/i18n/ui-strings").UiStrings> = {
+  "years experience": "statYearsExperience",
+  "years of experience": "statYearsExperience",
+  "clients": "statClients",
+  "projects": "statProjects",
+  "revenue": "statRevenue",
+  "users": "statUsers",
+};
+
+/** Localize common stat labels; falls back to the original label if no match. */
+function localizeStatLabel(label: string, language: string): string {
+  const key = STAT_LABEL_KEYS[label.toLowerCase()];
+  if (!key) return label;
+  return getUiL10n(language)[key] ?? label;
+}
+
+/** Map English language names to UiStrings keys for localization. */
+const LANGUAGE_NAME_KEYS: Record<string, keyof import("@/lib/i18n/ui-strings").UiStrings> = {
+  "english": "langEnglish",
+  "italian": "langItalian",
+  "german": "langGerman",
+  "french": "langFrench",
+  "spanish": "langSpanish",
+  "portuguese": "langPortuguese",
+  "japanese": "langJapanese",
+  "chinese": "langChinese",
+};
+
+/** Localize language names in hero section; falls back to original if no match. */
+function localizeLanguageName(name: string, language: string): string {
+  const key = LANGUAGE_NAME_KEYS[name.toLowerCase()];
+  if (!key) return name;
+  return getUiL10n(language)[key] ?? name;
 }
 
 function buildLanguagesSection(languageFacts: FactRow[], language: string): Section | null {
@@ -1025,9 +1072,9 @@ function buildLanguagesSection(languageFacts: FactRow[], language: string): Sect
   const items: LanguageItem[] = sortFacts(languageFacts)
     .map((f) => {
       const v = val(f);
-      const lang = str(v.language) ?? str(v.name);
-      if (!lang) return null;
-      const item: LanguageItem = { language: lang };
+      const rawLang = str(v.language) ?? str(v.name);
+      if (!rawLang) return null;
+      const item: LanguageItem = { language: localizeLanguageName(rawLang, language) };
       const rawProf = str(v.proficiency) ?? str(v.level);
       if (rawProf) {
         item.proficiency = localizeProficiency(rawProf, language);
@@ -1183,9 +1230,10 @@ function buildAtAGlanceSection(
 
   const stats = sortFacts(statFacts).map((f) => {
     const v = val(f);
-    const label = str(v.label) ?? str(v.name);
+    const rawLabel = str(v.label) ?? str(v.name);
     const value = str(v.value) ?? str(v.number);
-    if (!label || !value) return null;
+    if (!rawLabel || !value) return null;
+    const label = localizeStatLabel(rawLabel, language);
     return { label, value, unit: str(v.unit) };
   }).filter((s) => s !== null);
 
@@ -1326,7 +1374,7 @@ export function composeOptimisticPage(
   sections.push(buildFooterSection());
 
   // Slot assignment: distribute sections into layout slots
-  const resolvedTemplate = layoutTemplate ?? "vertical";
+  const resolvedTemplate = layoutTemplate ?? "monolith";
   const template = getLayoutTemplate(resolvedTemplate);
   const { sections: assigned, issues } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
 

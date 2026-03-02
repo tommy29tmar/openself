@@ -54,7 +54,7 @@ vi.mock("@/lib/services/auth-service", () => ({
 
 vi.mock("@/lib/layout/registry", () => ({
   resolveLayoutTemplate: vi.fn(() => ({
-    id: "vertical",
+    id: "monolith",
     slots: [{ id: "main", label: "Main", accepts: "*" }],
   })),
 }));

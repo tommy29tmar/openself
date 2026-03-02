@@ -592,6 +592,9 @@ function ChatPanelInner({
   // Username for OAuth edge case (authenticated but no username)
   const [oauthUsername, setOauthUsername] = useState("");
 
+  // Ref for refreshChat to avoid forward-reference in onFinish closure
+  const refreshChatRef = useRef<() => Promise<boolean>>(async () => false);
+
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } =
     useChat({
       api: "/api/chat",
@@ -625,15 +628,31 @@ function ChatPanelInner({
 
         setChatError(extractErrorMessage(error));
       },
+      onFinish: (message) => {
+        // Step exhaustion recovery: if the final assistant message has no text,
+        // refresh from DB where the server saved a synthetic message
+        if (!message.content?.trim()) {
+          let attempts = 0;
+          const tryRefresh = async () => {
+            const hasContent = await refreshChatRef.current();
+            attempts++;
+            if (!hasContent && attempts < 3) {
+              setTimeout(tryRefresh, 500);
+            }
+          };
+          tryRefresh();
+        }
+      },
     });
 
-  // Re-sync messages from the server DB to recover from stream errors
-  const refreshChat = useCallback(async () => {
+  // Re-sync messages from the server DB to recover from stream errors.
+  // Returns true if the last assistant message has non-empty content.
+  const refreshChat = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/messages", { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const data = (await res.json()) as MessagesResponse;
-      if (!data.success || !Array.isArray(data.messages)) return;
+      if (!data.success || !Array.isArray(data.messages)) return false;
       const restored: StoredMessage[] = data.messages
         .filter(
           (m): m is { id: string; role: string; content: string } =>
@@ -658,12 +677,19 @@ function ChatPanelInner({
         (msg) => msg.role === "assistant" && allWelcomeTexts.has(msg.content),
       );
       const welcome = getWelcomeMessage(language);
-      setMessages(welcomeAlreadyStored ? restored : [welcome, ...restored]);
+      const normalizedMessages = welcomeAlreadyStored ? restored : [welcome, ...restored];
+      setMessages(normalizedMessages);
       setChatError(null);
+      const lastAssistant = [...normalizedMessages].reverse().find(m => m.role === "assistant");
+      return !!(lastAssistant?.content?.trim());
     } catch {
       // Keep current state if refresh fails
+      return false;
     }
   }, [language, setMessages]);
+
+  // Keep ref in sync for onFinish closure
+  refreshChatRef.current = refreshChat;
 
   const handleChatSubmit = useCallback(
     (e: FormEvent<HTMLFormElement>) => {

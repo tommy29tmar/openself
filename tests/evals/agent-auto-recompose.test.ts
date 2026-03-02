@@ -93,10 +93,10 @@ vi.mock("@/lib/services/fact-validation", () => ({
   },
 }));
 vi.mock("@/lib/layout/contracts", () => ({
-  LAYOUT_TEMPLATES: ["vertical", "sidebar-left", "bento-standard"],
+  LAYOUT_TEMPLATES: ["monolith", "curator", "architect"],
 }));
 vi.mock("@/lib/layout/registry", () => ({
-  getLayoutTemplate: vi.fn(() => ({ id: "vertical", slots: [] })),
+  getLayoutTemplate: vi.fn(() => ({ id: "monolith", slots: [] })),
 }));
 vi.mock("@/lib/layout/assign-slots", () => ({
   assignSlotsFromFacts: vi.fn(() => ({ sections: [], issues: [] })),
@@ -115,7 +115,7 @@ describe("auto-recompose after fact mutations", () => {
     username: "draft",
     theme: "editorial-360",
     style: { colorScheme: "dark" },
-    layoutTemplate: "sidebar-left",
+    layoutTemplate: "curator",
     sections: [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Elena" } },
       { id: "bio-1", type: "bio", variant: "full", content: { text: "Bio" }, lock: { content: "user" } },
@@ -137,7 +137,7 @@ describe("auto-recompose after fact mutations", () => {
       username: "draft",
       theme: "editorial-360",
       style: { colorScheme: "dark" },
-      layoutTemplate: "sidebar-left",
+      layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Elena" } },
         { id: "bio-1", type: "bio", variant: "full", content: { text: "Updated bio" }, lock: { content: "user" } },
@@ -172,7 +172,7 @@ describe("auto-recompose after fact mutations", () => {
     expect(draftMeta).toBeDefined();
     expect(draftMeta!.theme).toBe("editorial-360");
     expect(draftMeta!.style).toEqual({ colorScheme: "dark" });
-    expect(draftMeta!.layoutTemplate).toBe("sidebar-left");
+    expect(draftMeta!.layoutTemplate).toBe("curator");
     expect(draftMeta!.sections).toHaveLength(2); // preserves section array for order/lock merge
   });
 

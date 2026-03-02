@@ -344,12 +344,12 @@ describe("mergeActiveSectionCopy", () => {
 
     const config = makeConfig([makeSection("bio", { description: "Bio." })]);
     config.theme = "warm";
-    config.layoutTemplate = "sidebar-left";
+    config.layoutTemplate = "curator";
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
     expect(result.theme).toBe("warm");
-    expect(result.layoutTemplate).toBe("sidebar-left");
+    expect(result.layoutTemplate).toBe("curator");
     expect(result.username).toBe("testuser");
     expect(result.version).toBe(1);
   });

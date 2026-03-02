@@ -21,6 +21,18 @@ import { enqueueSummaryJob } from "@/lib/services/summary-service";
 import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 
+/** Fallback messages when step exhaustion leaves no text reply. Keyed by language. */
+const STEP_EXHAUSTION_FALLBACK: Record<string, string> = {
+  en: "I've updated your profile. Let me know if you'd like any changes.",
+  it: "Ho aggiornato il tuo profilo. Dimmi se vuoi modificare qualcosa.",
+  de: "Ich habe dein Profil aktualisiert. Sag mir, wenn du etwas ändern möchtest.",
+  fr: "J'ai mis à jour votre profil. Dites-moi si vous souhaitez des modifications.",
+  es: "He actualizado tu perfil. Dime si quieres hacer algún cambio.",
+  pt: "Atualizei o seu perfil. Diga-me se quiser fazer alguma alteração.",
+  ja: "プロフィールを更新しました。変更があればお知らせください。",
+  zh: "我已更新了你的个人资料。如果需要修改请告诉我。",
+};
+
 /**
  * Per-profile message quota for authenticated users.
  * Atomic check+increment (single UPDATE with WHERE guard — no race).
@@ -254,7 +266,7 @@ export async function POST(req: Request) {
 
   const provider = getProviderName();
   const modelId = getModelIdForTier("standard");
-  const MAX_STEPS = 8; // batch_facts reduces per-turn tool calls; 8 is sufficient
+  const MAX_STEPS = 12; // batch_facts reduces per-turn tool calls; 12 gives headroom for complex turns
 
   try {
     const model = getModelForTier("standard");
@@ -329,6 +341,24 @@ export async function POST(req: Request) {
         } else {
           // No tool calls this turn — still clear any stale pendingOps
           try { mergeSessionMeta(writeSessionId, { pendingOperations: null }); } catch { /* best-effort */ }
+        }
+
+        // Step exhaustion with no text: save a synthetic assistant message
+        // so the client can recover by refreshing from DB
+        if (finishReason === "tool-calls" && (!text || !text.trim())) {
+          try {
+            const syntheticText = STEP_EXHAUSTION_FALLBACK[sessionLanguage] ?? STEP_EXHAUSTION_FALLBACK.en;
+            db.insert(messagesTable)
+              .values({
+                id: randomUUID(),
+                sessionId: messageSessionId,
+                role: "assistant",
+                content: syntheticText,
+              })
+              .run();
+          } catch (e) {
+            console.warn("[chat] synthetic message persistence failed:", e);
+          }
         }
 
         // Enqueue summary generation (best-effort, non-blocking)

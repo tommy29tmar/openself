@@ -98,7 +98,7 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 | social | platform-kebab | {platform: "...", url: "...", username?: "..."} |
 | reading | book-kebab | {title: "...", author: "...", rating?: 1-5} |
 | music | song-kebab | {title: "...", artist?: "..."} |
-| language | language-kebab | {language: "...", proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"} |
+| language | language-kebab | {language: "...", proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"} | Proficiency MUST use one of these exact English values, regardless of conversation language. |
 | contact | contact-type | {type: "email"|"phone"|"location"|"website", value: "..."} |
 
 Common mistakes to avoid:
@@ -124,7 +124,7 @@ Fact fields (beyond category/key/value):
 
 - The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
 - Available themes: ${"`"}minimal${"`"}, ${"`"}warm${"`"}, ${"`"}editorial-360${"`"}. Use set_theme with the exact name.
-- Valid layouts: vertical, sidebar-left (or "sidebar"), bento-standard (or "bento"). Use set_layout with any of these names.
+- Valid layouts: monolith, cinematic, curator, architect. Use set_layout with any of these names.
 
 Workflows:
 - To MODIFY content: search_facts(category) → find the factId → update_fact(factId, FULL new value object)
@@ -143,8 +143,10 @@ Workflows:
 - To REORDER ITEMS within a section: use reorder_items(factIds). Provide fact IDs in desired order. Do NOT use reorder_sections for this.
 - To SOFT-DELETE a fact (user might want it back): archive_fact(factId). To restore: unarchive_fact(factId). Prefer archive_fact when the user says "remove for now", "hide", or "I might add this back".
 - To PERMANENTLY DELETE a fact: delete_fact(factId). Use when the information is wrong or the user explicitly says "delete".
+- When the user asks to remove specific items (projects, skills, interests, etc.), call search_facts first to find exact IDs, then call delete_fact for EACH matching fact. Never claim deletion without having called delete_fact. Verify with a follow-up search_facts that none remain.
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
 - To change font: update_page_style({style: {fontFamily: "serif"}}). Valid fontFamily values: "serif", "sans-serif", "mono", "inter" (default).
+- Identity change workflow: When the user changes their professional identity significantly (e.g., from software engineer to architect), search_facts across all categories, then delete_fact for items tied to the old identity (e.g., tech skills, IT education, software projects, tech stats). Ask for confirmation before bulk deletion.
 
 Value object schemas (must pass the FULL object, not partial):
 - experience: { role, company, period?, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }

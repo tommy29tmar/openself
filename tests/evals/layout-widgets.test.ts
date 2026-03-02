@@ -186,7 +186,7 @@ describe("Phase 1b legacy adapter mapping", () => {
   });
 
   it("resolves languages:default to languages-list", () => {
-    const section: Section = { id: "l1", type: "languages", slot: "sidebar", content: { items: [] } };
+    const section: Section = { id: "l1", type: "languages", slot: "curator", content: { items: [] } };
     const result = toSlotAssignments([section]);
     expect(result.assignments[0].widgetId).toBe("languages-list");
   });
@@ -202,7 +202,7 @@ describe("Phase 1b legacy adapter mapping", () => {
       id: "c1",
       type: "contact",
       variant: "card",
-      slot: "sidebar",
+      slot: "curator",
       content: { methods: [{ type: "email", value: "a@b.com" }, { type: "phone", value: "123" }] },
     };
     const result = toSlotAssignments([section]);

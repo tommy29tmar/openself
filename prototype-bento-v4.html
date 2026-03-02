@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSelf - The Architect (Bento)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], serif: ['Instrument Serif', 'serif'] },
+                    colors: { os: { bg: '#FDFCFB', ink: '#0A0A0A', muted: '#737373', border: '#E5E5E5' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: theme('colors.os.bg'); color: theme('colors.os.ink'); overflow-x: hidden; }
+        
+        /* OpenSelf DNA: Bento Cards */
+        .os-card {
+            background-color: theme('colors.os.bg');
+            border: 1px solid theme('colors.os.border');
+            border-radius: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .os-card:hover {
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.05);
+            transform: translateY(-2px);
+        }
+
+        .fade-in { animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="p-4 md:p-8 lg:p-12 min-h-screen flex flex-col items-center justify-center">
+
+    <!-- OpenSelf DNA: The Stamp -->
+    <div class="fixed top-6 left-6 z-50 mix-blend-difference text-os-ink">
+        <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-widest">
+            <span class="w-2 h-2 bg-os-ink rounded-full animate-pulse"></span>
+            OpenSelf
+        </div>
+    </div>
+
+    <!-- OpenSelf DNA: Floating Pill Navigation -->
+    <nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-os-ink/90 backdrop-blur-md text-white px-2 py-2 rounded-full flex gap-1 shadow-2xl border border-white/10">
+        <a href="#" class="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors">Profile</a>
+        <a href="#" class="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors">Work</a>
+        <a href="#" class="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors">Contact</a>
+    </nav>
+
+    <main class="w-full max-w-6xl mx-auto mb-24 mt-12 md:mt-0">
+        
+        <!-- Bento Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[minmax(220px,auto)]">
+            
+            <!-- Hero Card -->
+            <div class="os-card md:col-span-2 md:row-span-2 p-8 md:p-10 flex flex-col justify-between fade-in" style="animation-delay: 0s;">
+                <div class="flex justify-between items-start mb-8">
+                    <span class="px-3 py-1 rounded-full border border-os-border text-xs font-mono text-os-muted">SYS_DESIGN</span>
+                    <div class="w-16 h-16 rounded-full overflow-hidden">
+                        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop" class="w-full h-full object-cover grayscale" alt="Profile">
+                    </div>
+                </div>
+                <div>
+                    <h1 class="text-5xl md:text-7xl font-serif tracking-tight leading-[0.9] mb-4">Alexander<br>Chen.</h1>
+                    <p class="text-os-ink/70 font-light max-w-sm">Designing digital infrastructure at Apple. San Francisco, CA.</p>
+                </div>
+            </div>
+
+            <!-- Expertise Card -->
+            <div class="os-card md:col-span-2 md:row-span-1 p-8 flex flex-col justify-center fade-in" style="animation-delay: 0.1s;">
+                <h2 class="text-xs font-mono uppercase tracking-[0.2em] text-os-muted mb-6">Expertise</h2>
+                <div class="flex flex-wrap gap-2">
+                    <span class="px-4 py-2 rounded-full bg-os-ink/5 text-sm font-medium">Design Systems</span>
+                    <span class="px-4 py-2 rounded-full bg-os-ink/5 text-sm font-medium">React / Next.js</span>
+                    <span class="px-4 py-2 rounded-full bg-os-ink/5 text-sm font-medium">Framer Motion</span>
+                    <span class="px-4 py-2 rounded-full bg-os-ink/5 text-sm font-medium">UI Architecture</span>
+                </div>
+            </div>
+
+            <!-- Experience Mini -->
+            <div class="os-card md:col-span-1 md:row-span-1 p-8 flex flex-col justify-between group fade-in" style="animation-delay: 0.2s;">
+                <h2 class="text-xs font-mono uppercase tracking-[0.2em] text-os-muted">Current</h2>
+                <div>
+                    <h3 class="text-2xl font-serif group-hover:translate-x-1 transition-transform">Apple</h3>
+                    <p class="text-sm text-os-muted mt-1">Senior Designer</p>
+                </div>
+            </div>
+
+            <!-- Experience Mini -->
+            <div class="os-card md:col-span-1 md:row-span-1 p-8 flex flex-col justify-between group fade-in" style="animation-delay: 0.3s;">
+                <h2 class="text-xs font-mono uppercase tracking-[0.2em] text-os-muted">Previous</h2>
+                <div>
+                    <h3 class="text-2xl font-serif group-hover:translate-x-1 transition-transform">Vogue Labs</h3>
+                    <p class="text-sm text-os-muted mt-1">Creative Director</p>
+                </div>
+            </div>
+
+            <!-- Large Image/Project Card -->
+            <div class="os-card md:col-span-3 md:row-span-1 overflow-hidden relative group fade-in cursor-pointer" style="animation-delay: 0.4s;">
+                <div class="absolute inset-0 bg-os-ink/10 mix-blend-multiply z-10 group-hover:bg-transparent transition-colors"></div>
+                <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" alt="Project">
+                <div class="absolute bottom-8 left-8 z-20 bg-os-bg/90 backdrop-blur-sm px-6 py-4 rounded-xl border border-os-border">
+                    <h3 class="font-serif text-2xl">macOS Vision System</h3>
+                    <p class="text-sm text-os-muted">Case Study</p>
+                </div>
+            </div>
+
+            <!-- Contact Card -->
+            <div class="os-card md:col-span-1 md:row-span-1 p-8 bg-os-ink text-os-bg flex flex-col justify-between group cursor-pointer hover:bg-os-ink/90 fade-in" style="animation-delay: 0.5s;">
+                <h2 class="text-xs font-mono uppercase tracking-[0.2em] text-white/50">Contact</h2>
+                <div>
+                    <h3 class="text-3xl font-serif mb-2 group-hover:scale-105 transition-transform origin-left">Let's talk.</h3>
+                    <div class="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+</body>
+</html>

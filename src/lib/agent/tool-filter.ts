@@ -13,7 +13,7 @@ import type { JourneyState } from "@/lib/agent/journey";
 // When adding a new tool to tools.ts, decide whether it belongs in onboarding:
 // - YES → add to ONBOARDING_TOOLS below
 // - NO  → it's automatically excluded from first_visit / returning_no_page
-// Full-state tools (style, layout, reorder, move, lock, request_publish) are intentionally excluded.
+// Full-state tools (reorder, move, lock, request_publish) are intentionally excluded.
 const ONBOARDING_TOOLS = [
   "create_fact",
   "update_fact",
@@ -29,6 +29,9 @@ const ONBOARDING_TOOLS = [
   "propose_soul_change",
   "set_fact_visibility", // user may say "don't show my email" during onboarding
   "inspect_page_state",  // read-only diagnostic, helps agent before generate_page
+  "set_theme",           // user may request theme during onboarding; ensureDraft() auto-composes
+  "set_layout",          // user may request layout during onboarding; ensureDraft() auto-composes
+  "update_page_style",   // user may request font/style during onboarding; ensureDraft() auto-composes
 ] as const;
 
 export const TOOL_SETS: Partial<Record<JourneyState, readonly string[]>> = {

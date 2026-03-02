@@ -21,7 +21,7 @@ function mockTools(names: string[]): Record<string, unknown> {
 }
 
 describe("tool filtering by journey state", () => {
-  it("first_visit: returns only onboarding tools (no style/publish/layout)", () => {
+  it("first_visit: returns onboarding tools including style (no publish/move/reorder)", () => {
     const tools = mockTools(ALL_TOOL_NAMES);
     const filtered = filterToolsByJourneyState(tools, "first_visit");
     const names = Object.keys(filtered);
@@ -29,11 +29,11 @@ describe("tool filtering by journey state", () => {
     expect(names).toContain("batch_facts");
     expect(names).toContain("generate_page");
     expect(names).toContain("save_memory");
-    expect(names).not.toContain("set_theme");
-    expect(names).not.toContain("set_layout");
+    expect(names).toContain("set_theme");
+    expect(names).toContain("set_layout");
+    expect(names).toContain("update_page_style");
     expect(names).not.toContain("request_publish");
     expect(names).not.toContain("propose_lock");
-    expect(names).not.toContain("update_page_style");
     expect(names).not.toContain("move_section");
     expect(names).not.toContain("reorder_sections");
     expect(names).not.toContain("publish_preflight");

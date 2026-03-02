@@ -165,7 +165,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "ava-stone",
     emailLocal: "ava.stone",
     language: "en",
-    layoutTemplate: "bento-standard",
+    layoutTemplate: "architect",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -326,7 +326,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "marco-rinaldi",
     emailLocal: "marco.rinaldi",
     language: "it",
-    layoutTemplate: "sidebar-left",
+    layoutTemplate: "curator",
     theme: "warm",
     style: {
       colorScheme: "light",
@@ -479,7 +479,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "lena-fischer",
     emailLocal: "lena.fischer",
     language: "de",
-    layoutTemplate: "vertical",
+    layoutTemplate: "monolith",
     theme: "minimal",
     style: {
       colorScheme: "light",
@@ -606,7 +606,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "sofia-alvarez",
     emailLocal: "sofia.alvarez",
     language: "es",
-    layoutTemplate: "bento-standard",
+    layoutTemplate: "architect",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -752,7 +752,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "priya-nair",
     emailLocal: "priya.nair",
     language: "en",
-    layoutTemplate: "sidebar-left",
+    layoutTemplate: "curator",
     theme: "minimal",
     style: {
       colorScheme: "light",
@@ -889,7 +889,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "malik-johnson",
     emailLocal: "malik.johnson",
     language: "en",
-    layoutTemplate: "vertical",
+    layoutTemplate: "monolith",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -1018,7 +1018,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "elise-dubois",
     emailLocal: "elise.dubois",
     language: "fr",
-    layoutTemplate: "sidebar-left",
+    layoutTemplate: "curator",
     theme: "warm",
     style: {
       colorScheme: "light",
@@ -1143,7 +1143,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "kenji-sato",
     emailLocal: "kenji.sato",
     language: "ja",
-    layoutTemplate: "bento-standard",
+    layoutTemplate: "architect",
     theme: "minimal",
     style: {
       colorScheme: "light",
@@ -1267,7 +1267,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "carla-mendes",
     emailLocal: "carla.mendes",
     language: "pt",
-    layoutTemplate: "vertical",
+    layoutTemplate: "monolith",
     theme: "warm",
     style: {
       colorScheme: "light",
@@ -1395,7 +1395,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "noah-brooks",
     emailLocal: "noah.brooks",
     language: "en",
-    layoutTemplate: "sidebar-left",
+    layoutTemplate: "curator",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -1534,7 +1534,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "amina-hassan",
     emailLocal: "amina.hassan",
     language: "en",
-    layoutTemplate: "vertical",
+    layoutTemplate: "monolith",
     theme: "minimal",
     style: {
       colorScheme: "light",

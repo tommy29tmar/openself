@@ -56,7 +56,7 @@ vi.mock("@/lib/page-config/normalize", () => ({
 }));
 
 vi.mock("@/lib/layout/registry", () => ({
-  resolveLayoutTemplate: vi.fn(() => ({ id: "vertical", slots: [] })),
+  resolveLayoutTemplate: vi.fn(() => ({ id: "monolith", slots: [] })),
 }));
 
 vi.mock("@/lib/layout/assign-slots", () => ({

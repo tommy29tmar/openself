@@ -71,7 +71,7 @@ vi.mock("@/lib/services/fact-validation", () => ({
 }));
 
 vi.mock("@/lib/layout/contracts", () => ({
-  LAYOUT_TEMPLATES: ["vertical", "sidebar-left", "bento-standard"] as const,
+  LAYOUT_TEMPLATES: ["monolith", "curator", "architect"] as const,
 }));
 
 vi.mock("@/lib/layout/registry", () => ({
@@ -136,7 +136,7 @@ vi.mock("ai", () => ({
 import { createAgentTools } from "@/lib/agent/tools";
 
 const verticalTemplate = {
-  id: "vertical",
+  id: "monolith",
   name: "Vertical",
   heroSlot: "hero",
   footerSlot: "footer",
@@ -153,7 +153,7 @@ function makeDraft(overrides?: any) {
       version: 1,
       username: "testuser",
       theme: "minimal",
-      layoutTemplate: "vertical",
+      layoutTemplate: "monolith",
       style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "centered" },
       sections: [
         { id: "hero-1", type: "hero", content: { name: "Test" } },
@@ -214,7 +214,7 @@ describe("inspect_page_state tool", () => {
     );
 
     expect(result.layout).toBeDefined();
-    expect(result.layout.template).toBe("vertical");
+    expect(result.layout.template).toBe("monolith");
     expect(result.layout.theme).toBe("minimal");
   });
 

@@ -83,7 +83,7 @@ export function SettingsPanel({
   onColorSchemeChange,
   fontFamily,
   onFontFamilyChange,
-  layoutTemplate = "vertical",
+  layoutTemplate = "monolith",
   onLayoutTemplateChange,
 }: SettingsPanelProps) {
   // Close on Escape

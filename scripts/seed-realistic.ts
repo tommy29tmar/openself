@@ -428,7 +428,7 @@ async function main() {
     eq(facts.sessionId, sessionId),
   ).all();
 
-  const config = composeOptimisticPage(insertedFacts, USERNAME, "en", "vertical");
+  const config = composeOptimisticPage(insertedFacts, USERNAME, "en", "monolith");
   console.log(`   Composed ${config.sections.length} sections`);
 
   console.log("🌱 Upserting draft...");

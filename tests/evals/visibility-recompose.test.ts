@@ -93,12 +93,12 @@ vi.mock("@/lib/services/fact-validation", () => ({
   },
 }));
 vi.mock("@/lib/layout/contracts", () => ({
-  LAYOUT_TEMPLATES: ["vertical", "sidebar-left", "bento-standard"],
+  LAYOUT_TEMPLATES: ["monolith", "curator", "architect"],
   resolveLayoutAlias: vi.fn((x: string) => x),
 }));
 vi.mock("@/lib/layout/registry", () => ({
-  getLayoutTemplate: vi.fn(() => ({ id: "vertical", slots: [] })),
-  resolveLayoutTemplate: vi.fn(() => ({ id: "vertical", slots: [] })),
+  getLayoutTemplate: vi.fn(() => ({ id: "monolith", slots: [] })),
+  resolveLayoutTemplate: vi.fn(() => ({ id: "monolith", slots: [] })),
 }));
 vi.mock("@/lib/layout/assign-slots", () => ({
   assignSlotsFromFacts: vi.fn(() => ({ sections: [], issues: [] })),

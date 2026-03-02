@@ -6,7 +6,7 @@ import {
 } from "@/lib/layout/quality";
 
 const TEMPLATE: LayoutTemplate = {
-  id: "bento-standard",
+  id: "architect",
   slots: [
     { id: "hero", size: "wide", required: true, maxSections: 1 },
     { id: "card", size: "square", required: true, maxSections: 1 },

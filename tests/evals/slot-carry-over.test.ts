@@ -33,7 +33,7 @@ const identityFact = makeFact({
 
 describe("assignSlotsFromFacts — soft-pin", () => {
   it("assigns section to draftSlot when valid and has capacity", () => {
-    const template = getLayoutTemplate("sidebar-left");
+    const template = getLayoutTemplate("curator");
     const sections: Section[] = [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } },
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] } },
@@ -46,7 +46,7 @@ describe("assignSlotsFromFacts — soft-pin", () => {
   });
 
   it("falls through to Phase 3 when draftSlot does not exist", () => {
-    const template = getLayoutTemplate("vertical");
+    const template = getLayoutTemplate("monolith");
     const sections: Section[] = [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } },
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] } },
@@ -60,7 +60,7 @@ describe("assignSlotsFromFacts — soft-pin", () => {
   });
 
   it("new sections (not in draftSlots) go through Phase 3 as before", () => {
-    const template = getLayoutTemplate("sidebar-left");
+    const template = getLayoutTemplate("curator");
     const sections: Section[] = [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } },
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] } },
@@ -71,13 +71,13 @@ describe("assignSlotsFromFacts — soft-pin", () => {
     const { sections: assigned } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
     const projects = assigned.find(s => s.id === "projects-1");
     expect(projects).toBeDefined();
-    // Projects should get Phase 3 assignment (not sidebar since it's not in draftSlots)
+    // Projects should get Phase 3 assignment (not curator since it's not in draftSlots)
     expect(projects!.slot).toBeTruthy();
   });
 
   it("falls through to Phase 3 when draftSlot capacity is exhausted", () => {
-    const template = getLayoutTemplate("sidebar-left");
-    // Fill sidebar to capacity with many sections pinned to same slot
+    const template = getLayoutTemplate("curator");
+    // Fill curator to capacity with many sections pinned to same slot
     const sections: Section[] = [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" } },
       { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] } },
@@ -86,10 +86,10 @@ describe("assignSlotsFromFacts — soft-pin", () => {
       { id: "social-1", type: "social", variant: "grid", content: { links: [] } },
       { id: "contact-1", type: "contact", variant: "grid", content: { items: [] } },
       { id: "languages-1", type: "languages", variant: "grid", content: { items: [] } },
-      // 7th sidebar section — sidebar maxSections is 6
+      // 7th curator section — curator maxSections is 6
       { id: "activities-1", type: "activities", variant: "grid", content: { items: [] } },
     ];
-    // All pinned to sidebar
+    // All pinned to curator
     const draftSlots = new Map([
       ["skills-1", "sidebar"], ["interests-1", "sidebar"], ["stats-1", "sidebar"],
       ["social-1", "sidebar"], ["contact-1", "sidebar"], ["languages-1", "sidebar"],
@@ -98,7 +98,7 @@ describe("assignSlotsFromFacts — soft-pin", () => {
     const { sections: assigned } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
     const activities = assigned.find(s => s.id === "activities-1");
     expect(activities).toBeDefined();
-    // 7th section should NOT be in sidebar (capacity exhausted) — falls through to Phase 3
+    // 7th section should NOT be in curator (capacity exhausted) — falls through to Phase 3
     expect(activities!.slot).not.toBe("sidebar");
   });
 });
@@ -110,11 +110,11 @@ describe("slot carry-over via projectCanonicalConfig", () => {
       makeFact({ id: "s1", category: "skill", key: "ts", value: { name: "TypeScript" } }),
     ];
 
-    // Simulate a draft that has skills in "sidebar"
+    // Simulate a draft that has skills in "curator"
     const draftMeta: DraftMeta = {
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
-      layoutTemplate: "sidebar-left",
+      layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
         { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] }, slot: "sidebar" },
@@ -126,8 +126,8 @@ describe("slot carry-over via projectCanonicalConfig", () => {
     // At-a-glance may replace skills in composition, but if skills section exists it should keep sidebar
     // Check any section that was in sidebar stays there
     // Composition may change section IDs, so check the slot is present on ANY section
-    const sidebarSections = config.sections.filter(s => s.slot === "sidebar");
-    expect(sidebarSections.length).toBeGreaterThanOrEqual(1);
+    const curatorSections = config.sections.filter(s => s.slot === "sidebar");
+    expect(curatorSections.length).toBeGreaterThanOrEqual(1);
   });
 
   it("passes draftSlots through to assignSlotsFromFacts", () => {
@@ -137,11 +137,11 @@ describe("slot carry-over via projectCanonicalConfig", () => {
       makeFact({ id: "s2", category: "skill", key: "react", value: { name: "React" } }),
     ];
 
-    // sidebar-left sidebar slot accepts skills — use that for a valid soft-pin
+    // curator sidebar slot accepts skills — use that for a valid soft-pin
     const draftMeta: DraftMeta = {
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
-      layoutTemplate: "sidebar-left",
+      layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
         { id: "skills-1", type: "skills", variant: "grid", content: { groups: [] }, slot: "sidebar" },

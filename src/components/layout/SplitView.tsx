@@ -13,6 +13,7 @@ import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
 import { PageRenderer } from "@/components/page";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
+import { HERO_NAME_FALLBACKS } from "@/lib/i18n/hero-fallbacks";
 import { friendlyError } from "@/lib/i18n/error-messages";
 import {
   Tabs,
@@ -32,19 +33,34 @@ type SplitViewProps = {
 
 const POLL_INTERVAL = 3000; // 3 seconds
 
-function EmptyPreview() {
+function EmptyPreview({ language }: { language: string }) {
+  const t = getUiL10n(language);
   return (
     <div className="flex h-full items-center justify-center text-center">
       <div className="max-w-xs space-y-2">
         <p className="text-lg font-medium text-muted-foreground">
-          Your page will appear here
+          {t.pageWillAppear}
         </p>
         <p className="text-sm text-muted-foreground">
-          Start chatting and watch it build in real time
+          {t.startChatting}
         </p>
       </div>
     </div>
   );
+}
+
+/** Derive a username suggestion from the hero name in the config. */
+function deriveUsernameFromConfig(config: PageConfig | null): string {
+  const hero = config?.sections?.find((s) => s.type === "hero");
+  const name = (hero?.content as Record<string, unknown>)?.name;
+  if (!name || typeof name !== "string") return "";
+  if (HERO_NAME_FALLBACKS.has(name)) return "";
+  const slug = name
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 20);
+  return slug.length >= 3 ? slug : "";
 }
 
 async function persistStyle(patch: {
@@ -161,7 +177,7 @@ export function SplitView({
     config?.style?.fontFamily ?? "inter",
   );
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplateId>(
-    (config?.layoutTemplate as LayoutTemplateId) ?? "vertical",
+    (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -445,7 +461,7 @@ export function SplitView({
   ) : (
     <div className="relative h-full overflow-y-auto">
       {navBar}
-      <EmptyPreview />
+      <EmptyPreview language={language} />
       <GearButton onClick={() => setSettingsOpen(true)} />
       <SettingsPanel
         open={settingsOpen}
@@ -474,7 +490,7 @@ export function SplitView({
       <SignupModal
         open={signupOpen}
         onClose={() => setSignupOpen(false)}
-        initialUsername={publishUsername !== "draft" ? publishUsername : ""}
+        initialUsername={publishUsername !== "draft" ? publishUsername : deriveUsernameFromConfig(config)}
         language={language}
       />
 

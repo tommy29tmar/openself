@@ -3,10 +3,10 @@ import type { LayoutTemplateDefinition } from "./types";
 import type { PageConfig } from "@/lib/page-config/schema";
 
 const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
-  vertical: {
-    id: "vertical",
-    name: "Vertical",
-    description: "Classic single-column layout",
+  monolith: {
+    id: "monolith",
+    name: "The Monolith",
+    description: "Classic single-column flow",
     heroSlot: "hero",
     footerSlot: "footer",
     slots: [
@@ -57,10 +57,64 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
       },
     ],
   },
-  "sidebar-left": {
-    id: "sidebar-left",
-    name: "Sidebar",
-    description: "Two-column layout with main content and sidebar",
+  cinematic: {
+    id: "cinematic",
+    name: "Cinematic",
+    description: "Immersive snap-scrolling journey",
+    heroSlot: "hero",
+    footerSlot: "footer",
+    slots: [
+      {
+        id: "hero",
+        size: "wide",
+        required: true,
+        maxSections: 1,
+        accepts: ["hero"],
+        order: 0,
+        mobileOrder: 0,
+      },
+      {
+        id: "main",
+        size: "wide",
+        required: false,
+        maxSections: 20,
+        accepts: [
+          "bio",
+          "skills",
+          "projects",
+          "timeline",
+          "interests",
+          "social",
+          "achievements",
+          "stats",
+          "at-a-glance",
+          "reading",
+          "music",
+          "contact",
+          "custom",
+          "experience",
+          "education",
+          "languages",
+          "activities",
+        ],
+        order: 1,
+        mobileOrder: 1,
+      },
+      {
+        id: "footer",
+        size: "wide",
+        required: true,
+        maxSections: 1,
+        accepts: ["footer"],
+        order: 99,
+        mobileOrder: 99,
+      },
+    ],
+  },
+  curator: {
+    id: "curator",
+    name: "The Curator",
+    description: "Editorial split-screen experience",
     heroSlot: "hero",
     footerSlot: "footer",
     slots: [
@@ -114,10 +168,10 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
       },
     ],
   },
-  "bento-standard": {
-    id: "bento-standard",
-    name: "Bento",
-    description: "Magazine-style grid with cards of varying sizes",
+  architect: {
+    id: "architect",
+    name: "The Architect",
+    description: "Dynamic asymmetric bento grid",
     heroSlot: "hero",
     footerSlot: "footer",
     slots: [
@@ -211,13 +265,13 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
 export function getLayoutTemplate(
   id: LayoutTemplateId,
 ): LayoutTemplateDefinition {
-  return LAYOUT_REGISTRY[id] ?? LAYOUT_REGISTRY["vertical"];
+  return LAYOUT_REGISTRY[id] ?? LAYOUT_REGISTRY["monolith"];
 }
 
 /**
  * Resolve the layout template for a PageConfig.
  * Only looks at config.layoutTemplate. style.layout is completely ignored.
- * Without an explicit layoutTemplate → always "vertical".
+ * Without an explicit layoutTemplate → always "monolith".
  */
 export function resolveLayoutTemplate(
   config: PageConfig,
@@ -228,7 +282,7 @@ export function resolveLayoutTemplate(
   if (id && id in LAYOUT_REGISTRY) {
     return LAYOUT_REGISTRY[id as LayoutTemplateId];
   }
-  return LAYOUT_REGISTRY["vertical"];
+  return LAYOUT_REGISTRY["monolith"];
 }
 
 export function getAllTemplates(): LayoutTemplateDefinition[] {

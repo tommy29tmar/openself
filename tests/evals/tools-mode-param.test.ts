@@ -47,10 +47,10 @@ vi.mock("@/lib/services/fact-validation", () => ({
   FactValidationError: class extends Error {},
 }));
 vi.mock("@/lib/layout/contracts", () => ({
-  LAYOUT_TEMPLATES: ["vertical", "sidebar-left", "bento-standard"] as const,
+  LAYOUT_TEMPLATES: ["monolith", "curator", "architect"] as const,
 }));
 vi.mock("@/lib/layout/registry", () => ({
-  getLayoutTemplate: vi.fn().mockReturnValue({ id: "vertical", slots: [] }),
+  getLayoutTemplate: vi.fn().mockReturnValue({ id: "monolith", slots: [] }),
 }));
 vi.mock("@/lib/layout/assign-slots", () => ({
   assignSlotsFromFacts: vi.fn().mockReturnValue({ sections: [], issues: [] }),

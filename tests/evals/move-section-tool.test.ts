@@ -59,7 +59,7 @@ function makeSidebarLeftDraft(sections: Section[]): PageConfig {
   return {
     theme: "minimal",
     style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
-    layoutTemplate: "sidebar-left",
+    layoutTemplate: "curator",
     sections,
   };
 }
@@ -89,12 +89,12 @@ describe("move_section tool", () => {
   });
 
   it("auto-switches widget when current doesn't fit target slot size", async () => {
-    // bento-standard: feature-right is "half", card-1 is "third"
+    // architect-standard: feature-right is "half", card-1 is "third"
     // skills-list fits wide/half but NOT third → should switch to skills-chips (fits third)
     mockDraft.config = {
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
-      layoutTemplate: "bento-standard",
+      layoutTemplate: "architect",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
         { id: "skills-1", type: "skills", variant: "list", content: { groups: [] }, slot: "feature-right", widgetId: "skills-list" },
@@ -138,6 +138,7 @@ describe("move_section tool", () => {
       slot: "sidebar",
       widgetId: "skills-grid",
     }));
+
     mockDraft.config = makeSidebarLeftDraft([
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
       ...sidebarSections,
@@ -193,7 +194,7 @@ describe("move_section tool", () => {
 
     const { tools } = createAgentTools("en", "sess1");
     const result = await tools.move_section.execute(
-      { sectionId: "does-not-exist", targetSlot: "sidebar" },
+      { sectionId: "does-not-exist", targetSlot: "curator" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
     );
     expect(result.success).toBe(false);

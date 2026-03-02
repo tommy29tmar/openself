@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSelf - Cinematic Vertical</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], serif: ['Instrument Serif', 'serif'] },
+                    colors: { os: { bg: '#FDFCFB', ink: '#0A0A0A', muted: '#737373', border: '#E5E5E5' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: theme('colors.os.bg'); color: theme('colors.os.ink'); }
+        /* OpenSelf DNA: Hairline dividers */
+        .os-divider { border-bottom: 1px solid theme('colors.os.border'); }
+        /* Cinematic scroll snap */
+        .snap-container { scroll-snap-type: y proximity; height: 100vh; overflow-y: scroll; }
+        .snap-section { scroll-snap-align: start; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
+        
+        .fade-up { opacity: 0; transform: translateY(20px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+        .fade-up.visible { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- OpenSelf DNA: The Stamp -->
+    <div class="fixed top-6 left-6 z-50 mix-blend-difference text-os-ink">
+        <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-widest">
+            <span class="w-2 h-2 bg-os-ink rounded-full animate-pulse"></span>
+            OpenSelf
+        </div>
+    </div>
+
+    <!-- OpenSelf DNA: Floating Pill Navigation -->
+    <nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-os-ink/90 backdrop-blur-md text-white px-2 py-2 rounded-full flex gap-1 shadow-2xl border border-white/10">
+        <a href="#hero" class="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors">Intro</a>
+        <a href="#about" class="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors">About</a>
+        <a href="#work" class="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors">Work</a>
+    </nav>
+
+    <main class="snap-container">
+        
+        <!-- Hero Section -->
+        <section id="hero" class="snap-section px-6 md:px-12 relative os-divider">
+            <div class="max-w-5xl mx-auto w-full fade-up visible">
+                <p class="text-os-muted mb-4 font-mono text-sm tracking-tight">01 / ARCHITECT</p>
+                <h1 class="text-7xl md:text-9xl font-serif tracking-tight leading-[0.9] mb-8">
+                    Alexander<br><span class="italic text-os-muted">Chen</span>
+                </h1>
+                <p class="text-xl md:text-3xl font-light max-w-2xl text-os-ink/80 leading-snug">
+                    Building the invisible layer between human intent and machine execution.
+                </p>
+            </div>
+            <!-- Scroll affordance -->
+            <div class="absolute bottom-24 left-6 md:left-12 text-os-muted text-sm flex items-center gap-4">
+                <span>Scroll to explore</span>
+                <div class="w-12 h-[1px] bg-os-border"></div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about" class="snap-section px-6 md:px-12 os-divider bg-os-ink text-os-bg">
+            <div class="max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center fade-up">
+                <div>
+                    <h2 class="text-4xl md:text-6xl font-serif mb-6">The Philosophy.</h2>
+                    <p class="text-lg md:text-xl font-light leading-relaxed text-white/70 mb-8">
+                        I believe that interfaces should not demand attention. They should recede, leaving only the task at hand. Currently leading this vision for macOS at Apple.
+                    </p>
+                    <div class="flex flex-wrap gap-3">
+                        <span class="px-4 py-2 rounded-full border border-white/20 text-sm">Design Systems</span>
+                        <span class="px-4 py-2 rounded-full border border-white/20 text-sm">Prototyping</span>
+                        <span class="px-4 py-2 rounded-full border border-white/20 text-sm">Spatial UI</span>
+                    </div>
+                </div>
+                <div class="aspect-square rounded-2xl overflow-hidden grayscale hover:grayscale-0 transition-all duration-700">
+                    <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop" class="w-full h-full object-cover" alt="Portrait">
+                </div>
+            </div>
+        </section>
+
+        <!-- Work/Experience Section -->
+        <section id="work" class="snap-section px-6 md:px-12 pt-32 pb-48">
+            <div class="max-w-5xl mx-auto w-full fade-up">
+                <h2 class="text-4xl md:text-6xl font-serif mb-16">Selected Timeline.</h2>
+                
+                <div class="flex flex-col">
+                    <div class="group py-8 border-b border-os-border flex flex-col md:flex-row justify-between md:items-center gap-4 cursor-pointer hover:bg-os-ink/5 transition-colors -mx-6 px-6">
+                        <div>
+                            <h3 class="text-3xl font-serif mb-1">Apple</h3>
+                            <p class="text-os-muted">Senior Design Engineer</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-mono text-sm text-os-muted">2021 — PRESENT</span>
+                        </div>
+                    </div>
+
+                    <div class="group py-8 border-b border-os-border flex flex-col md:flex-row justify-between md:items-center gap-4 cursor-pointer hover:bg-os-ink/5 transition-colors -mx-6 px-6">
+                        <div>
+                            <h3 class="text-3xl font-serif mb-1">Vogue Labs</h3>
+                            <p class="text-os-muted">Creative Director</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-mono text-sm text-os-muted">2018 — 2021</span>
+                        </div>
+                    </div>
+
+                    <div class="group py-8 border-b border-os-border flex flex-col md:flex-row justify-between md:items-center gap-4 cursor-pointer hover:bg-os-ink/5 transition-colors -mx-6 px-6">
+                        <div>
+                            <h3 class="text-3xl font-serif mb-1">Stripe</h3>
+                            <p class="text-os-muted">Product Designer</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-mono text-sm text-os-muted">2016 — 2018</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Simple Intersection Observer for fade-up
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.2 });
+
+        document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>

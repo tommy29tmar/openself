@@ -63,7 +63,7 @@ describe.each(providers)("layout-change [%s]", (provider: TestProvider) => {
 
     assertContainsAtLeast(
       text,
-      ["sidebar", "bento", "vertical", "grid", "column", "layout"],
+      ["curator", "architect", "monolith", "grid", "column", "layout"],
       2,
       "Should describe available layout options"
     );
@@ -91,13 +91,13 @@ describe.each(providers)("layout-change [%s]", (provider: TestProvider) => {
       model: getModel(),
       system: buildFamiliarUserPrompt(),
       messages: [
-        { role: "user", content: "Switch to the bento layout." },
+        { role: "user", content: "Switch to the architect layout." },
       ],
     });
 
     assertContainsAtLeast(
       text,
-      ["bento", "switch", "chang", "done", "preview", "right"],
+      ["architect", "switch", "chang", "done", "preview", "right"],
       1,
       "Should acknowledge the explicit instruction"
     );

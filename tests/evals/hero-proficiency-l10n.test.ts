@@ -25,7 +25,8 @@ describe("hero proficiency L10N", () => {
     const page = composeOptimisticPage(facts, "draft", "it");
     const hero = page.sections.find((s) => s.type === "hero");
     const languages = (hero!.content as { languages: { language: string; proficiency?: string }[] }).languages;
-    const eng = languages.find((l) => l.language === "English");
+    // Language names are localized to Italian: "English" → "Inglese", "Italiano" stays
+    const eng = languages.find((l) => l.language === "Inglese");
     expect(eng?.proficiency).toBe("fluente");
     const ita = languages.find((l) => l.language === "Italiano");
     expect(ita?.proficiency).toBe("madrelingua");
@@ -39,6 +40,8 @@ describe("hero proficiency L10N", () => {
     const page = composeOptimisticPage(facts, "draft", "it");
     const hero = page.sections.find((s) => s.type === "hero");
     const languages = (hero!.content as { languages: { language: string; proficiency?: string }[] }).languages;
-    expect(languages[0].proficiency).toBe("conversational");
+    // "English" → "Inglese" in Italian, proficiency "conversational" is unknown so passed through
+    const eng = languages.find((l) => l.language === "Inglese");
+    expect(eng?.proficiency).toBe("conversational");
   });
 });
