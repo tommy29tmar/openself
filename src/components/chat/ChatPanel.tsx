@@ -644,6 +644,7 @@ function ChatPanelInner({
 
   // Voice context — sync refs for onFinish closure
   const voice = useVoice();
+  const { lastFinalTranscript, consumeTranscript, disableVoiceMode } = voice;
   voiceRef.current = voice.voiceMode;
   isPrimaryRef.current = isPrimaryVoiceConsumer ?? false;
   voiceSpeakRef.current = voice.speakResponse;
@@ -651,17 +652,17 @@ function ChatPanelInner({
   // Transcript consumption (guarded by isPrimaryVoiceConsumer)
   useEffect(() => {
     if (!isPrimaryVoiceConsumer) return;
-    if (voice.lastFinalTranscript) {
-      append({ role: "user", content: voice.lastFinalTranscript }, { body: { language } });
-      voice.consumeTranscript();
+    if (lastFinalTranscript) {
+      append({ role: "user", content: lastFinalTranscript }, { body: { language } });
+      consumeTranscript();
     }
-  }, [voice.lastFinalTranscript, isPrimaryVoiceConsumer, append, language, voice]);
+  }, [lastFinalTranscript, isPrimaryVoiceConsumer, append, language, consumeTranscript]);
 
   // Typing disables voice mode
   const handleTyping = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    voice.disableVoiceMode();
+    disableVoiceMode();
     handleInputChange(e);
-  }, [handleInputChange, voice]);
+  }, [handleInputChange, disableVoiceMode]);
 
   const handleChatSubmit = useCallback(
     (e: FormEvent<HTMLFormElement>) => {
