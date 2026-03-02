@@ -1,5 +1,5 @@
 import { generateObject } from "ai";
-import { getModel } from "@/lib/ai/provider";
+import { getModelForTier } from "@/lib/ai/provider";
 import type { FactRow } from "@/lib/services/kb-service";
 import type { Section } from "@/lib/page-config/schema";
 import {
@@ -19,6 +19,24 @@ import {
 } from "@/lib/services/section-cache-service";
 import { upsertState } from "@/lib/services/section-copy-state-service";
 import { logEvent } from "@/lib/services/event-service";
+
+import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
+
+/**
+ * Reorder sections for personalization priority based on archetype.
+ * Archetype-priority sections are processed first (more LLM budget),
+ * remaining sections follow in original order.
+ */
+export function prioritizeSections(sections: Section[], archetype?: string): Section[] {
+  if (!archetype || archetype === "generalist") return sections;
+  const strategy = ARCHETYPE_STRATEGIES[archetype as keyof typeof ARCHETYPE_STRATEGIES];
+  if (!strategy) return sections;
+
+  const priorityTypes = new Set(strategy.explorationOrder);
+  const priority = sections.filter(s => priorityTypes.has(s.type));
+  const rest = sections.filter(s => !priorityTypes.has(s.type));
+  return [...priority, ...rest];
+}
 
 export type PersonalizeSectionInput = {
   section: Section;
@@ -89,7 +107,7 @@ export async function personalizeSection(
   // 3. Call LLM
   try {
     const { object } = await generateObject({
-      model: getModel(),
+      model: getModelForTier("fast"),
       schema,
       prompt: [
         `You are a personal page copywriter. Rewrite the content of a "${section.type}" section for ${username}'s personal page.`,

@@ -14,6 +14,7 @@ vi.mock("@/lib/db", () => ({
     prepare: vi.fn(() => ({
       get: vi.fn(() => undefined),
       run: vi.fn(),
+      all: vi.fn(() => []),
     })),
   },
   db: {},
@@ -22,6 +23,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/services/kb-service", () => ({
   countFacts: vi.fn(() => 0),
   getAllFacts: vi.fn(() => []),
+  getActiveFacts: vi.fn(() => []),
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
@@ -50,6 +52,11 @@ vi.mock("@/lib/services/section-richness", () => ({
 
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn((facts: unknown[]) => facts),
+}));
+
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/services/personalization-hashing", () => ({
@@ -93,12 +100,13 @@ function mockSqliteQuery(pattern: RegExp, result: unknown) {
   const originalPrepare = vi.mocked(sqlite.prepare);
   originalPrepare.mockImplementation((sql: string) => {
     if (pattern.test(sql)) {
-      return { get: getMock, run: vi.fn() } as unknown as ReturnType<typeof sqlite.prepare>;
+      return { get: getMock, run: vi.fn(), all: vi.fn(() => []) } as unknown as ReturnType<typeof sqlite.prepare>;
     }
     // Default: return undefined
     return {
       get: vi.fn(() => undefined),
       run: vi.fn(),
+      all: vi.fn(() => []),
     } as unknown as ReturnType<typeof sqlite.prepare>;
   });
   return getMock;
@@ -136,6 +144,7 @@ beforeEach(() => {
   vi.mocked(sqlite.prepare).mockImplementation(() => ({
     get: vi.fn(() => undefined),
     run: vi.fn(),
+    all: vi.fn(() => []),
   }) as unknown as ReturnType<typeof sqlite.prepare>);
 });
 
@@ -355,7 +364,7 @@ describe("detectExpertiseLevel", () => {
 // ---------------------------------------------------------------------------
 describe("assembleBootstrapPayload", () => {
   it("returns a complete payload for first_visit", () => {
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
 
     expect(payload.journeyState).toBe("first_visit");
     expect(payload.language).toBe("en");
@@ -385,7 +394,7 @@ describe("assembleBootstrapPayload", () => {
       },
     ] as never);
 
-    const payload = assembleBootstrapPayload(SCOPE, "it");
+    const { payload } = assembleBootstrapPayload(SCOPE, "it");
     expect(payload.userName).toBe("Marco Rossi");
   });
 
@@ -405,25 +414,25 @@ describe("assembleBootstrapPayload", () => {
       },
     ] as never);
 
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.userName).toBe("Legacy User");
   });
 
   it("includes publishedUsername when page is published", () => {
     vi.mocked(getPublishedUsername).mockReturnValue("marco");
-    const payload = assembleBootstrapPayload(SCOPE, "it");
+    const { payload } = assembleBootstrapPayload(SCOPE, "it");
     expect(payload.publishedUsername).toBe("marco");
   });
 
   it("counts pending proposals", () => {
     mockPendingProposals(3);
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.pendingProposalCount).toBe(3);
   });
 
   it("lists thin sections", () => {
     vi.mocked(classifySectionRichness).mockReturnValue("thin");
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.thinSections.length).toBeGreaterThan(0);
     expect(payload.thinSections).toContain("hero");
   });
@@ -446,7 +455,7 @@ describe("assembleBootstrapPayload", () => {
       },
     ] as never);
 
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.staleFacts).toContain("skill/react");
   });
 });

@@ -6,10 +6,15 @@ import {
   deleteFact,
   searchFacts,
   getAllFacts,
+  getFactById,
   setFactVisibility,
   VisibilityTransitionError,
-  updateFactSortOrder,
 } from "@/lib/services/kb-service";
+import { db } from "@/lib/db";
+import { facts } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { FactConstraintError } from "@/lib/services/fact-constraints";
+import { logTrustAction } from "@/lib/services/trust-ledger-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
@@ -25,18 +30,25 @@ import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry"
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
+import { toSlotAssignments } from "@/lib/layout/validate-adapter";
+import { validateLayoutComposition } from "@/lib/layout/quality";
+import { WIDGET_REGISTRY, getBestWidget, getWidgetById } from "@/lib/layout/widgets";
 import { isSectionComplete } from "@/lib/page-config/section-completeness";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { validateUsernameFormat } from "@/lib/page-config/usernames";
-import { personalizeSection } from "@/lib/services/section-personalizer";
+import { personalizeSection, prioritizeSections } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import { updateJourneyStatePin } from "@/lib/agent/journey";
+import { checkPageCoherence } from "@/lib/services/coherence-check";
+import { mergeSessionMeta, getSessionMeta } from "@/lib/services/session-metadata";
+import type { JournalEntry } from "@/lib/services/session-metadata";
 
 export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
+  const operationJournal: JournalEntry[] = [];
 
   /** Auto-compose draft from facts if none exists yet. */
   function ensureDraft(): PageConfig {
@@ -98,7 +110,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }
   }
 
-  return {
+  const tools = {
   create_fact: tool({
     description:
       "Store a new fact about the user in the knowledge base. Use this whenever the user shares information about themselves (name, job, skills, interests, projects, etc). Break complex info into separate atomic facts.",
@@ -153,6 +165,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         if (error instanceof FactValidationError) {
           return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
         }
+        if (error instanceof FactConstraintError) {
+          return { success: false, code: error.code, existingFactId: error.existingFactId, suggestion: error.suggestion };
+        }
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
@@ -163,39 +178,118 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
-  create_facts: tool({
-    description:
-      "Store multiple facts at once. Use when the user shares several pieces of information in one message.",
+  batch_facts: tool({
+    description: "Execute multiple fact operations in order. Operations are applied sequentially (create, update, delete) and a single recompose runs at the end. Max 20 operations.",
     parameters: z.object({
-      facts: z.array(z.object({
-        category: z.string(),
-        key: z.string(),
-        value: z.record(z.unknown()),
-        confidence: z.number().optional().default(1.0),
-      })),
+      operations: z.array(z.discriminatedUnion("action", [
+        z.object({
+          action: z.literal("create"),
+          category: z.string(),
+          key: z.string(),
+          value: z.record(z.unknown()),
+          source: z.string().optional(),
+          confidence: z.number().optional(),
+          parentFactId: z.string().optional(),
+        }),
+        z.object({
+          action: z.literal("update"),
+          factId: z.string(),
+          value: z.record(z.unknown()),
+        }),
+        z.object({
+          action: z.literal("delete"),
+          factId: z.string(),
+        }),
+      ])).max(20),
     }),
-    execute: async ({ facts: inputs }) => {
-      const results = [];
-      for (const input of inputs) {
-        try {
-          const fact = await createFact(input, sessionId);
-          results.push({
-            success: true,
-            factId: fact.id,
-            key: input.key,
-            visibility: fact.visibility,
-            pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
-          });
-        } catch (error) {
-          results.push({ success: false, key: input.key, error: String(error) });
-          logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "create_facts", key: input.key, error: String(error) } });
+    execute: async ({ operations }) => {
+      if (operations.length > 20) {
+        return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, updated: 0, deleted: 0 };
+      }
+      let created = 0, updated = 0, deleted = 0;
+      const warnings: string[] = [];
+      const reverseOps: Array<{
+        action: "delete" | "restore" | "recreate";
+        factId?: string;
+        previousValue?: unknown;
+        previousFact?: Record<string, unknown>;
+      }> = [];
+
+      try {
+        for (const op of operations) {
+          switch (op.action) {
+            case "create": {
+              const result = await createFact(
+                {
+                  category: op.category,
+                  key: op.key,
+                  value: op.value,
+                  source: op.source ?? "chat",
+                  confidence: op.confidence,
+                  parentFactId: op.parentFactId,
+                },
+                sessionId,
+                effectiveOwnerKey,
+              );
+              reverseOps.push({ action: "delete", factId: result.id });
+              created++;
+              break;
+            }
+            case "update": {
+              const old = getFactById(op.factId, sessionId, readKeys);
+              if (old) reverseOps.push({ action: "restore", factId: op.factId, previousValue: old.value });
+              const updatedRow = updateFact({ factId: op.factId, value: op.value }, sessionId, readKeys);
+              if (updatedRow) {
+                updated++;
+                const w = (updatedRow as any)._warnings as string[] | undefined;
+                if (w) warnings.push(...w);
+              }
+              break;
+            }
+            case "delete": {
+              const old = getFactById(op.factId, sessionId, readKeys);
+              if (old) {
+                const { id, ...rest } = old;
+                reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
+              }
+              const didDelete = deleteFact(op.factId, sessionId, readKeys);
+              if (didDelete) deleted++;
+              break;
+            }
+          }
         }
+
+        if (reverseOps.length > 0) {
+          logTrustAction(effectiveOwnerKey, "batch_facts",
+            `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
+            { undoPayload: { action: "reverse_batch", reverseOps } },
+          );
+        }
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[tools] recomposeAfterMutation after batch failed:", e);
+        }
+        return { success: true, created, updated, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
+      } catch (err) {
+        if (reverseOps.length > 0) {
+          try {
+            logTrustAction(effectiveOwnerKey, "batch_facts",
+              `Batch (partial): ${created} created, ${updated} updated, ${deleted} deleted — stopped by error`,
+              { undoPayload: { action: "reverse_batch", reverseOps } },
+            );
+            recomposeAfterMutation();
+          } catch (cleanupErr) {
+            console.error("[batch_facts] cleanup failed after partial batch:", cleanupErr);
+          }
+        }
+
+        if (err instanceof FactValidationError) {
+          return { success: false, error: "VALIDATION_ERROR", message: err.message, created, updated, deleted, hint: "Batch stopped — earlier operations were applied" };
+        }
+        if (err instanceof FactConstraintError) {
+          return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, created, updated, deleted, hint: "Batch stopped — earlier operations were applied" };
+        }
+        throw err;
       }
-      // Single recomposition at end
-      try { recomposeAfterMutation(); } catch (e) {
-        console.warn("[tools] recomposeAfterMutation after batch create failed:", e);
-      }
-      return { results, totalCreated: results.filter(r => r.success).length };
     },
   }),
 
@@ -217,16 +311,21 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
+        const warnings = (fact as any)._warnings as string[] | undefined;
         return {
           success: true,
           factId: fact.id,
           visibility: fact.visibility,
           pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
           recomposeOk,
+          ...(warnings ? { warnings } : {}),
         };
       } catch (error) {
         if (error instanceof FactValidationError) {
           return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
+        }
+        if (error instanceof FactConstraintError) {
+          return { success: false, code: error.code, existingFactId: error.existingFactId, suggestion: error.suggestion };
         }
         logEvent({
           eventType: "tool_call_error",
@@ -409,9 +508,136 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           ...existing,
           sections: reordered as PageConfig["sections"],
         };
+        // Run slot validation on reordered config
+        const warnings: string[] = [];
+        try {
+          const template = resolveLayoutTemplate(updated);
+          const { assignments } = toSlotAssignments(updated.sections);
+          const validation = validateLayoutComposition(template, assignments, WIDGET_REGISTRY);
+          for (const w of validation.warnings) {
+            warnings.push(w.message);
+          }
+        } catch { /* validation is advisory, don't block reorder */ }
         upsertDraft(username, updated, sessionId);
-        return { success: true };
+        return { success: true, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  move_section: tool({
+    description:
+      "Move a section to a different layout slot. Auto-switches widget if the current one doesn't fit the target slot.",
+    parameters: z.object({
+      sectionId: z.string().describe("The ID of the section to move"),
+      targetSlot: z.string().describe("The target slot ID (e.g., 'sidebar', 'main')"),
+    }),
+    execute: async ({ sectionId, targetSlot }) => {
+      try {
+        const draft = ensureDraft();
+
+        const sectionIdx = draft.sections.findIndex((s) => s.id === sectionId);
+        if (sectionIdx === -1) {
+          return { success: false, error: "SECTION_NOT_FOUND" };
+        }
+        const section = draft.sections[sectionIdx];
+
+        // Check user position lock
+        if (section.lock?.position && section.lock.lockedBy === "user") {
+          return { success: false, error: "POSITION_LOCKED" };
+        }
+
+        // Same slot → no-op
+        if (section.slot === targetSlot) {
+          return { success: true, movedTo: targetSlot, widgetChanged: false };
+        }
+
+        // Resolve template
+        const templateId = draft.layoutTemplate ?? "vertical";
+        const template = getLayoutTemplate(templateId);
+        if (!template) {
+          return { success: false, error: "NO_TEMPLATE" };
+        }
+
+        // Validate target slot exists
+        const slot = template.slots.find((s) => s.id === targetSlot);
+        if (!slot) {
+          return {
+            success: false,
+            error: "SLOT_NOT_FOUND",
+            available: template.slots.map((s) => s.id),
+          };
+        }
+
+        // Validate slot accepts section type
+        if (!slot.accepts.includes(section.type as any)) {
+          return {
+            success: false,
+            error: "TYPE_NOT_ACCEPTED",
+            accepted: slot.accepts,
+          };
+        }
+
+        // Check capacity (exclude the section being moved if it's already in targetSlot)
+        const currentInSlot = draft.sections.filter(
+          (s) => s.slot === targetSlot && s.id !== sectionId,
+        ).length;
+        if (slot.maxSections && currentInSlot >= slot.maxSections) {
+          return {
+            success: false,
+            error: "SLOT_FULL",
+            current: currentInSlot,
+            max: slot.maxSections,
+          };
+        }
+
+        // Auto-switch widget if current doesn't fit target slot size
+        const previousWidget = section.widgetId;
+        let widgetChanged = false;
+        if (section.widgetId) {
+          const currentWidget = getWidgetById(section.widgetId);
+          if (currentWidget && !currentWidget.fitsIn.includes(slot.size)) {
+            const better = getBestWidget(section.type as any, slot.size);
+            if (better) {
+              section.widgetId = better.id;
+              widgetChanged = true;
+            }
+          }
+        } else {
+          // No widget assigned — pick one for the target slot
+          const widget = getBestWidget(section.type as any, slot.size);
+          if (widget) {
+            section.widgetId = widget.id;
+            widgetChanged = true;
+          }
+        }
+
+        // Apply move
+        section.slot = targetSlot;
+        const updated = { ...draft, sections: [...draft.sections] };
+        updated.sections[sectionIdx] = { ...section };
+
+        upsertDraft(draft.username ?? "draft", updated, sessionId);
+
+        logEvent({
+          eventType: "page_config_updated",
+          actor: "assistant",
+          payload: { requestId, tool: "move_section", sectionId, targetSlot, widgetChanged },
+        });
+
+        return {
+          success: true,
+          movedTo: targetSlot,
+          widgetChanged,
+          ...(widgetChanged ? { previousWidget, newWidget: section.widgetId } : {}),
+        };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "move_section", error: String(error) },
+        });
         return { success: false, error: String(error) };
       }
     },
@@ -491,11 +717,16 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
               // Fire-and-forget: don't await, don't block tool response
               (async () => {
                 try {
-                  for (const sectionType of impacted) {
-                    const section = config.sections.find((s: any) => s.type === sectionType);
-                    if (!section) continue;
+                  // Circuit B: archetype-weighted personalization priority
+                  const meta = getSessionMeta(sessionId);
+                  const archetype = typeof meta.archetype === "string" ? meta.archetype : undefined;
+                  const impactedSections = impacted
+                    .map(type => config.sections.find((s: any) => s.type === type))
+                    .filter((s): s is typeof config.sections[number] => !!s);
+                  const orderedSections = prioritizeSections(impactedSections, archetype);
+                  for (const section of orderedSections) {
                     await personalizeSection({
-                      section, ownerKey, language: factLang,
+                      section, ownerKey: effectiveOwnerKey, language: factLang,
                       publishableFacts: publishable,
                       soulCompiled: soul.compiled, username,
                     });
@@ -506,6 +737,24 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
               })();
             }
           }
+
+          // Fire-and-forget coherence check (steady_state only)
+          // Circuit I: pass compiled soul for tone-aware coherence
+          // Circuit D1: store warning/info issues in session metadata
+          (async () => {
+            try {
+              const soulCompiled = getActiveSoul(effectiveOwnerKey)?.compiled;
+              const issues = await checkPageCoherence(config.sections, facts, soulCompiled);
+              const warnings = issues.filter(i => i.severity === "warning");
+              const infos = issues.filter(i => i.severity === "info");
+              mergeSessionMeta(sessionId, {
+                coherenceWarnings: warnings.length > 0 ? warnings : null,
+                coherenceInfos: infos.length > 0 ? infos : null,
+              });
+            } catch (err) {
+              console.error("[generate_page] coherence check error:", err);
+            }
+          })();
         }
 
         return {
@@ -935,41 +1184,116 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
-  reorder_section_items: tool({
+  archive_fact: tool({
     description:
-      "Reorder items within a section (e.g., skills, experiences, interests). Provide the fact keys in the desired order. Do NOT use reorder_sections for this — that tool reorders sections on the page, not items within a section.",
+      "Soft-delete a fact by setting archived_at. The fact disappears from the page but can be restored with unarchive_fact. Use instead of delete_fact when the user might want to bring it back later.",
     parameters: z.object({
-      category: z
-        .string()
-        .describe("The fact category whose items to reorder (e.g., 'skill', 'experience', 'interest')"),
-      orderedKeys: z
-        .array(z.string())
-        .describe("Array of fact keys in the desired display order"),
+      factId: z.string().describe("The ID of the fact to archive"),
     }),
-    execute: async ({ category, orderedKeys }) => {
+    execute: async ({ factId }) => {
       try {
-        const notFound: string[] = [];
-        for (let i = 0; i < orderedKeys.length; i++) {
-          const changes = updateFactSortOrder(sessionId, category, orderedKeys[i], i);
-          if (changes === 0) notFound.push(orderedKeys[i]);
+        const existing = getFactById(factId, sessionId, readKeys);
+        if (!existing) return { success: false, error: "FACT_NOT_FOUND" };
+        if (existing.archivedAt) return { success: true, factId, alreadyArchived: true };
+        const now = new Date().toISOString();
+        db.update(facts).set({ archivedAt: now, updatedAt: now }).where(eq(facts.id, factId)).run();
+        // Orphan children
+        db.update(facts).set({ parentFactId: null }).where(eq(facts.parentFactId, factId)).run();
+        logTrustAction(effectiveOwnerKey, "archive_fact", `Archived fact ${factId}`, {
+          undoPayload: { action: "unarchive_fact", factId },
+        });
+        let recomposeOk = true;
+        try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
+        return { success: true, factId, recomposeOk };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "archive_fact", error: String(error), factId },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  unarchive_fact: tool({
+    description:
+      "Restore a previously archived fact by clearing archived_at. The fact reappears on the page.",
+    parameters: z.object({
+      factId: z.string().describe("The ID of the archived fact to restore"),
+    }),
+    execute: async ({ factId }) => {
+      try {
+        const existing = getFactById(factId, sessionId, readKeys);
+        if (!existing) return { success: false, error: "FACT_NOT_FOUND" };
+        if (!existing.archivedAt) return { success: true, factId, alreadyActive: true };
+        const now = new Date().toISOString();
+        db.update(facts).set({ archivedAt: null, updatedAt: now }).where(eq(facts.id, factId)).run();
+        let recomposeOk = true;
+        try { recomposeAfterMutation(); } catch (e) {
+          recomposeOk = false;
+          console.warn("[tools] recomposeAfterMutation failed:", e);
+        }
+        return { success: true, factId, recomposeOk };
+      } catch (error) {
+        logEvent({
+          eventType: "tool_call_error",
+          actor: "assistant",
+          payload: { requestId, tool: "unarchive_fact", error: String(error), factId },
+        });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  reorder_items: tool({
+    description:
+      "Reorder items within a section by setting sort_order on each fact. Provide fact IDs (not keys) in the desired order. Cannot reorder composite sections (hero, bio, at-a-glance, footer).",
+    parameters: z.object({
+      factIds: z
+        .array(z.string())
+        .describe("Array of fact IDs in the desired display order"),
+    }),
+    execute: async ({ factIds }) => {
+      try {
+        if (factIds.length === 0) return { success: true, reordered: 0 };
+        // Validate all facts exist, are active, and share a category
+        // Categories whose facts feed composite sections (hero/bio/at-a-glance/footer)
+        // that have no meaningful item order
+        const NON_REORDERABLE_CATEGORIES = new Set(["identity"]);
+        const resolved: Array<{ id: string; category: string }> = [];
+        for (const fid of factIds) {
+          const f = getFactById(fid, sessionId, readKeys);
+          if (!f) return { success: false, error: `Fact not found: ${fid}` };
+          resolved.push({ id: f.id, category: f.category });
+        }
+        const categories = new Set(resolved.map(r => r.category));
+        if (categories.size > 1) {
+          return { success: false, error: `All facts must share a category. Found: ${[...categories].join(", ")}` };
+        }
+        const category = resolved[0].category;
+        if (NON_REORDERABLE_CATEGORIES.has(category)) {
+          return { success: false, error: `Cannot reorder items in composite section '${category}'` };
+        }
+        // Write dense ranks
+        const now = new Date().toISOString();
+        for (let i = 0; i < resolved.length; i++) {
+          db.update(facts).set({ sortOrder: i, updatedAt: now }).where(eq(facts.id, resolved[i].id)).run();
         }
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
           console.warn("[tools] recomposeAfterMutation failed:", e);
         }
-        return {
-          success: true,
-          category,
-          orderedKeys,
-          recomposeOk,
-          ...(notFound.length > 0 && { warning: `Keys not found: ${notFound.join(", ")}` }),
-        };
+        return { success: true, reordered: resolved.length, category, recomposeOk };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",
           actor: "assistant",
-          payload: { requestId, tool: "reorder_section_items", error: String(error), category },
+          payload: { requestId, tool: "reorder_items", error: String(error) },
         });
         return { success: false, error: String(error) };
       }
@@ -1054,6 +1378,62 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
   };
+
+  // --- Journal recording wrapper ---
+  // Wraps each tool's execute to record journal entries for every call.
+  function summarizeArgs(toolName: string, args: Record<string, unknown>): Record<string, unknown> {
+    const { value, operations, ...light } = args;
+    if (operations && Array.isArray(operations)) return { ...light, batchSize: operations.length };
+    return light;
+  }
+  function summarizeTool(toolName: string, args: Record<string, unknown>, result: unknown): string {
+    const r = result as Record<string, unknown> | null;
+    switch (toolName) {
+      case "create_fact": return `${args.category}/${args.key}`;
+      case "update_fact": return `updated ${args.factId}`;
+      case "delete_fact": return `deleted ${args.factId}`;
+      case "search_facts": return `searched "${args.query}" (${r?.count ?? 0} results)`;
+      case "batch_facts": return `batch ${(args.operations as unknown[])?.length ?? 0} ops`;
+      case "generate_page": return "composed page";
+      case "set_theme": return `theme=${args.theme}`;
+      case "set_layout": return `layout=${args.layout}`;
+      case "reorder_sections": return "reordered sections";
+      case "move_section": return `moved ${args.sectionId} → ${args.targetSlot}`;
+      case "request_publish": return `publish ${args.username}`;
+      default: return toolName;
+    }
+  }
+  for (const [name, t] of Object.entries(tools)) {
+    const originalExecute = (t as { execute: Function }).execute;
+    (t as { execute: Function }).execute = async function (this: unknown, args: Record<string, unknown>, context: unknown) {
+      const start = Date.now();
+      try {
+        const result = await originalExecute.call(this, args, context);
+        operationJournal.push({
+          toolName: name,
+          timestamp: new Date().toISOString(),
+          durationMs: Date.now() - start,
+          success: typeof result === "object" && result !== null ? (result as Record<string, unknown>).success !== false : true,
+          args: summarizeArgs(name, args),
+          summary: summarizeTool(name, args, result),
+          ...(name === "batch_facts" && args.operations ? { batchSize: (args.operations as unknown[]).length } : {}),
+        });
+        return result;
+      } catch (error) {
+        operationJournal.push({
+          toolName: name,
+          timestamp: new Date().toISOString(),
+          durationMs: Date.now() - start,
+          success: false,
+          args: summarizeArgs(name, args),
+          summary: `${name} failed: ${(error as Error).message ?? String(error)}`,
+        });
+        throw error;
+      }
+    };
+  }
+
+  return { tools, getJournal: () => operationJournal };
 }
 
 /**
@@ -1080,4 +1460,4 @@ function mergeSectionLocks(
 }
 
 // Backward compatibility for tests/imports that expect a static object.
-export const agentTools = createAgentTools("en", "__default__");
+export const agentTools = createAgentTools("en", "__default__").tools;

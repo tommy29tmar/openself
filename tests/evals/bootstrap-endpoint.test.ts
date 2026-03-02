@@ -19,12 +19,13 @@ const mockBootstrapPayload = {
   thinSections: [],
   staleFacts: [],
   openConflicts: [],
+  archivableFacts: [],
   language: "en",
   conversationContext: null,
 };
 
 vi.mock("@/lib/agent/journey", () => ({
-  assembleBootstrapPayload: vi.fn(() => ({ ...mockBootstrapPayload })),
+  assembleBootstrapPayload: vi.fn(() => ({ payload: { ...mockBootstrapPayload }, data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] } })),
 }));
 
 vi.mock("@/lib/auth/session", () => ({

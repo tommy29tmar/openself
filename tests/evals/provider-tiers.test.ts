@@ -28,6 +28,7 @@ import {
   getModelIdForTier,
   getProviderName,
   type ModelTier,
+  type LegacyModelTier,
 } from "@/lib/ai/provider";
 
 describe("provider tiers", () => {
@@ -43,10 +44,10 @@ describe("provider tiers", () => {
     process.env = originalEnv;
   });
 
-  describe("ModelTier type includes capable", () => {
-    it("accepts 'capable' as a valid tier", () => {
-      // This test validates that the type system accepts "capable"
-      const tier: ModelTier = "capable";
+  describe("LegacyModelTier type includes capable", () => {
+    it("accepts 'capable' as a valid legacy tier", () => {
+      // This test validates that the type system accepts "capable" as legacy alias
+      const tier: LegacyModelTier = "capable";
       expect(tier).toBe("capable");
     });
   });
@@ -58,10 +59,11 @@ describe("provider tiers", () => {
       expect(modelId).toBe("gemini-2.0-flash");
     });
 
-    it("returns medium model for 'medium' tier", () => {
+    it("returns standard model for 'medium' tier (legacy alias)", () => {
       process.env.AI_PROVIDER = "google";
       const modelId = getModelIdForTier("medium");
-      expect(modelId).toBe("gemini-2.5-flash");
+      // "medium" maps to "standard" tier, which defaults to gemini-2.0-flash
+      expect(modelId).toBe("gemini-2.0-flash");
     });
 
     it("returns capable model for 'capable' tier — google", () => {

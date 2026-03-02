@@ -23,6 +23,8 @@ const {
 vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => "mock-model"),
   getModelId: vi.fn(() => "mock-model-id"),
+  getModelForTier: vi.fn(() => "mock-model"),
+  getModelIdForTier: vi.fn(() => "mock-model-id"),
 }));
 
 // Mock generateObject (NOT generateText) from the ai package

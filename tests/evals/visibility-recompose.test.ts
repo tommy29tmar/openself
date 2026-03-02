@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoist all mocks before imports
 const {
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
   mockCreateFact,
@@ -24,6 +25,7 @@ const {
   mockRequestPublish,
 } = vi.hoisted(() => ({
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
   mockCreateFact: vi.fn(),
@@ -51,9 +53,9 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
-  updateFactSortOrder: vi.fn(),
 }));
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: mockGetDraft,
@@ -156,7 +158,7 @@ describe("set_fact_visibility triggers recomposition", () => {
   });
 
   it("calls recomposeAfterMutation (upsertDraft) after visibility change", async () => {
-    const tools = createAgentTools("en", "sess1", "owner1", "req1", ["sess1"]);
+    const { tools } = createAgentTools("en", "sess1", "owner1", "req1", ["sess1"]);
     const result = await tools.set_fact_visibility.execute(
       { factId: "f1", visibility: "proposed" },
       { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
@@ -168,7 +170,7 @@ describe("set_fact_visibility triggers recomposition", () => {
 
   it("passes readKeys as 5th argument to setFactVisibility", async () => {
     const readKeys = ["sess1", "sess2"];
-    const tools = createAgentTools("en", "sess1", "owner1", "req1", readKeys);
+    const { tools } = createAgentTools("en", "sess1", "owner1", "req1", readKeys);
     await tools.set_fact_visibility.execute(
       { factId: "f1", visibility: "proposed" },
       { toolCallId: "tc2", messages: [], abortSignal: new AbortController().signal },

@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db, sqlite } from "@/lib/db";
-import { trustLedger } from "@/lib/db/schema";
+import { trustLedger, facts as factsTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { deactivateMemory, reactivateMemory, feedbackMemory } from "@/lib/services/memory-service";
 
@@ -98,6 +98,50 @@ function executeUndo(payload: UndoPayload, ownerKey: string): void {
           .run(payload.conflictId, ownerKey);
       }
       break;
+    case "unarchive_fact":
+      // Undo an archive — caller must trigger recomposeAfterMutation() after
+      sqlite
+        .prepare(
+          "UPDATE facts SET archived_at = NULL, updated_at = ? WHERE id = ?",
+        )
+        .run(new Date().toISOString(), payload.factId as string);
+      break;
+    case "reverse_batch": {
+      // Undo batch_facts: each reverseOp reverses one sub-operation
+      //   create → { action: "delete", factId }
+      //   update → { action: "restore", factId, previousValue }
+      //   delete → { action: "recreate", factId, previousFact }
+      // NOTE (R7-C2): caller must trigger recomposeAfterMutation() after
+      const reverseOps = (payload.reverseOps ?? []) as Array<{
+        action: "delete" | "restore" | "recreate";
+        factId?: string;
+        previousValue?: unknown;
+        previousFact?: Record<string, unknown>;
+      }>;
+      for (const op of reverseOps) {
+        if (!op.factId) continue; // skip malformed ops
+        switch (op.action) {
+          case "delete":
+            db.delete(factsTable).where(eq(factsTable.id, op.factId!)).run();
+            break;
+          case "restore":
+            db.update(factsTable)
+              .set({ value: op.previousValue as string, updatedAt: new Date().toISOString() })
+              .where(eq(factsTable.id, op.factId!))
+              .run();
+            break;
+          case "recreate":
+            if (op.previousFact) {
+              db.insert(factsTable)
+                .values({ id: op.factId, ...op.previousFact } as any)
+                .onConflictDoNothing()
+                .run();
+            }
+            break;
+        }
+      }
+      break;
+    }
     default:
       throw new Error(`Unknown undo action: ${payload.action}`);
   }

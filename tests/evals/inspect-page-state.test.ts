@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGetDraft,
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockResolveLayoutTemplate,
   mockGroupSectionsBySlot,
   mockIsSectionComplete,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockResolveLayoutTemplate: vi.fn(),
   mockGroupSectionsBySlot: vi.fn(),
   mockIsSectionComplete: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -170,11 +173,11 @@ function makeDraft(overrides?: any) {
 }
 
 describe("inspect_page_state tool", () => {
-  let tools: ReturnType<typeof createAgentTools>;
+  let tools: ReturnType<typeof createAgentTools>["tools"];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
     mockResolveLayoutTemplate.mockReturnValue(verticalTemplate);
     mockGroupSectionsBySlot.mockReturnValue({
       hero: [{ id: "hero-1", type: "hero" }],

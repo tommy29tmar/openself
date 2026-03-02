@@ -22,12 +22,14 @@ const mockBootstrapPayload = {
   thinSections: [] as string[],
   staleFacts: [] as string[],
   openConflicts: [] as string[],
+  archivableFacts: [],
   language: "en",
   conversationContext: null,
+  archetype: "generalist" as const,
 };
 
 vi.mock("@/lib/agent/journey", () => ({
-  assembleBootstrapPayload: vi.fn(() => ({ ...mockBootstrapPayload })),
+  assembleBootstrapPayload: vi.fn(() => ({ payload: { ...mockBootstrapPayload }, data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] } })),
 }));
 
 vi.mock("@/lib/agent/context", () => ({
@@ -67,8 +69,10 @@ vi.mock("@/lib/middleware/rate-limit", () => ({
 
 vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => "mock-model"),
+  getModelForTier: vi.fn(() => "mock-model"),
   getProviderName: vi.fn(() => "anthropic"),
   getModelId: vi.fn(() => "mock-model-id"),
+  getModelIdForTier: vi.fn(() => "mock-model-id"),
 }));
 
 vi.mock("ai", () => ({
@@ -79,7 +83,7 @@ vi.mock("ai", () => ({
 }));
 
 vi.mock("@/lib/agent/tools", () => ({
-  createAgentTools: vi.fn(() => ({})),
+  createAgentTools: vi.fn(() => ({ tools: {} })),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -120,15 +124,17 @@ describe("POST /api/chat bootstrap wiring", () => {
       expect.objectContaining({ cognitiveOwnerKey: "cog-1" }),
       "en",
       undefined, // single-user: no auth context
+      "hello",   // lastUserMessage extracted from messages
     );
 
-    // assembleContext received the bootstrap payload as 5th argument
+    // assembleContext received the bootstrap payload as 5th argument + data as 6th
     expect(assembleContext).toHaveBeenCalledWith(
       expect.any(Object),  // scope
       "en",                 // language
       expect.any(Array),    // messages
       undefined,            // single-user: chatAuthCtx is null → ternary yields undefined
-      expect.objectContaining({ journeyState: "first_visit" }), // bootstrap
+      expect.objectContaining({ journeyState: "first_visit" }), // bootstrap payload
+      expect.objectContaining({ facts: [], soul: null }),        // bootstrap data
     );
   });
 });

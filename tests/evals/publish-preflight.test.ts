@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted mocks ──────────────────────────────────────────
-const { mockGetDraft, mockGetAllFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
+const { mockGetDraft, mockGetAllFacts, mockGetActiveFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockIsMultiUserEnabled: vi.fn(() => false),
   mockValidateUsernameFormat: vi.fn(() => ({ ok: true })),
   mockRequestPublish: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -168,11 +170,11 @@ function makeFact(overrides?: any) {
 }
 
 describe("publish_preflight tool", () => {
-  let tools: ReturnType<typeof createAgentTools>;
+  let tools: ReturnType<typeof createAgentTools>["tools"];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
   });
 
   it("exists in the tools object", () => {
@@ -347,11 +349,11 @@ describe("publish_preflight tool", () => {
 });
 
 describe("request_publish username guard", () => {
-  let tools: ReturnType<typeof createAgentTools>;
+  let tools: ReturnType<typeof createAgentTools>["tools"];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]);
+    tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
   });
 
   it("rejects empty username", async () => {

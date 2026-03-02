@@ -45,15 +45,24 @@ export function projectCanonicalConfig(
   // 1. Filter to publishable facts only
   const publishable = filterPublishableFacts(facts);
 
-  // 2. Compose in factLanguage (canonical, no translation)
+  // 2. Build draftSlots map for carry-over (soft-pin)
+  const draftSlots = new Map<string, string>();
+  if (draftMeta) {
+    for (const ds of draftMeta.sections) {
+      if (ds.slot) draftSlots.set(ds.id, ds.slot);
+    }
+  }
+
+  // 3. Compose in factLanguage (canonical, no translation)
   const composed = composeOptimisticPage(
     publishable,
     username,
     factLanguage,
     draftMeta?.layoutTemplate,
+    draftSlots.size > 0 ? draftSlots : undefined,
   );
 
-  // 3. Preserve metadata from draft (theme, style, layout)
+  // 4. Preserve metadata from draft (theme, style, layout)
   let config = draftMeta
     ? {
         ...composed,
@@ -63,7 +72,7 @@ export function projectCanonicalConfig(
       }
     : composed;
 
-  // 4. Preserve section order + locks from draft (metadata only, not content)
+  // 5. Preserve section order + locks from draft (metadata only, not content)
   if (draftMeta && draftMeta.sections.length > 0) {
     const draftOrder = draftMeta.sections.map((s) => s.id);
     const composedMap = new Map(config.sections.map((s) => [s.id, s]));

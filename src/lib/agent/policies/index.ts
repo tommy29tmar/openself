@@ -16,6 +16,7 @@ export type SituationContext = {
   thinSections: string[];
   staleFacts: string[];
   openConflicts: string[];
+  archivableFacts: string[];
 };
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ import {
   thinSectionsDirective,
   staleFactsDirective,
   openConflictsDirective,
+  archivableFactsDirective,
 } from "./situations";
 
 /**
@@ -80,6 +82,10 @@ export function getSituationDirectives(
 
   if (situations.includes("has_open_conflicts") && context.openConflicts.length > 0) {
     directives.push(openConflictsDirective(context.openConflicts));
+  }
+
+  if (situations.includes("has_archivable_facts") && context.archivableFacts.length > 0) {
+    directives.push(archivableFactsDirective(context.archivableFacts));
   }
 
   if (directives.length === 0) return "";

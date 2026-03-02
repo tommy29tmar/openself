@@ -4,12 +4,14 @@ import { describe, it, expect, vi } from "vitest";
 const {
   mockMergeActiveSectionCopy,
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetAllActiveCopies,
   mockGetActiveSoul,
   mockFilterPublishableFacts,
 } = vi.hoisted(() => ({
   mockMergeActiveSectionCopy: vi.fn().mockImplementation((config: unknown) => config),
   mockGetAllFacts: vi.fn().mockReturnValue([]),
+  mockGetActiveFacts: vi.fn().mockReturnValue([]),
   mockGetAllActiveCopies: vi.fn().mockReturnValue([]),
   mockGetActiveSoul: vi.fn().mockReturnValue(null),
   mockFilterPublishableFacts: vi.fn().mockReturnValue([]),
@@ -48,6 +50,7 @@ vi.mock("@/lib/services/page-projection", () => ({
 }));
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
 }));
 
 describe("mergeActiveSectionCopy importability", () => {

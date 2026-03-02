@@ -1,4 +1,4 @@
-import { eq, and, like, or, sql, inArray, asc } from "drizzle-orm";
+import { eq, and, like, or, sql, inArray, asc, isNull, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   facts,
@@ -14,6 +14,7 @@ import { initialVisibility, isSensitiveCategory, type Visibility } from "@/lib/v
 import { logEvent } from "@/lib/services/event-service";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
 import { validateFactValue } from "@/lib/services/fact-validation";
+import { FactConstraintError, CURRENT_UNIQUE_CATEGORIES } from "@/lib/services/fact-constraints";
 
 // -- Taxonomy store backed by DB
 
@@ -52,6 +53,7 @@ export type CreateFactInput = {
   value: Record<string, unknown>;
   source?: string;
   confidence?: number;
+  parentFactId?: string;
 };
 
 export type UpdateFactInput = {
@@ -67,6 +69,9 @@ export type FactRow = {
   source: string | null;
   confidence: number | null;
   visibility: string | null;
+  sortOrder: number | null;
+  parentFactId: string | null;
+  archivedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -77,20 +82,11 @@ export function getNextSortOrder(sessionId: string, category: string): number {
   const row = db
     .select({ maxOrder: sql<number>`MAX(sort_order)` })
     .from(facts)
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), isNull(facts.archivedAt)))
     .get();
   return (row?.maxOrder ?? -1) + 1;
 }
 
-/** NOTE: scoped to anchor session only — consistent with createFact/getNextSortOrder scoping.
- * Returns the number of rows updated (0 if key not found). */
-export function updateFactSortOrder(sessionId: string, category: string, key: string, sortOrder: number): number {
-  const result = db.update(facts)
-    .set({ sortOrder })
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
-    .run();
-  return result.changes;
-}
 
 // -- CRUD Operations
 
@@ -104,6 +100,29 @@ export async function createFact(
 
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
+
+  // Current uniqueness check — only one "current" per category (e.g. experience)
+  // Exclude same key to avoid blocking idempotent upserts.
+  if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
+    const val = typeof input.value === "object" ? input.value : {};
+    if ((val as Record<string, unknown>).status === "current") {
+      const existingCurrent = db.select().from(facts)
+        .where(and(
+          eq(facts.sessionId, sessionId),
+          eq(facts.category, normalized.canonical),
+          isNull(facts.archivedAt),
+          sql`json_extract(value, '$.status') = 'current'`,
+          ne(facts.key, input.key),
+        )).get();
+      if (existingCurrent) {
+        throw new FactConstraintError({
+          code: "EXISTING_CURRENT",
+          existingFactId: existingCurrent.id,
+          suggestion: `Update existing fact ${existingCurrent.id} to status:"past" first, then create the new one.`,
+        });
+      }
+    }
+  }
 
   // Experience key collision guardrail: prevent accidental data loss
   if (normalized.canonical === "experience") {
@@ -158,6 +177,7 @@ export async function createFact(
       confidence,
       visibility,
       sortOrder,
+      parentFactId: input.parentFactId ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -229,6 +249,35 @@ export function updateFact(
   // Validate new value before persisting
   validateFactValue(existing.category, existing.key, input.value);
 
+  // Current uniqueness check (analogous to createFact, with self-exclusion)
+  if (CURRENT_UNIQUE_CATEGORIES.has(existing.category)) {
+    const newVal = typeof input.value === "object" ? input.value : {};
+    if ((newVal as Record<string, unknown>).status === "current") {
+      const existingCurrent = db.select().from(facts)
+        .where(and(
+          eq(facts.sessionId, existing.sessionId),
+          eq(facts.category, existing.category),
+          isNull(facts.archivedAt),
+          sql`json_extract(value, '$.status') = 'current'`,
+          sql`${facts.id} != ${input.factId}`,
+        )).get();
+      if (existingCurrent) {
+        throw new FactConstraintError({
+          code: "EXISTING_CURRENT",
+          existingFactId: existingCurrent.id,
+          suggestion: `Another fact (${existingCurrent.id}) already has status:"current". Update it to "past" first.`,
+        });
+      }
+    }
+  }
+
+  // Cascade warning: check if fact has children
+  const children = db.select({ count: sql<number>`count(*)` })
+    .from(facts)
+    .where(and(eq(facts.parentFactId, input.factId), isNull(facts.archivedAt)))
+    .get();
+  const hasChildren = (children?.count ?? 0) > 0;
+
   const now = new Date().toISOString();
   db.update(facts)
     .set({ value: input.value, updatedAt: now })
@@ -243,7 +292,12 @@ export function updateFact(
     entityId: input.factId,
   });
 
-  return { ...existing, value: input.value, updatedAt: now } as FactRow;
+  return {
+    ...existing,
+    value: input.value,
+    updatedAt: now,
+    ...(hasChildren ? { _warnings: [`This fact has ${children!.count} child fact(s) that may need updating`] } : {}),
+  } as FactRow;
 }
 
 /**
@@ -273,6 +327,12 @@ export function deleteFact(
 
   db.delete(facts).where(eq(facts.id, factId)).run();
 
+  // Orphan cleanup: detach children
+  db.update(facts)
+    .set({ parentFactId: null })
+    .where(eq(facts.parentFactId, factId))
+    .run();
+
   logEvent({
     eventType: "fact_deleted",
     actor: "assistant",
@@ -298,58 +358,62 @@ export function searchFacts(query: string, sessionId: string = "__default__", se
 
   if (PROFILE_ID_CANONICAL) {
     return db.select().from(facts)
-      .where(and(eq(facts.profileId, sessionId), matchCondition))
+      .where(and(eq(facts.profileId, sessionId), isNull(facts.archivedAt), matchCondition))
       .all() as FactRow[];
   }
   if (sessionIds && sessionIds.length > 0) {
     return db.select().from(facts)
-      .where(and(inArray(facts.sessionId, sessionIds), matchCondition))
+      .where(and(inArray(facts.sessionId, sessionIds), isNull(facts.archivedAt), matchCondition))
       .all() as FactRow[];
   }
   return db.select().from(facts)
-    .where(and(eq(facts.sessionId, sessionId), matchCondition))
+    .where(and(eq(facts.sessionId, sessionId), isNull(facts.archivedAt), matchCondition))
     .all() as FactRow[];
 }
 
 /**
- * Get all facts for a session. Supports multi-key read via sessionIds array.
+ * Get all active (non-archived) facts for a session. Supports multi-key read via sessionIds array.
+ * This is the primary API — all production callers should use this.
  */
-export function getAllFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
+export function getActiveFacts(sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
   if (PROFILE_ID_CANONICAL) {
-    return db.select().from(facts).where(eq(facts.profileId, sessionId)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+    return db.select().from(facts).where(and(eq(facts.profileId, sessionId), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
   }
   if (sessionIds && sessionIds.length > 0) {
-    return db.select().from(facts).where(inArray(facts.sessionId, sessionIds)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+    return db.select().from(facts).where(and(inArray(facts.sessionId, sessionIds), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
   }
-  return db.select().from(facts).where(eq(facts.sessionId, sessionId)).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
+  return db.select().from(facts).where(and(eq(facts.sessionId, sessionId), isNull(facts.archivedAt))).orderBy(asc(facts.sortOrder), asc(facts.createdAt)).all() as FactRow[];
 }
+
+/** @deprecated Use getActiveFacts() instead. Kept for backward compatibility during migration. */
+export const getAllFacts = getActiveFacts;
 
 export function getFactsByCategory(category: string, sessionId: string = "__default__"): FactRow[] {
   return db
     .select()
     .from(facts)
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), isNull(facts.archivedAt)))
     .all() as FactRow[];
 }
 
-/** Exact lookup by session + category + key triple. */
+/** Exact lookup by session + category + key triple. Excludes archived facts. */
 export function getFactByKey(sessionId: string, category: string, key: string): FactRow | undefined {
   return db
     .select()
     .from(facts)
-    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key)))
+    .where(and(eq(facts.sessionId, sessionId), eq(facts.category, category), eq(facts.key, key), isNull(facts.archivedAt)))
     .get() as FactRow | undefined;
 }
 
 /**
- * Count facts across multiple session keys. Used by mode detection.
+ * Count active (non-archived) facts across multiple session keys. Used by mode detection.
  */
 export function countFacts(sessionIds: string[]): number {
   if (sessionIds.length === 0) return 0;
   const row = db
     .select({ count: sql<number>`count(*)` })
     .from(facts)
-    .where(inArray(facts.sessionId, sessionIds))
+    .where(and(inArray(facts.sessionId, sessionIds), isNull(facts.archivedAt)))
     .get();
   return row?.count ?? 0;
 }

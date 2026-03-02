@@ -9,6 +9,23 @@ type AssignOptions = {
   repair?: boolean; // default true — if false, skip auto-repair (used by publish gate)
 };
 
+/** Check slot exists, accepts the section type, and has remaining capacity */
+function isSoftPinValid(
+  slotId: string,
+  sectionType: string,
+  usedCapacity: Map<string, number>,
+  slotCapacity: Map<string, number>,
+  slotDefs: Map<string, FullSlotDefinition>,
+): boolean {
+  const slot = slotDefs.get(slotId);
+  if (!slot) return false;
+  if (!slot.accepts.includes(sectionType as ComponentType)) return false;
+  const used = usedCapacity.get(slotId) ?? 0;
+  const cap = slotCapacity.get(slotId) ?? 0;
+  if (used >= cap) return false;
+  return true;
+}
+
 /**
  * Assign sections to slots in the given template, respecting locks and type constraints.
  *
@@ -21,6 +38,7 @@ export function assignSlotsFromFacts(
   sections: Section[],
   locks?: Map<string, SectionLock>,
   options?: AssignOptions,
+  draftSlots?: Map<string, string>,
 ): { sections: Section[]; issues: LayoutValidationIssue[] } {
   const doRepair = options?.repair !== false;
   const result: Section[] = [];
@@ -50,12 +68,26 @@ export function assignSlotsFromFacts(
   }
 
   // Phase 1: locked sections keep their slot and widget
+  // Phase 1.5: soft-pin — sections carry over their draft slot if valid
   const unassigned: Section[] = [];
   for (const section of sections) {
     const lock = locks?.get(section.id) ?? section.lock;
     if (lock?.position && section.slot) {
       const s = { ...section };
       consumeSlot(s.slot!);
+      result.push(s);
+      continue;
+    }
+    // Soft-pin: if this section had a slot in the previous draft, try to keep it
+    const draftSlot = draftSlots?.get(section.id);
+    if (draftSlot && isSoftPinValid(draftSlot, section.type, usedCapacity, slotCapacity, slotDefs)) {
+      const s = { ...section, slot: draftSlot };
+      const slotDef = slotDefs.get(draftSlot);
+      if (slotDef) {
+        const widget = getBestWidget(section.type as ComponentType, slotDef.size);
+        if (widget && !s.widgetId) s.widgetId = widget.id;
+      }
+      consumeSlot(draftSlot);
       result.push(s);
       continue;
     }

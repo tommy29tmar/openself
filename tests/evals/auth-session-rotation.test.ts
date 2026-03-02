@@ -50,6 +50,8 @@ testSqlite.exec(`
     status TEXT NOT NULL DEFAULT 'active',
     user_id TEXT REFERENCES users(id),
     profile_id TEXT REFERENCES profiles(id),
+    journey_state TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
@@ -76,6 +78,8 @@ testSqlite.exec(`
     confidence REAL DEFAULT 1.0,
     visibility TEXT DEFAULT 'private',
     sort_order INTEGER DEFAULT 0,
+    parent_fact_id TEXT,
+    archived_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
@@ -413,6 +417,21 @@ vi.mock("@/lib/services/session-service", () => ({
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: () => [
+    {
+      id: "f1",
+      sessionId: SESSION_ANCHOR,
+      profileId: SESSION_ANCHOR,
+      category: "identity",
+      key: "full-name",
+      value: { full: "Test User" },
+      visibility: "public",
+      confidence: 1.0,
+      source: "chat",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
+  ],
+  getActiveFacts: () => [
     {
       id: "f1",
       sessionId: SESSION_ANCHOR,

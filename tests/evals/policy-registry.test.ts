@@ -110,6 +110,7 @@ describe("getSituationDirectives", () => {
     thinSections: [],
     staleFacts: [],
     openConflicts: [],
+    archivableFacts: [],
   };
 
   it("returns empty string when no situations active", () => {

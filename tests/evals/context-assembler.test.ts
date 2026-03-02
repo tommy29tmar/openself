@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: vi.fn(() => []),
+  getActiveFacts: vi.fn(() => []),
   countFacts: vi.fn(() => 0),
 }));
 vi.mock("@/lib/services/page-service", () => ({
@@ -425,7 +426,7 @@ describe("assembleContext with bootstrap", () => {
     };
 
     const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);
-    expect(buildSystemPrompt).toHaveBeenCalledWith(bootstrap);
+    expect(buildSystemPrompt).toHaveBeenCalledWith(bootstrap, expect.objectContaining({ includeSchemaReference: expect.any(Boolean) }));
     expect(result.systemPrompt).toContain("BOOTSTRAP_PROMPT");
   });
 

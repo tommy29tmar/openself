@@ -14,6 +14,13 @@ import { getAllActiveCopies } from "@/lib/services/section-copy-state-service";
 import { cleanupExpiredCache } from "@/lib/services/section-cache-service";
 import { createProposal, markStaleProposals } from "@/lib/services/proposal-service";
 import { computeHash } from "@/lib/services/personalization-hashing";
+import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
+import { getDraft } from "@/lib/services/page-service";
+import { getActiveFacts } from "@/lib/services/kb-service";
+import { checkPageCoherence } from "@/lib/services/coherence-check";
+import { mergeSessionMeta, getRecentJournalEntries } from "@/lib/services/session-metadata";
+import { detectJournalPatterns } from "@/lib/services/journal-patterns";
+import { saveMemory } from "@/lib/services/memory-service";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -148,7 +155,65 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
     console.error("[heartbeat] Cache cleanup failed:", err);
   }
 
-  const outcome = expired > 0 || dismissed > 0 || conformityActions > 0 ? "action_taken" : "ok";
+  // Circuit D2: coherence check → session metadata + event log
+  let coherenceWarningCount = 0;
+  try {
+    const scope = resolveOwnerScopeForWorker(ownerKey);
+    const draft = getDraft(scope.knowledgePrimaryKey);
+    if (draft?.config) {
+      const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;
+      const activeFacts = getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+      const soulCompiled = getActiveSoul(ownerKey)?.compiled;
+      const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], activeFacts, soulCompiled);
+      const warnings = coherenceIssues.filter(i => i.severity === "warning");
+      const infos = coherenceIssues.filter(i => i.severity === "info");
+
+      // Store in session metadata; null when empty to clear stale data
+      const anchorSession = scope.knowledgePrimaryKey;
+      mergeSessionMeta(anchorSession, {
+        coherenceWarnings: warnings.length > 0 ? warnings : null,
+        coherenceInfos: infos.length > 0 ? infos : null,
+      });
+
+      coherenceWarningCount = warnings.length + infos.length;
+      if (coherenceWarningCount > 0) {
+        logEvent({
+          eventType: "heartbeat_coherence",
+          actor: "worker",
+          payload: { ownerKey, warningsFound: warnings.length, infosFound: infos.length },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[heartbeat] Coherence check failed:", err);
+  }
+
+  // Circuit F2: journal patterns → meta-memories
+  let journalPatternCount = 0;
+  try {
+    const recentJournals = getRecentJournalEntries(ownerKey, 5);
+    const patterns = detectJournalPatterns(recentJournals);
+    for (const pattern of patterns) {
+      const saved = saveMemory(
+        ownerKey,
+        `${pattern.description}. ${pattern.suggestion}`,
+        "pattern",
+        "journal_analysis",
+      );
+      if (saved) journalPatternCount++;
+    }
+    if (journalPatternCount > 0) {
+      logEvent({
+        eventType: "heartbeat_journal_patterns",
+        actor: "worker",
+        payload: { ownerKey, patternsFound: journalPatternCount },
+      });
+    }
+  } catch (err) {
+    console.error("[heartbeat] Journal pattern analysis failed:", err);
+  }
+
+  const outcome = expired > 0 || dismissed > 0 || conformityActions > 0 || coherenceWarningCount > 0 || journalPatternCount > 0 ? "action_taken" : "ok";
   recordHeartbeatRun(ownerKey, "deep", outcome, 0, config.timezone, startMs);
 }
 

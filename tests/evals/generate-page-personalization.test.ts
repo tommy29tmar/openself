@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoist mock functions needed by fire-and-forget personalization
 const {
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
   mockComposeOptimisticPage,
@@ -16,6 +17,9 @@ const {
   mockPersonalizeSection,
 } = vi.hoisted(() => ({
   mockGetAllFacts: vi.fn().mockReturnValue([
+    { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
+  ]),
+  mockGetActiveFacts: vi.fn().mockReturnValue([
     { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
   ]),
   mockGetDraft: vi.fn().mockReturnValue(null),
@@ -46,6 +50,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -93,6 +98,7 @@ vi.mock("@/lib/layout/lock-policy", () => ({
 }));
 vi.mock("@/lib/services/section-personalizer", () => ({
   personalizeSection: mockPersonalizeSection,
+  prioritizeSections: vi.fn((sections: unknown[]) => sections),
 }));
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: mockFilterPublishableFacts,
@@ -102,6 +108,10 @@ vi.mock("@/lib/services/personalization-impact", () => ({
 }));
 vi.mock("@/lib/services/personalization-hashing", () => ({
   computeHash: mockComputeHash,
+}));
+vi.mock("@/lib/services/session-metadata", () => ({
+  mergeSessionMeta: vi.fn(() => ({})),
+  getSessionMeta: vi.fn(() => ({})),
 }));
 
 import { createAgentTools } from "@/lib/agent/tools";
@@ -130,7 +140,7 @@ describe("generate_page fire-and-forget personalization", () => {
     mockGetActiveSoul.mockReturnValue({ compiled: "warm voice", id: "s1" });
     mockDetectImpactedSections.mockReturnValue(["hero"]);
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "onboarding");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "onboarding");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -147,7 +157,7 @@ describe("generate_page fire-and-forget personalization", () => {
     mockGetActiveSoul.mockReturnValue({ compiled: "warm voice", id: "s1" });
     mockDetectImpactedSections.mockReturnValue(["hero"]);
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"]);
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"]);
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -163,7 +173,7 @@ describe("generate_page fire-and-forget personalization", () => {
     mockDetectImpactedSections.mockReturnValue(["hero"]);
 
     // No ownerKey passed (3rd param)
-    const tools = createAgentTools("en", "session1", undefined, "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", undefined, "req1", ["session1"], "steady_state");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -177,7 +187,7 @@ describe("generate_page fire-and-forget personalization", () => {
   it("does NOT trigger personalization when no active soul", async () => {
     mockGetActiveSoul.mockReturnValue(null);
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -191,7 +201,7 @@ describe("generate_page fire-and-forget personalization", () => {
   it("does NOT trigger personalization when soul has no compiled field", async () => {
     mockGetActiveSoul.mockReturnValue({ id: "s1", compiled: "" });
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -206,7 +216,7 @@ describe("generate_page fire-and-forget personalization", () => {
     mockGetActiveSoul.mockReturnValue({ compiled: "warm voice", id: "s1" });
     mockDetectImpactedSections.mockReturnValue([]);
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -225,7 +235,7 @@ describe("generate_page fire-and-forget personalization", () => {
       { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
     ]);
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -266,7 +276,7 @@ describe("generate_page fire-and-forget personalization", () => {
       ],
     });
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -289,7 +299,7 @@ describe("generate_page fire-and-forget personalization", () => {
       sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
     });
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
@@ -308,7 +318,7 @@ describe("generate_page fire-and-forget personalization", () => {
 
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const tools = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
+    const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },

@@ -24,12 +24,14 @@ vi.mock("ai", () => ({
 
 vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => ({})),
+  getModelForTier: vi.fn(() => ({})),
   getProviderName: vi.fn(() => "mock"),
   getModelId: vi.fn(() => "mock-model"),
+  getModelIdForTier: vi.fn(() => "mock-model"),
 }));
 
 vi.mock("@/lib/agent/tools", () => ({
-  createAgentTools: vi.fn(() => ({})),
+  createAgentTools: vi.fn(() => ({ tools: {} })),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -73,18 +75,22 @@ vi.mock("@/lib/services/summary-service", () => ({
 
 vi.mock("@/lib/agent/journey", () => ({
   assembleBootstrapPayload: vi.fn(() => ({
-    journeyState: "first_visit",
-    situations: [],
-    expertiseLevel: "novice",
-    userName: null,
-    lastSeenDaysAgo: null,
-    publishedUsername: null,
-    pendingProposalCount: 0,
-    thinSections: [],
-    staleFacts: [],
-    openConflicts: [],
-    language: "en",
-    conversationContext: null,
+    payload: {
+      journeyState: "first_visit",
+      situations: [],
+      expertiseLevel: "novice",
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [],
+      staleFacts: [],
+      openConflicts: [],
+      archivableFacts: [],
+      language: "en",
+      conversationContext: null,
+    },
+    data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] },
   })),
 }));
 

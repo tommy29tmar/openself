@@ -1,8 +1,9 @@
 import { streamText, generateText, type CoreMessage } from "ai";
-import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getProviderName } from "@/lib/ai/provider";
 import { assembleContext } from "@/lib/agent/context";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { createAgentTools } from "@/lib/agent/tools";
+import { filterToolsByJourneyState } from "@/lib/agent/tool-filter";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -17,6 +18,7 @@ import {
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 import { enqueueSummaryJob } from "@/lib/services/summary-service";
+import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 
 /**
@@ -120,12 +122,15 @@ export async function POST(req: Request) {
   // --- Journey Intelligence: assemble bootstrap payload ---
   // Must run BEFORE quota enforcement so the message count read by bootstrap
   // reflects the pre-increment state (avoids false "blocked" on the Nth message).
-  // TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
-  // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
   const authInfoForBootstrap = chatAuthCtx
     ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
     : undefined;
-  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap);
+  // Extract last user message for archetype signal detection
+  const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
+  const lastUserMessageText = lastUserMsg
+    ? (typeof lastUserMsg.content === "string" ? lastUserMsg.content : null)
+    : null;
+  const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessageText ?? undefined);
 
   // Quota enforcement
   const isAuthenticated =
@@ -227,6 +232,7 @@ export async function POST(req: Request) {
     messages,
     authInfoForBootstrap,
     bootstrap,
+    bootstrapData,
   );
 
   // Role whitelist: AI SDK expects only these roles
@@ -247,16 +253,19 @@ export async function POST(req: Request) {
   }
 
   const provider = getProviderName();
-  const modelId = getModelId();
+  const modelId = getModelIdForTier("standard");
+  const MAX_STEPS = 8; // batch_facts reduces per-turn tool calls; 8 is sufficient
 
   try {
-    const model = getModel();
+    const model = getModelForTier("standard");
+    const { tools: agentTools, getJournal } = createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode);
+    const tools = filterToolsByJourneyState(agentTools, bootstrap.journeyState);
     const result = streamText({
       model,
       system: systemPrompt,
       messages: safeMessages,
-      tools: createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode),
-      maxSteps: 10, // Allow up to 10 tool-calling rounds per turn
+      tools,
+      maxSteps: MAX_STEPS,
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
         const { text } = await generateText({
@@ -280,7 +289,7 @@ export async function POST(req: Request) {
           return null;
         }
       },
-      onFinish: async ({ text, usage }) => {
+      onFinish: async ({ text, usage, finishReason }) => {
         if (text) {
           db.insert(messagesTable)
             .values({
@@ -299,8 +308,31 @@ export async function POST(req: Request) {
           recordUsage(provider, modelId, inputTokens, outputTokens);
         }
 
+        // Persist operation journal + detect step exhaustion
+        const journal = getJournal();
+        if (journal.length > 0) {
+          const metaUpdate: Record<string, unknown> = { journal };
+          if (finishReason === "tool-calls") {
+            // Step exhaustion: model wanted more tool calls but hit maxSteps
+            metaUpdate.pendingOperations = {
+              timestamp: new Date().toISOString(),
+              journal,
+              finishReason: "step_exhaustion",
+            };
+          } else {
+            // Successful completion: clear any stale pendingOperations from previous turns
+            metaUpdate.pendingOperations = null;
+          }
+          try { mergeSessionMeta(writeSessionId, metaUpdate); } catch (e) {
+            console.warn("[chat] journal persistence failed:", e);
+          }
+        } else {
+          // No tool calls this turn — still clear any stale pendingOps
+          try { mergeSessionMeta(writeSessionId, { pendingOperations: null }); } catch { /* best-effort */ }
+        }
+
         // Enqueue summary generation (best-effort, non-blocking)
-        enqueueSummaryJob(effectiveScope.cognitiveOwnerKey);
+        enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys);
       },
     });
 

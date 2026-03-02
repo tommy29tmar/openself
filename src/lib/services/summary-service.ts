@@ -7,6 +7,7 @@ import { generateText } from "ai";
 import { getModelForTier, getModelIdForTier, getProviderName } from "@/lib/ai/provider";
 import { recordUsage, checkBudget } from "@/lib/services/usage-service";
 import { enqueueJob } from "@/lib/worker/index";
+import { getSessionMeta, type JournalEntry } from "@/lib/services/session-metadata";
 
 type SummaryRow = {
   id: string;
@@ -88,6 +89,23 @@ function getUnsummarizedMessages(
 }
 
 /**
+ * Compress journal entries into a max-3-line digest for summary enrichment.
+ * Groups by tool name, counts operations.
+ */
+export function buildJournalDigest(journal: JournalEntry[]): string {
+  if (journal.length === 0) return "";
+  const toolCounts = new Map<string, number>();
+  for (const entry of journal) {
+    toolCounts.set(entry.toolName, (toolCounts.get(entry.toolName) ?? 0) + 1);
+  }
+  const lines = Array.from(toolCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([tool, count]) => `- ${tool}: ${count}x`)
+    .slice(0, 3);
+  return `\nActions taken in this conversation:\n${lines.join("\n")}`;
+}
+
+/**
  * Generate/update the conversation summary for an owner.
  * Uses CAS (compare-and-swap) for race safety.
  */
@@ -139,13 +157,24 @@ Write a concise summary focusing on:
 
 Keep the summary concise (under 500 words). Write in third person.`;
 
+  // Circuit F1: read journal from session metadata and build digest
+  const journalEntries: JournalEntry[] = [];
+  for (const sessionKey of messageKeys) {
+    const meta = getSessionMeta(sessionKey);
+    if (meta?.journal && Array.isArray(meta.journal)) {
+      journalEntries.push(...(meta.journal as JournalEntry[]));
+    }
+  }
+  const journalDigest = buildJournalDigest(journalEntries);
+  const fullPrompt = journalDigest ? `${prompt}\n\n${journalDigest}` : prompt;
+
   try {
-    const model = getModelForTier("medium");
-    const modelId = getModelIdForTier("medium");
+    const model = getModelForTier("standard");
+    const modelId = getModelIdForTier("standard");
 
     const result = await generateText({
       model,
-      prompt,
+      prompt: fullPrompt,
       maxTokens: 800,
     });
 
@@ -222,9 +251,9 @@ Keep the summary concise (under 500 words). Write in third person.`;
 /**
  * Enqueue a summary job for the worker. Dedup via job_type+payload.
  */
-export function enqueueSummaryJob(ownerKey: string): void {
+export function enqueueSummaryJob(ownerKey: string, messageKeys?: string[]): void {
   try {
-    enqueueJob("memory_summary", { ownerKey });
+    enqueueJob("memory_summary", { ownerKey, messageKeys: messageKeys ?? [ownerKey] });
   } catch {
     // Best-effort — don't fail the chat request
   }

@@ -348,6 +348,13 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
 }
 
+/** Sort facts by sortOrder ASC, createdAt ASC (defense-in-depth for non-DB sources). */
+function sortFacts(factsArr: FactRow[]): FactRow[] {
+  return [...factsArr].sort((a, b) =>
+    (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
+    (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
+  );
+}
 
 /** Languages where common nouns (job titles, roles) are capitalized. */
 const CAPITALIZE_NOUNS_LANGUAGES = new Set(["de"]);
@@ -618,7 +625,7 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
 function buildSkillsSection(skillFacts: FactRow[], language: string): Section | null {
   if (skillFacts.length === 0) return null;
 
-  const skills = skillFacts
+  const skills = sortFacts(skillFacts)
     .map((f) => {
       const v = val(f);
       return str(v.name) ?? str(v.value);
@@ -640,7 +647,7 @@ function buildSkillsSection(skillFacts: FactRow[], language: string): Section | 
 }
 
 function buildProjectsSection(projectFacts: FactRow[], language: string, extraItems: ProjectItem[] = []): Section | null {
-  const items: ProjectItem[] = projectFacts
+  const items: ProjectItem[] = sortFacts(projectFacts)
     .map((f) => {
       const v = val(f);
       const title = str(v.title) ?? str(v.name);
@@ -694,7 +701,7 @@ function buildProjectsFromExperience(experienceFacts: FactRow[]): ProjectItem[] 
 function buildInterestsSection(interestFacts: FactRow[], language: string): Section | null {
   if (interestFacts.length === 0) return null;
 
-  const items = interestFacts
+  const items = sortFacts(interestFacts)
     .map((f) => {
       const v = val(f);
       const name = str(v.name) ?? str(v.value);
@@ -719,7 +726,7 @@ function buildInterestsSection(interestFacts: FactRow[], language: string): Sect
 function buildSocialSection(socialFacts: FactRow[]): Section | null {
   if (socialFacts.length === 0) return null;
 
-  const links: SocialLink[] = socialFacts
+  const links: SocialLink[] = sortFacts(socialFacts)
     .map((f) => {
       const v = val(f);
       const url = str(v.url) ?? str(v.value);
@@ -757,7 +764,7 @@ function buildFooterSection(): Section {
 function buildTimelineSection(experienceFacts: FactRow[], language: string): Section | null {
   if (experienceFacts.length === 0) return null;
 
-  const items = experienceFacts
+  const items = sortFacts(experienceFacts)
     .map((f) => {
       const v = val(f);
       const title = str(v.role) ?? str(v.title);
@@ -792,7 +799,7 @@ function isExtendedSectionsEnabled(): boolean {
 
 function buildExperienceSection(experienceFacts: FactRow[], language: string): Section | null {
   // Filter: employment (undefined/employment) + freelance → experience; client → projects (handled separately)
-  const employmentFacts = experienceFacts.filter((f) => {
+  const employmentFacts = sortFacts(experienceFacts).filter((f) => {
     const t = str(val(f).type);
     return !t || t === "employment" || t === "freelance";
   });
@@ -850,7 +857,7 @@ function buildExperienceSection(experienceFacts: FactRow[], language: string): S
 function buildEducationSection(educationFacts: FactRow[], language: string): Section | null {
   if (educationFacts.length === 0) return null;
 
-  const items: EducationItem[] = educationFacts
+  const items: EducationItem[] = sortFacts(educationFacts)
     .map((f) => {
       const v = val(f);
       const institution = str(v.institution) ?? str(v.school) ?? str(v.name);
@@ -883,7 +890,7 @@ function buildEducationSection(educationFacts: FactRow[], language: string): Sec
 function buildAchievementsSection(achievementFacts: FactRow[], language: string): Section | null {
   if (achievementFacts.length === 0) return null;
 
-  const items: AchievementItem[] = achievementFacts
+  const items: AchievementItem[] = sortFacts(achievementFacts)
     .map((f) => {
       const v = val(f);
       const title = str(v.title) ?? str(v.name);
@@ -914,7 +921,7 @@ function buildAchievementsSection(achievementFacts: FactRow[], language: string)
 function buildStatsSection(statFacts: FactRow[], language: string): Section | null {
   if (statFacts.length === 0) return null;
 
-  const mapped = statFacts.map((f) => {
+  const mapped = sortFacts(statFacts).map((f) => {
     const v = val(f);
     const label = str(v.label) ?? str(v.name);
     const value = str(v.value) ?? str(v.number);
@@ -938,7 +945,7 @@ function buildStatsSection(statFacts: FactRow[], language: string): Section | nu
 function buildReadingSection(readingFacts: FactRow[], language: string): Section | null {
   if (readingFacts.length === 0) return null;
 
-  const items: ReadingItem[] = readingFacts
+  const items: ReadingItem[] = sortFacts(readingFacts)
     .map((f) => {
       const v = val(f);
       const title = str(v.title) ?? str(v.name);
@@ -970,7 +977,7 @@ function buildReadingSection(readingFacts: FactRow[], language: string): Section
 function buildMusicSection(musicFacts: FactRow[], language: string): Section | null {
   if (musicFacts.length === 0) return null;
 
-  const items: MusicItem[] = musicFacts
+  const items: MusicItem[] = sortFacts(musicFacts)
     .map((f) => {
       const v = val(f);
       const title = str(v.title) ?? str(v.name);
@@ -1015,7 +1022,7 @@ function buildLanguagesSection(languageFacts: FactRow[], language: string): Sect
   if (languageFacts.length === 0) return null;
 
   const l = getL10n(language);
-  const items: LanguageItem[] = languageFacts
+  const items: LanguageItem[] = sortFacts(languageFacts)
     .map((f) => {
       const v = val(f);
       const lang = str(v.language) ?? str(v.name);
@@ -1045,7 +1052,7 @@ function buildContactSection(contactFacts: FactRow[], language: string): Section
   // Visibility already filtered globally at composeOptimisticPage top
   if (contactFacts.length === 0) return null;
 
-  const methods: ContactMethod[] = contactFacts
+  const methods: ContactMethod[] = sortFacts(contactFacts)
     .map((f) => {
       const v = val(f);
       const value = str(v.value) ?? str(v.email) ?? str(v.phone) ?? str(v.address);
@@ -1075,7 +1082,7 @@ function buildContactSection(contactFacts: FactRow[], language: string): Section
 function buildActivitiesSection(activityFacts: FactRow[], language: string): Section | null {
   if (activityFacts.length === 0) return null;
 
-  const items: ActivityItem[] = activityFacts
+  const items: ActivityItem[] = sortFacts(activityFacts)
     .map((f) => {
       const v = val(f);
       const name = str(v.name) ?? str(v.value);
@@ -1170,11 +1177,11 @@ function buildAtAGlanceSection(
   interestFacts: FactRow[],
   language: string,
 ): Section | null {
-  const skills = skillFacts
+  const skills = sortFacts(skillFacts)
     .map((f) => { const v = val(f); return str(v.name) ?? str(v.value); })
     .filter((s): s is string => s !== undefined);
 
-  const stats = statFacts.map((f) => {
+  const stats = sortFacts(statFacts).map((f) => {
     const v = val(f);
     const label = str(v.label) ?? str(v.name);
     const value = str(v.value) ?? str(v.number);
@@ -1182,7 +1189,7 @@ function buildAtAGlanceSection(
     return { label, value, unit: str(v.unit) };
   }).filter((s) => s !== null);
 
-  const interests = interestFacts.map((f) => {
+  const interests = sortFacts(interestFacts).map((f) => {
     const v = val(f);
     const name = str(v.name) ?? str(v.value);
     if (!name) return null;
@@ -1215,6 +1222,7 @@ export function composeOptimisticPage(
   username: string,
   language: string = "en",
   layoutTemplate?: LayoutTemplateId,
+  draftSlots?: Map<string, string>,
 ): PageConfig {
   // Global privacy gate: only compose from public/proposed facts
   const visibleFacts = facts.filter(
@@ -1268,8 +1276,12 @@ export function composeOptimisticPage(
 
     // Merge project-category facts with client-type experience facts into a single projects section
     const clientProjectItems = buildProjectsFromExperience(experienceFacts);
-    const projectFacts = grouped.get("project") ?? [];
-    const projects = buildProjectsSection(projectFacts, language, clientProjectItems);
+    // Exclude child projects (parentFactId → existing experience) from standalone section
+    const experienceIds = new Set(experienceFacts.map(f => f.id));
+    const topLevelProjectFacts = (grouped.get("project") ?? []).filter(
+      f => !f.parentFactId || !experienceIds.has(f.parentFactId),
+    );
+    const projects = buildProjectsSection(topLevelProjectFacts, language, clientProjectItems);
     if (projects) sections.push(projects);
 
     const education = buildEducationSection(grouped.get("education") ?? [], language);
@@ -1296,7 +1308,11 @@ export function composeOptimisticPage(
     const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
     if (skills) sections.push(skills);
 
-    const projects = buildProjectsSection(grouped.get("project") ?? [], language);
+    const legacyExpIds = new Set(experienceFacts.map(f => f.id));
+    const legacyTopLevelProjects = (grouped.get("project") ?? []).filter(
+      f => !f.parentFactId || !legacyExpIds.has(f.parentFactId),
+    );
+    const projects = buildProjectsSection(legacyTopLevelProjects, language);
     if (projects) sections.push(projects);
 
     const interests = buildInterestsSection(interestFacts, language);
@@ -1312,7 +1328,7 @@ export function composeOptimisticPage(
   // Slot assignment: distribute sections into layout slots
   const resolvedTemplate = layoutTemplate ?? "vertical";
   const template = getLayoutTemplate(resolvedTemplate);
-  const { sections: assigned, issues } = assignSlotsFromFacts(template, sections);
+  const { sections: assigned, issues } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
 
   const finalSections = assigned;
   const finalTemplate = resolvedTemplate;

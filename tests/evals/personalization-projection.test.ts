@@ -18,8 +18,10 @@ vi.mock("@/lib/services/personalization-hashing", () => ({
 
 // Mock KB service
 const mockGetAllFacts = vi.fn().mockReturnValue([]);
+const mockGetActiveFacts = vi.fn().mockReturnValue([]);
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
 }));
 
 // Mock projection

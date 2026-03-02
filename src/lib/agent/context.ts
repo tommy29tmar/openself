@@ -9,7 +9,10 @@ import { getSystemPromptText, buildSystemPrompt } from "@/lib/agent/prompts";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
-import type { JourneyState, BootstrapPayload } from "@/lib/agent/journey";
+import type { JourneyState, BootstrapPayload, BootstrapData } from "@/lib/agent/journey";
+import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
+import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
+import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import type { PromptMode } from "./promptAssembler";
 
 /**
@@ -38,6 +41,85 @@ export type ContextResult = {
 };
 
 /**
+ * Context profile per journey state.
+ * Controls which blocks are injected and their budgets.
+ * Omitted blocks skip DB queries entirely (saves tokens AND latency).
+ */
+export type ContextProfile = {
+  facts: { include: boolean; budget: number };
+  soul: { include: boolean; budget: number };
+  summary: { include: boolean; budget: number };
+  memories: { include: boolean; budget: number };
+  conflicts: { include: boolean; budget: number };
+  richness: { include: boolean };
+  layoutIntelligence: { include: boolean };
+  includeSchemaReference: boolean;
+};
+
+export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
+  first_visit: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: false, budget: 0 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: false, budget: 0 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: true,
+  },
+  returning_no_page: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: true, budget: 800 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: true,
+  },
+  draft_ready: {
+    facts: { include: true, budget: 1500 },
+    soul: { include: true, budget: 1500 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: true },
+    includeSchemaReference: false,
+  },
+  active_fresh: {
+    facts: { include: true, budget: 1500 },
+    soul: { include: true, budget: 1000 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: true },
+    includeSchemaReference: false,
+  },
+  active_stale: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: true, budget: 1000 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: false,
+  },
+  blocked: {
+    facts: { include: false, budget: 0 },
+    soul: { include: false, budget: 0 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: false, budget: 0 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: false,
+  },
+};
+
+/**
  * Detect agent mode based on knowledge state across all sessions.
  */
 export function detectMode(readKeys: string[]): PromptMode {
@@ -62,37 +144,6 @@ function truncateToTokenBudget(text: string, budget: number): string {
  * composes the system prompt with per-block token budgets,
  * and trims client messages to fit within the total budget.
  */
-export type ProfileArchetype = "developer" | "designer" | "executive" | "student" | "creator" | "generalist";
-
-export function detectArchetype(facts: Array<{ category: string; key: string; value: unknown }>): ProfileArchetype {
-  const projectFacts = facts.filter((f) => f.category === "project");
-  const experienceFacts = facts.filter((f) => f.category === "experience");
-  const identityFacts = facts.filter((f) => f.category === "identity");
-  const skillFacts = facts.filter((f) => f.category === "skill");
-
-  // Check role/title keywords
-  const roleFact = identityFacts.find((f) => f.key === "role" || f.key === "title");
-  const roleStr = roleFact ? JSON.stringify(roleFact.value).toLowerCase() : "";
-
-  if (roleStr.includes("designer") || roleStr.includes("ux") || roleStr.includes("ui")) return "designer";
-  if (roleStr.includes("ceo") || roleStr.includes("cto") || roleStr.includes("director") || roleStr.includes("vp")) return "executive";
-  if (roleStr.includes("student") || roleStr.includes("intern")) return "student";
-
-  // 3+ projects with URL = creator
-  const projectsWithUrl = projectFacts.filter((f) => {
-    const v = typeof f.value === "object" && f.value !== null ? f.value : {};
-    return "url" in v || "link" in v;
-  });
-  if (projectsWithUrl.length >= 3) return "creator";
-
-  // Dev signals
-  if (skillFacts.length >= 3) return "developer";
-
-  // Lots of experience = executive
-  if (experienceFacts.length >= 5) return "executive";
-
-  return "generalist";
-}
 
 export type AuthInfo = {
   authenticated: boolean;
@@ -120,61 +171,85 @@ export function assembleContext(
   clientMessages: Array<{ role: string; content: string }>,
   authInfo?: AuthInfo,
   bootstrap?: BootstrapPayload,
+  bootstrapData?: BootstrapData,
 ): ContextResult {
   // Use bootstrap journeyState when available, fall back to detectMode()
   const mode: PromptMode = bootstrap
     ? mapJourneyStateToMode(bootstrap.journeyState)
     : detectMode(scope.knowledgeReadKeys);
 
-  // --- Build context blocks ---
+  // --- Determine context profile ---
+  const profile = bootstrap ? CONTEXT_PROFILES[bootstrap.journeyState] : null;
 
-  // Facts block
-  const existingFacts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
-  const topFacts = existingFacts.slice(0, 50);
-  let factsBlock =
-    topFacts.length > 0
-      ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts
-          .map((f) => `- [${f.category}/${f.key}]: ${JSON.stringify(f.value)}`)
-          .join("\n")}`
-      : "";
-  factsBlock = truncateToTokenBudget(factsBlock, BUDGET.facts);
+  // --- Build context blocks (conditional on profile) ---
 
-  // Soul block (compiled identity overlay)
-  const activeSoul = getActiveSoul(scope.cognitiveOwnerKey);
-  let soulBlock = activeSoul?.compiled ?? "";
-  soulBlock = truncateToTokenBudget(soulBlock, BUDGET.soul);
+  // Facts block — use passthrough data when available, otherwise query DB
+  let existingFacts: ReturnType<typeof getAllFacts> = [];
+  let factsBlock = "";
+  if (!profile || profile.facts.include) {
+    existingFacts = bootstrapData?.facts
+      ?? getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+    const topFacts = existingFacts.slice(0, 50);
+    factsBlock =
+      topFacts.length > 0
+        ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts
+            .map((f) => `- [${f.category}/${f.key}]: ${JSON.stringify(f.value)}`)
+            .join("\n")}`
+        : "";
+    factsBlock = truncateToTokenBudget(factsBlock, profile?.facts.budget ?? BUDGET.facts);
+  }
+
+  // Soul block (compiled identity overlay) — passthrough or query
+  let soulBlock = "";
+  if (!profile || profile.soul.include) {
+    const activeSoul = bootstrapData?.soul
+      ?? getActiveSoul(scope.cognitiveOwnerKey);
+    soulBlock = activeSoul?.compiled ?? "";
+    soulBlock = truncateToTokenBudget(soulBlock, profile?.soul.budget ?? BUDGET.soul);
+  }
 
   // Summary block (Tier 2)
-  let summaryBlock = getSummary(scope.cognitiveOwnerKey) ?? "";
-  summaryBlock = truncateToTokenBudget(summaryBlock, BUDGET.summary);
+  let summaryBlock = "";
+  if (!profile || profile.summary.include) {
+    summaryBlock = getSummary(scope.cognitiveOwnerKey) ?? "";
+    summaryBlock = truncateToTokenBudget(summaryBlock, profile?.summary.budget ?? BUDGET.summary);
+  }
 
   // Memories block (Tier 3)
-  const activeMemories = getActiveMemories(scope.cognitiveOwnerKey, 10);
-  let memoriesBlock =
-    activeMemories.length > 0
-      ? activeMemories
-          .map((m) => `- [${m.memoryType}] ${m.content}`)
-          .join("\n")
-      : "";
-  memoriesBlock = truncateToTokenBudget(memoriesBlock, BUDGET.memories);
+  let memoriesBlock = "";
+  if (!profile || profile.memories.include) {
+    const activeMemories = getActiveMemories(scope.cognitiveOwnerKey, 10);
+    memoriesBlock =
+      activeMemories.length > 0
+        ? activeMemories
+            .map((m) => `- [${m.memoryType}] ${m.content}`)
+            .join("\n")
+        : "";
+    memoriesBlock = truncateToTokenBudget(memoriesBlock, profile?.memories.budget ?? BUDGET.memories);
+  }
 
-  // Conflicts block
-  const openConflicts = getOpenConflicts(scope.cognitiveOwnerKey);
-  let conflictsBlock =
-    openConflicts.length > 0
-      ? openConflicts
-          .map(
-            (c) =>
-              `- [${c.id}] ${c.category}/${c.key}: fact_a=${c.factAId}(${c.sourceA}) vs fact_b=${c.factBId ?? "?"}(${c.sourceB ?? "?"})`,
-          )
-          .join("\n")
-      : "";
-  conflictsBlock = truncateToTokenBudget(conflictsBlock, BUDGET.conflicts);
+  // Conflicts block — passthrough or query
+  let conflictsBlock = "";
+  if (!profile || profile.conflicts.include) {
+    const openConflicts = bootstrapData?.openConflictRecords
+      ?? getOpenConflicts(scope.cognitiveOwnerKey);
+    conflictsBlock =
+      openConflicts.length > 0
+        ? openConflicts
+            .map(
+              (c) =>
+                `- [${c.id}] ${c.category}/${c.key}: fact_a=${c.factAId}(${c.sourceA}) vs fact_b=${c.factBId ?? "?"}(${c.sourceB ?? "?"})`,
+            )
+            .join("\n")
+        : "";
+    conflictsBlock = truncateToTokenBudget(conflictsBlock, profile?.conflicts.budget ?? BUDGET.conflicts);
+  }
 
-  // Base system prompt
   // Base system prompt — use new composable path when bootstrap available
   const basePrompt = bootstrap
-    ? buildSystemPrompt(bootstrap)
+    ? buildSystemPrompt(bootstrap, {
+        includeSchemaReference: profile?.includeSchemaReference ?? true,
+      })
     : getSystemPromptText(mode, language);
 
   // Compose full system prompt
@@ -197,40 +272,95 @@ export function assembleContext(
     );
   }
 
-  // Section richness block (steady_state only — drives drill-down)
-  let richnessBlock = "";
-  if (mode === "steady_state") {
-    const publishable = filterPublishableFacts(existingFacts);
-    const lines: string[] = [];
-    for (const sectionType of Object.keys(SECTION_FACT_CATEGORIES)) {
-      const level = classifySectionRichness(publishable, sectionType);
-      if (level !== "rich") {
-        lines.push(`- ${sectionType}: ${level}`);
+  // Archetype-weighted exploration priorities — conditional on profile.richness
+  const archetype = bootstrap?.archetype ?? "generalist";
+  const strategy = ARCHETYPE_STRATEGIES[archetype];
+  const includeRichness = !profile || profile.richness.include;
+  const includeLayout = !profile || profile.layoutIntelligence.include;
+
+  if (mode === "onboarding" && includeRichness) {
+    // Onboarding: show archetype + priorities to guide fact collection
+    const publishable = bootstrapData?.publishableFacts ?? filterPublishableFacts(existingFacts);
+    const weighted = strategy.explorationOrder
+      .map(category => ({
+        category,
+        richness: classifySectionRichness(publishable, category),
+      }))
+      .filter(x => x.richness !== "rich");
+
+    if (weighted.length > 0) {
+      const priorityLines = weighted.map(
+        (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
+      );
+      const explorationBlock = `ARCHETYPE: ${archetype}\nEXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
+      contextParts.push(`\n\n---\n\n${explorationBlock}`);
+    }
+  } else if (mode === "steady_state") {
+    // Steady state: richness + layout intelligence (conditional)
+    if (includeRichness) {
+      const publishable = bootstrapData?.publishableFacts ?? filterPublishableFacts(existingFacts);
+      const weighted = strategy.explorationOrder
+        .map(category => ({
+          category,
+          richness: classifySectionRichness(publishable, category),
+        }))
+        .filter(x => x.richness !== "rich");
+
+      if (weighted.length > 0) {
+        const priorityLines = weighted.map(
+          (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
+        );
+        const explorationBlock = `EXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
+        contextParts.push(`\n\n---\n\n${explorationBlock}`);
       }
     }
-    if (lines.length > 0) {
-      richnessBlock = `SECTION RICHNESS (thin/empty sections need more facts):\n${lines.join("\n")}`;
-    }
-  }
-  if (richnessBlock) contextParts.push(`\n\n---\n\n${richnessBlock}`);
 
-  // Layout intelligence block (steady_state only)
-  if (mode === "steady_state") {
-    const archetype = detectArchetype(existingFacts);
-    const layoutIntelligence = `PAGE LAYOUT INTELLIGENCE:
-Default order: bio → at-a-glance → experience → projects → education → achievements → [personality sections]
-
+    if (includeLayout) {
+      const layoutIntelligence = `PAGE LAYOUT INTELLIGENCE:
 Profile archetype: ${archetype}
-
-Consider reordering when:
-- designer: projects before experience (portfolio-first)
-- student: education before experience
-- executive: experience before everything (track record)
-- creator: projects + achievements before experience
-- User EXPLICITLY asks: put requested section right after bio
+Section priority: ${strategy.sectionPriority.join(" → ")}
 
 Before proposing a reorder, explain reasoning and ask for confirmation.`;
-    contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+      contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+    }
+  }
+
+  // --- Resume injection: incomplete operation from previous turn ---
+  const PENDING_OPS_TTL_MS = 60 * 60 * 1000; // 1 hour
+  const sessionId = scope.currentSessionId;
+  if (sessionId) {
+    try {
+      const meta = getSessionMeta(sessionId);
+      const pending = meta.pendingOperations as { timestamp: string; journal: unknown[]; finishReason: string } | undefined;
+      if (pending?.timestamp) {
+        const age = Date.now() - new Date(pending.timestamp).getTime();
+        if (age < PENDING_OPS_TTL_MS && pending.journal?.length > 0) {
+          const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
+            .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)
+            .join("\n");
+          contextParts.push(
+            `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
+          );
+        } else if (age >= PENDING_OPS_TTL_MS) {
+          // Stale — clean up
+          mergeSessionMeta(sessionId, { pendingOperations: undefined });
+        }
+      }
+    } catch { /* best-effort */ }
+  }
+
+  // --- Coherence issues injection (circuit D1, steady_state only) ---
+  if (sessionId && mode === "steady_state") {
+    try {
+      const meta = getSessionMeta(sessionId);
+      const warnings = (meta.coherenceWarnings ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
+      const infos = (meta.coherenceInfos ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
+      const allIssues = [...warnings, ...infos];
+      const directive = coherenceIssuesDirective(allIssues);
+      if (directive) {
+        contextParts.push(`\n\n---\n\n${directive}`);
+      }
+    } catch { /* best-effort */ }
   }
 
   let systemPrompt = contextParts.join("");

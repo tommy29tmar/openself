@@ -20,6 +20,8 @@ import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing"
 import type { OwnerScope } from "@/lib/auth/session";
 import type { AuthInfo } from "@/lib/agent/context";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
+import { detectArchetypeFromSignals, refineArchetype, type Archetype } from "@/lib/agent/archetypes";
+import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,7 +41,8 @@ export type Situation =
   | "has_stale_facts"
   | "has_open_conflicts"
   | "has_name"
-  | "has_soul";
+  | "has_soul"
+  | "has_archivable_facts";
 
 export type ExpertiseLevel = "novice" | "familiar" | "expert";
 
@@ -54,8 +57,21 @@ export interface BootstrapPayload {
   thinSections: string[];
   staleFacts: string[];
   openConflicts: string[];
+  archivableFacts: string[];
   language: string;
   conversationContext: string | null;
+  archetype: Archetype;
+}
+
+/**
+ * Shared data collected during bootstrap, passed to assembleContext
+ * to avoid duplicate DB queries. Pure optimization — same data, fewer reads.
+ */
+export interface BootstrapData {
+  facts: FactRow[];
+  soul: { compiled: string | null } | null;
+  openConflictRecords: Array<{ id: string; category: string; key: string; factAId: string; sourceA: string; factBId?: string; sourceB?: string }>;
+  publishableFacts: FactRow[];
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +83,36 @@ const STALE_FACT_DAYS = 30;
 
 /** Published page updated more recently than this is "fresh". */
 const FRESH_PAGE_DAYS = 7;
+
+/** Relevance threshold below which a fact is considered archivable. */
+const ARCHIVABLE_RELEVANCE_THRESHOLD = 0.3;
+
+/** Minimum active facts to keep — never suggest archival below this floor. */
+const ARCHIVABLE_SAFETY_FLOOR = 5;
+
+/**
+ * Recency factor for relevance scoring.
+ * <30d: 1.0, 30-90d: 0.7, 90-180d: 0.4, >180d: 0.2
+ */
+export function recencyFactor(updatedAt: string | null): number {
+  if (!updatedAt) return 0.2;
+  const days = daysBetween(new Date(updatedAt), new Date());
+  if (days < 30) return 1.0;
+  if (days < 90) return 0.7;
+  if (days < 180) return 0.4;
+  return 0.2;
+}
+
+/**
+ * Compute relevance score for a fact.
+ * Used by both detectSituations (flag) and assembleBootstrapPayload (list).
+ * Single source of truth for the relevance formula.
+ */
+export function computeRelevance(f: FactRow, childCountMap?: Map<string, number>): number {
+  const recency = recencyFactor(f.updatedAt);
+  const children = childCountMap?.get(f.id) ?? 0;
+  return (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
+}
 
 // ---------------------------------------------------------------------------
 // Detection: Journey State
@@ -201,6 +247,7 @@ export function detectSituations(
     pendingProposalCount?: number;
     openConflicts?: Array<{ category: string; key: string }>;
     publishableFacts?: FactRow[];
+    childCountMap?: Map<string, number>;
   },
 ): Situation[] {
   const situations: Situation[] = [];
@@ -253,6 +300,20 @@ export function detectSituations(
     situations.push("has_soul");
   }
 
+  // Archivable facts: relevance-based detection
+  const activeFacts = facts.filter(f => !f.archivedAt);
+  if (activeFacts.length > ARCHIVABLE_SAFETY_FLOOR) {
+    const childCountMap = opts?.childCountMap;
+    const archivable = activeFacts.filter(f =>
+      computeRelevance(f, childCountMap) < ARCHIVABLE_RELEVANCE_THRESHOLD,
+    );
+
+    // Safety floor: don't suggest if it would leave fewer than 5 active facts
+    if (archivable.length > 0 && activeFacts.length - archivable.length >= ARCHIVABLE_SAFETY_FLOOR) {
+      situations.push("has_archivable_facts");
+    }
+  }
+
   return situations;
 }
 
@@ -279,7 +340,8 @@ export function assembleBootstrapPayload(
   scope: OwnerScope,
   language: string,
   authInfo?: AuthInfo,
-): BootstrapPayload {
+  lastUserMessage?: string,
+): { payload: BootstrapPayload; data: BootstrapData } {
   const readKeys = scope.knowledgeReadKeys;
   const ownerKey = scope.cognitiveOwnerKey;
 
@@ -292,10 +354,25 @@ export function assembleBootstrapPayload(
   const openConflictRecords = getOpenConflicts(ownerKey);
   const publishable = filterPublishableFacts(facts);
 
+  // Pre-compute child counts for relevance scoring (scoped by readKeys)
+  const childCountMap = new Map<string, number>();
+  if (readKeys.length > 0) {
+    const placeholders = readKeys.map(() => "?").join(",");
+    const rows = sqlite
+      .prepare(
+        `SELECT parent_fact_id, COUNT(*) as cnt FROM facts WHERE parent_fact_id IS NOT NULL AND archived_at IS NULL AND session_id IN (${placeholders}) GROUP BY parent_fact_id`,
+      )
+      .all(...readKeys) as Array<{ parent_fact_id: string; cnt: number }>;
+    for (const row of rows) {
+      childCountMap.set(row.parent_fact_id, row.cnt);
+    }
+  }
+
   const situations = detectSituations(facts, ownerKey, {
     pendingProposalCount,
     openConflicts: openConflictRecords,
     publishableFacts: publishable,
+    childCountMap,
   });
   const expertiseLevel = detectExpertiseLevel(readKeys);
 
@@ -333,23 +410,74 @@ export function assembleBootstrapPayload(
     (c) => `${c.category}/${c.key}`,
   );
 
+  // Archivable facts list (category/key for directive rendering)
+  const archivableFacts: string[] = [];
+  if (situations.includes("has_archivable_facts")) {
+    const activeFacts = facts.filter(f => !f.archivedAt);
+    for (const f of activeFacts) {
+      if (computeRelevance(f, childCountMap) < ARCHIVABLE_RELEVANCE_THRESHOLD) {
+        archivableFacts.push(`${f.category}/${f.key}`);
+      }
+    }
+  }
+
   // Conversation context (latest summary or null)
   // Lightweight — we don't load the full summary here, just indicate if one exists
   const conversationContext = null; // Reserved for future use
 
+  // Archetype detection — cached in session metadata for stability
+  const sessionId = scope.currentSessionId;
+  const meta = sessionId ? getSessionMeta(sessionId) : {};
+  let archetype: Archetype;
+  if (meta.archetype && typeof meta.archetype === "string") {
+    archetype = meta.archetype as Archetype;
+  } else {
+    // Detect from role fact + last message, then refine from all facts
+    const roleFact = facts.find(
+      (f) => f.category === "identity" && (f.key === "role" || f.key === "title"),
+    );
+    const roleStr = roleFact
+      ? typeof roleFact.value === "object" && roleFact.value !== null
+        ? (roleFact.value as Record<string, unknown>).role as string ?? JSON.stringify(roleFact.value)
+        : String(roleFact.value)
+      : null;
+    const raw = detectArchetypeFromSignals(roleStr, lastUserMessage ?? null);
+    archetype = refineArchetype(facts, raw);
+    // Cache in session metadata
+    if (sessionId) {
+      mergeSessionMeta(sessionId, { archetype });
+    }
+    // TODO(Circuito A): When archetype !== "generalist" and no soul exists,
+    // propose an initial soul profile based on archetype strategies.
+    // Deferred — cross-cutting concern tracked in v2 plan.
+  }
+
+  // Read soul for data passthrough (avoids re-query in assembleContext)
+  const soul = getActiveSoul(ownerKey);
+
   return {
-    journeyState,
-    situations,
-    expertiseLevel,
-    userName,
-    lastSeenDaysAgo,
-    publishedUsername,
-    pendingProposalCount,
-    thinSections,
-    staleFacts,
-    openConflicts,
-    language,
-    conversationContext,
+    payload: {
+      journeyState,
+      situations,
+      expertiseLevel,
+      userName,
+      lastSeenDaysAgo,
+      publishedUsername,
+      pendingProposalCount,
+      thinSections,
+      staleFacts,
+      openConflicts,
+      archivableFacts,
+      language,
+      conversationContext,
+      archetype,
+    },
+    data: {
+      facts,
+      soul,
+      openConflictRecords,
+      publishableFacts: publishable,
+    },
   };
 }
 

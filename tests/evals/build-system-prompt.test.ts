@@ -45,8 +45,8 @@ vi.mock("@/lib/agent/policies/memory-directives", () => ({
 vi.mock("@/lib/agent/policies/turn-management", () => ({
   turnManagementRules: vi.fn(() => "TURN_MANAGEMENT_RULES_BLOCK"),
 }));
-vi.mock("@/lib/agent/policies/action-awareness", () => ({
-  actionAwarenessPolicy: vi.fn(() => "ACTION_AWARENESS_POLICY_BLOCK"),
+vi.mock("@/lib/agent/policies/planning-protocol", () => ({
+  planningProtocol: vi.fn(() => "PLANNING_PROTOCOL_BLOCK"),
 }));
 vi.mock("@/lib/agent/policies/undo-awareness", () => ({
   undoAwarenessPolicy: vi.fn(() => "UNDO_AWARENESS_POLICY_BLOCK"),
@@ -54,7 +54,7 @@ vi.mock("@/lib/agent/policies/undo-awareness", () => ({
 
 import { buildSystemPrompt } from "@/lib/agent/prompts";
 import type { BootstrapPayload } from "@/lib/agent/journey";
-import { actionAwarenessPolicy } from "@/lib/agent/policies/action-awareness";
+import { planningProtocol } from "@/lib/agent/policies/planning-protocol";
 import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
 
 beforeEach(() => {
@@ -72,6 +72,7 @@ const makeBootstrap = (overrides?: Partial<BootstrapPayload>): BootstrapPayload 
   thinSections: [],
   staleFacts: [],
   openConflicts: [],
+  archivableFacts: [],
   language: "en",
   conversationContext: null,
   ...overrides,
@@ -207,11 +208,11 @@ describe("buildSystemPrompt", () => {
     });
   });
 
-  describe("action and undo awareness (Sprint 5)", () => {
-    it("includes action awareness policy block", () => {
+  describe("planning protocol and undo awareness", () => {
+    it("includes planning protocol block", () => {
       const result = buildSystemPrompt(makeBootstrap());
-      expect(result).toContain("ACTION_AWARENESS_POLICY_BLOCK");
-      expect(actionAwarenessPolicy).toHaveBeenCalled();
+      expect(result).toContain("PLANNING_PROTOCOL_BLOCK");
+      expect(planningProtocol).toHaveBeenCalled();
     });
 
     it("includes undo awareness policy block", () => {
@@ -220,20 +221,20 @@ describe("buildSystemPrompt", () => {
       expect(undoAwarenessPolicy).toHaveBeenCalled();
     });
 
-    it("places action awareness after memory directives", () => {
+    it("places planning protocol after memory directives", () => {
       const result = buildSystemPrompt(makeBootstrap());
       const memIdx = result.indexOf("MEMORY_USAGE_DIRECTIVES_BLOCK");
-      const actionIdx = result.indexOf("ACTION_AWARENESS_POLICY_BLOCK");
+      const planIdx = result.indexOf("PLANNING_PROTOCOL_BLOCK");
       expect(memIdx).toBeGreaterThan(-1);
-      expect(actionIdx).toBeGreaterThan(memIdx);
+      expect(planIdx).toBeGreaterThan(memIdx);
     });
 
-    it("places undo awareness after action awareness", () => {
+    it("places undo awareness after planning protocol", () => {
       const result = buildSystemPrompt(makeBootstrap());
-      const actionIdx = result.indexOf("ACTION_AWARENESS_POLICY_BLOCK");
+      const planIdx = result.indexOf("PLANNING_PROTOCOL_BLOCK");
       const undoIdx = result.indexOf("UNDO_AWARENESS_POLICY_BLOCK");
-      expect(actionIdx).toBeGreaterThan(-1);
-      expect(undoIdx).toBeGreaterThan(actionIdx);
+      expect(planIdx).toBeGreaterThan(-1);
+      expect(undoIdx).toBeGreaterThan(planIdx);
     });
 
     it("composition has 12 blocks without situation directives", () => {
@@ -241,7 +242,7 @@ describe("buildSystemPrompt", () => {
       const parts = result.split("\n\n---\n\n");
       // [CORE_CHARTER, SAFETY, TOOL, FACT_SCHEMA, DATA_MODEL, OUTPUT,
       //  journeyPolicy, expertiseCalibration, turnManagement,
-      //  memoryDirectives, actionAwareness, undoAwareness]
+      //  memoryDirectives, planningProtocol, undoAwareness]
       expect(parts.length).toBe(12);
     });
 
@@ -255,7 +256,7 @@ describe("buildSystemPrompt", () => {
       const parts = result.split("\n\n---\n\n");
       // [CORE_CHARTER, SAFETY, TOOL, FACT_SCHEMA, DATA_MODEL, OUTPUT,
       //  journeyPolicy, situationDirectives, expertiseCalibration,
-      //  turnManagement, memoryDirectives, actionAwareness, undoAwareness]
+      //  turnManagement, memoryDirectives, planningProtocol, undoAwareness]
       expect(parts.length).toBe(13);
     });
   });

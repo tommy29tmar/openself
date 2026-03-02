@@ -1,6 +1,6 @@
 /**
  * Tests for the drill-down context block (section richness in assembleContext).
- * Verifies that steady_state mode includes SECTION RICHNESS and
+ * Verifies that steady_state mode includes EXPLORATION PRIORITIES and
  * that onboarding mode does not.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: vi.fn(() => []),
+  getActiveFacts: vi.fn(() => []),
   countFacts: vi.fn(() => 0),
 }));
 vi.mock("@/lib/services/page-service", () => ({
@@ -28,6 +29,10 @@ vi.mock("@/lib/services/conflict-service", () => ({
 }));
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(),
 }));
 
 import { assembleContext } from "@/lib/agent/context";
@@ -53,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("drill-down context block", () => {
-  it("includes SECTION RICHNESS block in steady_state mode", () => {
+  it("includes EXPLORATION PRIORITIES block in steady_state mode", () => {
     const identityFact = {
       id: "f1",
       category: "identity",
@@ -73,7 +78,7 @@ describe("drill-down context block", () => {
     ]);
 
     expect(mode).toBe("steady_state");
-    expect(systemPrompt).toContain("SECTION RICHNESS");
+    expect(systemPrompt).toContain("EXPLORATION PRIORITIES");
   });
 
   it("lists thin/empty sections but not rich ones", () => {
@@ -92,15 +97,14 @@ describe("drill-down context block", () => {
       { role: "user", content: "hi" },
     ]);
 
-    // skills is rich (3 facts) — should NOT appear in the list
-    expect(systemPrompt).not.toMatch(/- skills: rich/);
-    // hero has 1 identity fact — should be "thin"
-    expect(systemPrompt).toContain("- hero: thin");
-    // projects has 0 facts — should be "empty"
-    expect(systemPrompt).toContain("- projects: empty");
+    // skills is rich (3 facts) — should NOT appear in the exploration priorities
+    expect(systemPrompt).not.toMatch(/skills: rich/);
+    // Archetype-weighted priorities show numbered format (e.g., "1. projects: empty")
+    // projects has 0 facts — should be "empty" in the priorities
+    expect(systemPrompt).toContain("projects: empty");
   });
 
-  it("does NOT include SECTION RICHNESS block in onboarding mode", () => {
+  it("includes ARCHETYPE label in onboarding mode exploration block", () => {
     // Force onboarding mode
     vi.mocked(countFacts).mockReturnValue(0);
     vi.mocked(hasAnyPublishedPage).mockReturnValue(false);
@@ -110,17 +114,18 @@ describe("drill-down context block", () => {
     ]);
 
     expect(mode).toBe("onboarding");
-    expect(systemPrompt).not.toContain("SECTION RICHNESS");
+    // Onboarding now includes archetype-weighted exploration with ARCHETYPE prefix
+    expect(systemPrompt).toContain("ARCHETYPE:");
   });
 
-  it("steady_state prompt includes drill-down instructions", () => {
+  it("steady_state prompt includes layout intelligence", () => {
     const { systemPrompt, mode } = assembleContext(SCOPE, "en", [
       { role: "user", content: "hello" },
     ]);
 
     expect(mode).toBe("steady_state");
-    expect(systemPrompt).toContain("Drill-down:");
-    expect(systemPrompt).toContain("thin");
+    expect(systemPrompt).toContain("PAGE LAYOUT INTELLIGENCE");
+    expect(systemPrompt).toContain("Profile archetype:");
   });
 
   it("omits richness block when all sections are rich", () => {
@@ -183,9 +188,8 @@ describe("drill-down context block", () => {
       { role: "user", content: "hi" },
     ]);
 
-    // All sections are rich — no richness data block should appear
-    // Note: the prompt instructions mention "SECTION RICHNESS" as a reference,
-    // but the actual data block starts with "SECTION RICHNESS (thin/empty"
-    expect(systemPrompt).not.toContain("SECTION RICHNESS (thin/empty");
+    // All sections are rich — exploration priorities block should be omitted
+    // (it only appears when at least one section is not rich)
+    expect(systemPrompt).not.toContain("EXPLORATION PRIORITIES");
   });
 });

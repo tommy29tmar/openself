@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoist all mocks before imports
 const {
   mockGetAllFacts,
+  mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
   mockCreateFact,
@@ -24,6 +25,7 @@ const {
   mockRequestPublish,
 } = vi.hoisted(() => ({
   mockGetAllFacts: vi.fn(),
+  mockGetActiveFacts: vi.fn(),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
   mockCreateFact: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));
@@ -148,7 +151,7 @@ describe("auto-recompose after fact mutations", () => {
 
   it("recomposes draft after create_fact using projectCanonicalConfig", async () => {
     mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma", visibility: "proposed" });
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     const result = await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },
       { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
@@ -161,7 +164,7 @@ describe("auto-recompose after fact mutations", () => {
 
   it("passes DraftMeta to projectCanonicalConfig for order/lock preservation", async () => {
     mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma", visibility: "proposed" });
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },
       { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
@@ -178,7 +181,7 @@ describe("auto-recompose after fact mutations", () => {
 
   it("recomposes draft after update_fact", async () => {
     mockUpdateFact.mockReturnValue({ id: "f1", category: "identity", key: "name", visibility: "public" });
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     const result = await tools.update_fact.execute(
       { factId: "f1", value: { name: "Elena Rossi" } },
       { toolCallId: "tc2", messages: [], abortSignal: new AbortController().signal },
@@ -190,7 +193,7 @@ describe("auto-recompose after fact mutations", () => {
 
   it("recomposes draft after delete_fact", async () => {
     mockDeleteFact.mockReturnValue(true);
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     const result = await tools.delete_fact.execute(
       { factId: "f1" },
       { toolCallId: "tc3", messages: [], abortSignal: new AbortController().signal },
@@ -203,7 +206,7 @@ describe("auto-recompose after fact mutations", () => {
   it("skips recompose when no facts remain after delete", async () => {
     mockDeleteFact.mockReturnValue(true);
     mockGetAllFacts.mockReturnValue([]); // no facts left
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     await tools.delete_fact.execute(
       { factId: "f1" },
       { toolCallId: "tc4", messages: [], abortSignal: new AbortController().signal },
@@ -215,7 +218,7 @@ describe("auto-recompose after fact mutations", () => {
     // Make computeConfigHash return the SAME hash as the existing draft
     vi.mocked(computeConfigHash).mockReturnValue("old-hash");
     mockCreateFact.mockReturnValue({ id: "f2", category: "skill", key: "figma", visibility: "proposed" });
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },
       { toolCallId: "tc5", messages: [], abortSignal: new AbortController().signal },
@@ -227,7 +230,7 @@ describe("auto-recompose after fact mutations", () => {
 
   it("does not recompose on create_fact failure", async () => {
     mockCreateFact.mockImplementation(() => { throw new Error("DB error"); });
-    const tools = createAgentTools("it", "sess1");
+    const { tools } = createAgentTools("it", "sess1");
     const result = await tools.create_fact.execute(
       { category: "skill", key: "figma", value: { name: "Figma" } },
       { toolCallId: "tc6", messages: [], abortSignal: new AbortController().signal },

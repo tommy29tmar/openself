@@ -1,0 +1,198 @@
+/**
+ * Tests for conditional context injection by journey state (Task 24).
+ * Validates that context profiles skip unnecessary DB queries and blocks.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// --- Mocks ---
+
+const mockGetAllFacts = vi.fn(() => []);
+const mockGetActiveFacts = vi.fn(() => []);
+vi.mock("@/lib/services/kb-service", () => ({
+  getAllFacts: (...args: any[]) => mockGetAllFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
+  countFacts: vi.fn(() => 0),
+}));
+vi.mock("@/lib/services/page-service", () => ({
+  hasAnyPublishedPage: vi.fn(() => false),
+}));
+
+const mockGetSummary = vi.fn(() => "A conversation summary");
+vi.mock("@/lib/services/summary-service", () => ({
+  getSummary: (...args: any[]) => mockGetSummary(...args),
+}));
+
+const mockGetActiveMemories = vi.fn(() => [
+  { memoryType: "observation", content: "User likes React" },
+]);
+vi.mock("@/lib/services/memory-service", () => ({
+  getActiveMemories: (...args: any[]) => mockGetActiveMemories(...args),
+}));
+
+const mockGetActiveSoul = vi.fn(() => ({ compiled: "Soul: creative person" }));
+vi.mock("@/lib/services/soul-service", () => ({
+  getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
+}));
+
+const mockGetOpenConflicts = vi.fn(() => []);
+vi.mock("@/lib/services/conflict-service", () => ({
+  getOpenConflicts: (...args: any[]) => mockGetOpenConflicts(...args),
+}));
+
+vi.mock("@/lib/services/page-projection", () => ({
+  filterPublishableFacts: vi.fn(() => []),
+}));
+
+const mockBuildSystemPrompt = vi.fn(() => "BOOTSTRAP_PROMPT");
+vi.mock("@/lib/agent/prompts", () => ({
+  getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
+  buildSystemPrompt: (...args: any[]) => mockBuildSystemPrompt(...args),
+}));
+
+vi.mock("@/lib/agent/journey", () => ({}));
+
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(() => ({})),
+}));
+
+import { assembleContext, estimateTokens, CONTEXT_PROFILES } from "@/lib/agent/context";
+import type { OwnerScope } from "@/lib/auth/session";
+import type { BootstrapPayload } from "@/lib/agent/journey";
+
+const SCOPE: OwnerScope = {
+  cognitiveOwnerKey: "cog-1",
+  knowledgeReadKeys: ["sess-a", "sess-b"],
+  knowledgePrimaryKey: "sess-a",
+  currentSessionId: "sess-b",
+};
+
+const MESSAGES = [
+  { role: "user", content: "Hello" },
+  { role: "assistant", content: "Hi!" },
+];
+
+function makeBootstrap(journeyState: string): BootstrapPayload {
+  return {
+    journeyState: journeyState as any,
+    situations: [],
+    expertiseLevel: "beginner" as any,
+    language: "en",
+    archetype: "generalist",
+    thinSections: [],
+    staleFacts: [],
+    openConflicts: [],
+    pendingProposalCount: 0,
+    archivableFacts: [],
+  } as BootstrapPayload;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetAllFacts.mockReturnValue([]);
+  mockGetActiveFacts.mockReturnValue([]);
+  mockGetSummary.mockReturnValue("A conversation summary");
+  mockGetActiveMemories.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
+  mockGetActiveSoul.mockReturnValue({ compiled: "Soul: creative person" });
+  mockGetOpenConflicts.mockReturnValue([]);
+  mockBuildSystemPrompt.mockReturnValue("BOOTSTRAP_PROMPT");
+});
+
+describe("conditional context by journey state", () => {
+  it("first_visit: includes facts but omits soul/summary/memories/conflicts", () => {
+    const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("first_visit"));
+
+    // Facts query IS called
+    expect(mockGetAllFacts).toHaveBeenCalled();
+
+    // Soul, summary, memories, conflicts queries are NOT called
+    expect(mockGetActiveSoul).not.toHaveBeenCalled();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    expect(mockGetActiveMemories).not.toHaveBeenCalled();
+    expect(mockGetOpenConflicts).not.toHaveBeenCalled();
+
+    // Schema reference IS included (buildSystemPrompt receives includeSchemaReference: true)
+    expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ includeSchemaReference: true }),
+    );
+  });
+
+  it("draft_ready: omits schema reference, includes soul + richness", () => {
+    const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("draft_ready"));
+
+    // buildSystemPrompt receives includeSchemaReference: false
+    expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ includeSchemaReference: false }),
+    );
+
+    // Soul IS queried
+    expect(mockGetActiveSoul).toHaveBeenCalled();
+
+    // Summary and memories are NOT queried
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    expect(mockGetActiveMemories).not.toHaveBeenCalled();
+  });
+
+  it("active_fresh: includes all blocks with schema reference off", () => {
+    const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("active_fresh"));
+
+    // All queries are called
+    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveSoul).toHaveBeenCalled();
+    expect(mockGetSummary).toHaveBeenCalled();
+    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetOpenConflicts).toHaveBeenCalled();
+
+    // Schema reference is off for active states
+    expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ includeSchemaReference: false }),
+    );
+  });
+
+  it("blocked: minimal context — no DB queries for facts/soul/summary/memories/conflicts", () => {
+    const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("blocked"));
+
+    expect(mockGetAllFacts).not.toHaveBeenCalled();
+    expect(mockGetActiveSoul).not.toHaveBeenCalled();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    expect(mockGetActiveMemories).not.toHaveBeenCalled();
+    expect(mockGetOpenConflicts).not.toHaveBeenCalled();
+  });
+
+  it("returning_no_page: includes facts + soul + summary + memories + conflicts", () => {
+    const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("returning_no_page"));
+
+    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveSoul).toHaveBeenCalled();
+    expect(mockGetSummary).toHaveBeenCalled();
+    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetOpenConflicts).toHaveBeenCalled();
+
+    // Schema reference is on (returning user still needs to collect facts)
+    expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ includeSchemaReference: true }),
+    );
+  });
+
+  it("no bootstrap (legacy path): calls all DB queries unconditionally", () => {
+    const result = assembleContext(SCOPE, "en", MESSAGES);
+
+    // All queries are called in the legacy path
+    expect(mockGetAllFacts).toHaveBeenCalled();
+    expect(mockGetActiveSoul).toHaveBeenCalled();
+    expect(mockGetSummary).toHaveBeenCalled();
+    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetOpenConflicts).toHaveBeenCalled();
+  });
+
+  it("CONTEXT_PROFILES has entries for all 6 journey states", () => {
+    const states = ["first_visit", "returning_no_page", "draft_ready", "active_fresh", "active_stale", "blocked"];
+    for (const state of states) {
+      expect(CONTEXT_PROFILES).toHaveProperty(state);
+    }
+  });
+});

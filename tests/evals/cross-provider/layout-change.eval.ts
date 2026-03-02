@@ -33,6 +33,7 @@ function buildFamiliarUserPrompt(): string {
     thinSections: [],
     staleFacts: [],
     openConflicts: [],
+    archivableFacts: [],
     language: "en",
     conversationContext: null,
   };
