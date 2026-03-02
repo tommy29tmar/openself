@@ -569,7 +569,7 @@ git commit -m "feat(connectors): detect OAuth return param, auto-open settings, 
 
 **Context:** The sync route at `src/app/api/connectors/github/sync/route.ts` (30 lines) currently enqueues a `connector_sync` job without checking for in-flight operations. We need: (a) check if a `connector_sync` job is already queued/running, (b) reject with `ALREADY_SYNCING` if so, (c) rate limit to 60s between syncs.
 
-**LinkedIn import does NOT need a server-side lock.** It's synchronous (no job queue), and `batchCreateFacts()` already has per-fact dedup via the `(sessionId, category, key)` unique constraint + draft hash idempotency. Re-importing the same ZIP → all facts skip → same draft hash → no-op. Client-side button disable (Task 1's LinkedInCard `importing` state) is sufficient UX protection.
+**LinkedIn import also requires a server-side lock** (per Supervisor Constraint: "backend idempotency/locking for sync/import as the primary protection"). Although `batchCreateFacts()` has per-fact dedup, concurrent imports could race on draft recomposition. The import route should check `hasPendingImport(ownerKey)` before proceeding and return `409 ALREADY_IMPORTING` if an import is in flight. Implementation: add a `hasPendingImport(ownerKey)` function alongside `hasPendingJob()` that checks for `job_type = 'linkedin_import'` in `queued`/`running` status. Since LinkedIn import is synchronous (not queued), use a simpler approach: insert a sentinel job row with status `'running'` at the start of the import, delete it on completion (in a try/finally). This gives the same `hasPendingImport()` query pattern as sync.
 
 **Step 1: Write tests**
 
@@ -632,6 +632,7 @@ Create `src/lib/connectors/idempotency.ts`:
 
 ```typescript
 import { sqlite } from "@/lib/db";
+import { randomUUID } from "crypto";
 
 const SYNC_COOLDOWN_MS = 60_000; // 60 seconds
 
@@ -658,6 +659,44 @@ export function hasPendingJob(ownerKey: string): boolean {
     )
     .get(ownerKey);
   return !!row;
+}
+
+/**
+ * Check if a LinkedIn import is already in progress for this owner.
+ * Uses a sentinel job row inserted at import start, deleted on completion.
+ */
+export function hasPendingImport(ownerKey: string): boolean {
+  const row = sqlite
+    .prepare(
+      `SELECT 1 FROM jobs
+       WHERE job_type = 'linkedin_import'
+         AND json_extract(payload, '$.ownerKey') = ?
+         AND status IN ('queued', 'running')
+       LIMIT 1`,
+    )
+    .get(ownerKey);
+  return !!row;
+}
+
+/**
+ * Insert a sentinel job row to mark an import as in-flight.
+ * Call removeImportLock() in a finally block when done.
+ */
+export function acquireImportLock(ownerKey: string): string {
+  const id = randomUUID();
+  sqlite
+    .prepare(
+      `INSERT INTO jobs (id, job_type, payload, status, run_after, attempts)
+       VALUES (?, 'linkedin_import', ?, 'running', datetime('now'), 0)`,
+    )
+    .run(id, JSON.stringify({ ownerKey }));
+  return id;
+}
+
+export function removeImportLock(jobId: string): void {
+  sqlite
+    .prepare(`DELETE FROM jobs WHERE id = ?`)
+    .run(jobId);
 }
 
 /**
@@ -697,12 +736,38 @@ if (githubConnector && isSyncRateLimited(githubConnector.lastSync)) {
 }
 ```
 
-**Step 4: Run tests**
+**Step 4: Wire into LinkedIn import route**
+
+In `src/app/api/connectors/linkedin-zip/import/route.ts`, add the import lock:
+
+```typescript
+import { hasPendingImport, acquireImportLock, removeImportLock } from "@/lib/connectors/idempotency";
+
+// ... inside POST handler, after scope/auth checks:
+
+// Idempotency: check for in-flight import
+if (hasPendingImport(ownerKey)) {
+  return NextResponse.json(
+    { success: false, code: "ALREADY_IMPORTING", error: "An import is already in progress.", retryable: false },
+    { status: 409 },
+  );
+}
+
+// Acquire sentinel lock, ensure cleanup on completion
+const lockId = acquireImportLock(ownerKey);
+try {
+  // ... existing import logic (importLinkedInZip, etc.)
+} finally {
+  removeImportLock(lockId);
+}
+```
+
+**Step 5: Run tests**
 
 Run: `npx vitest run tests/evals/connector-idempotency.test.ts`
 Expected: PASS
 
-**Step 5: Commit**
+**Step 6: Commit**
 
 ```bash
 git add src/lib/connectors/idempotency.ts src/app/api/connectors/github/sync/route.ts src/app/api/connectors/linkedin-zip/import/route.ts tests/evals/connector-idempotency.test.ts
@@ -1041,14 +1106,20 @@ import { randomUUID } from "crypto";
 
 describe("Avatar Upload", () => {
   describe("POST /api/media/avatar validation", () => {
-    it("rejects files over 2MB", () => {
-      // Size check is in the route (MAX_SIZE = 2MB), not processAvatarImage.
-      // Verify the constant is correct and the route would reject.
-      const MAX_SIZE = 2 * 1024 * 1024;
-      const oversizedLength = MAX_SIZE + 1;
-      expect(oversizedLength).toBeGreaterThan(MAX_SIZE);
-      // Full route-level test requires HTTP harness; here we verify the guard constant.
-      // The route does: if (buffer.byteLength > MAX_SIZE) return 413
+    it("rejects files over 2MB", async () => {
+      // Test the route handler directly by importing it
+      const { POST } = await import("@/app/api/media/avatar/route");
+      const oversized = new Blob([new Uint8Array(2 * 1024 * 1024 + 1)], { type: "image/jpeg" });
+      const form = new FormData();
+      form.append("file", oversized, "big.jpg");
+      const req = new Request("http://localhost/api/media/avatar", {
+        method: "POST",
+        body: form,
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.code).toBe("FILE_TOO_LARGE");
     });
 
     it("rejects non-image MIME types", async () => {
@@ -1882,15 +1953,22 @@ In the upsert statement inside `confirmPublish()`, add `sourceLanguage` to the p
 
 Where the published page row is written (the `INSERT OR REPLACE` or `upsertDraft` call), ensure `source_language` is set.
 
-Since `confirmPublish()` does a raw SQL `INSERT OR REPLACE` into the page table, add `source_language` to the insert columns:
+`confirmPublish()` uses `INSERT INTO page (...) VALUES (...) ON CONFLICT(id) DO UPDATE SET ...`. Add `source_language` to both the INSERT columns/values and the ON CONFLICT update:
 
 ```sql
-INSERT OR REPLACE INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at, source_language)
-SELECT ?, session_id, profile_id, username, config, config_hash, 'published', generated_at, datetime('now'), ?
-FROM page WHERE id = ? AND status = 'approval_pending'
+INSERT INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at, source_language)
+VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  username = excluded.username,
+  config = excluded.config,
+  config_hash = excluded.config_hash,
+  status = 'published',
+  generated_at = excluded.generated_at,
+  updated_at = excluded.updated_at,
+  source_language = excluded.source_language
 ```
 
-(Check the exact SQL in `confirmPublish()` and adjust accordingly.)
+The `source_language` value comes from `factLang` passed through the publish pipeline.
 
 **Step 2: Pass factLang in publish pipeline**
 
@@ -2155,7 +2233,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add src/app/\\[username\\]/page.tsx src/lib/services/page-service.ts tests/evals/public-page-translation.test.ts
+git add 'src/app/[username]/page.tsx' src/lib/services/page-service.ts tests/evals/public-page-translation.test.ts
 git commit -m "feat(i18n): add public page auto-translation with Accept-Language detection"
 ```
 
