@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
+// Mutable flags — vi.hoisted runs before vi.mock
+const { flagsMock } = vi.hoisted(() => ({
+  flagsMock: { PROFILE_ID_CANONICAL: false },
+}));
+
 const mockCreateFact = vi.fn().mockResolvedValue({
   id: "fact-1",
   sessionId: "anchor-sess",
@@ -11,19 +16,21 @@ const mockCreateFact = vi.fn().mockResolvedValue({
   source: "connector",
 });
 
+const mockGetActiveFacts = vi.fn().mockReturnValue([
+  {
+    id: "f1",
+    sessionId: "anchor-sess",
+    category: "skill",
+    key: "ts",
+    value: { name: "TypeScript" },
+    source: "connector",
+    visibility: "proposed",
+  },
+]);
+
 vi.mock("@/lib/services/kb-service", () => ({
   createFact: (...args: unknown[]) => mockCreateFact(...args),
-  getActiveFacts: vi.fn().mockReturnValue([
-    {
-      id: "f1",
-      sessionId: "anchor-sess",
-      category: "skill",
-      key: "ts",
-      value: { name: "TypeScript" },
-      source: "connector",
-      visibility: "proposed",
-    },
-  ]),
+  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
 }));
 
 const mockGetDraft = vi.fn().mockReturnValue(null);
@@ -45,13 +52,13 @@ vi.mock("@/lib/services/page-projection", () => ({
   }),
 }));
 
+const mockGetFactLanguage = vi.fn().mockReturnValue("en");
+
 vi.mock("@/lib/services/preferences-service", () => ({
-  getFactLanguage: vi.fn().mockReturnValue("en"),
+  getFactLanguage: (...args: unknown[]) => mockGetFactLanguage(...args),
 }));
 
-vi.mock("@/lib/flags", () => ({
-  PROFILE_ID_CANONICAL: false,
-}));
+vi.mock("@/lib/flags", () => flagsMock);
 
 const { batchCreateFacts } = await import("@/lib/connectors/connector-fact-writer");
 
@@ -59,6 +66,7 @@ describe("connector-fact-writer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetDraft.mockReturnValue(null);
+    flagsMock.PROFILE_ID_CANONICAL = false;
   });
 
   const scope = {
@@ -78,12 +86,28 @@ describe("connector-fact-writer", () => {
 
     expect(mockCreateFact).toHaveBeenCalledTimes(1);
     const [input, sessionId, profileId, options] = mockCreateFact.mock.calls[0];
+    // Verify source is forced to "connector" (not default "chat")
+    // This is sufficient because createFact writes input.source to DB via
+    // `source: input.source ?? "chat"` (kb-service.ts:176)
     expect(input.source).toBe("connector");
     expect(options?.actor).toBe("connector");
     expect(sessionId).toBe("anchor-sess");
     expect(profileId).toBe("prof-1");
     expect(report.factsWritten).toBe(1);
     expect(report.factsSkipped).toBe(0);
+  });
+
+  it("overrides user-supplied source with 'connector'", async () => {
+    // Even if input has source: "chat", the writer must force "connector"
+    await batchCreateFacts(
+      [{ category: "skill", key: "ts", value: { name: "TS" }, source: "chat" }],
+      scope,
+      "testuser",
+      "en",
+    );
+
+    const [input] = mockCreateFact.mock.calls[0];
+    expect(input.source).toBe("connector");
   });
 
   it("skips failed facts and continues batch", async () => {
@@ -156,18 +180,39 @@ describe("connector-fact-writer", () => {
   });
 });
 
-describe("connector-fact-writer with PROFILE_ID_CANONICAL", () => {
-  it("uses cognitiveOwnerKey for getActiveFacts and knowledgePrimaryKey for draft ops", async () => {
-    // This test verifies the split-key logic
-    const { getActiveFacts } = await import("@/lib/services/kb-service");
-    const { getDraft } = await import("@/lib/services/page-service");
+describe("connector-fact-writer split-key logic", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetDraft.mockReturnValue(null);
+    flagsMock.PROFILE_ID_CANONICAL = false;
+  });
 
-    const splitScope = {
-      cognitiveOwnerKey: "prof-1",
-      knowledgeReadKeys: ["sess-1", "sess-2"],
-      knowledgePrimaryKey: "sess-1",
-      currentSessionId: "sess-2",
-    };
+  const splitScope = {
+    cognitiveOwnerKey: "prof-1",
+    knowledgeReadKeys: ["sess-1", "sess-2"],
+    knowledgePrimaryKey: "sess-1",
+    currentSessionId: "sess-2",
+  };
+
+  it("uses knowledgePrimaryKey for createFact sessionId and getDraft", async () => {
+    await batchCreateFacts(
+      [{ category: "skill", key: "x", value: { name: "X" } }],
+      splitScope,
+      "testuser",
+      "en",
+    );
+
+    // createFact: sessionId = knowledgePrimaryKey, profileId = cognitiveOwnerKey
+    expect(mockCreateFact.mock.calls[0][1]).toBe("sess-1");
+    expect(mockCreateFact.mock.calls[0][2]).toBe("prof-1");
+    // getDraft: session-based, always knowledgePrimaryKey
+    expect(mockGetDraft).toHaveBeenCalledWith("sess-1");
+    // getFactLanguage: session-based
+    expect(mockGetFactLanguage).toHaveBeenCalledWith("sess-1");
+  });
+
+  it("PROFILE_ID_CANONICAL=false: getActiveFacts uses knowledgePrimaryKey + readKeys", async () => {
+    flagsMock.PROFILE_ID_CANONICAL = false;
 
     await batchCreateFacts(
       [{ category: "skill", key: "x", value: { name: "X" } }],
@@ -176,11 +221,23 @@ describe("connector-fact-writer with PROFILE_ID_CANONICAL", () => {
       "en",
     );
 
-    // createFact uses knowledgePrimaryKey as sessionId, cognitiveOwnerKey as profileId
-    expect(mockCreateFact.mock.calls[0][1]).toBe("sess-1"); // sessionId
-    expect(mockCreateFact.mock.calls[0][2]).toBe("prof-1"); // profileId
+    // Non-canonical: factsReadId = knowledgePrimaryKey, passes readKeys
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("sess-1", ["sess-1", "sess-2"]);
+  });
 
-    // getDraft uses knowledgePrimaryKey (session-based)
+  it("PROFILE_ID_CANONICAL=true: getActiveFacts uses cognitiveOwnerKey, no readKeys", async () => {
+    flagsMock.PROFILE_ID_CANONICAL = true;
+
+    await batchCreateFacts(
+      [{ category: "skill", key: "x", value: { name: "X" } }],
+      splitScope,
+      "testuser",
+      "en",
+    );
+
+    // Canonical: factsReadId = cognitiveOwnerKey, readKeys = undefined
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("prof-1", undefined);
+    // But getDraft still uses knowledgePrimaryKey (session-based)
     expect(mockGetDraft).toHaveBeenCalledWith("sess-1");
   });
 });

@@ -12,7 +12,7 @@ export type ConnectorDefinition = {
 export type ConnectorRow = {
   id: string;
   connectorType: string;
-  ownerKey: string;
+  ownerKey: string | null;
   status: ConnectorStatus;
   credentials: string | null; // AES-256-GCM ciphertext (base64)
   config: Record<string, unknown> | null;
