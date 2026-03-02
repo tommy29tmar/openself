@@ -36,6 +36,7 @@ import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { TAGLINE_TEMPLATES } from "@/lib/i18n/hero-fallbacks";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
+import { getProfileAvatar } from "@/lib/services/media-service";
 
 const DEFAULT_STYLE: StyleConfig = {
   colorScheme: "light",
@@ -385,6 +386,7 @@ function buildHeroSection(
   socialFacts?: FactRow[],
   contactFacts?: FactRow[],
   languageFacts?: FactRow[],
+  profileId?: string,
 ): Section | null {
   let name: string | undefined;
   let tagline: string | undefined;
@@ -525,6 +527,14 @@ function buildHeroSection(
   if (socialLinks.length > 0) content.socialLinks = socialLinks;
   if (contactEmail) content.contactEmail = contactEmail;
   if (languageItems.length > 0) content.languages = languageItems;
+
+  // Avatar
+  if (profileId) {
+    const avatarMediaId = getProfileAvatar(profileId);
+    if (avatarMediaId) {
+      content.avatarUrl = `/api/media/${avatarMediaId}`;
+    }
+  }
 
   return {
     id: "hero-1",
@@ -1293,6 +1303,7 @@ export function composeOptimisticPage(
   language: string = "en",
   layoutTemplate?: LayoutTemplateId,
   draftSlots?: Map<string, string>,
+  profileId?: string,
 ): PageConfig {
   // Global privacy gate: only compose from public/proposed facts
   const visibleFacts = facts.filter(
@@ -1317,6 +1328,7 @@ export function composeOptimisticPage(
     extended ? socialFacts : undefined,
     extended ? contactFacts : undefined,
     extended ? languageFacts : undefined,
+    profileId,
   );
   if (hero) sections.push(hero);
 

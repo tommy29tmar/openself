@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 1834 automated tests passing (153 test files)
+- 2063 automated tests passing (165 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -363,10 +363,34 @@ All items complete. Two connectors implemented end-to-end with full test coverag
 1. **private-contact category** — Forces `private` visibility via `SENSITIVE_CATEGORIES`. Email validation widened for private-contact category.
 2. **Date placeholder validation** — Extended to `start`/`end` fields (not just `period`).
 
-### Phase 1d — Other Phase 1
-1. Media upload API and avatar end-to-end support
-2. ~~Connector MVP (GitHub)~~ — Done (GitHub + LinkedIn ZIP)
-3. Public page auto-translation for visitors (on-demand + cached)
+### Phase 1d Closing ✅
+
+All 3 remaining Phase 1 items complete. 16 commits, ~230 new tests (2063 total, 165 files).
+
+**Feature 1: Connector UI in SettingsPanel**
+1. **ConnectorSection component** — Status fetch from `/api/connectors/status`, per-connector cards (connected/disconnected states), GitHub OAuth connect, LinkedIn ZIP file picker, disconnect via `/api/connectors/{id}/disconnect`.
+2. **SettingsPanel wiring** — ConnectorSection mounted as "Integrations" section below Avatar.
+3. **OAuth return flow** — Builder detects `?connector=github` URL param, auto-opens settings panel, cleans URL via `replaceState`.
+4. **Sync idempotency + rate limiting** — `hasPendingJob()` checks jobs table (409 ALREADY_SYNCING), `isSyncRateLimited()` enforces 60s cooldown (429 RATE_LIMITED), `acquireImportLock()`/`releaseImportLock()` in-memory Set lock for LinkedIn import.
+5. **API error contract** — Standardized `{ success: false, code, error, retryable }` via `connectorError()` helper across all 5 connector routes.
+
+**Feature 2: Avatar Upload**
+1. **Magic bytes validation + EXIF stripping** — `detectMimeFromMagicBytes()` (JPEG/PNG/GIF/WebP), `stripExifFromJpeg()` (removes APP1 markers), `processAvatarImage()` orchestrator with MIME mismatch check.
+2. **POST/DELETE endpoints** — `POST /api/media/avatar` (auth → formData → 2MB size check → MIME whitelist → magic bytes + EXIF strip → upload), `DELETE /api/media/avatar` (auth → remove). Delete-before-insert pattern for partial unique index.
+3. **Composer wiring** — `profileId` threaded through `projectCanonicalConfig()` → `composeOptimisticPage()` → `buildHeroSection()` → `getProfileAvatar()`. All new params optional for backward compatibility. Wired into preview, stream, tools, publish pipeline, connector fact writer.
+4. **AvatarSection UI** — Client component with 64px circular preview, upload button (file picker → POST FormData), remove button (DELETE), loading/error states.
+
+**Feature 3: Public Page Auto-Translation**
+1. **Accept-Language parser** — Q-weight sorting, region-to-base fallback (fr-CA → fr), wildcard filtering, 8 supported languages. Bot detection (Googlebot, Bingbot, etc.) skips translation for SEO.
+2. **DB migration 0024** — `source_language TEXT` column on `page` table. Stored at publish time from `factLang`.
+3. **Translation cache key hardening** — Composite SHA-256 of content hash + source language + target language + model ID. Fixed model tier bug (`getModelIdForTier("fast")`).
+4. **Public page translation logic** — Language precedence: `?lang=` > `os_lang` cookie > `Accept-Language` > page sourceLanguage. Bot detection skips translation. `?lang=original` bypass.
+5. **TranslationBanner** — Disclosure banner: "Machine-translated from {language}. View original" with link to `?lang=original`.
+
+**Build fixes:**
+- `yauzl-promise` added to `serverExternalPackages` (native `@node-rs/crc32` can't be bundled by webpack).
+- LinkedIn mapper type predicate fix for strict TS in `next build`.
+- `EXPECTED_SCHEMA_VERSION` bumped to 24.
 
 ### Later
 1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
@@ -389,7 +413,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 1834 passed / 1834 total (Vitest, 153 test files)
+- Automated tests: 2063 passed / 2063 total (Vitest, 165 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)

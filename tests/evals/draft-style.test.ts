@@ -46,6 +46,7 @@ testSqlite.exec(`
       CHECK (status IN ('draft', 'approval_pending', 'published')),
     generated_at DATETIME,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source_language TEXT,
     CHECK (status != 'published' OR username != 'draft')
   );
 `);

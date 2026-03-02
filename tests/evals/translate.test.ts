@@ -64,7 +64,7 @@ vi.mock("drizzle-orm", () => ({
   sql: {},
 }));
 
-import { translatePageContent } from "@/lib/ai/translate";
+import { translatePageContent, computeCompositeCacheKey } from "@/lib/ai/translate";
 import { generateObject } from "ai";
 import { logEvent } from "@/lib/services/event-service";
 import type { PageConfig } from "@/lib/page-config/schema";
@@ -527,5 +527,129 @@ describe("translatePageContent — cache behavior", () => {
 
     // Restore normal behavior for other tests
     mockFrom.mockReturnValue({ where: mockDbWhere });
+  });
+});
+
+describe("computeCompositeCacheKey", () => {
+  it("produces a 64-char hex string", () => {
+    const key = computeCompositeCacheKey("abc123", "it", "en", "model-1");
+    expect(key).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("same inputs yield the same key", () => {
+    const a = computeCompositeCacheKey("hash1", "it", "en", "model-1");
+    const b = computeCompositeCacheKey("hash1", "it", "en", "model-1");
+    expect(a).toBe(b);
+  });
+
+  it("different source language yields a different key", () => {
+    const fromIt = computeCompositeCacheKey("hash1", "it", "en", "model-1");
+    const fromDe = computeCompositeCacheKey("hash1", "de", "en", "model-1");
+    expect(fromIt).not.toBe(fromDe);
+  });
+
+  it("different target language yields a different key", () => {
+    const toEn = computeCompositeCacheKey("hash1", "it", "en", "model-1");
+    const toDe = computeCompositeCacheKey("hash1", "it", "de", "model-1");
+    expect(toEn).not.toBe(toDe);
+  });
+
+  it("different model yields a different key", () => {
+    const m1 = computeCompositeCacheKey("hash1", "it", "en", "model-1");
+    const m2 = computeCompositeCacheKey("hash1", "it", "en", "model-2");
+    expect(m1).not.toBe(m2);
+  });
+
+  it("different content hash yields a different key", () => {
+    const c1 = computeCompositeCacheKey("hash1", "it", "en", "model-1");
+    const c2 = computeCompositeCacheKey("hash2", "it", "en", "model-1");
+    expect(c1).not.toBe(c2);
+  });
+});
+
+describe("translatePageContent — source language cache isolation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReturnValue(undefined);
+  });
+
+  it("changing source language causes cache miss even with same content and target", async () => {
+    // First call: it→en, cache miss, LLM translates
+    mockGenerateObject.mockResolvedValue({
+      object: [{
+        sectionId: "hero-1",
+        type: "hero",
+        content: { name: "Marco Rossi", tagline: "Welcome" },
+      }],
+    } as any);
+
+    const config = makeConfig();
+    await translatePageContent(config, "en", "it");
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+
+    // Second call: de→en, same content but different source — should miss cache
+    await translatePageContent(config, "en", "de");
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+  });
+
+  it("same source/target/content yields cache hit", async () => {
+    const cachedSections = [
+      {
+        sectionId: "hero-1",
+        type: "hero",
+        content: { name: "Marco Rossi", tagline: "Welcome" },
+      },
+    ];
+
+    // Simulate cache hit for it→en
+    mockGet.mockReturnValue({
+      contentHash: "composite-hash",
+      targetLanguage: "en",
+      translatedSections: cachedSections,
+      model: "mock-model-id",
+    });
+
+    const config = makeConfig();
+    const result = await translatePageContent(config, "en", "it");
+
+    // LLM should NOT have been called
+    expect(mockGenerateObject).not.toHaveBeenCalled();
+
+    // Cached content should be merged
+    const hero = result.sections.find((s) => s.id === "hero-1")!;
+    expect((hero.content as any).tagline).toBe("Welcome");
+  });
+
+  it("null source language is normalized to 'unknown' for cache key", async () => {
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+
+    const config = makeConfig();
+    await translatePageContent(config, "en", null);
+
+    // Check the cache write uses "unknown" as normalized source
+    // The cacheKey stored should be a composite of content+unknown+en+modelId
+    expect(mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetLanguage: "en",
+        model: "mock-model-id",
+      }),
+    );
+    // Verify the contentHash in the write is a composite (64-char hex, not the raw content hash)
+    const writeCall = mockValues.mock.calls[0][0];
+    expect(writeCall.contentHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("cache write uses getModelIdForTier('fast') not getModelId()", async () => {
+    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+
+    const config = makeConfig();
+    await translatePageContent(config, "en", "it");
+
+    // The mock for getModelIdForTier returns "mock-model-id"
+    expect(mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "mock-model-id",
+      }),
+    );
   });
 });

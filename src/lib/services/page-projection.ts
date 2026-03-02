@@ -41,6 +41,7 @@ export function projectCanonicalConfig(
   username: string,
   factLanguage: string,
   draftMeta?: DraftMeta,
+  profileId?: string,
 ): PageConfig {
   // 1. Filter to publishable facts only
   const publishable = filterPublishableFacts(facts);
@@ -65,6 +66,7 @@ export function projectCanonicalConfig(
     factLanguage,
     draftMeta?.layoutTemplate,
     draftSlots.size > 0 ? draftSlots : undefined,
+    profileId,
   );
 
   // 4. Preserve metadata from draft (theme, style, layout)
@@ -123,8 +125,9 @@ export function projectPublishableConfig(
   username: string,
   factLanguage: string,
   draftMeta?: DraftMeta,
+  profileId?: string,
 ): PageConfig {
   return publishableFromCanonical(
-    projectCanonicalConfig(facts, username, factLanguage, draftMeta),
+    projectCanonicalConfig(facts, username, factLanguage, draftMeta, profileId),
   );
 }

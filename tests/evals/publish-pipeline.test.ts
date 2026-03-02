@@ -88,6 +88,10 @@ vi.mock("@/lib/flags", () => ({
   PROFILE_ID_CANONICAL: false,
 }));
 
+vi.mock("@/lib/services/session-service", () => ({
+  getSession: vi.fn(() => null),
+}));
+
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 import {
   getDraft,
@@ -180,7 +184,7 @@ describe("prepareAndPublish", () => {
     // Pipeline always calls upsertDraft with the recomposed+translated config
     expect(upsertDraft).toHaveBeenCalled();
     expect(requestPublish).toHaveBeenCalledWith("testuser", "session-1");
-    expect(confirmPublish).toHaveBeenCalledWith("testuser", "session-1");
+    expect(confirmPublish).toHaveBeenCalledWith("testuser", "session-1", "en");
   });
 
   it("promotes proposed facts to public in the transaction", async () => {

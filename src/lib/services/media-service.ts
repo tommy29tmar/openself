@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { mediaAssets } from "@/lib/db/schema";
 
@@ -51,6 +51,23 @@ export function uploadAvatar(
     .run();
 
   return id;
+}
+
+/**
+ * Get the avatar media ID for a profile, or null if none exists.
+ */
+export function getProfileAvatar(profileId: string): string | null {
+  const row = db
+    .select({ id: mediaAssets.id })
+    .from(mediaAssets)
+    .where(
+      and(
+        eq(mediaAssets.profileId, profileId),
+        eq(mediaAssets.kind, "avatar"),
+      ),
+    )
+    .get();
+  return row?.id ?? null;
 }
 
 export function getMediaById(

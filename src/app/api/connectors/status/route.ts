@@ -2,15 +2,13 @@ import { NextResponse } from "next/server";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { getConnectorStatus } from "@/lib/connectors/connector-service";
+import { connectorError } from "@/lib/connectors/api-errors";
 
 export async function GET(req: Request) {
   const scope = resolveOwnerScope(req);
 
   if (isMultiUserEnabled() && !scope) {
-    return NextResponse.json(
-      { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
-      { status: 403 },
-    );
+    return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }
 
   const ownerKey = scope?.cognitiveOwnerKey ?? "__default__";
@@ -20,9 +18,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ success: true, connectors });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { success: false, code: "INTERNAL", error: message },
-      { status: 500 },
-    );
+    return connectorError("INTERNAL", message, 500, true);
   }
 }

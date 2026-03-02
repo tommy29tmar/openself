@@ -53,12 +53,16 @@ export async function GET(req: Request) {
       }
     : undefined;
 
+  // Resolve profileId for avatar lookup
+  const profileId = scope?.cognitiveOwnerKey ?? "__default__";
+
   // Canonical config: all sections for display
   const previewConfig = projectCanonicalConfig(
     facts,
     canonicalUsername,
     factLang,
     draftMeta,
+    profileId,
   );
 
   // Merge personalized copy (hash-guarded, stale → deterministic fallback)

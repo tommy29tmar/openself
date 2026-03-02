@@ -203,6 +203,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         currentDraft?.username ?? "draft",
         factLang,
         draftMeta,
+        effectiveOwnerKey,
       );
 
       // Idempotency: skip write if hash matches

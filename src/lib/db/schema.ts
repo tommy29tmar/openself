@@ -151,6 +151,7 @@ export const page = sqliteTable("page", {
   status: text("status").notNull().default("draft"),   // draft | approval_pending | published
   generatedAt: text("generated_at"),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  sourceLanguage: text("source_language"),
 });
 
 // -- Agent Config

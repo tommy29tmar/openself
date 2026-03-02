@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { GitHub, generateState } from "arctic";
 import { resolveOwnerScope } from "@/lib/auth/session";
+import { connectorError } from "@/lib/connectors/api-errors";
 
 function getConnectorGitHubClient(): GitHub | null {
   const clientId = process.env.GITHUB_CLIENT_ID;
@@ -27,18 +28,12 @@ function getConnectorGitHubClient(): GitHub | null {
 export async function GET(req: NextRequest) {
   const scope = resolveOwnerScope(req);
   if (!scope) {
-    return NextResponse.json(
-      { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
-      { status: 403 },
-    );
+    return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }
 
   const github = getConnectorGitHubClient();
   if (!github) {
-    return NextResponse.json(
-      { success: false, code: "NOT_CONFIGURED", error: "GitHub OAuth not configured." },
-      { status: 404 },
-    );
+    return connectorError("NOT_CONFIGURED", "GitHub OAuth not configured.", 404, false);
   }
 
   const state = generateState();

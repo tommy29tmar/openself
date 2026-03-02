@@ -69,6 +69,19 @@ export function getPublishedPage(username: string): PageConfig | null {
 }
 
 /**
+ * Get the source language of a published page.
+ * Returns null if page not found or no source_language recorded.
+ */
+export function getPublishedPageSourceLanguage(username: string): string | null {
+  const row = db
+    .select({ sourceLanguage: page.sourceLanguage })
+    .from(page)
+    .where(and(eq(page.username, username), eq(page.status, "published")))
+    .get();
+  return row?.sourceLanguage ?? null;
+}
+
+/**
  * Look up the published username for a set of session IDs.
  * Returns the most recently updated published page's username, or null.
  */
@@ -204,7 +217,11 @@ export function requestPublish(username: string, sessionId: string = "__default_
  * Promote draft → published. Called by POST /api/publish (user action).
  * Atomic: reads draft, creates/updates published row, resets draft status.
  */
-export function confirmPublish(username: string, sessionId: string = "__default__"): void {
+export function confirmPublish(
+  username: string,
+  sessionId: string = "__default__",
+  sourceLanguage?: string,
+): void {
   // Guard 1: reserved usernames
   if (RESERVED_USERNAMES.has(username)) {
     throw new PublishError(`Username "${username}" is reserved`, "USERNAME_RESERVED", 400);
@@ -245,17 +262,18 @@ export function confirmPublish(username: string, sessionId: string = "__default_
     const now = new Date().toISOString();
     sqlite
       .prepare(
-        `INSERT INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?)
+        `INSERT INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at, source_language)
+         VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            username = excluded.username,
            config = excluded.config,
            config_hash = excluded.config_hash,
            status = 'published',
            generated_at = excluded.generated_at,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at,
+           source_language = excluded.source_language`,
       )
-      .run(username, sessionId, profileId, username, draftRow.config, draftRow.config_hash, draftRow.generated_at, now);
+      .run(username, sessionId, profileId, username, draftRow.config, draftRow.config_hash, draftRow.generated_at, now, sourceLanguage ?? null);
 
     // Step 3: reset draft status back to "draft"
     sqlite
