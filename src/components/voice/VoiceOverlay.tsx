@@ -18,14 +18,14 @@ export function VoiceOverlay({ onOpenChat }: VoiceOverlayProps) {
     <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 pb-6 pt-4 bg-gradient-to-t from-background/90 to-transparent">
       {/* Interim text display */}
       {voiceMode && interimText && (
-        <div className="mx-4 rounded-lg bg-background/80 px-4 py-2 text-sm text-muted-foreground backdrop-blur-sm">
+        <div role="status" aria-live="polite" className="mx-4 rounded-lg bg-background/80 px-4 py-2 text-sm text-muted-foreground backdrop-blur-sm">
           {interimText}
         </div>
       )}
 
       {/* State indicator */}
       {voiceMode && voiceState === VoiceState.WAITING && (
-        <div className="text-xs text-muted-foreground animate-pulse">
+        <div role="status" aria-live="polite" className="text-xs text-muted-foreground animate-pulse">
           Thinking...
         </div>
       )}
@@ -38,6 +38,7 @@ export function VoiceOverlay({ onOpenChat }: VoiceOverlayProps) {
           onClick={onOpenChat}
           className="flex h-10 w-10 items-center justify-center rounded-full border bg-background/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-accent"
           aria-label="Open chat"
+          title="Open chat"
         >
           <svg
             aria-hidden="true"
