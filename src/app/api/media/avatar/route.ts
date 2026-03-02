@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   }
 
   const authCtx = getAuthContext(req);
-  const profileId = authCtx?.profileId ?? "main";
+  const profileId = authCtx?.profileId ?? "__default__";
 
   // Parse FormData
   let formData: FormData;
@@ -107,7 +107,7 @@ export async function DELETE(req: Request) {
   }
 
   const authCtx = getAuthContext(req);
-  const profileId = authCtx?.profileId ?? "main";
+  const profileId = authCtx?.profileId ?? "__default__";
 
   // Delete avatar for this profile
   db.delete(mediaAssets)
