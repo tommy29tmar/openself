@@ -3,6 +3,16 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96-bit IV recommended for GCM
 const KEY_VERSION = 1;
+const EXPECTED_KEY_HEX_LENGTH = 64; // 32 bytes = 64 hex chars
+
+function validateHexKey(hexKey: string): Buffer {
+  if (!/^[0-9a-f]{64}$/i.test(hexKey)) {
+    throw new Error(
+      `CONNECTOR_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes). Got ${hexKey.length} chars.`,
+    );
+  }
+  return Buffer.from(hexKey, "hex");
+}
 
 /**
  * Encrypt a credentials object using AES-256-GCM.
@@ -12,7 +22,7 @@ export function encryptCredentials(
   data: Record<string, unknown>,
   hexKey: string,
 ): string {
-  const key = Buffer.from(hexKey, "hex");
+  const key = validateHexKey(hexKey);
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv);
 
@@ -45,7 +55,7 @@ export function decryptCredentials(
     Buffer.from(encrypted, "base64").toString("utf-8"),
   );
 
-  const key = Buffer.from(hexKey, "hex");
+  const key = validateHexKey(hexKey);
   const iv = Buffer.from(envelope.iv, "base64");
   const data = Buffer.from(envelope.data, "base64");
   const tag = Buffer.from(envelope.tag, "base64");

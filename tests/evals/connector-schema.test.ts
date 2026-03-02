@@ -23,10 +23,12 @@ describe("connector schema", () => {
   });
 
   it("credentials column is plain text (not json mode)", () => {
-    // After changing from { mode: "json" } to plain text,
-    // the column config should not have mapFromDriverValue (json mode adds this)
-    const col = schema.connectors.credentials;
-    expect(col).toBeDefined();
+    const credCol = schema.connectors.credentials as unknown as { columnType: string };
+    const configCol = schema.connectors.config as unknown as { columnType: string };
+    // credentials stores AES-256-GCM ciphertext, must NOT be JSON mode
+    expect(credCol.columnType).toBe("SQLiteText");
+    // config is JSON mode (control comparison)
+    expect(configCol.columnType).toBe("SQLiteTextJson");
   });
 
   it("connectorItems table exists with required columns", () => {

@@ -42,6 +42,18 @@ describe("connector-encryption", () => {
     expect(decrypted).toEqual({});
   });
 
+  it("rejects invalid hex key (too short)", () => {
+    expect(() => encryptCredentials({ t: 1 }, "abcd")).toThrow(
+      "CONNECTOR_ENCRYPTION_KEY must be exactly 64 hex characters",
+    );
+  });
+
+  it("rejects invalid hex key (non-hex chars)", () => {
+    expect(() =>
+      encryptCredentials({ t: 1 }, "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"),
+    ).toThrow("CONNECTOR_ENCRYPTION_KEY must be exactly 64 hex characters");
+  });
+
   it("handles complex nested objects", () => {
     const original = {
       access_token: "ghp_abc",
