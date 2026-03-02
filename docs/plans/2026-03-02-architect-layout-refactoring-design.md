@@ -30,6 +30,7 @@ The architect (bento) layout has three structural issues:
 - Issue includes: section id, section type, template id
 
 #### `group-slots.ts`
+- **Add `accepts` check to Step 2 (explicit slot assignment, line ~46-51)**: Currently checks only `validSlotIds.has()` + capacity. Must also verify `slot.accepts.includes(section.type)`. Sections with explicit slot that fails accepts check fall through to overflow (Step 3).
 - Remove the "Last resort: put in first non-hero/footer slot that has any room" block (lines ~62-72) that ignores both `accepts` and `maxSections`
 - Keep the overflow logic at lines ~50-60 that **does** check `slot.accepts` — this is sound
 - **Do not change** the function signature: it stays `Record<string, Section[]>`. Sections without a valid `slot` field simply don't appear in any slot bucket and are excluded from rendering
@@ -119,7 +120,9 @@ All compact variants:
 
 #### `scripts/backfill-architect-slots.ts`
 - Query all pages (draft + published) where `layoutTemplate = "architect"`
-- For each: run `assignSlotsFromFacts()` with the updated registry
+- For each: run `assignSlotsFromFacts()` with `draftSlots = undefined` to bypass soft-pin and force full affinity re-ranking
+- `config` treated as object (Drizzle `mode: "json"`), no `JSON.parse()`
+- Writes `configHash` + `updatedAt` alongside `config` (per `sanitize-drafts.ts` pattern)
 - Modes: `--dry-run` (report changes, don't write) and `--apply` (write to DB)
 - Output: per-page diff (section id → old slot/widget → new slot/widget)
 - Safety: skip pages with any user locks (`lockedBy: "user"`)
