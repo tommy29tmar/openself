@@ -1,0 +1,104 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// --- Mocks ---
+
+const mockResolveOwnerScope = vi.fn();
+const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
+const mockEnqueueJob = vi.fn();
+
+vi.mock("@/lib/auth/session", () => ({
+  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
+}));
+
+vi.mock("@/lib/connectors/connector-service", () => ({
+  getConnectorStatus: (...args: unknown[]) => mockGetConnectorStatus(...args),
+}));
+
+vi.mock("@/lib/worker", () => ({
+  enqueueJob: (...args: unknown[]) => mockEnqueueJob(...args),
+}));
+
+vi.mock("@/lib/db", () => ({
+  db: {},
+  sqlite: {},
+}));
+
+vi.mock("@/lib/db/schema", () => ({
+  connectors: {
+    id: "id", ownerKey: "owner_key", connectorType: "connector_type",
+    status: "status", enabled: "enabled",
+  },
+}));
+
+const ownerScope = {
+  cognitiveOwnerKey: "owner-1",
+  knowledgePrimaryKey: "sess-1",
+  knowledgeReadKeys: ["sess-1"],
+  currentSessionId: "sess-1",
+};
+
+describe("POST /api/connectors/github/sync", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 403 when not authenticated", async () => {
+    mockResolveOwnerScope.mockReturnValue(null);
+
+    const { POST } = await import("@/app/api/connectors/github/sync/route");
+    const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
+    const res = await POST(req as never);
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe("AUTH_REQUIRED");
+  });
+
+  it("returns 404 when no connected GitHub connector", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorStatus.mockReturnValue([]);
+
+    const { POST } = await import("@/app/api/connectors/github/sync/route");
+    const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
+    const res = await POST(req as never);
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe("NOT_CONNECTED");
+  });
+
+  it("returns 200 and enqueues sync job when GitHub is connected", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorStatus.mockReturnValue([
+      { id: "c1", connectorType: "github", status: "connected", enabled: true },
+    ]);
+
+    const { POST } = await import("@/app/api/connectors/github/sync/route");
+    const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
+    const res = await POST(req as never);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.message).toBe("Sync queued");
+    expect(mockEnqueueJob).toHaveBeenCalledWith("connector_sync", { ownerKey: "owner-1" });
+  });
+
+  it("only matches 'connected' status — not 'error', 'disconnected', or 'paused'", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+
+    for (const status of ["error", "disconnected", "paused"]) {
+      mockGetConnectorStatus.mockReturnValue([
+        { id: "c1", connectorType: "github", status, enabled: true },
+      ]);
+
+      const { POST } = await import("@/app/api/connectors/github/sync/route");
+      const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
+      const res = await POST(req as never);
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.code).toBe("NOT_CONNECTED");
+    }
+
+    expect(mockEnqueueJob).not.toHaveBeenCalled();
+  });
+});
