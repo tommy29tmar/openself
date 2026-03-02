@@ -10,6 +10,7 @@ import { generateSummary } from "@/lib/services/summary-service";
 import { handleHeartbeatLight, handleHeartbeatDeep } from "./heartbeat";
 import { expireStaleProposals } from "@/lib/services/soul-service";
 import { handleConnectorSync } from "@/lib/connectors/connector-sync-handler";
+import "@/lib/connectors/register-all";
 
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MINUTES = [1, 5, 15];
