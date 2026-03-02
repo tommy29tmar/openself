@@ -13,10 +13,15 @@ type MusicContent = {
     title?: string;
 };
 
-export function Music({ content }: SectionProps<MusicContent>) {
+export function Music({ content, variant }: SectionProps<MusicContent>) {
     const { items = [], title } = content;
 
     if (!items.length) return null;
+
+    const isCompact = variant === "compact";
+    const maxItems = isCompact ? 5 : items.length;
+    const visible = items.slice(0, maxItems);
+    const remaining = items.length - visible.length;
 
     return (
         <section className="theme-reveal">
@@ -24,42 +29,64 @@ export function Music({ content }: SectionProps<MusicContent>) {
                 {title || "Music"}
             </h2>
 
-            <div className="space-y-12">
-                {items.map((item, index) => (
-                    <React.Fragment key={index}>
-                        <article className="group">
-                            <h3 className="text-2xl md:text-3xl font-[var(--page-font-heading)] font-medium group-hover:text-[var(--page-accent)] transition-colors">
-                                {item.url ? (
-                                    <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="hover:underline underline-offset-4"
-                                    >
-                                        {item.title}
-                                    </a>
-                                ) : (
-                                    item.title
-                                )}
-                            </h3>
+            {isCompact ? (
+                <div className="space-y-3">
+                    {visible.map((item, index) => (
+                        <div key={index} className="flex items-baseline gap-2">
                             {item.artist && (
-                                <div className="text-lg font-medium text-[var(--page-fg)] mt-1">
+                                <span className="text-sm text-[var(--page-fg-secondary)]">
                                     {item.artist}
-                                </div>
+                                </span>
                             )}
-                            {item.note && (
-                                <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-2xl text-lg mt-3">
-                                    {item.note}
-                                </p>
-                            )}
-                        </article>
+                            <span className="text-lg font-[var(--page-font-heading)] font-medium text-[var(--page-fg)]">
+                                {item.title}
+                            </span>
+                        </div>
+                    ))}
+                    {remaining > 0 && (
+                        <div className="text-sm text-[var(--page-fg-secondary)] italic">
+                            +{remaining} more
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-12">
+                    {items.map((item, index) => (
+                        <React.Fragment key={index}>
+                            <article className="group">
+                                <h3 className="text-2xl md:text-3xl font-[var(--page-font-heading)] font-medium group-hover:text-[var(--page-accent)] transition-colors">
+                                    {item.url ? (
+                                        <a
+                                            href={item.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="hover:underline underline-offset-4"
+                                        >
+                                            {item.title}
+                                        </a>
+                                    ) : (
+                                        item.title
+                                    )}
+                                </h3>
+                                {item.artist && (
+                                    <div className="text-lg font-medium text-[var(--page-fg)] mt-1">
+                                        {item.artist}
+                                    </div>
+                                )}
+                                {item.note && (
+                                    <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-2xl text-lg mt-3">
+                                        {item.note}
+                                    </p>
+                                )}
+                            </article>
 
-                        {index < items.length - 1 && (
-                            <div className="entry-dot-separator" />
-                        )}
-                    </React.Fragment>
-                ))}
-            </div>
+                            {index < items.length - 1 && (
+                                <div className="entry-dot-separator" />
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+            )}
         </section>
     );
 }

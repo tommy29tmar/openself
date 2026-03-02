@@ -4,9 +4,10 @@ import type { LayoutTemplateDefinition } from "./types";
 /**
  * Group sections into their respective slots based on:
  * 1. Type routing: hero → heroSlot, footer → footerSlot (always, regardless of slot field)
- * 2. Explicit slot field if valid
- * 3. Fallback: overflow sections go to first slot with capacity (typically "main")
+ * 2. Explicit slot field if valid AND slot accepts the section type
+ * 3. Overflow: first slot with capacity > 1 that accepts the section type
  *
+ * Sections that cannot be placed in any compatible slot are silently dropped.
  * Empty slots are included as empty arrays so layout components know they exist.
  * Order within each slot preserves original sections array order.
  */
@@ -43,51 +44,30 @@ export function groupSectionsBySlot(
       }
     }
 
-    // Step 2: Explicit slot assignment
+    // Step 2: Explicit slot assignment (must pass accepts check)
     if (section.slot && validSlotIds.has(section.slot)) {
-      const capacity = slotCapacity.get(section.slot) ?? Infinity;
-      if (result[section.slot].length < capacity) {
-        result[section.slot].push(section);
-        continue;
+      const slotDef = template.slots.find(s => s.id === section.slot);
+      const typeAccepted = slotDef?.accepts.includes(section.type as never) ?? false;
+      if (typeAccepted) {
+        const capacity = slotCapacity.get(section.slot) ?? Infinity;
+        if (result[section.slot].length < capacity) {
+          result[section.slot].push(section);
+          continue;
+        }
       }
-      // Slot full — fall through to overflow
+      // Type not accepted or slot full — fall through to overflow
     }
 
-    // Step 3: Overflow — find first slot with capacity > 1 that has room
-    let placed = false;
+    // Step 3: Overflow — find first slot with capacity > 1 that accepts this type
     for (const slot of template.slots) {
       if (slot.id === template.heroSlot || slot.id === template.footerSlot) continue;
       const capacity = slot.maxSections ?? Infinity;
-      if (capacity > 1 && result[slot.id].length < capacity) {
-        // Check if slot accepts this section type
-        if (slot.accepts.includes(section.type as never)) {
-          result[slot.id].push(section);
-          placed = true;
-          break;
-        }
+      if (capacity > 1 && result[slot.id].length < capacity && slot.accepts.includes(section.type as never)) {
+        result[slot.id].push(section);
+        break;
       }
     }
-
-    // Last resort: put in first non-hero/footer slot that has any room
-    if (!placed) {
-      for (const slot of template.slots) {
-        if (slot.id === template.heroSlot || slot.id === template.footerSlot) continue;
-        const capacity = slot.maxSections ?? Infinity;
-        if (result[slot.id].length < capacity) {
-          result[slot.id].push(section);
-          placed = true;
-          break;
-        }
-      }
-    }
-
-    // If still not placed (all slots full), append to last non-footer slot
-    if (!placed) {
-      const lastSlot = template.slots.filter((s) => s.id !== template.footerSlot).pop();
-      if (lastSlot) {
-        result[lastSlot.id].push(section);
-      }
-    }
+    // Unplaceable sections (no compatible slot with capacity) are silently dropped
   }
 
   return result;

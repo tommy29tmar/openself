@@ -185,6 +185,15 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     maxItems: 20,
     label: "Achievements (list)",
   },
+  {
+    id: "achievements-compact",
+    sectionType: "achievements",
+    variant: "compact",
+    fitsIn: ["third"],
+    minItems: 1,
+    maxItems: 3,
+    label: "Achievements (compact)",
+  },
 
   // At a Glance
   {
@@ -216,6 +225,15 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     maxItems: 20,
     label: "Reading (list)",
   },
+  {
+    id: "reading-compact",
+    sectionType: "reading",
+    variant: "compact",
+    fitsIn: ["third"],
+    minItems: 1,
+    maxItems: 5,
+    label: "Reading (compact)",
+  },
 
   // Music
   {
@@ -226,6 +244,15 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     minItems: 1,
     maxItems: 20,
     label: "Music (list)",
+  },
+  {
+    id: "music-compact",
+    sectionType: "music",
+    variant: "compact",
+    fitsIn: ["third"],
+    minItems: 1,
+    maxItems: 5,
+    label: "Music (compact)",
   },
 
   // Contact
@@ -262,6 +289,15 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     variant: "cards",
     fitsIn: ["wide", "half"],
     label: "Education (cards)",
+  },
+  {
+    id: "education-compact",
+    sectionType: "education",
+    variant: "compact",
+    fitsIn: ["third"],
+    minItems: 1,
+    maxItems: 3,
+    label: "Education (compact)",
   },
 
   // Languages

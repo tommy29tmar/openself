@@ -14,10 +14,44 @@ type AchievementsContent = {
     title?: string;
 };
 
-export function Achievements({ content }: SectionProps<AchievementsContent>) {
+export function Achievements({ content, variant }: SectionProps<AchievementsContent>) {
     const { items = [], title } = content;
 
     if (!items.length) return null;
+
+    const isCompact = variant === "compact";
+    const maxItems = isCompact ? 3 : items.length;
+    const visible = items.slice(0, maxItems);
+    const remaining = items.length - visible.length;
+
+    if (isCompact) {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">
+                    {title || "Achievements"}
+                </h2>
+                <div className="space-y-3">
+                    {visible.map((item, index) => (
+                        <div key={index} className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-lg font-semibold text-[var(--page-fg)]">
+                                {item.title}
+                            </span>
+                            {item.date && (
+                                <span className="text-sm text-[var(--page-fg-secondary)]">
+                                    {item.date}
+                                </span>
+                            )}
+                        </div>
+                    ))}
+                    {remaining > 0 && (
+                        <div className="text-sm text-[var(--page-fg-secondary)] italic">
+                            +{remaining} more
+                        </div>
+                    )}
+                </div>
+            </section>
+        );
+    }
 
     const summaryLine = items
         .slice(1)

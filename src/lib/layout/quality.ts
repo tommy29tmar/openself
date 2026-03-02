@@ -4,7 +4,8 @@ export type LayoutIssueType =
   | "overflow_risk"
   | "too_sparse"
   | "incompatible_widget"
-  | "missing_required";
+  | "missing_required"
+  | "unplaceable_section";
 
 export type IssueSeverity = "error" | "warning";
 
@@ -53,6 +54,7 @@ const SEVERITY_MAP: Record<LayoutIssueType, IssueSeverity> = {
   incompatible_widget: "error",
   overflow_risk: "warning",
   too_sparse: "warning",
+  unplaceable_section: "warning",
 };
 
 function normalizeWidgets(

@@ -160,6 +160,68 @@ describe("Phase 1b widgets", () => {
   });
 });
 
+describe("compact widgets for architect card slots", () => {
+  it("reading-compact exists and fits third", () => {
+    const w = getWidgetById("reading-compact");
+    expect(w).toBeDefined();
+    expect(w!.sectionType).toBe("reading");
+    expect(w!.variant).toBe("compact");
+    expect(w!.fitsIn).toEqual(["third"]);
+    expect(w!.maxItems).toBe(5);
+  });
+
+  it("education-compact exists and fits third", () => {
+    const w = getWidgetById("education-compact");
+    expect(w).toBeDefined();
+    expect(w!.sectionType).toBe("education");
+    expect(w!.variant).toBe("compact");
+    expect(w!.fitsIn).toEqual(["third"]);
+    expect(w!.maxItems).toBe(3);
+  });
+
+  it("achievements-compact exists and fits third", () => {
+    const w = getWidgetById("achievements-compact");
+    expect(w).toBeDefined();
+    expect(w!.sectionType).toBe("achievements");
+    expect(w!.variant).toBe("compact");
+    expect(w!.fitsIn).toEqual(["third"]);
+    expect(w!.maxItems).toBe(3);
+  });
+
+  it("music-compact exists and fits third", () => {
+    const w = getWidgetById("music-compact");
+    expect(w).toBeDefined();
+    expect(w!.sectionType).toBe("music");
+    expect(w!.variant).toBe("compact");
+    expect(w!.fitsIn).toEqual(["third"]);
+    expect(w!.maxItems).toBe(5);
+  });
+
+  it("getBestWidget selects reading-compact for third slot", () => {
+    const w = getBestWidget("reading", "third");
+    expect(w).toBeDefined();
+    expect(w!.id).toBe("reading-compact");
+  });
+
+  it("getBestWidget still selects reading-list for wide slot", () => {
+    const w = getBestWidget("reading", "wide");
+    expect(w).toBeDefined();
+    expect(w!.id).toBe("reading-list");
+  });
+
+  it("getBestWidget selects education-compact for third slot", () => {
+    const w = getBestWidget("education", "third");
+    expect(w).toBeDefined();
+    expect(w!.id).toBe("education-compact");
+  });
+
+  it("getBestWidget selects music-compact for third slot", () => {
+    const w = getBestWidget("music", "third");
+    expect(w).toBeDefined();
+    expect(w!.id).toBe("music-compact");
+  });
+});
+
 describe("buildWidgetMap", () => {
   it("returns a record of all widgets keyed by id", () => {
     const map = buildWidgetMap();
