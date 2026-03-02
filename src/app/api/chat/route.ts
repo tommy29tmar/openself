@@ -3,6 +3,7 @@ import { getModelForTier, getModelIdForTier, getProviderName } from "@/lib/ai/pr
 import { assembleContext } from "@/lib/agent/context";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { createAgentTools } from "@/lib/agent/tools";
+import { filterToolsByJourneyState } from "@/lib/agent/tool-filter";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -258,11 +259,12 @@ export async function POST(req: Request) {
   try {
     const model = getModelForTier("standard");
     const { tools: agentTools, getJournal } = createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode);
+    const tools = filterToolsByJourneyState(agentTools, bootstrap.journeyState);
     const result = streamText({
       model,
       system: systemPrompt,
       messages: safeMessages,
-      tools: agentTools,
+      tools,
       maxSteps: MAX_STEPS,
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         const schema = parameterSchema({ toolName: toolCall.toolName });
