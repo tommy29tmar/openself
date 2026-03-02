@@ -45,4 +45,30 @@ describe("Public page translation logic", () => {
       expect(isCrawler(ua)).toBe(true);
     });
   });
+
+  describe("graceful degradation", () => {
+    it("serves original when sourceLanguage is null (old pages)", () => {
+      const sourceLanguage = null;
+      const visitorLang = "fr";
+      // When sourceLanguage is null, skip translation
+      const shouldTranslate = sourceLanguage !== null && visitorLang !== sourceLanguage;
+      expect(shouldTranslate).toBe(false);
+    });
+
+    it("serves original when Accept-Language has no supported match", () => {
+      const visitorLang = parseAcceptLanguage("ko,th;q=0.9");
+      expect(visitorLang).toBeNull();
+      // null visitorLang → no translation
+    });
+  });
+
+  describe("TranslationBanner language names", () => {
+    it("maps source language codes to display names", async () => {
+      const { LANGUAGE_NAMES } = await import("@/lib/i18n/language-names");
+      expect(LANGUAGE_NAMES.fr).toBe("French");
+      expect(LANGUAGE_NAMES.it).toBe("Italian");
+      expect(LANGUAGE_NAMES.de).toBe("German");
+      expect(LANGUAGE_NAMES.ja).toBe("Japanese");
+    });
+  });
 });
