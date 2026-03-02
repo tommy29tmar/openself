@@ -69,6 +69,19 @@ export function getPublishedPage(username: string): PageConfig | null {
 }
 
 /**
+ * Get the source language of a published page.
+ * Returns null if page not found or no source_language recorded.
+ */
+export function getPublishedPageSourceLanguage(username: string): string | null {
+  const row = db
+    .select({ sourceLanguage: page.sourceLanguage })
+    .from(page)
+    .where(and(eq(page.username, username), eq(page.status, "published")))
+    .get();
+  return row?.sourceLanguage ?? null;
+}
+
+/**
  * Look up the published username for a set of session IDs.
  * Returns the most recently updated published page's username, or null.
  */
