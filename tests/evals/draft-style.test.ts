@@ -278,6 +278,7 @@ vi.mock("@/lib/auth/session", () => ({
     knowledgePrimaryKey: "__default__",
     currentSessionId: "__default__",
   }),
+  getAuthContext: () => null,
   createSessionCookie: () => "",
 }));
 
@@ -285,6 +286,18 @@ vi.mock("@/lib/services/session-service", () => ({
   isMultiUserEnabled: () => false,
   getSession: () => null,
   getDefaultSessionId: () => "__default__",
+}));
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getActiveFacts: () => [],
+}));
+
+vi.mock("@/lib/services/preferences-service", () => ({
+  getPreferences: () => ({ factLanguage: null, language: "en" }),
+}));
+
+vi.mock("@/lib/services/page-projection", () => ({
+  projectCanonicalConfig: () => ({}),
 }));
 
 // Must import AFTER vi.mock so the mock is in place

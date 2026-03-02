@@ -500,7 +500,7 @@ export function SplitView({
       {/* Desktop: side-by-side */}
       <div className="hidden h-screen md:flex">
         <div className="w-[400px] shrink-0 overflow-hidden border-r">
-          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
+          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
         </div>
         <div className="relative flex-1">{previewPane}</div>
       </div>
@@ -520,7 +520,7 @@ export function SplitView({
           forceMount
           className="flex-1 overflow-hidden data-[state=inactive]:hidden"
         >
-          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
+          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
         </TabsContent>
         <TabsContent
           value="preview"

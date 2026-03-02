@@ -101,7 +101,7 @@ export function SettingsPanel({
       {/* Backdrop */}
       <div
         className={cn(
-          "absolute inset-0 z-20 bg-black/20 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/20 transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={onClose}
@@ -111,7 +111,7 @@ export function SettingsPanel({
       {/* Panel */}
       <div
         className={cn(
-          "absolute inset-y-0 right-0 z-30 w-80 border-l bg-background shadow-xl transition-transform duration-200 ease-out",
+          "fixed inset-y-0 right-0 z-[56] w-80 border-l bg-background shadow-xl transition-transform duration-200 ease-out",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >

@@ -176,17 +176,8 @@ const LIMIT_PUBLISH_CTA: Record<string, string> = {
 
 type LimitReachedUIProps = {
   language: string;
-  authV2: boolean;
   authState?: AuthState;
-  registerUsername: string;
-  setRegisterUsername: (v: string) => void;
-  registerEmail: string;
-  setRegisterEmail: (v: string) => void;
-  registerPassword: string;
-  setRegisterPassword: (v: string) => void;
-  registerError: string | null;
-  registering: boolean;
-  handleRegister: () => void;
+  onSignupRequest?: () => void;
   requestingPublish: boolean;
   publishRequested: boolean;
   publishRequestError: string | null;
@@ -197,17 +188,8 @@ type LimitReachedUIProps = {
 
 function LimitReachedUI({
   language,
-  authV2,
   authState,
-  registerUsername,
-  setRegisterUsername,
-  registerEmail,
-  setRegisterEmail,
-  registerPassword,
-  setRegisterPassword,
-  registerError,
-  registering,
-  handleRegister,
+  onSignupRequest,
   requestingPublish,
   publishRequested,
   publishRequestError,
@@ -215,6 +197,7 @@ function LimitReachedUI({
   oauthUsername,
   setOauthUsername,
 }: LimitReachedUIProps) {
+  const t = getUiL10n(language);
   // Case 1: Authenticated with published page — show limit + link
   if (authState?.authenticated && authState?.publishedUsername) {
     return (
@@ -317,64 +300,19 @@ function LimitReachedUI({
     );
   }
 
-  // Case 4: Not authenticated — original signup flow
+  // Case 4: Not authenticated — prompt to open signup modal
   return (
-    <div className="space-y-3 border-t bg-amber-50 px-4 py-3 dark:bg-amber-950">
+    <div className="space-y-2 border-t bg-amber-50 px-4 py-3 dark:bg-amber-950">
       <p className="text-sm text-amber-800 dark:text-amber-200">
         {LIMIT_MESSAGES[language] ?? LIMIT_MESSAGES.en}
       </p>
-      <div className="flex flex-col gap-2">
-        <input
-          type="text"
-          value={registerUsername}
-          onChange={(e) => setRegisterUsername(e.target.value.toLowerCase())}
-          placeholder="username"
-          className="rounded border bg-background px-2 py-1 text-sm"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !authV2) handleRegister();
-          }}
-        />
-        {authV2 && (
-          <>
-            <input
-              type="email"
-              value={registerEmail}
-              onChange={(e) => setRegisterEmail(e.target.value)}
-              placeholder="email"
-              className="rounded border bg-background px-2 py-1 text-sm"
-              autoComplete="email"
-            />
-            <input
-              type="password"
-              value={registerPassword}
-              onChange={(e) => setRegisterPassword(e.target.value)}
-              placeholder="password (min 8 chars)"
-              minLength={8}
-              className="rounded border bg-background px-2 py-1 text-sm"
-              autoComplete="new-password"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleRegister();
-              }}
-            />
-          </>
-        )}
-        <button
-          onClick={handleRegister}
-          disabled={
-            registering ||
-            !registerUsername.trim() ||
-            (authV2 && (!registerEmail.trim() || registerPassword.length < 8))
-          }
-          className="shrink-0 rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          {registering ? "..." : "Claim your page"}
-        </button>
-      </div>
-      {registerError && (
-        <p className="text-sm text-red-600 dark:text-red-400">
-          {registerError}
-        </p>
-      )}
+      <button
+        onClick={() => onSignupRequest?.()}
+        disabled={!onSignupRequest}
+        className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+      >
+        {t.signupToContinue}
+      </button>
     </div>
   );
 }
@@ -384,6 +322,7 @@ type ChatPanelProps = {
   /** When true, show email + password fields in the signup form */
   authV2?: boolean;
   authState?: AuthState;
+  onSignupRequest?: () => void;
   initialBootstrap?: Record<string, unknown> | null;
   initialMessages?: Array<{id: string; role: string; content: string}>;
   disableInitialFetch?: boolean;
@@ -409,6 +348,7 @@ type ChatPanelInnerProps = {
   authV2: boolean;
   initialMessages: StoredMessage[];
   authState?: AuthState;
+  onSignupRequest?: () => void;
 };
 
 function ChatPanelLoading() {
@@ -424,7 +364,7 @@ function ChatPanelLoading() {
   );
 }
 
-export function ChatPanel({ language = "en", authV2 = true, authState, initialBootstrap, initialMessages: propMessages, disableInitialFetch }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
     getWelcomeMessage(language),
   ]);
@@ -566,6 +506,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, initialBo
       authV2={authV2}
       initialMessages={initialMessages}
       authState={authState}
+      onSignupRequest={onSignupRequest}
     />
   );
 }
@@ -575,16 +516,11 @@ function ChatPanelInner({
   authV2,
   initialMessages,
   authState,
+  onSignupRequest,
 }: ChatPanelInnerProps) {
   const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [limitReached, setLimitReached] = useState(false);
-  const [registerUsername, setRegisterUsername] = useState("");
-  const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
-  const [registerError, setRegisterError] = useState<string | null>(null);
-  const [registering, setRegistering] = useState(false);
-  const [registered, setRegistered] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [requestingPublish, setRequestingPublish] = useState(false);
   const [publishRequested, setPublishRequested] = useState(false);
@@ -703,44 +639,6 @@ function ChatPanelInner({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleRegister = useCallback(async () => {
-    if (!registerUsername.trim()) return;
-    if (authV2 && (!registerEmail.trim() || !registerPassword.trim())) return;
-
-    setRegistering(true);
-    setRegisterError(null);
-
-    try {
-      const payload: Record<string, string> = {
-        username: registerUsername.trim().toLowerCase(),
-      };
-      if (authV2) {
-        payload.email = registerEmail.trim().toLowerCase();
-        payload.password = registerPassword;
-      }
-
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (res.status === 401) {
-        window.location.href = "/invite";
-        return;
-      }
-      if (data.success) {
-        setRegistered(data.username);
-      } else {
-        setRegisterError(friendlyError(data.code, t));
-      }
-    } catch {
-      setRegisterError(t.networkError);
-    } finally {
-      setRegistering(false);
-    }
-  }, [registerUsername, registerEmail, registerPassword, authV2, t]);
-
   const handleRequestPublish = useCallback(async (usernameOverride?: string) => {
     setRequestingPublish(true);
     setPublishRequestError(null);
@@ -787,34 +685,11 @@ function ChatPanelInner({
         </div>
       </ScrollArea>
 
-      {registered ? (
-        <div className="border-t bg-green-50 px-4 py-3 dark:bg-green-950">
-          <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            Page published!
-          </p>
-          <a
-            href={`/${registered}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-green-700 underline dark:text-green-300"
-          >
-            View at /{registered}
-          </a>
-        </div>
-      ) : limitReached ? (
+      {limitReached ? (
         <LimitReachedUI
           language={language}
-          authV2={authV2}
           authState={authState}
-          registerUsername={registerUsername}
-          setRegisterUsername={setRegisterUsername}
-          registerEmail={registerEmail}
-          setRegisterEmail={setRegisterEmail}
-          registerPassword={registerPassword}
-          setRegisterPassword={setRegisterPassword}
-          registerError={registerError}
-          registering={registering}
-          handleRegister={handleRegister}
+          onSignupRequest={onSignupRequest}
           requestingPublish={requestingPublish}
           publishRequested={publishRequested}
           publishRequestError={publishRequestError}

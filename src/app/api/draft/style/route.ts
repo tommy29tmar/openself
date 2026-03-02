@@ -3,12 +3,15 @@ import { getDraft, upsertDraft } from "@/lib/services/page-service";
 import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { isAvailableFont } from "@/lib/page-config/fonts";
 import type { PageConfig } from "@/lib/page-config/schema";
-import { resolveOwnerScope } from "@/lib/auth/session";
+import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId, resolveLayoutAlias } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
+import { getActiveFacts } from "@/lib/services/kb-service";
+import { getPreferences } from "@/lib/services/preferences-service";
+import { projectCanonicalConfig } from "@/lib/services/page-projection";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +25,31 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const draft = getDraft(primaryKey);
+    let draft = getDraft(primaryKey);
 
     if (!draft) {
-      return NextResponse.json(
-        { success: false, error: "No draft exists" },
-        { status: 404 },
-      );
+      // Auto-compose from facts (ensureDraft pattern — handles OwnerScope shift after registration)
+      const readKeys = scope?.knowledgeReadKeys ?? [primaryKey];
+      const facts = getActiveFacts(primaryKey, readKeys);
+      if (facts.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "No draft exists" },
+          { status: 404 },
+        );
+      }
+      const authCtx = getAuthContext(req);
+      const draftUsername = authCtx?.username ?? "draft";
+      const { factLanguage, language } = getPreferences(primaryKey);
+      const factLang = factLanguage ?? language ?? "en";
+      const composed = projectCanonicalConfig(facts, draftUsername, factLang);
+      upsertDraft(draftUsername, composed, primaryKey);
+      draft = getDraft(primaryKey);
+      if (!draft) {
+        return NextResponse.json(
+          { success: false, error: "No draft exists" },
+          { status: 404 },
+        );
+      }
     }
 
     const config = { ...draft.config };

@@ -153,6 +153,7 @@ export async function POST(req: Request) {
     multiUser && effectiveScope.cognitiveOwnerKey !== effectiveScope.currentSessionId;
 
   const extraHeaders: Record<string, string> = {};
+  let quotaInfo: { remaining: number; limit: number } | undefined;
 
   if (multiUser) {
     const lastMessage = messages[messages.length - 1];
@@ -236,8 +237,10 @@ export async function POST(req: Request) {
         }
       }
 
-      extraHeaders["X-Message-Count"] = String(getMessageCount(sessionId));
+      const postCount = getMessageCount(sessionId);
+      extraHeaders["X-Message-Count"] = String(postCount);
       extraHeaders["X-Message-Limit"] = String(limit);
+      quotaInfo = { remaining: Math.max(0, limit - postCount), limit };
     }
   }
 
@@ -249,6 +252,7 @@ export async function POST(req: Request) {
     authInfoForBootstrap,
     bootstrap,
     bootstrapData,
+    quotaInfo,
   );
 
   // Role whitelist: AI SDK expects only these roles

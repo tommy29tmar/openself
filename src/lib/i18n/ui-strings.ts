@@ -49,6 +49,9 @@ export interface UiStrings {
   signUpAndPublish: string;
   alreadyHaveAccount: string;
 
+  // Signup CTA (quota reached, anonymous)
+  signupToContinue: string;
+
   // Signup validation
   usernameRequired: string;
   emailRequired: string;
@@ -159,6 +162,7 @@ const en: UiStrings = {
   atLeast8Chars: "At least 8 characters",
   signUpAndPublish: "Sign up & publish",
   alreadyHaveAccount: "Already have an account?",
+  signupToContinue: "Sign up to continue",
   usernameRequired: "Username is required",
   emailRequired: "Email is required",
   passwordTooShort: "Password must be at least 8 characters",
@@ -252,6 +256,7 @@ const it: UiStrings = {
   atLeast8Chars: "Almeno 8 caratteri",
   signUpAndPublish: "Registrati e pubblica",
   alreadyHaveAccount: "Hai già un account?",
+  signupToContinue: "Registrati per continuare",
   usernameRequired: "Nome utente richiesto",
   emailRequired: "Email richiesta",
   passwordTooShort: "La password deve avere almeno 8 caratteri",
@@ -345,6 +350,7 @@ const de: UiStrings = {
   atLeast8Chars: "Mindestens 8 Zeichen",
   signUpAndPublish: "Registrieren & veröffentlichen",
   alreadyHaveAccount: "Bereits ein Konto?",
+  signupToContinue: "Registrieren um fortzufahren",
   usernameRequired: "Benutzername erforderlich",
   emailRequired: "E-Mail erforderlich",
   passwordTooShort: "Passwort muss mindestens 8 Zeichen lang sein",
@@ -438,6 +444,7 @@ const fr: UiStrings = {
   atLeast8Chars: "Au moins 8 caractères",
   signUpAndPublish: "S'inscrire et publier",
   alreadyHaveAccount: "Vous avez déjà un compte ?",
+  signupToContinue: "Inscrivez-vous pour continuer",
   usernameRequired: "Nom d'utilisateur requis",
   emailRequired: "E-mail requis",
   passwordTooShort: "Le mot de passe doit contenir au moins 8 caractères",
@@ -531,6 +538,7 @@ const es: UiStrings = {
   atLeast8Chars: "Al menos 8 caracteres",
   signUpAndPublish: "Registrarse y publicar",
   alreadyHaveAccount: "¿Ya tienes cuenta?",
+  signupToContinue: "Regístrate para continuar",
   usernameRequired: "Nombre de usuario requerido",
   emailRequired: "Correo electrónico requerido",
   passwordTooShort: "La contraseña debe tener al menos 8 caracteres",
@@ -624,6 +632,7 @@ const pt: UiStrings = {
   atLeast8Chars: "Pelo menos 8 caracteres",
   signUpAndPublish: "Registar e publicar",
   alreadyHaveAccount: "Já tem conta?",
+  signupToContinue: "Registe-se para continuar",
   usernameRequired: "Nome de utilizador obrigatório",
   emailRequired: "E-mail obrigatório",
   passwordTooShort: "A palavra-passe deve ter pelo menos 8 caracteres",
@@ -717,6 +726,7 @@ const ja: UiStrings = {
   atLeast8Chars: "8文字以上",
   signUpAndPublish: "登録して公開",
   alreadyHaveAccount: "アカウントをお持ちですか？",
+  signupToContinue: "登録して続ける",
   usernameRequired: "ユーザー名は必須です",
   emailRequired: "メールアドレスは必須です",
   passwordTooShort: "パスワードは8文字以上必要です",
@@ -810,6 +820,7 @@ const zh: UiStrings = {
   atLeast8Chars: "至少8个字符",
   signUpAndPublish: "注册并发布",
   alreadyHaveAccount: "已有账户？",
+  signupToContinue: "注册以继续",
   usernameRequired: "用户名为必填项",
   emailRequired: "电子邮件为必填项",
   passwordTooShort: "密码至少需要8个字符",

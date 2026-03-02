@@ -130,7 +130,7 @@ describe("POST /api/chat bootstrap wiring", () => {
       "hello",   // lastUserMessage extracted from messages
     );
 
-    // assembleContext received the bootstrap payload as 5th argument + data as 6th
+    // assembleContext received the bootstrap payload as 5th argument + data as 6th + quotaInfo as 7th
     expect(assembleContext).toHaveBeenCalledWith(
       expect.any(Object),  // scope
       "en",                 // language
@@ -138,6 +138,7 @@ describe("POST /api/chat bootstrap wiring", () => {
       undefined,            // single-user: chatAuthCtx is null → ternary yields undefined
       expect.objectContaining({ journeyState: "first_visit" }), // bootstrap payload
       expect.objectContaining({ facts: [], soul: null }),        // bootstrap data
+      undefined,            // quotaInfo: single-user mode, no quota tracking
     );
   });
 });

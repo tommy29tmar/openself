@@ -172,6 +172,7 @@ export function assembleContext(
   authInfo?: AuthInfo,
   bootstrap?: BootstrapPayload,
   bootstrapData?: BootstrapData,
+  quotaInfo?: { remaining: number; limit: number },
 ): ContextResult {
   // Use bootstrap journeyState when available, fall back to detectMode()
   const mode: PromptMode = bootstrap
@@ -364,6 +365,17 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
         contextParts.push(`\n\n---\n\n${directive}`);
       }
     } catch { /* best-effort */ }
+  }
+
+  // --- Message quota warning: nudge agent to suggest registration ---
+  if (quotaInfo && quotaInfo.remaining <= 3) {
+    contextParts.push(`\n\n---\n\nMESSAGE QUOTA:
+Remaining messages: ${quotaInfo.remaining}/${quotaInfo.limit}.
+The user is running out of messages. In your NEXT reply:
+1. Naturally suggest a username derived from their name (e.g. "marcorossi" for Marco Rossi).
+2. Mention that messages are limited and they can register to continue.
+3. Keep the suggestion casual — weave it into the conversation naturally.
+Do NOT interrupt an active topic abruptly. Weave it into the conversation.`);
   }
 
   let systemPrompt = contextParts.join("");

@@ -452,6 +452,14 @@ vi.mock("@/lib/services/page-composer", () => ({
   composeOptimisticPage: () => makeConfig(),
 }));
 
+vi.mock("@/lib/services/page-projection", async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>;
+  return {
+    ...actual,
+    projectCanonicalConfig: () => makeConfig(),
+  };
+});
+
 vi.mock("@/lib/ai/translate", () => ({
   translatePageContent: async (config: PageConfig) => config,
 }));
@@ -526,10 +534,13 @@ describe("Route handlers use primaryKey (anchor) after session rotation", () => 
     expect(lastUpsertKey).toBe(SESSION_ANCHOR);
   });
 
-  it("POST /api/draft/style returns 404 when queried with wrong key", async () => {
-    // mockDraft is null — getDraft(SESSION_ANCHOR) returns null
+  it("POST /api/draft/style auto-composes when no draft exists but facts exist", async () => {
+    // mockDraft is null — getDraft(SESSION_ANCHOR) returns null, but getActiveFacts returns facts
+    // so the route auto-composes a draft, then applies the style change
     const res = await stylePOST(makeRequest("http://localhost/api/draft/style", "POST", { theme: "warm" }));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
   });
 
   it("POST /api/draft/lock finds draft via anchor key", async () => {
