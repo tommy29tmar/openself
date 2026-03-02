@@ -237,11 +237,11 @@ describe("Agent Brain v2 — end-to-end", () => {
       knowledgePrimaryKey: sessionId,
       currentSessionId: sessionId,
     };
-    const bootstrap = assembleBootstrapPayload(scope, "en", null);
+    const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(scope, "en", null);
     expect(bootstrap.archetype).toBe("developer");
 
     // 3. assembleContext with bootstrap → prompt contains archetype info
-    const ctx = assembleContext(scope, "en", [], undefined, bootstrap);
+    const ctx = assembleContext(scope, "en", [], undefined, bootstrap, bootstrapData);
     expect(ctx.systemPrompt).toContain("developer");
   });
 });

@@ -63,6 +63,17 @@ export interface BootstrapPayload {
   archetype: Archetype;
 }
 
+/**
+ * Shared data collected during bootstrap, passed to assembleContext
+ * to avoid duplicate DB queries. Pure optimization — same data, fewer reads.
+ */
+export interface BootstrapData {
+  facts: FactRow[];
+  soul: { compiled: string | null } | null;
+  openConflictRecords: Array<{ id: string; category: string; key: string; factAId: string; sourceA: string; factBId?: string; sourceB?: string }>;
+  publishableFacts: FactRow[];
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -330,7 +341,7 @@ export function assembleBootstrapPayload(
   language: string,
   authInfo?: AuthInfo,
   lastUserMessage?: string,
-): BootstrapPayload {
+): { payload: BootstrapPayload; data: BootstrapData } {
   const readKeys = scope.knowledgeReadKeys;
   const ownerKey = scope.cognitiveOwnerKey;
 
@@ -441,21 +452,32 @@ export function assembleBootstrapPayload(
     // Deferred — cross-cutting concern tracked in v2 plan.
   }
 
+  // Read soul for data passthrough (avoids re-query in assembleContext)
+  const soul = getActiveSoul(ownerKey);
+
   return {
-    journeyState,
-    situations,
-    expertiseLevel,
-    userName,
-    lastSeenDaysAgo,
-    publishedUsername,
-    pendingProposalCount,
-    thinSections,
-    staleFacts,
-    openConflicts,
-    archivableFacts,
-    language,
-    conversationContext,
-    archetype,
+    payload: {
+      journeyState,
+      situations,
+      expertiseLevel,
+      userName,
+      lastSeenDaysAgo,
+      publishedUsername,
+      pendingProposalCount,
+      thinSections,
+      staleFacts,
+      openConflicts,
+      archivableFacts,
+      language,
+      conversationContext,
+      archetype,
+    },
+    data: {
+      facts,
+      soul,
+      openConflictRecords,
+      publishableFacts: publishable,
+    },
   };
 }
 

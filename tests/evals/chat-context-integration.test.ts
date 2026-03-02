@@ -73,19 +73,22 @@ vi.mock("@/lib/services/summary-service", () => ({
 
 vi.mock("@/lib/agent/journey", () => ({
   assembleBootstrapPayload: vi.fn(() => ({
-    journeyState: "first_visit",
-    situations: [],
-    expertiseLevel: "novice",
-    userName: null,
-    lastSeenDaysAgo: null,
-    publishedUsername: null,
-    pendingProposalCount: 0,
-    thinSections: [],
-    staleFacts: [],
-    openConflicts: [],
-    archivableFacts: [],
-    language: "en",
-    conversationContext: null,
+    payload: {
+      journeyState: "first_visit",
+      situations: [],
+      expertiseLevel: "novice",
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [],
+      staleFacts: [],
+      openConflicts: [],
+      archivableFacts: [],
+      language: "en",
+      conversationContext: null,
+    },
+    data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] },
   })),
 }));
 

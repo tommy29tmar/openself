@@ -29,7 +29,7 @@ const mockBootstrapPayload = {
 };
 
 vi.mock("@/lib/agent/journey", () => ({
-  assembleBootstrapPayload: vi.fn(() => ({ ...mockBootstrapPayload })),
+  assembleBootstrapPayload: vi.fn(() => ({ payload: { ...mockBootstrapPayload }, data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] } })),
 }));
 
 vi.mock("@/lib/agent/context", () => ({
@@ -125,13 +125,14 @@ describe("POST /api/chat bootstrap wiring", () => {
       "hello",   // lastUserMessage extracted from messages
     );
 
-    // assembleContext received the bootstrap payload as 5th argument
+    // assembleContext received the bootstrap payload as 5th argument + data as 6th
     expect(assembleContext).toHaveBeenCalledWith(
       expect.any(Object),  // scope
       "en",                 // language
       expect.any(Array),    // messages
       undefined,            // single-user: chatAuthCtx is null → ternary yields undefined
-      expect.objectContaining({ journeyState: "first_visit" }), // bootstrap
+      expect.objectContaining({ journeyState: "first_visit" }), // bootstrap payload
+      expect.objectContaining({ facts: [], soul: null }),        // bootstrap data
     );
   });
 });

@@ -364,7 +364,7 @@ describe("detectExpertiseLevel", () => {
 // ---------------------------------------------------------------------------
 describe("assembleBootstrapPayload", () => {
   it("returns a complete payload for first_visit", () => {
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
 
     expect(payload.journeyState).toBe("first_visit");
     expect(payload.language).toBe("en");
@@ -394,7 +394,7 @@ describe("assembleBootstrapPayload", () => {
       },
     ] as never);
 
-    const payload = assembleBootstrapPayload(SCOPE, "it");
+    const { payload } = assembleBootstrapPayload(SCOPE, "it");
     expect(payload.userName).toBe("Marco Rossi");
   });
 
@@ -414,25 +414,25 @@ describe("assembleBootstrapPayload", () => {
       },
     ] as never);
 
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.userName).toBe("Legacy User");
   });
 
   it("includes publishedUsername when page is published", () => {
     vi.mocked(getPublishedUsername).mockReturnValue("marco");
-    const payload = assembleBootstrapPayload(SCOPE, "it");
+    const { payload } = assembleBootstrapPayload(SCOPE, "it");
     expect(payload.publishedUsername).toBe("marco");
   });
 
   it("counts pending proposals", () => {
     mockPendingProposals(3);
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.pendingProposalCount).toBe(3);
   });
 
   it("lists thin sections", () => {
     vi.mocked(classifySectionRichness).mockReturnValue("thin");
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.thinSections.length).toBeGreaterThan(0);
     expect(payload.thinSections).toContain("hero");
   });
@@ -455,7 +455,7 @@ describe("assembleBootstrapPayload", () => {
       },
     ] as never);
 
-    const payload = assembleBootstrapPayload(SCOPE, "en");
+    const { payload } = assembleBootstrapPayload(SCOPE, "en");
     expect(payload.staleFacts).toContain("skill/react");
   });
 });

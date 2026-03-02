@@ -121,8 +121,6 @@ export async function POST(req: Request) {
   // --- Journey Intelligence: assemble bootstrap payload ---
   // Must run BEFORE quota enforcement so the message count read by bootstrap
   // reflects the pre-increment state (avoids false "blocked" on the Nth message).
-  // TODO(Sprint 2): bootstrap and assembleContext both query facts/soul/conflicts independently.
-  // Refactor assembleContext to consume bootstrap data and avoid duplicate DB reads.
   const authInfoForBootstrap = chatAuthCtx
     ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
     : undefined;
@@ -131,7 +129,7 @@ export async function POST(req: Request) {
   const lastUserMessageText = lastUserMsg
     ? (typeof lastUserMsg.content === "string" ? lastUserMsg.content : null)
     : null;
-  const bootstrap = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessageText ?? undefined);
+  const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessageText ?? undefined);
 
   // Quota enforcement
   const isAuthenticated =
@@ -233,6 +231,7 @@ export async function POST(req: Request) {
     messages,
     authInfoForBootstrap,
     bootstrap,
+    bootstrapData,
   );
 
   // Role whitelist: AI SDK expects only these roles

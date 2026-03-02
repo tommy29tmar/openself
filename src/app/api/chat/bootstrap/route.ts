@@ -51,7 +51,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const language = url.searchParams.get("language") ?? "en";
 
-  const payload = assembleBootstrapPayload(effectiveScope, language, authInfo);
+  const { payload } = assembleBootstrapPayload(effectiveScope, language, authInfo);
 
   return new Response(JSON.stringify(payload), {
     status: 200,

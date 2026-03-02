@@ -9,7 +9,7 @@ import { getSystemPromptText, buildSystemPrompt } from "@/lib/agent/prompts";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
-import type { JourneyState, BootstrapPayload } from "@/lib/agent/journey";
+import type { JourneyState, BootstrapPayload, BootstrapData } from "@/lib/agent/journey";
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
@@ -171,6 +171,7 @@ export function assembleContext(
   clientMessages: Array<{ role: string; content: string }>,
   authInfo?: AuthInfo,
   bootstrap?: BootstrapPayload,
+  bootstrapData?: BootstrapData,
 ): ContextResult {
   // Use bootstrap journeyState when available, fall back to detectMode()
   const mode: PromptMode = bootstrap
@@ -182,11 +183,12 @@ export function assembleContext(
 
   // --- Build context blocks (conditional on profile) ---
 
-  // Facts block
+  // Facts block — use passthrough data when available, otherwise query DB
   let existingFacts: ReturnType<typeof getAllFacts> = [];
   let factsBlock = "";
   if (!profile || profile.facts.include) {
-    existingFacts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+    existingFacts = bootstrapData?.facts
+      ?? getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
     const topFacts = existingFacts.slice(0, 50);
     factsBlock =
       topFacts.length > 0
@@ -197,10 +199,11 @@ export function assembleContext(
     factsBlock = truncateToTokenBudget(factsBlock, profile?.facts.budget ?? BUDGET.facts);
   }
 
-  // Soul block (compiled identity overlay)
+  // Soul block (compiled identity overlay) — passthrough or query
   let soulBlock = "";
   if (!profile || profile.soul.include) {
-    const activeSoul = getActiveSoul(scope.cognitiveOwnerKey);
+    const activeSoul = bootstrapData?.soul
+      ?? getActiveSoul(scope.cognitiveOwnerKey);
     soulBlock = activeSoul?.compiled ?? "";
     soulBlock = truncateToTokenBudget(soulBlock, profile?.soul.budget ?? BUDGET.soul);
   }
@@ -225,10 +228,11 @@ export function assembleContext(
     memoriesBlock = truncateToTokenBudget(memoriesBlock, profile?.memories.budget ?? BUDGET.memories);
   }
 
-  // Conflicts block
+  // Conflicts block — passthrough or query
   let conflictsBlock = "";
   if (!profile || profile.conflicts.include) {
-    const openConflicts = getOpenConflicts(scope.cognitiveOwnerKey);
+    const openConflicts = bootstrapData?.openConflictRecords
+      ?? getOpenConflicts(scope.cognitiveOwnerKey);
     conflictsBlock =
       openConflicts.length > 0
         ? openConflicts
