@@ -29,6 +29,7 @@ type SplitViewProps = {
   authState?: AuthState;
   publishedConfigHash?: string | null;
   onPublishedConfigHashChange?: (hash: string | null) => void;
+  openSettings?: boolean;
 };
 
 const POLL_INTERVAL = 3000; // 3 seconds
@@ -122,6 +123,7 @@ export function SplitView({
   authState,
   publishedConfigHash,
   onPublishedConfigHashChange,
+  openSettings,
 }: SplitViewProps) {
   // Lifted chat data fetching — bootstrap + messages fetched once, shared by both ChatPanel instances
   const [bootstrapData, setBootstrapData] = useState<Record<string, unknown> | null>(null);
@@ -183,6 +185,13 @@ export function SplitView({
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Auto-open settings when returning from OAuth connector flow
+  useEffect(() => {
+    if (openSettings) {
+      setSettingsOpen(true);
+    }
+  }, [openSettings]);
 
   // Lifted publish / signup state
   const [signupOpen, setSignupOpen] = useState(false);

@@ -62,6 +62,19 @@ export default function BuilderPage() {
   });
   const [publishedConfigHash, setPublishedConfigHash] = useState<string | null>(null);
 
+  // Detect OAuth return param (e.g. /builder?connector=github_connected)
+  const [connectorReturn, setConnectorReturn] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("connector")) {
+      setConnectorReturn(true);
+      url.searchParams.delete("connector");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  }, []);
+
   // Lightweight auth refresh — only updates auth-related state, no language or loading side effects
   const refreshAuth = useCallback(async () => {
     const controller = new AbortController();
@@ -198,6 +211,7 @@ export default function BuilderPage() {
       authState={authState}
       publishedConfigHash={publishedConfigHash}
       onPublishedConfigHashChange={setPublishedConfigHash}
+      openSettings={connectorReturn}
     />
   );
 }
