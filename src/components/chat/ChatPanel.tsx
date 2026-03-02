@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "ai/react";
-import { useRef, useEffect, useState, useCallback, type FormEvent } from "react";
+import { useRef, useEffect, useState, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -9,6 +9,8 @@ import type { AuthState } from "@/app/builder/page";
 import { extractErrorMessage } from "@/lib/services/errors";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { friendlyError } from "@/lib/i18n/error-messages";
+import { useVoice } from "@/components/voice/VoiceProvider";
+import { MicButton } from "@/components/voice/MicButton";
 
 /**
  * Welcome messages for first-time visitors.
@@ -326,6 +328,7 @@ type ChatPanelProps = {
   initialBootstrap?: Record<string, unknown> | null;
   initialMessages?: Array<{id: string; role: string; content: string}>;
   disableInitialFetch?: boolean;
+  isPrimaryVoiceConsumer?: boolean;
 };
 
 type StoredMessage = {
@@ -349,6 +352,7 @@ type ChatPanelInnerProps = {
   initialMessages: StoredMessage[];
   authState?: AuthState;
   onSignupRequest?: () => void;
+  isPrimaryVoiceConsumer?: boolean;
 };
 
 function ChatPanelLoading() {
@@ -364,7 +368,7 @@ function ChatPanelLoading() {
   );
 }
 
-export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
     getWelcomeMessage(language),
   ]);
@@ -507,6 +511,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
       initialMessages={initialMessages}
       authState={authState}
       onSignupRequest={onSignupRequest}
+      isPrimaryVoiceConsumer={isPrimaryVoiceConsumer}
     />
   );
 }
@@ -517,6 +522,7 @@ function ChatPanelInner({
   initialMessages,
   authState,
   onSignupRequest,
+  isPrimaryVoiceConsumer,
 }: ChatPanelInnerProps) {
   const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -531,7 +537,12 @@ function ChatPanelInner({
   // Ref for refreshChat to avoid forward-reference in onFinish closure
   const refreshChatRef = useRef<() => Promise<boolean>>(async () => false);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } =
+  // Refs for voice (needed in onFinish closure, which is defined before voice context is available)
+  const voiceRef = useRef(false);
+  const isPrimaryRef = useRef(false);
+  const voiceSpeakRef = useRef<(text: string) => void>(() => {});
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append } =
     useChat({
       api: "/api/chat",
       body: { language },
@@ -577,6 +588,10 @@ function ChatPanelInner({
             }
           };
           tryRefresh();
+        }
+        // TTS in voice mode (guarded via refs to avoid stale closures)
+        if (isPrimaryRef.current && voiceRef.current && message.content?.trim()) {
+          voiceSpeakRef.current(message.content);
         }
       },
     });
@@ -626,6 +641,27 @@ function ChatPanelInner({
 
   // Keep ref in sync for onFinish closure
   refreshChatRef.current = refreshChat;
+
+  // Voice context — sync refs for onFinish closure
+  const voice = useVoice();
+  voiceRef.current = voice.voiceMode;
+  isPrimaryRef.current = isPrimaryVoiceConsumer ?? false;
+  voiceSpeakRef.current = voice.speakResponse;
+
+  // Transcript consumption (guarded by isPrimaryVoiceConsumer)
+  useEffect(() => {
+    if (!isPrimaryVoiceConsumer) return;
+    if (voice.lastFinalTranscript) {
+      append({ role: "user", content: voice.lastFinalTranscript }, { body: { language } });
+      voice.consumeTranscript();
+    }
+  }, [voice.lastFinalTranscript, isPrimaryVoiceConsumer, append, language, voice]);
+
+  // Typing disables voice mode
+  const handleTyping = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    voice.disableVoiceMode();
+    handleInputChange(e);
+  }, [handleInputChange, voice]);
 
   const handleChatSubmit = useCallback(
     (e: FormEvent<HTMLFormElement>) => {
@@ -721,10 +757,12 @@ function ChatPanelInner({
           )}
           <ChatInput
             value={input}
-            onChange={handleInputChange}
+            onChange={handleTyping}
             onSubmit={handleChatSubmit}
             isLoading={isLoading}
             placeholder={t.typeMessage}
+            interimText={voice.voiceMode ? voice.interimText : undefined}
+            micButton={voice.enabled ? <MicButton /> : undefined}
           />
         </>
       )}
