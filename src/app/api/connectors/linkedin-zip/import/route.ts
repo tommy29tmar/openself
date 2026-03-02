@@ -5,6 +5,7 @@ import { importLinkedInZip } from "@/lib/connectors/linkedin-zip/import";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { acquireImportLock, releaseImportLock } from "@/lib/connectors/idempotency";
 import { connectorError } from "@/lib/connectors/api-errors";
+import { writeImportEvent } from "@/lib/connectors/import-event";
 
 const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
 
     const factLanguage = getFactLanguage(scope.knowledgePrimaryKey) ?? "en";
     const report = await importLinkedInZip(buffer, scope, username, factLanguage);
+
+    // Write pending import event flag for agent reaction
+    if (report.factsWritten > 0) {
+      writeImportEvent(scope.knowledgePrimaryKey, report.factsWritten);
+    }
 
     return NextResponse.json({ success: true, report });
   } catch (error) {
