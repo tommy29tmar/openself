@@ -80,6 +80,7 @@ const CATEGORY_RULES: Record<string, FieldRule> = {
   music: { requiredOneOf: ["title", "name"], urlFields: ["url"] },
   language: { requiredOneOf: ["language", "name"] },
   contact: { requiredOneOf: ["value", "email", "phone", "address"], emailFields: ["email", "value"] },
+  "private-contact": { requiredOneOf: ["value", "email", "phone"], emailFields: ["email"] },
 };
 
 // ---------------------------------------------------------------------------
@@ -171,15 +172,17 @@ export function validateFactValue(
     }
 
     // Rule 4: Email fields must look like emails when present AND the contact type is email
-    if (rules.emailFields && category === "contact") {
-      const contactType = value.type;
-      if (contactType === "email") {
+    if (rules.emailFields && (category === "contact" || category === "private-contact")) {
+      // For "contact": existing behavior — only validate when type === "email"
+      // For "private-contact": always validate emailFields that are present (no type gate)
+      const shouldValidateEmail = category === "private-contact" || value.type === "email";
+      if (shouldValidateEmail) {
         for (const field of rules.emailFields) {
           const v = value[field];
           if (v !== undefined && v !== null && typeof v === "string" && v.trim().length > 0) {
             if (!looksLikeEmail(v)) {
               throw new FactValidationError(
-                `contact fact field "${field}" must be a valid email (got "${v}")`,
+                `${category} fact field "${field}" must be a valid email (got "${v}")`,
                 category,
                 key,
               );
