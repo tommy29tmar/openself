@@ -155,7 +155,22 @@ export function assignSlotsFromFacts(
         hasCapacity(slot.id),
     );
 
-    for (const slot of candidateSlots) {
+    // Rank candidates: affinity DESC → fillRatio ASC → order ASC
+    const ranked = [...candidateSlots].sort((a, b) => {
+      const affinityA = a.affinity?.[sectionType] ?? 0;
+      const affinityB = b.affinity?.[sectionType] ?? 0;
+      if (affinityB !== affinityA) return affinityB - affinityA;
+
+      const maxA = a.maxSections ?? Infinity;
+      const maxB = b.maxSections ?? Infinity;
+      const ratioA = maxA === Infinity ? 0 : (usedCapacity.get(a.id) ?? 0) / maxA;
+      const ratioB = maxB === Infinity ? 0 : (usedCapacity.get(b.id) ?? 0) / maxB;
+      if (ratioA !== ratioB) return ratioA - ratioB;
+
+      return a.order - b.order;
+    });
+
+    for (const slot of ranked) {
       const widget = getBestWidget(sectionType, slot.size);
       if (widget) {
         const s = { ...section, slot: slot.id };
