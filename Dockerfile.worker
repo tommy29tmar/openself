@@ -35,12 +35,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy worker bundle
 COPY --from=build /app/dist ./dist
 
-# Copy better-sqlite3 native module (external dependency)
+# Copy better-sqlite3 native module + runtime dependencies only
+# (node-addon-api and prebuild-install are build-time only)
 COPY --from=build /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 COPY --from=build /app/node_modules/bindings ./node_modules/bindings
 COPY --from=build /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
-COPY --from=build /app/node_modules/prebuild-install ./node_modules/prebuild-install
-COPY --from=build /app/node_modules/node-addon-api ./node_modules/node-addon-api
 
 # Copy migration SQL files to /app/migrations (outside volume-mounted /app/db)
 COPY --from=build /app/db/migrations ./migrations
