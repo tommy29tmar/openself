@@ -41,6 +41,9 @@ export function useSttProvider({
   const abortRef = useRef<AbortController | null>(null);
   // NOTE: All error-recovery setTimeout calls should store IDs and be cleared in stop()
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const abortedRef = useRef(false); // CRITICAL: prevents onstop from uploading after user abort
 
   // Web Speech API path
   const startWebSpeech = useCallback(() => {
@@ -97,11 +100,102 @@ export function useSttProvider({
   }, [language, onResult, onFinalResult]);
 
   // Server fallback path (MediaRecorder + POST /api/transcribe)
-  // Stub for now — wired in Task 10
-  const startServerFallback = useCallback(() => {
-    setState(VoiceSttState.ERROR);
-    return false;
-  }, []);
+  const startServerFallback = useCallback(async () => {
+    abortedRef.current = false; // Reset on new start
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm",
+      });
+      mediaRecorderRef.current = recorder;
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Cleanup stream
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+
+        // CRITICAL: If user aborted, skip upload entirely
+        if (abortedRef.current) {
+          setState(VoiceSttState.IDLE);
+          return;
+        }
+
+        if (chunks.length === 0) {
+          setState(VoiceSttState.IDLE);
+          return;
+        }
+
+        setState(VoiceSttState.TRANSCRIBING);
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+
+        // POST to server
+        const formData = new FormData();
+        formData.append("file", blob, "audio.webm");
+
+        abortRef.current = new AbortController();
+        try {
+          const res = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+            signal: abortRef.current.signal,
+          });
+
+          // Double-check abort flag (could have been set during fetch)
+          if (abortedRef.current) return;
+
+          if (!res.ok) {
+            setState(VoiceSttState.ERROR);
+            errorTimerRef.current = setTimeout(() => setState(VoiceSttState.IDLE), 3000);
+            return;
+          }
+          const data = await res.json();
+          if (abortedRef.current) return; // Check again after parsing
+
+          if (data.text?.trim()) {
+            onResult({ text: data.text.trim(), isFinal: true });
+            onFinalResult(data.text.trim());
+          } else {
+            setState(VoiceSttState.IDLE);
+          }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") {
+            setState(VoiceSttState.IDLE);
+          } else {
+            setState(VoiceSttState.ERROR);
+            errorTimerRef.current = setTimeout(() => setState(VoiceSttState.IDLE), 3000);
+          }
+        }
+      };
+
+      setState(VoiceSttState.LISTENING);
+      recorder.start();
+
+      // Auto-stop after max duration (60s safety)
+      setTimeout(() => {
+        if (recorder.state === "recording" && !abortedRef.current) {
+          recorder.stop();
+        }
+      }, 60_000);
+
+      return true;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setState(VoiceSttState.PERMISSION_DENIED);
+      } else {
+        setState(VoiceSttState.ERROR);
+      }
+      return false;
+    }
+  }, [onResult, onFinalResult]);
 
   const start = useCallback(() => {
     if (state !== VoiceSttState.IDLE) return;
@@ -117,6 +211,9 @@ export function useSttProvider({
   }, [state, startWebSpeech, startServerFallback, useServerFallback, serverSttAvailable]);
 
   const stop = useCallback(() => {
+    // Set abort flag FIRST — prevents onstop handler from uploading
+    abortedRef.current = true;
+
     if (errorTimerRef.current) {
       clearTimeout(errorTimerRef.current);
       errorTimerRef.current = null;
@@ -125,8 +222,16 @@ export function useSttProvider({
       recognitionRef.current.abort();
       recognitionRef.current = null;
     }
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop(); // triggers onstop, but abortedRef prevents upload
+      mediaRecorderRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
     if (abortRef.current) {
-      abortRef.current.abort();
+      abortRef.current.abort(); // cancel any in-flight fetch
       abortRef.current = null;
     }
     setState(VoiceSttState.IDLE);
