@@ -531,7 +531,7 @@ function ChatPanelInner({
   // Ref for refreshChat to avoid forward-reference in onFinish closure
   const refreshChatRef = useRef<() => Promise<boolean>>(async () => false);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } =
+  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append } =
     useChat({
       api: "/api/chat",
       body: { language },
@@ -638,6 +638,18 @@ function ChatPanelInner({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-trigger message after LinkedIn import (G4)
+  useEffect(() => {
+    const handler = () => {
+      append(
+        { role: "user", content: "I just imported my LinkedIn profile." },
+        { body: { language, metadata: { source: "auto_import_trigger" } } },
+      );
+    };
+    window.addEventListener("openself:import-complete", handler);
+    return () => window.removeEventListener("openself:import-complete", handler);
+  }, [append, language]);
 
   const handleRequestPublish = useCallback(async (usernameOverride?: string) => {
     setRequestingPublish(true);
