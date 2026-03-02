@@ -569,7 +569,7 @@ git commit -m "feat(connectors): detect OAuth return param, auto-open settings, 
 
 **Context:** The sync route at `src/app/api/connectors/github/sync/route.ts` (30 lines) currently enqueues a `connector_sync` job without checking for in-flight operations. We need: (a) check if a `connector_sync` job is already queued/running, (b) reject with `ALREADY_SYNCING` if so, (c) rate limit to 60s between syncs.
 
-**LinkedIn import also requires a server-side lock** (per Supervisor Constraint: "backend idempotency/locking for sync/import as the primary protection"). Although `batchCreateFacts()` has per-fact dedup, concurrent imports could race on draft recomposition. The import route should check `hasPendingImport(ownerKey)` before proceeding and return `409 ALREADY_IMPORTING` if an import is in flight. Implementation: add a `hasPendingImport(ownerKey)` function alongside `hasPendingJob()` that checks for `job_type = 'linkedin_import'` in `queued`/`running` status. Since LinkedIn import is synchronous (not queued), use a simpler approach: insert a sentinel job row with status `'running'` at the start of the import, delete it on completion (in a try/finally). This gives the same `hasPendingImport()` query pattern as sync.
+**LinkedIn import also requires a server-side lock** (per Supervisor Constraint: "backend idempotency/locking for sync/import as the primary protection"). Although `batchCreateFacts()` has per-fact dedup, concurrent imports could race on draft recomposition. Since LinkedIn import is synchronous (not job-queued), we use an **in-memory `Set<string>`** lock keyed by `ownerKey`. This avoids: (a) a migration to add `linkedin_import` to the jobs CHECK constraint, (b) race conditions between check-then-insert on the dedup index, (c) stale locks after process crashes (in-memory state is lost on restart = auto-cleanup). The single-process SQLite model guarantees a single web server process, so in-memory state is sufficient.
 
 **Step 1: Write tests**
 
@@ -632,7 +632,6 @@ Create `src/lib/connectors/idempotency.ts`:
 
 ```typescript
 import { sqlite } from "@/lib/db";
-import { randomUUID } from "crypto";
 
 const SYNC_COOLDOWN_MS = 60_000; // 60 seconds
 
@@ -662,41 +661,24 @@ export function hasPendingJob(ownerKey: string): boolean {
 }
 
 /**
- * Check if a LinkedIn import is already in progress for this owner.
- * Uses a sentinel job row inserted at import start, deleted on completion.
+ * In-memory lock for LinkedIn import (synchronous, not job-queued).
+ * Safe because: single-process SQLite model = one web server process.
+ * Auto-cleans on process restart (no stale DB rows).
  */
+const activeImports = new Set<string>();
+
 export function hasPendingImport(ownerKey: string): boolean {
-  const row = sqlite
-    .prepare(
-      `SELECT 1 FROM jobs
-       WHERE job_type = 'linkedin_import'
-         AND json_extract(payload, '$.ownerKey') = ?
-         AND status IN ('queued', 'running')
-       LIMIT 1`,
-    )
-    .get(ownerKey);
-  return !!row;
+  return activeImports.has(ownerKey);
 }
 
-/**
- * Insert a sentinel job row to mark an import as in-flight.
- * Call removeImportLock() in a finally block when done.
- */
-export function acquireImportLock(ownerKey: string): string {
-  const id = randomUUID();
-  sqlite
-    .prepare(
-      `INSERT INTO jobs (id, job_type, payload, status, run_after, attempts)
-       VALUES (?, 'linkedin_import', ?, 'running', datetime('now'), 0)`,
-    )
-    .run(id, JSON.stringify({ ownerKey }));
-  return id;
+export function acquireImportLock(ownerKey: string): boolean {
+  if (activeImports.has(ownerKey)) return false;
+  activeImports.add(ownerKey);
+  return true;
 }
 
-export function removeImportLock(jobId: string): void {
-  sqlite
-    .prepare(`DELETE FROM jobs WHERE id = ?`)
-    .run(jobId);
+export function releaseImportLock(ownerKey: string): void {
+  activeImports.delete(ownerKey);
 }
 
 /**
@@ -741,24 +723,22 @@ if (githubConnector && isSyncRateLimited(githubConnector.lastSync)) {
 In `src/app/api/connectors/linkedin-zip/import/route.ts`, add the import lock:
 
 ```typescript
-import { hasPendingImport, acquireImportLock, removeImportLock } from "@/lib/connectors/idempotency";
+import { acquireImportLock, releaseImportLock } from "@/lib/connectors/idempotency";
 
 // ... inside POST handler, after scope/auth checks:
 
-// Idempotency: check for in-flight import
-if (hasPendingImport(ownerKey)) {
+// Idempotency: atomic acquire (returns false if already locked)
+if (!acquireImportLock(ownerKey)) {
   return NextResponse.json(
     { success: false, code: "ALREADY_IMPORTING", error: "An import is already in progress.", retryable: false },
     { status: 409 },
   );
 }
 
-// Acquire sentinel lock, ensure cleanup on completion
-const lockId = acquireImportLock(ownerKey);
 try {
   // ... existing import logic (importLinkedInZip, etc.)
 } finally {
-  removeImportLock(lockId);
+  releaseImportLock(ownerKey);
 }
 ```
 
