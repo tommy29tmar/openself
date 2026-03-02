@@ -22,6 +22,8 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { VoiceProvider } from "@/components/voice/VoiceProvider";
+import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
+import { isVoiceEnabled } from "@/lib/voice/feature-flags";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 type SplitViewProps = {
@@ -128,6 +130,8 @@ export function SplitView({
   openSettings,
 }: SplitViewProps) {
   const isMobile = useIsMobile();
+  const voiceEnabled = isVoiceEnabled();
+  const [activeTab, setActiveTab] = useState(voiceEnabled ? "preview" : "chat");
 
   // Lifted chat data fetching — bootstrap + messages fetched once, shared by both ChatPanel instances
   const [bootstrapData, setBootstrapData] = useState<Record<string, unknown> | null>(null);
@@ -521,7 +525,7 @@ export function SplitView({
         </div>
 
         {/* Mobile: tabs */}
-        <Tabs defaultValue="chat" className="flex h-screen flex-col md:hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-screen flex-col md:hidden">
           <TabsList className="sticky top-0 z-40 w-full rounded-none">
             <TabsTrigger value="chat" className="flex-1">
               Chat
@@ -543,6 +547,7 @@ export function SplitView({
             className="relative flex-1 overflow-hidden data-[state=inactive]:hidden"
           >
             {previewPane}
+            <VoiceOverlay onOpenChat={() => setActiveTab("chat")} />
           </TabsContent>
         </Tabs>
       </>
