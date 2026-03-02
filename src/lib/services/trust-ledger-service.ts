@@ -119,6 +119,7 @@ function executeUndo(payload: UndoPayload, ownerKey: string): void {
         previousFact?: Record<string, unknown>;
       }>;
       for (const op of reverseOps) {
+        if (!op.factId) continue; // skip malformed ops
         switch (op.action) {
           case "delete":
             db.delete(factsTable).where(eq(factsTable.id, op.factId!)).run();

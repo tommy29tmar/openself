@@ -16,8 +16,12 @@ export type JournalPattern = {
  * Analyze journal entries across recent conversations to detect behavioral patterns.
  * Deterministic — no LLM. Designed for deep heartbeat.
  *
- * @param entries Journal entries from multiple recent sessions
+ * @param entries Journal entries from multiple recent sessions (flattened, may span session boundaries)
  * @returns Max 2 most significant patterns
+ *
+ * NOTE: Sequence/correction detection operates on the flattened array. Entries at
+ * session boundaries may create false-positive adjacency pairs. This is acceptable
+ * for meta-memory suggestions (low-stakes) and avoids the complexity of session-aware detection.
  */
 export function detectJournalPatterns(entries: JournalEntry[]): JournalPattern[] {
   if (entries.length < 5) return [];

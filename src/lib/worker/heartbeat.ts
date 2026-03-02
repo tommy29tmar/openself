@@ -194,13 +194,13 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
     const recentJournals = getRecentJournalEntries(ownerKey, 5);
     const patterns = detectJournalPatterns(recentJournals);
     for (const pattern of patterns) {
-      saveMemory(
+      const saved = saveMemory(
         ownerKey,
         `${pattern.description}. ${pattern.suggestion}`,
         "pattern",
         "journal_analysis",
       );
-      journalPatternCount++;
+      if (saved) journalPatternCount++;
     }
     if (journalPatternCount > 0) {
       logEvent({
