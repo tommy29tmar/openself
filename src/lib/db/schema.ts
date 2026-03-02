@@ -190,12 +190,35 @@ export const agentMemory = sqliteTable(
 export const connectors = sqliteTable("connectors", {
   id: text("id").primaryKey(),
   connectorType: text("connector_type").notNull(),
-  credentials: text("credentials", { mode: "json" }),
+  credentials: text("credentials"), // AES-256-GCM ciphertext (base64 string), not JSON
   config: text("config", { mode: "json" }),
   lastSync: text("last_sync"),
   enabled: integer("enabled", { mode: "boolean" }).default(true),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+  ownerKey: text("owner_key"),
+  status: text("status").notNull().default("connected"),
+  syncCursor: text("sync_cursor"),
+  lastError: text("last_error"),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
+
+// -- Connector Items (provenance tracking: external items → facts)
+export const connectorItems = sqliteTable(
+  "connector_items",
+  {
+    id: text("id").primaryKey(),
+    connectorId: text("connector_id")
+      .notNull()
+      .references(() => connectors.id),
+    externalId: text("external_id").notNull(),
+    externalHash: text("external_hash"),
+    factId: text("fact_id"),
+    lastSeenAt: text("last_seen_at").default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    uniqueIndex("uniq_connector_item").on(table.connectorId, table.externalId),
+  ],
+);
 
 export const syncLog = sqliteTable("sync_log", {
   id: text("id").primaryKey(),
