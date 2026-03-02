@@ -42,7 +42,8 @@ export type Situation =
   | "has_open_conflicts"
   | "has_name"
   | "has_soul"
-  | "has_archivable_facts";
+  | "has_archivable_facts"
+  | "has_recent_import";
 
 export type ExpertiseLevel = "novice" | "familiar" | "expert";
 
@@ -314,6 +315,16 @@ export function detectSituations(
     if (archivable.length > 0 && activeFacts.length - archivable.length >= ARCHIVABLE_SAFETY_FLOOR) {
       situations.push("has_archivable_facts");
     }
+  }
+
+  // Recent import (connector facts created within last 30 minutes)
+  const RECENT_IMPORT_WINDOW_MS = 30 * 60 * 1000;
+  const recentCutoff = new Date(Date.now() - RECENT_IMPORT_WINDOW_MS);
+  const recentConnectorFacts = facts.filter(
+    (f) => f.source === "connector" && f.createdAt && new Date(f.createdAt) > recentCutoff,
+  );
+  if (recentConnectorFacts.length > 0) {
+    situations.push("has_recent_import");
   }
 
   return situations;
