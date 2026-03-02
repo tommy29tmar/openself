@@ -658,6 +658,35 @@ describe("Connector Idempotency", () => {
       releaseImportLock(key2);
     });
   });
+
+  describe("LinkedIn import route returns 409 when locked", () => {
+    it("POST /api/connectors/linkedin-zip/import returns ALREADY_IMPORTING", async () => {
+      const { acquireImportLock, releaseImportLock } = await import(
+        "@/lib/connectors/idempotency"
+      );
+      const { POST } = await import(
+        "@/app/api/connectors/linkedin-zip/import/route"
+      );
+      // Pre-acquire lock to simulate concurrent import
+      // Use a known ownerKey that resolveOwnerScope would return for test auth
+      const testOwnerKey = "__default__";
+      acquireImportLock(testOwnerKey);
+      try {
+        const form = new FormData();
+        form.append("file", new Blob(["test"]), "test.zip");
+        const req = new Request("http://localhost/api/connectors/linkedin-zip/import", {
+          method: "POST",
+          body: form,
+        });
+        const res = await POST(req as any);
+        expect(res.status).toBe(409);
+        const body = await res.json();
+        expect(body.code).toBe("ALREADY_IMPORTING");
+      } finally {
+        releaseImportLock(testOwnerKey);
+      }
+    });
+  });
 });
 ```
 
