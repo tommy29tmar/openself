@@ -5,13 +5,27 @@ import tempfile
 import logging
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stt")
 
-app = FastAPI(title="OpenSelf STT", docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-load model on startup."""
+    logger.info("Warming up model...")
+    try:
+        get_model()
+    except Exception as e:
+        logger.warning(f"Warmup failed (model will load on first request): {e}")
+    yield
+
+
+app = FastAPI(title="OpenSelf STT", docs_url=None, redoc_url=None, lifespan=lifespan)
 
 # Lazy model loading
 _model = None
@@ -77,11 +91,3 @@ async def transcribe(file: UploadFile = File(...)):
     return JSONResponse({"text": text, "language": info.language, "duration": info.duration})
 
 
-@app.on_event("startup")
-async def warmup():
-    """Pre-load model on startup."""
-    logger.info("Warming up model...")
-    try:
-        get_model()
-    except Exception as e:
-        logger.warning(f"Warmup failed (model will load on first request): {e}")

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || "http://stt:8080";
 export const MAX_CONTENT_LENGTH = 5 * 1024 * 1024; // 5MB
 
-// Simple in-memory rate limiter (per IP, 10 req/min)
+// Simple in-memory rate limiter (per IP, 10 req/min).
+// Assumes single-process deployment. For multi-instance, swap to Redis or shared store.
 export const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 export function checkRateLimit(ip: string): boolean {

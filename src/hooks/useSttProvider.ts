@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 export enum VoiceSttState {
   IDLE = "idle",
@@ -44,6 +44,7 @@ export function useSttProvider({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const abortedRef = useRef(false); // CRITICAL: prevents onstop from uploading after user abort
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Web Speech API path
   const startWebSpeech = useCallback(() => {
@@ -85,9 +86,7 @@ export function useSttProvider({
       }
     };
 
-    recognition.onend = () => {
-      // Speech ended naturally — nothing to do, onresult already fired
-    };
+    recognition.onend = () => {};
 
     recognitionRef.current = recognition;
     try {
@@ -180,7 +179,7 @@ export function useSttProvider({
       recorder.start();
 
       // Auto-stop after max duration (60s safety)
-      setTimeout(() => {
+      autoStopTimerRef.current = setTimeout(() => {
         if (recorder.state === "recording" && !abortedRef.current) {
           recorder.stop();
         }
@@ -214,6 +213,10 @@ export function useSttProvider({
     // Set abort flag FIRST — prevents onstop handler from uploading
     abortedRef.current = true;
 
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
     if (errorTimerRef.current) {
       clearTimeout(errorTimerRef.current);
       errorTimerRef.current = null;
@@ -236,6 +239,14 @@ export function useSttProvider({
     }
     setState(VoiceSttState.IDLE);
   }, []);
+
+  // Cleanup on unmount — release mic, cancel timers, abort fetch
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      stop();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { sttState: state, startStt: start, stopStt: stop };
 }

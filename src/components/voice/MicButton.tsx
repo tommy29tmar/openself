@@ -22,7 +22,7 @@ type MicButtonProps = {
 };
 
 export function MicButton({ size = "default", className }: MicButtonProps) {
-  const { voiceMode, voiceState, enabled, canUseVoice, toggleVoiceMode, abort } = useVoice();
+  const { voiceMode, voiceState, enabled, toggleVoiceMode, abort } = useVoice();
 
   if (!enabled) return null;
 

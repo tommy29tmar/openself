@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 export enum TtsState {
   IDLE = "idle",
@@ -56,6 +56,14 @@ export function useTtsProvider({ language, onSpeakingDone }: UseTtsProviderOptio
     window.speechSynthesis?.cancel();
     setState(TtsState.IDLE);
   }, []);
+
+  // Cleanup on unmount — cancel any ongoing speech
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      stopSpeaking();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { ttsState: state, speak, stopSpeaking };
 }

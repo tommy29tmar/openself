@@ -547,7 +547,7 @@ export function SplitView({
             className="relative flex-1 overflow-hidden data-[state=inactive]:hidden"
           >
             {previewPane}
-            <VoiceOverlay onOpenChat={() => setActiveTab("chat")} />
+            {voiceEnabled && <VoiceOverlay onOpenChat={() => setActiveTab("chat")} />}
           </TabsContent>
         </Tabs>
       </>
