@@ -23,6 +23,14 @@ vi.mock("@/lib/db", () => ({
   sqlite: {},
 }));
 
+const mockHasPendingJob = vi.fn().mockReturnValue(false);
+const mockIsSyncRateLimited = vi.fn().mockReturnValue(false);
+
+vi.mock("@/lib/connectors/idempotency", () => ({
+  hasPendingJob: (...args: unknown[]) => mockHasPendingJob(...args),
+  isSyncRateLimited: (...args: unknown[]) => mockIsSyncRateLimited(...args),
+}));
+
 vi.mock("@/lib/db/schema", () => ({
   connectors: {
     id: "id", ownerKey: "owner_key", connectorType: "connector_type",
@@ -99,6 +107,43 @@ describe("POST /api/connectors/github/sync", () => {
       expect(body.code).toBe("NOT_CONNECTED");
     }
 
+    expect(mockEnqueueJob).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 ALREADY_SYNCING when a sync job is pending", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorStatus.mockReturnValue([
+      { id: "c1", connectorType: "github", status: "connected", enabled: true },
+    ]);
+    mockHasPendingJob.mockReturnValue(true);
+
+    const { POST } = await import("@/app/api/connectors/github/sync/route");
+    const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
+    const res = await POST(req as never);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe("ALREADY_SYNCING");
+    expect(body.retryable).toBe(true);
+    expect(mockEnqueueJob).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 RATE_LIMITED when synced too recently", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorStatus.mockReturnValue([
+      { id: "c1", connectorType: "github", status: "connected", enabled: true, lastSync: new Date().toISOString() },
+    ]);
+    mockHasPendingJob.mockReturnValue(false);
+    mockIsSyncRateLimited.mockReturnValue(true);
+
+    const { POST } = await import("@/app/api/connectors/github/sync/route");
+    const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
+    const res = await POST(req as never);
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe("RATE_LIMITED");
+    expect(body.retryable).toBe(true);
     expect(mockEnqueueJob).not.toHaveBeenCalled();
   });
 });

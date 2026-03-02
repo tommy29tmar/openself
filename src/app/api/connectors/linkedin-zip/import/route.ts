@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { importLinkedInZip } from "@/lib/connectors/linkedin-zip/import";
 import { getFactLanguage } from "@/lib/services/preferences-service";
+import { acquireImportLock, releaseImportLock } from "@/lib/connectors/idempotency";
 
 const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -17,12 +18,21 @@ export async function POST(req: NextRequest) {
 
   const authCtx = getAuthContext(req);
   const username = authCtx?.username ?? "__default__";
+  const ownerKey = scope.cognitiveOwnerKey;
 
   const contentLength = parseInt(req.headers.get("content-length") ?? "0");
   if (contentLength > MAX_SIZE) {
     return NextResponse.json(
       { success: false, code: "FILE_TOO_LARGE", error: "File too large (max 100 MB)." },
       { status: 413 },
+    );
+  }
+
+  // Acquire import lock — reject if another import is already running
+  if (!acquireImportLock(ownerKey)) {
+    return NextResponse.json(
+      { success: false, code: "ALREADY_IMPORTING", error: "An import is already in progress.", retryable: true },
+      { status: 409 },
     );
   }
 
@@ -63,5 +73,7 @@ export async function POST(req: NextRequest) {
       { success: false, code: "IMPORT_FAILED", error: error instanceof Error ? error.message : String(error) },
       { status: 500 },
     );
+  } finally {
+    releaseImportLock(ownerKey);
   }
 }

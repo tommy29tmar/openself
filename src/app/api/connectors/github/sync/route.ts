@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { getConnectorStatus } from "@/lib/connectors/connector-service";
+import { hasPendingJob, isSyncRateLimited } from "@/lib/connectors/idempotency";
 import { enqueueJob } from "@/lib/worker";
 
 export async function POST(req: NextRequest) {
@@ -21,6 +22,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { success: false, code: "NOT_CONNECTED", error: "GitHub not connected." },
       { status: 404 },
+    );
+  }
+
+  // Idempotency: reject if a sync job is already queued or running
+  if (hasPendingJob(ownerKey)) {
+    return NextResponse.json(
+      { success: false, code: "ALREADY_SYNCING", error: "A sync is already in progress.", retryable: true },
+      { status: 409 },
+    );
+  }
+
+  // Rate limit: reject if last sync was less than 60s ago
+  if (isSyncRateLimited(github.lastSync)) {
+    return NextResponse.json(
+      { success: false, code: "RATE_LIMITED", error: "Please wait before syncing again.", retryable: true },
+      { status: 429 },
     );
   }
 
