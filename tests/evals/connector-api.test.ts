@@ -6,6 +6,7 @@ const mockResolveOwnerScope = vi.fn();
 const mockIsMultiUserEnabled = vi.fn().mockReturnValue(true);
 const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
 const mockDisconnectConnector = vi.fn();
+const mockGetConnectorById = vi.fn().mockReturnValue(null);
 
 vi.mock("@/lib/auth/session", () => ({
   resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
@@ -18,20 +19,11 @@ vi.mock("@/lib/services/session-service", () => ({
 vi.mock("@/lib/connectors/connector-service", () => ({
   getConnectorStatus: (...args: unknown[]) => mockGetConnectorStatus(...args),
   disconnectConnector: (...args: unknown[]) => mockDisconnectConnector(...args),
+  getConnectorById: (...args: unknown[]) => mockGetConnectorById(...args),
 }));
 
-// Mock DB for connector ownership check
 vi.mock("@/lib/db", () => ({
-  db: {
-    select: vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          get: vi.fn().mockReturnValue(null),
-          all: vi.fn().mockReturnValue([]),
-        }),
-      }),
-    }),
-  },
+  db: {},
   sqlite: {},
 }));
 
@@ -41,6 +33,13 @@ vi.mock("@/lib/db/schema", () => ({
     status: "status", enabled: "enabled",
   },
 }));
+
+const ownerScope = {
+  cognitiveOwnerKey: "owner-1",
+  knowledgePrimaryKey: "sess-1",
+  knowledgeReadKeys: ["sess-1"],
+  currentSessionId: "sess-1",
+};
 
 describe("GET /api/connectors/status", () => {
   beforeEach(() => {
@@ -59,12 +58,7 @@ describe("GET /api/connectors/status", () => {
   });
 
   it("returns connector list for authenticated user", async () => {
-    mockResolveOwnerScope.mockReturnValue({
-      cognitiveOwnerKey: "owner-1",
-      knowledgePrimaryKey: "sess-1",
-      knowledgeReadKeys: ["sess-1"],
-      currentSessionId: "sess-1",
-    });
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([
       { id: "c1", connectorType: "github", status: "connected", enabled: true },
     ]);
@@ -108,12 +102,45 @@ describe("POST /api/connectors/[id]/disconnect", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns 200 on successful disconnect", async () => {
-    mockResolveOwnerScope.mockReturnValue({
-      cognitiveOwnerKey: "owner-1",
-      knowledgePrimaryKey: "sess-1",
-      knowledgeReadKeys: ["sess-1"],
-      currentSessionId: "sess-1",
+  it("returns 404 when connector does not exist", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorById.mockReturnValue(null);
+
+    const { POST } = await import("@/app/api/connectors/[id]/disconnect/route");
+    const res = await POST(
+      new Request("http://localhost/api/connectors/c-nonexistent/disconnect", { method: "POST" }),
+      { params: Promise.resolve({ id: "c-nonexistent" }) },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.code).toBe("NOT_FOUND");
+  });
+
+  it("returns 403 when connector belongs to different owner", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorById.mockReturnValue({
+      id: "c-other",
+      ownerKey: "other-owner",
+      connectorType: "github",
+    });
+
+    const { POST } = await import("@/app/api/connectors/[id]/disconnect/route");
+    const res = await POST(
+      new Request("http://localhost/api/connectors/c-other/disconnect", { method: "POST" }),
+      { params: Promise.resolve({ id: "c-other" }) },
+    );
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("FORBIDDEN");
+    expect(mockDisconnectConnector).not.toHaveBeenCalled();
+  });
+
+  it("returns 200 when connector belongs to caller", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetConnectorById.mockReturnValue({
+      id: "c1",
+      ownerKey: "owner-1",
+      connectorType: "github",
     });
 
     const { POST } = await import("@/app/api/connectors/[id]/disconnect/route");

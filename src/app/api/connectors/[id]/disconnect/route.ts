@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
-import { disconnectConnector } from "@/lib/connectors/connector-service";
+import { disconnectConnector, getConnectorById } from "@/lib/connectors/connector-service";
 
 export async function POST(
   req: Request,
@@ -17,8 +17,24 @@ export async function POST(
   }
 
   const { id } = await params;
+  const ownerKey = scope?.cognitiveOwnerKey ?? "__default__";
 
   try {
+    // Verify connector exists and belongs to this owner
+    const connector = getConnectorById(id);
+    if (!connector) {
+      return NextResponse.json(
+        { success: false, code: "NOT_FOUND", error: "Connector not found." },
+        { status: 404 },
+      );
+    }
+    if (connector.ownerKey !== ownerKey) {
+      return NextResponse.json(
+        { success: false, code: "FORBIDDEN", error: "Connector does not belong to this user." },
+        { status: 403 },
+      );
+    }
+
     disconnectConnector(id);
     return NextResponse.json({ success: true });
   } catch (error) {

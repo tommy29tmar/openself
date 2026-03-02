@@ -1,6 +1,6 @@
 import { eq, and, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { connectors } from "@/lib/db/schema";
 import {
   encryptCredentials,
@@ -20,9 +20,8 @@ function getEncryptionKey(): string {
 
 /**
  * Create or reconnect a connector.
- * Uses UPDATE-first/INSERT-fallback because the unique index is PARTIAL
- * (WHERE owner_key IS NOT NULL) — SQLite ON CONFLICT requires a non-partial index.
- * SQLite serializes transactions, so this is race-safe.
+ * Wrapped in sqlite.transaction for atomicity (UPDATE-first/INSERT-fallback).
+ * Cannot use ON CONFLICT because the unique index is PARTIAL (WHERE owner_key IS NOT NULL).
  */
 export function createConnector(
   ownerKey: string,
@@ -34,54 +33,63 @@ export function createConnector(
   const encrypted = encryptCredentials(rawCredentials, key);
   const now = new Date().toISOString();
 
-  // Try to reactivate existing row (handles reconnect after disconnect)
-  const existing = db
-    .select()
-    .from(connectors)
-    .where(
-      and(
-        eq(connectors.ownerKey, ownerKey),
-        eq(connectors.connectorType, connectorType),
-      ),
-    )
-    .get();
-
-  if (existing) {
-    db.update(connectors)
-      .set({
-        credentials: encrypted,
-        status: "connected",
-        enabled: true,
-        lastError: null,
-        updatedAt: now,
-        ...(config !== undefined ? { config } : {}),
-      })
-      .where(eq(connectors.id, existing.id))
-      .run();
-
-    return db
+  return sqlite.transaction(() => {
+    // Try to reactivate existing row (handles reconnect after disconnect)
+    const existing = db
       .select()
       .from(connectors)
-      .where(eq(connectors.id, existing.id))
-      .get()!;
-  }
+      .where(
+        and(
+          eq(connectors.ownerKey, ownerKey),
+          eq(connectors.connectorType, connectorType),
+        ),
+      )
+      .get();
 
-  // No existing row → insert new
-  const id = randomUUID();
-  db.insert(connectors)
-    .values({
-      id,
-      ownerKey,
-      connectorType,
-      credentials: encrypted,
-      config: config ?? null,
-      status: "connected",
-      enabled: true,
-      updatedAt: now,
-    })
-    .run();
+    if (existing) {
+      db.update(connectors)
+        .set({
+          credentials: encrypted,
+          status: "connected",
+          enabled: true,
+          lastError: null,
+          updatedAt: now,
+          ...(config !== undefined ? { config } : {}),
+        })
+        .where(eq(connectors.id, existing.id))
+        .run();
 
-  return db.select().from(connectors).where(eq(connectors.id, id)).get()!;
+      return db
+        .select()
+        .from(connectors)
+        .where(eq(connectors.id, existing.id))
+        .get()!;
+    }
+
+    // No existing row → insert new
+    const id = randomUUID();
+    db.insert(connectors)
+      .values({
+        id,
+        ownerKey,
+        connectorType,
+        credentials: encrypted,
+        config: config ?? null,
+        status: "connected",
+        enabled: true,
+        updatedAt: now,
+      })
+      .run();
+
+    return db.select().from(connectors).where(eq(connectors.id, id)).get()!;
+  })();
+}
+
+/**
+ * Get a connector by ID (for ownership verification). Returns null if not found.
+ */
+export function getConnectorById(connectorId: string) {
+  return db.select().from(connectors).where(eq(connectors.id, connectorId)).get() ?? null;
 }
 
 /**
