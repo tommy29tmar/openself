@@ -5,7 +5,7 @@ import { jobs } from "@/lib/db/schema";
 import { logEvent } from "@/lib/services/event-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { upsertDraft } from "@/lib/services/page-service";
-import { getAllFacts } from "@/lib/services/kb-service";
+import { getActiveFacts } from "@/lib/services/kb-service";
 import { generateSummary } from "@/lib/services/summary-service";
 import { handleHeartbeatLight, handleHeartbeatDeep } from "./heartbeat";
 import { expireStaleProposals } from "@/lib/services/soul-service";
@@ -22,7 +22,7 @@ const handlers: Record<string, JobHandler> = {
     const username = payload.username as string;
     const language = (payload.language as string) ?? "en";
     const sessionId = (payload.sessionId as string) ?? "__default__";
-    const facts = getAllFacts(sessionId);
+    const facts = getActiveFacts(sessionId);
     const config = composeOptimisticPage(facts, username, language);
     upsertDraft(username, config, sessionId);
   },
@@ -57,7 +57,7 @@ const handlers: Record<string, JobHandler> = {
     const username = payload.username as string;
     const language = (payload.language as string) ?? "en";
     const sessionId = (payload.sessionId as string) ?? "__default__";
-    const facts = getAllFacts(sessionId);
+    const facts = getActiveFacts(sessionId);
     const config = composeOptimisticPage(facts, username, language);
     upsertDraft(username, config, sessionId);
   },

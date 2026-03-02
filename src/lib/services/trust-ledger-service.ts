@@ -132,10 +132,14 @@ function executeUndo(payload: UndoPayload, ownerKey: string): void {
             break;
           case "recreate":
             if (op.previousFact) {
-              db.insert(factsTable)
-                .values({ id: op.factId, ...op.previousFact } as any)
-                .onConflictDoNothing()
-                .run();
+              const pf = op.previousFact;
+              // Guard: required fields must be present for a valid fact row
+              if (pf.category && pf.key && pf.value !== undefined) {
+                db.insert(factsTable)
+                  .values({ id: op.factId, ...pf } as typeof factsTable.$inferInsert)
+                  .onConflictDoNothing()
+                  .run();
+              }
             }
             break;
         }

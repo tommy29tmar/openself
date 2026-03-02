@@ -50,7 +50,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetActiveFacts,
+  getActiveFacts: mockGetAllFacts,
   setFactVisibility: vi.fn(),
   VisibilityTransitionError: class extends Error {},
 }));
@@ -172,8 +172,9 @@ describe("generate_page fire-and-forget personalization", () => {
     mockGetActiveSoul.mockReturnValue({ compiled: "warm voice", id: "s1" });
     mockDetectImpactedSections.mockReturnValue(["hero"]);
 
-    // No ownerKey passed (3rd param)
-    const { tools } = createAgentTools("en", "session1", undefined, "req1", ["session1"], "steady_state");
+    // No ownerKey passed (3rd param), no mode passed (effectiveOwnerKey fallback
+    // to sessionId means the mode guard is the actual gate now)
+    const { tools } = createAgentTools("en", "session1", undefined, "req1", ["session1"]);
     const result = await tools.generate_page.execute(
       { username: "test", language: "en" },
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },

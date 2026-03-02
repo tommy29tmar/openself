@@ -20,11 +20,14 @@ vi.mock("@/lib/db", () => ({
   db: {},
 }));
 
-vi.mock("@/lib/services/kb-service", () => ({
-  countFacts: vi.fn(() => 0),
-  getAllFacts: vi.fn(() => []),
-  getActiveFacts: vi.fn(() => []),
-}));
+vi.mock("@/lib/services/kb-service", () => {
+  const mockFn = vi.fn(() => []);
+  return {
+    countFacts: vi.fn(() => 0),
+    getAllFacts: mockFn,
+    getActiveFacts: mockFn,
+  };
+});
 
 vi.mock("@/lib/services/page-service", () => ({
   hasAnyPublishedPage: vi.fn(() => false),

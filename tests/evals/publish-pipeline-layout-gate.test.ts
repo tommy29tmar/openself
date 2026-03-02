@@ -9,11 +9,14 @@ vi.mock("@/lib/db", () => ({
   sqlite: { transaction: vi.fn((fn: () => void) => fn) },
 }));
 
-vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: vi.fn(),
-  getActiveFacts: vi.fn(),
-  setFactVisibility: vi.fn(),
-}));
+vi.mock("@/lib/services/kb-service", () => {
+  const mockGetAllFacts = vi.fn();
+  return {
+    getAllFacts: mockGetAllFacts,
+    getActiveFacts: mockGetAllFacts,
+    setFactVisibility: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: vi.fn(),

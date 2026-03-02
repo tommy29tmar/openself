@@ -1,5 +1,5 @@
 import type { OwnerScope } from "@/lib/auth/session";
-import { getAllFacts, countFacts } from "@/lib/services/kb-service";
+import { getActiveFacts, countFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemories } from "@/lib/services/memory-service";
@@ -184,11 +184,11 @@ export function assembleContext(
   // --- Build context blocks (conditional on profile) ---
 
   // Facts block — use passthrough data when available, otherwise query DB
-  let existingFacts: ReturnType<typeof getAllFacts> = [];
+  let existingFacts: ReturnType<typeof getActiveFacts> = [];
   let factsBlock = "";
   if (!profile || profile.facts.include) {
     existingFacts = bootstrapData?.facts
-      ?? getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+      ?? getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
     const topFacts = existingFacts.slice(0, 50);
     factsBlock =
       topFacts.length > 0
@@ -238,7 +238,7 @@ export function assembleContext(
         ? openConflicts
             .map(
               (c) =>
-                `- [${c.id}] ${c.category}/${c.key}: fact_a=${c.factAId}(${c.sourceA}) vs fact_b=${c.factBId ?? "?"}(${c.sourceB ?? "?"})`,
+                `- [${c.id}] ${c.category}/${c.key}: fact_a=${c.factAId}(${c.sourceA ?? "?"}) vs fact_b=${c.factBId ?? "?"}(${c.sourceB ?? "?"})`,
             )
             .join("\n")
         : "";

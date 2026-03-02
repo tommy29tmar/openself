@@ -9,10 +9,10 @@
  */
 
 import { sqlite } from "@/lib/db";
-import { countFacts, getAllFacts, type FactRow } from "@/lib/services/kb-service";
+import { countFacts, getActiveFacts, type FactRow } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage, getDraft, getPublishedUsername } from "@/lib/services/page-service";
 import { getActiveSoul, proposeSoulChange, getPendingProposals } from "@/lib/services/soul-service";
-import { getOpenConflicts } from "@/lib/services/conflict-service";
+import { getOpenConflicts, type ConflictRow } from "@/lib/services/conflict-service";
 import { createProposalService } from "@/lib/services/proposal-service";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
@@ -70,7 +70,7 @@ export interface BootstrapPayload {
 export interface BootstrapData {
   facts: FactRow[];
   soul: { compiled: string | null } | null;
-  openConflictRecords: Array<{ id: string; category: string; key: string; factAId: string; sourceA: string | null; factBId?: string | null; sourceB?: string | null }>;
+  openConflictRecords: ConflictRow[];
   publishableFacts: FactRow[];
 }
 
@@ -347,7 +347,7 @@ export function assembleBootstrapPayload(
 
   const journeyState = getOrDetectJourneyState(scope, authInfo);
 
-  const facts = getAllFacts(scope.knowledgePrimaryKey, readKeys);
+  const facts = getActiveFacts(scope.knowledgePrimaryKey, readKeys);
 
   // Pre-compute shared data (used by both detectSituations and payload fields)
   const pendingProposalCount = createProposalService().getPendingProposals(ownerKey).length;
@@ -425,9 +425,9 @@ export function assembleBootstrapPayload(
   // Lightweight — we don't load the full summary here, just indicate if one exists
   const conversationContext = null; // Reserved for future use
 
-  // Archetype detection — cached in session metadata for stability
-  const sessionId = scope.currentSessionId;
-  const meta = sessionId ? getSessionMeta(sessionId) : {};
+  // Archetype detection — cache on anchor session for cross-session consistency
+  const archetypeSessionId = scope.knowledgePrimaryKey;
+  const meta = archetypeSessionId ? getSessionMeta(archetypeSessionId) : {};
   let archetype: Archetype;
   if (meta.archetype && typeof meta.archetype === "string") {
     archetype = meta.archetype as Archetype;
@@ -444,8 +444,8 @@ export function assembleBootstrapPayload(
     const raw = detectArchetypeFromSignals(roleStr, lastUserMessage ?? null);
     archetype = refineArchetype(facts, raw);
     // Cache in session metadata
-    if (sessionId) {
-      mergeSessionMeta(sessionId, { archetype });
+    if (archetypeSessionId) {
+      mergeSessionMeta(archetypeSessionId, { archetype });
     }
   }
 

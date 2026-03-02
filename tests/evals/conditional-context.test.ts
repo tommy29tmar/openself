@@ -7,10 +7,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // --- Mocks ---
 
 const mockGetAllFacts = vi.fn(() => []);
-const mockGetActiveFacts = vi.fn(() => []);
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: (...args: any[]) => mockGetAllFacts(...args),
-  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetAllFacts(...args),
   countFacts: vi.fn(() => 0),
 }));
 vi.mock("@/lib/services/page-service", () => ({
@@ -90,7 +89,6 @@ function makeBootstrap(journeyState: string): BootstrapPayload {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetAllFacts.mockReturnValue([]);
-  mockGetActiveFacts.mockReturnValue([]);
   mockGetSummary.mockReturnValue("A conversation summary");
   mockGetActiveMemories.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
   mockGetActiveSoul.mockReturnValue({ compiled: "Soul: creative person" });

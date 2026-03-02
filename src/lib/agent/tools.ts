@@ -5,7 +5,7 @@ import {
   updateFact,
   deleteFact,
   searchFacts,
-  getAllFacts,
+  getActiveFacts,
   getFactById,
   setFactVisibility,
   VisibilityTransitionError,
@@ -32,7 +32,7 @@ import { extractLocks } from "@/lib/layout/lock-policy";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { toSlotAssignments } from "@/lib/layout/validate-adapter";
 import { validateLayoutComposition } from "@/lib/layout/quality";
-import { WIDGET_REGISTRY, getBestWidget, getWidgetById } from "@/lib/layout/widgets";
+import { buildWidgetMap, getBestWidget, getWidgetById } from "@/lib/layout/widgets";
 import { isSectionComplete } from "@/lib/page-config/section-completeness";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
@@ -54,7 +54,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
   function ensureDraft(): PageConfig {
     const existing = getDraft(sessionId);
     if (existing) return existing.config;
-    const allFacts = getAllFacts(sessionId, readKeys);
+    const allFacts = getActiveFacts(sessionId, readKeys);
     if (allFacts.length === 0) throw new Error("No facts yet — ask the user for information first");
     const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
     const composed = composeOptimisticPage(allFacts, "draft", factLang);
@@ -78,7 +78,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     if (_recomposing) return;
     _recomposing = true;
     try {
-      const allFacts = getAllFacts(sessionId, readKeys);
+      const allFacts = getActiveFacts(sessionId, readKeys);
       if (allFacts.length === 0) return;
       const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
       const currentDraft = getDraft(sessionId);
@@ -513,7 +513,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         try {
           const template = resolveLayoutTemplate(updated);
           const { assignments } = toSlotAssignments(updated.sections);
-          const validation = validateLayoutComposition(template, assignments, WIDGET_REGISTRY);
+          const validation = validateLayoutComposition(template, assignments, buildWidgetMap());
           for (const w of validation.warnings) {
             warnings.push(w.message);
           }
@@ -592,31 +592,34 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           };
         }
 
+        // Clone section before mutation to avoid modifying the draft reference in-place
+        const sectionCopy = { ...section };
+
         // Auto-switch widget if current doesn't fit target slot size
-        const previousWidget = section.widgetId;
+        const previousWidget = sectionCopy.widgetId;
         let widgetChanged = false;
-        if (section.widgetId) {
-          const currentWidget = getWidgetById(section.widgetId);
+        if (sectionCopy.widgetId) {
+          const currentWidget = getWidgetById(sectionCopy.widgetId);
           if (currentWidget && !currentWidget.fitsIn.includes(slot.size)) {
-            const better = getBestWidget(section.type as any, slot.size);
+            const better = getBestWidget(sectionCopy.type as any, slot.size);
             if (better) {
-              section.widgetId = better.id;
+              sectionCopy.widgetId = better.id;
               widgetChanged = true;
             }
           }
         } else {
           // No widget assigned — pick one for the target slot
-          const widget = getBestWidget(section.type as any, slot.size);
+          const widget = getBestWidget(sectionCopy.type as any, slot.size);
           if (widget) {
-            section.widgetId = widget.id;
+            sectionCopy.widgetId = widget.id;
             widgetChanged = true;
           }
         }
 
         // Apply move
-        section.slot = targetSlot;
+        sectionCopy.slot = targetSlot;
         const updated = { ...draft, sections: [...draft.sections] };
-        updated.sections[sectionIdx] = { ...section };
+        updated.sections[sectionIdx] = sectionCopy;
 
         upsertDraft(draft.username ?? "draft", updated, sessionId);
 
@@ -661,7 +664,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     }),
     execute: async ({ username, language }) => {
       try {
-        const facts = getAllFacts(sessionId, readKeys);
+        const facts = getActiveFacts(sessionId, readKeys);
         if (facts.length === 0) {
           return { success: false, error: "No facts in knowledge base yet" };
         }
@@ -706,12 +709,13 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         });
 
         // Fire-and-forget personalization (steady_state only)
-        if (mode === "steady_state" && ownerKey) {
-          const soul = getActiveSoul(ownerKey);
+        // Keys: effectiveOwnerKey for all reads (facts/soul/impact), sessionId for metadata writes
+        if (mode === "steady_state" && effectiveOwnerKey) {
+          const soul = getActiveSoul(effectiveOwnerKey);
           if (soul?.compiled) {
             const publishable = filterPublishableFacts(facts);
             const soulHash = computeHash(soul.compiled);
-            const impacted = detectImpactedSections(publishable, ownerKey, factLang, soulHash);
+            const impacted = detectImpactedSections(publishable, effectiveOwnerKey, factLang, soulHash);
 
             if (impacted.length > 0) {
               // Fire-and-forget: don't await, don't block tool response
@@ -1127,7 +1131,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const hasUsername = usernameValidation.ok;
 
         // 3. Quality checks
-        const allFacts = getAllFacts(sessionId, readKeys);
+        const allFacts = getActiveFacts(sessionId, readKeys);
         const publishableFacts = filterPublishableFacts(allFacts);
         const proposedCount = allFacts.filter((f: any) => f.visibility === "proposed").length;
 
@@ -1320,7 +1324,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const config = draft.config;
         const template = resolveLayoutTemplate(config);
         const slotGroups = groupSectionsBySlot(config.sections, template);
-        const allFacts = getAllFacts(sessionId, readKeys);
+        const allFacts = getActiveFacts(sessionId, readKeys);
         const publishable = filterPublishableFacts(allFacts);
 
         const sections = config.sections.map((s) => {

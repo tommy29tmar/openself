@@ -1,5 +1,5 @@
 import { sqlite } from "@/lib/db";
-import { getAllFacts, setFactVisibility } from "@/lib/services/kb-service";
+import { getActiveFacts, setFactVisibility } from "@/lib/services/kb-service";
 import {
   getDraft,
   upsertDraft,
@@ -63,7 +63,7 @@ export async function prepareAndPublish(
   const { mode, expectedHash } = opts;
 
   // Step A: Validate — use shared filter
-  const facts = getAllFacts(sessionId);
+  const facts = getActiveFacts(sessionId);
   if (facts.length === 0) {
     throw new PublishError("No facts to publish", "NO_FACTS", 400);
   }

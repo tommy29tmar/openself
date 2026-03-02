@@ -22,21 +22,21 @@ const {
   mockClassifySectionRichness,
   mockFilterPublishableFacts,
 } = vi.hoisted(() => ({
-  mockGetActiveSoul: vi.fn(() => null),
-  mockProposeSoulChange: vi.fn(() => ({ id: "proposal-1" })),
-  mockGetPendingProposals: vi.fn(() => []),
-  mockGetSessionMeta: vi.fn(() => ({})),
+  mockGetActiveSoul: vi.fn().mockReturnValue(null),
+  mockProposeSoulChange: vi.fn().mockReturnValue({ id: "proposal-1" }),
+  mockGetPendingProposals: vi.fn().mockReturnValue([]),
+  mockGetSessionMeta: vi.fn().mockReturnValue({}),
   mockMergeSessionMeta: vi.fn(),
-  mockCountFacts: vi.fn(() => 5),
-  mockGetAllFacts: vi.fn(() => []),
-  mockHasAnyPublishedPage: vi.fn(() => false),
-  mockGetDraft: vi.fn(() => null),
-  mockGetPublishedUsername: vi.fn(() => null),
-  mockGetOpenConflicts: vi.fn(() => []),
-  mockCreateProposalService: vi.fn(() => ({
-    getPendingProposals: vi.fn(() => []),
-  })),
-  mockClassifySectionRichness: vi.fn(() => "rich"),
+  mockCountFacts: vi.fn().mockReturnValue(5),
+  mockGetAllFacts: vi.fn().mockReturnValue([]),
+  mockHasAnyPublishedPage: vi.fn().mockReturnValue(false),
+  mockGetDraft: vi.fn().mockReturnValue(null),
+  mockGetPublishedUsername: vi.fn().mockReturnValue(null),
+  mockGetOpenConflicts: vi.fn().mockReturnValue([]),
+  mockCreateProposalService: vi.fn().mockReturnValue({
+    getPendingProposals: vi.fn().mockReturnValue([]),
+  }),
+  mockClassifySectionRichness: vi.fn().mockReturnValue("rich"),
   mockFilterPublishableFacts: vi.fn((facts: unknown[]) => facts),
 }));
 
@@ -55,42 +55,42 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/services/kb-service", () => ({
-  countFacts: (...args: unknown[]) => mockCountFacts(...args),
-  getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
-  getActiveFacts: vi.fn(() => []),
+  countFacts: mockCountFacts,
+  getAllFacts: mockGetAllFacts,
+  getActiveFacts: mockGetAllFacts,
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
-  hasAnyPublishedPage: (...args: unknown[]) => mockHasAnyPublishedPage(...args),
-  getDraft: (...args: unknown[]) => mockGetDraft(...args),
-  getPublishedUsername: (...args: unknown[]) => mockGetPublishedUsername(...args),
+  hasAnyPublishedPage: mockHasAnyPublishedPage,
+  getDraft: mockGetDraft,
+  getPublishedUsername: mockGetPublishedUsername,
 }));
 
 vi.mock("@/lib/services/soul-service", () => ({
-  getActiveSoul: (...args: unknown[]) => mockGetActiveSoul(...args),
-  proposeSoulChange: (...args: unknown[]) => mockProposeSoulChange(...args),
-  getPendingProposals: (...args: unknown[]) => mockGetPendingProposals(...args),
+  getActiveSoul: mockGetActiveSoul,
+  proposeSoulChange: mockProposeSoulChange,
+  getPendingProposals: mockGetPendingProposals,
 }));
 
 vi.mock("@/lib/services/conflict-service", () => ({
-  getOpenConflicts: (...args: unknown[]) => mockGetOpenConflicts(...args),
+  getOpenConflicts: mockGetOpenConflicts,
 }));
 
 vi.mock("@/lib/services/proposal-service", () => ({
-  createProposalService: (...args: unknown[]) => mockCreateProposalService(...args),
+  createProposalService: mockCreateProposalService,
 }));
 
 vi.mock("@/lib/services/section-richness", () => ({
-  classifySectionRichness: (...args: unknown[]) => mockClassifySectionRichness(...args),
+  classifySectionRichness: mockClassifySectionRichness,
 }));
 
 vi.mock("@/lib/services/page-projection", () => ({
-  filterPublishableFacts: (...args: unknown[]) => mockFilterPublishableFacts(...args),
+  filterPublishableFacts: mockFilterPublishableFacts,
 }));
 
 vi.mock("@/lib/services/session-metadata", () => ({
-  getSessionMeta: (...args: unknown[]) => mockGetSessionMeta(...args),
-  mergeSessionMeta: (...args: unknown[]) => mockMergeSessionMeta(...args),
+  getSessionMeta: mockGetSessionMeta,
+  mergeSessionMeta: mockMergeSessionMeta,
 }));
 
 vi.mock("@/lib/services/personalization-hashing", () => ({
@@ -136,10 +136,11 @@ describe("Circuito A: archetype → soul auto-proposal", () => {
   it("proposes initial soul when archetype is not generalist and no soul exists", () => {
     // With a role fact, archetype should detect as non-generalist
     // No soul, no pending proposals → should propose
-    assembleBootstrapPayload(SCOPE);
+    assembleBootstrapPayload(SCOPE, "en");
 
     expect(mockProposeSoulChange).toHaveBeenCalledTimes(1);
-    const [ownerKey, overlay, reason] = mockProposeSoulChange.mock.calls[0];
+    const call = mockProposeSoulChange.mock.calls[0] as unknown[];
+    const [ownerKey, overlay, reason] = call;
     expect(ownerKey).toBe("test-owner");
     expect(overlay).toHaveProperty("tone");
     expect(overlay).toHaveProperty("communicationStyle");
@@ -152,7 +153,7 @@ describe("Circuito A: archetype → soul auto-proposal", () => {
       compiled: "Warm and friendly",
     });
 
-    assembleBootstrapPayload(SCOPE);
+    assembleBootstrapPayload(SCOPE, "en");
 
     expect(mockProposeSoulChange).not.toHaveBeenCalled();
   });
@@ -162,7 +163,7 @@ describe("Circuito A: archetype → soul auto-proposal", () => {
     mockGetAllFacts.mockReturnValue([]);
     mockCountFacts.mockReturnValue(5);
 
-    assembleBootstrapPayload(SCOPE);
+    assembleBootstrapPayload(SCOPE, "en");
 
     expect(mockProposeSoulChange).not.toHaveBeenCalled();
   });
@@ -172,16 +173,17 @@ describe("Circuito A: archetype → soul auto-proposal", () => {
       { id: "pending-1", status: "pending" },
     ]);
 
-    assembleBootstrapPayload(SCOPE);
+    assembleBootstrapPayload(SCOPE, "en");
 
     expect(mockProposeSoulChange).not.toHaveBeenCalled();
   });
 
   it("uses archetype strategy toneHint and communicationStyle in proposal", () => {
-    assembleBootstrapPayload(SCOPE);
+    assembleBootstrapPayload(SCOPE, "en");
 
     if (mockProposeSoulChange.mock.calls.length > 0) {
-      const overlay = mockProposeSoulChange.mock.calls[0][1];
+      const call = mockProposeSoulChange.mock.calls[0] as unknown[];
+      const overlay = call[1] as Record<string, unknown>;
       // The overlay should match one of the ARCHETYPE_STRATEGIES
       const allTones = Object.values(ARCHETYPE_STRATEGIES).map(s => s.toneHint);
       const allStyles = Object.values(ARCHETYPE_STRATEGIES).map(s => s.communicationStyle);
@@ -193,10 +195,10 @@ describe("Circuito A: archetype → soul auto-proposal", () => {
 
 describe("archetype session cache", () => {
   it("saves archetype to session metadata on first detection", () => {
-    assembleBootstrapPayload(SCOPE);
+    assembleBootstrapPayload(SCOPE, "en");
 
     expect(mockMergeSessionMeta).toHaveBeenCalledWith(
-      "test-session",
+      "test-owner",
       expect.objectContaining({ archetype: expect.any(String) }),
     );
   });
@@ -204,13 +206,13 @@ describe("archetype session cache", () => {
   it("uses cached archetype from session on subsequent calls", () => {
     mockGetSessionMeta.mockReturnValue({ archetype: "developer" });
 
-    const result = assembleBootstrapPayload(SCOPE);
+    const result = assembleBootstrapPayload(SCOPE, "en");
 
     expect(result.payload.archetype).toBe("developer");
     // Should NOT re-detect — mergeSessionMeta should not be called with archetype
     // (it's already cached)
-    const archCalls = mockMergeSessionMeta.mock.calls.filter(
-      (c: unknown[]) => c[1] && typeof c[1] === "object" && "archetype" in (c[1] as Record<string, unknown>),
+    const archCalls = (mockMergeSessionMeta.mock.calls as unknown[][]).filter(
+      (c) => c[1] && typeof c[1] === "object" && "archetype" in (c[1] as Record<string, unknown>),
     );
     expect(archCalls.length).toBe(0);
   });

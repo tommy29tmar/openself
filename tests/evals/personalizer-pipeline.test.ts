@@ -49,7 +49,7 @@ vi.mock("@/lib/ai/provider", () => ({
 // Mock kb-service
 vi.mock("@/lib/services/kb-service", () => ({
   getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
-  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetAllFacts(...args),
 }));
 
 // Mock soul-service

@@ -7,11 +7,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mock all service dependencies before importing the module under test ---
 
-vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: vi.fn(() => []),
-  getActiveFacts: vi.fn(() => []),
-  countFacts: vi.fn(() => 0),
-}));
+vi.mock("@/lib/services/kb-service", () => {
+  const mockFn = vi.fn(() => []);
+  return {
+    getAllFacts: mockFn,
+    getActiveFacts: mockFn,
+    countFacts: vi.fn(() => 0),
+  };
+});
 vi.mock("@/lib/services/page-service", () => ({
   hasAnyPublishedPage: vi.fn(() => false),
 }));

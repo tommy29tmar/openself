@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
-import { getAllFacts } from "@/lib/services/kb-service";
+import { getActiveFacts } from "@/lib/services/kb-service";
 import { getDraft, hasAnyPage, upsertDraft, getPublishedUsername, getPublishedConfigHash } from "@/lib/services/page-service";
 import { logEvent } from "@/lib/services/event-service";
 import {
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
 
     let regenerated = false;
     if (regenerateDraft) {
-      const facts = getAllFacts(primaryKey, readKeys);
+      const facts = getActiveFacts(primaryKey, readKeys);
       if (facts.length > 0) {
         const currentDraft = getDraft(primaryKey);
         const username = currentDraft?.username ?? "draft";

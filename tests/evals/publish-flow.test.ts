@@ -13,14 +13,17 @@ vi.mock("@/lib/services/page-service", () => ({
   getPublishedPage: vi.fn(),
 }));
 
-vi.mock("@/lib/services/kb-service", () => ({
-  getAllFacts: vi.fn(),
-  getActiveFacts: vi.fn(),
-  createFact: vi.fn(),
-  updateFact: vi.fn(),
-  deleteFact: vi.fn(),
-  searchFacts: vi.fn(() => []),
-}));
+vi.mock("@/lib/services/kb-service", () => {
+  const mockGetAllFacts = vi.fn();
+  return {
+    getAllFacts: mockGetAllFacts,
+    getActiveFacts: mockGetAllFacts,
+    createFact: vi.fn(),
+    updateFact: vi.fn(),
+    deleteFact: vi.fn(),
+    searchFacts: vi.fn(() => []),
+  };
+});
 
 import { agentTools } from "@/lib/agent/tools";
 import type { PageConfig } from "@/lib/page-config/schema";

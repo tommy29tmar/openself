@@ -53,7 +53,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getAllFacts: mockGetAllFacts,
-  getActiveFacts: mockGetActiveFacts,
+  getActiveFacts: mockGetAllFacts,
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));
