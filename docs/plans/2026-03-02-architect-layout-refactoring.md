@@ -1146,12 +1146,12 @@ git commit -m "feat(theme): add compact variant to Music component"
 
 ---
 
-## Task 12: Compact variant truncation tests + full validation
+## Task 12: Compact variant widget resolution tests + full validation
 
 **Files:**
 - Create: `tests/evals/compact-variants.test.ts`
 
-**Context:** The project has no component rendering test infra (`@testing-library/react` / `jsdom` are not installed). We test the truncation/widget-resolution logic at the pure data level. Visual rendering is validated in Task 14 (UAT screenshots).
+**Context:** The project has no component rendering test infra (`@testing-library/react` / `jsdom` are not installed). We test widget resolution and maxItems boundaries at the data level. Truncation rendering ("+N more" indicator, item slicing) is validated visually in Task 14 (UAT screenshots).
 
 **Step 1: Write truncation and widget resolution tests**
 
@@ -1207,7 +1207,9 @@ describe("compact variant widget resolution", () => {
 describe("compact widgets in architect slot assignment", () => {
   const architect = getLayoutTemplate("architect");
 
-  it("reading section in card slot gets reading-compact widget", () => {
+  it("reading section lands in card-3 with reading-compact widget", () => {
+    // With only reading as non-hero/footer, affinity ranking puts it in card-3
+    // (card-3 reading affinity: 70 > full-row reading affinity: 60)
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "r1", type: "reading", content: { items: [{ title: "Book 1" }] } }),
@@ -1216,13 +1218,13 @@ describe("compact widgets in architect slot assignment", () => {
     const { sections: result } = assignSlotsFromFacts(architect, sections);
     const reading = result.find(s => s.id === "r1");
     expect(reading).toBeDefined();
-    // reading has highest affinity in card-3, which is third-sized
-    if (reading!.slot?.startsWith("card-")) {
-      expect(reading!.widgetId).toBe("reading-compact");
-    }
+    expect(reading!.slot).toBe("card-3");
+    expect(reading!.widgetId).toBe("reading-compact");
   });
 
-  it("music section in card slot gets music-compact widget", () => {
+  it("music section lands in card-3 with music-compact widget", () => {
+    // With only music as non-hero/footer, affinity ranking puts it in card-3
+    // (card-3 music affinity: 70 > full-row music affinity: 60)
     const sections = [
       makeSection({ id: "h1", type: "hero" }),
       makeSection({ id: "m1", type: "music", content: { items: [{ title: "Song 1", artist: "A" }] } }),
@@ -1231,9 +1233,8 @@ describe("compact widgets in architect slot assignment", () => {
     const { sections: result } = assignSlotsFromFacts(architect, sections);
     const music = result.find(s => s.id === "m1");
     expect(music).toBeDefined();
-    if (music!.slot?.startsWith("card-")) {
-      expect(music!.widgetId).toBe("music-compact");
-    }
+    expect(music!.slot).toBe("card-3");
+    expect(music!.widgetId).toBe("music-compact");
   });
 
   it("overflow_risk emitted when items exceed compact maxItems", () => {
@@ -1245,11 +1246,11 @@ describe("compact widgets in architect slot assignment", () => {
     ];
     const { sections: result, issues } = assignSlotsFromFacts(architect, sections);
     const reading = result.find(s => s.id === "r1");
-    // If reading lands in a card slot with compact widget (maxItems=5), 8 items → overflow_risk
-    if (reading?.widgetId === "reading-compact") {
-      const overflow = issues.find(i => i.issue === "overflow_risk" && i.message.includes("reading-compact"));
-      expect(overflow).toBeDefined();
-    }
+    // reading lands in card-3 (third-sized) → reading-compact (maxItems=5), 8 items → overflow_risk
+    expect(reading!.slot).toBe("card-3");
+    expect(reading!.widgetId).toBe("reading-compact");
+    const overflow = issues.find(i => i.issue === "overflow_risk" && i.message.includes("reading-compact"));
+    expect(overflow).toBeDefined();
   });
 });
 ```
@@ -1269,7 +1270,7 @@ If any test fails, fix before continuing. These changes (affinity + compact widg
 
 ```bash
 git add tests/evals/compact-variants.test.ts
-git commit -m "test(layout): add compact variant truncation and slot assignment tests"
+git commit -m "test(layout): add compact variant widget resolution and slot assignment tests"
 ```
 
 ---
