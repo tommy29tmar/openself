@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGenerateObject,
   mockGetModel,
+  mockGetModelForTier,
   mockGetCachedCopy,
   mockPutCachedCopy,
   mockUpsertState,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockGenerateObject: vi.fn(),
   mockGetModel: vi.fn(() => "mock-model"),
+  mockGetModelForTier: vi.fn(() => "mock-model"),
   mockGetCachedCopy: vi.fn(),
   mockPutCachedCopy: vi.fn(),
   mockUpsertState: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("ai", () => ({
 // Mock the AI provider
 vi.mock("@/lib/ai/provider", () => ({
   getModel: mockGetModel,
+  getModelForTier: mockGetModelForTier,
 }));
 
 // Mock cache service
@@ -88,6 +91,7 @@ function makeInput(overrides: Partial<PersonalizeSectionInput> = {}): Personaliz
 beforeEach(() => {
   mockGenerateObject.mockReset();
   mockGetModel.mockReset().mockReturnValue("mock-model");
+  mockGetModelForTier.mockReset().mockReturnValue("mock-model");
   mockGetCachedCopy.mockReset();
   mockPutCachedCopy.mockReset();
   mockUpsertState.mockReset();

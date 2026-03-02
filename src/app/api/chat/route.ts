@@ -1,5 +1,5 @@
 import { streamText, generateText, type CoreMessage } from "ai";
-import { getModel, getProviderName, getModelId } from "@/lib/ai/provider";
+import { getModel, getModelForTier, getProviderName, getModelId } from "@/lib/ai/provider";
 import { assembleContext } from "@/lib/agent/context";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { createAgentTools } from "@/lib/agent/tools";
@@ -256,7 +256,7 @@ export async function POST(req: Request) {
   const MAX_STEPS = 8; // batch_facts reduces per-turn tool calls; 8 is sufficient
 
   try {
-    const model = getModel();
+    const model = getModelForTier("standard");
     const { tools: agentTools, getJournal } = createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode);
     const result = streamText({
       model,

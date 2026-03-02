@@ -8,43 +8,83 @@ type Provider = "google" | "openai" | "anthropic" | "ollama";
 
 /**
  * Model tier for cost-aware routing.
- * - "cheap": fast, low-cost (default for chat, translations)
- * - "medium": higher quality for summaries, soul proposals
- * - "capable": complex reasoning (conformity analysis, advanced personalization)
+ *
+ * | Tier      | Use case                                    | Default model      |
+ * |-----------|---------------------------------------------|--------------------|
+ * | fast      | Schema-constrained generateObject,          | Same as AI_MODEL   |
+ * |           | translation, mechanical tasks               |                    |
+ * | standard  | Chat conversation, summaries,               | Same as AI_MODEL   |
+ * |           | text compression                            |                    |
+ * | reasoning | Conformity analysis, complex multi-step     | gemini-2.5-pro /   |
+ * |           | evaluation                                  | claude-sonnet-4-6  |
+ *
+ * By default, fast and standard resolve to AI_MODEL (= cheapest).
+ * Override per tier with AI_MODEL_FAST, AI_MODEL_STANDARD, AI_MODEL_REASONING.
  */
-export type ModelTier = "cheap" | "medium" | "capable";
+export type ModelTier = "fast" | "standard" | "reasoning";
 
-const MEDIUM_MODELS: Record<Provider, string> = {
-  google: "gemini-2.5-flash",
+/** @deprecated Use "fast" | "standard" | "reasoning" */
+export type LegacyModelTier = "cheap" | "medium" | "capable";
+
+/** Maps legacy tier names to new names. */
+const TIER_ALIAS: Record<string, ModelTier> = {
+  cheap: "fast",
+  medium: "standard",
+  capable: "reasoning",
+};
+
+const FAST_MODELS: Record<Provider, string> = {
+  google: "gemini-2.0-flash",
   openai: "gpt-4o-mini",
   anthropic: "claude-haiku-4-5-20251001",
   ollama: "llama3.3",
 };
 
-const CAPABLE_MODELS: Record<Provider, string> = {
+const STANDARD_MODELS: Record<Provider, string> = {
+  google: "gemini-2.0-flash",
+  openai: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001",
+  ollama: "llama3.3",
+};
+
+const REASONING_MODELS: Record<Provider, string> = {
   google: "gemini-2.5-pro",
   openai: "gpt-4o",
   anthropic: "claude-sonnet-4-6",
   ollama: "llama3.3",
 };
 
-/** Maps non-cheap tiers to their model tables. */
-const TIER_MODELS: Record<Exclude<ModelTier, "cheap">, Record<Provider, string>> = {
-  medium: MEDIUM_MODELS,
-  capable: CAPABLE_MODELS,
+const TIER_MODEL_TABLES: Record<ModelTier, Record<Provider, string>> = {
+  fast: FAST_MODELS,
+  standard: STANDARD_MODELS,
+  reasoning: REASONING_MODELS,
 };
 
-/** Maps non-cheap tiers to their env override keys. */
-const TIER_ENV_KEYS: Record<Exclude<ModelTier, "cheap">, string> = {
-  medium: "AI_MODEL_MEDIUM",
-  capable: "AI_MODEL_CAPABLE",
+/** Env var overrides per tier (with legacy fallbacks). */
+const TIER_ENV_KEYS: Record<ModelTier, string[]> = {
+  fast: ["AI_MODEL_FAST"],
+  standard: ["AI_MODEL_STANDARD", "AI_MODEL_MEDIUM"],
+  reasoning: ["AI_MODEL_REASONING", "AI_MODEL_CAPABLE"],
 };
 
-export function getModelForTier(tier: ModelTier): LanguageModel {
-  if (tier === "cheap") return getModel();
+function resolveTier(tier: ModelTier | LegacyModelTier): ModelTier {
+  return TIER_ALIAS[tier] ?? tier as ModelTier;
+}
 
+function resolveModelIdForTier(resolved: ModelTier): string {
   const provider = getProvider();
-  const modelId = process.env[TIER_ENV_KEYS[tier]] ?? TIER_MODELS[tier][provider];
+  for (const envKey of TIER_ENV_KEYS[resolved]) {
+    const val = process.env[envKey];
+    if (val) return val;
+  }
+  // Fall back to AI_MODEL if set (single-model setup)
+  return process.env.AI_MODEL ?? TIER_MODEL_TABLES[resolved][provider];
+}
+
+export function getModelForTier(tier: ModelTier | LegacyModelTier): LanguageModel {
+  const resolved = resolveTier(tier);
+  const provider = getProvider();
+  const modelId = resolveModelIdForTier(resolved);
 
   switch (provider) {
     case "google": {
@@ -66,10 +106,8 @@ export function getModelForTier(tier: ModelTier): LanguageModel {
   }
 }
 
-export function getModelIdForTier(tier: ModelTier): string {
-  if (tier === "cheap") return getModelId();
-  const provider = getProvider();
-  return process.env[TIER_ENV_KEYS[tier]] ?? TIER_MODELS[tier][provider];
+export function getModelIdForTier(tier: ModelTier | LegacyModelTier): string {
+  return resolveModelIdForTier(resolveTier(tier));
 }
 
 const DEFAULT_MODELS: Record<Provider, string> = {

@@ -4,7 +4,7 @@ const mockGenerateObject = vi.fn();
 vi.mock("ai", () => ({
   generateObject: (...args: unknown[]) => mockGenerateObject(...args),
 }));
-vi.mock("@/lib/ai/provider", () => ({ getModel: () => "mock-model" }));
+vi.mock("@/lib/ai/provider", () => ({ getModel: () => "mock-model", getModelForTier: () => "mock-model" }));
 vi.mock("@/lib/services/event-service", () => ({ logEvent: vi.fn() }));
 
 import {

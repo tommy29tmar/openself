@@ -1,5 +1,5 @@
 import { generateObject } from "ai";
-import { getModel } from "@/lib/ai/provider";
+import { getModelForTier } from "@/lib/ai/provider";
 import type { FactRow } from "@/lib/services/kb-service";
 import type { Section } from "@/lib/page-config/schema";
 import {
@@ -107,7 +107,7 @@ export async function personalizeSection(
   // 3. Call LLM
   try {
     const { object } = await generateObject({
-      model: getModel(),
+      model: getModelForTier("fast"),
       schema,
       prompt: [
         `You are a personal page copywriter. Rewrite the content of a "${section.type}" section for ${username}'s personal page.`,

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { getModel, getModelId } from "@/lib/ai/provider";
+import { getModel, getModelId, getModelForTier } from "@/lib/ai/provider";
 import { db } from "@/lib/db";
 import { translationCache } from "@/lib/db/schema";
 import type { PageConfig } from "@/lib/page-config/schema";
@@ -159,7 +159,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
 
   try {
     const result = await generateObject({
-      model: getModel(),
+      model: getModelForTier("fast"),
       schema: TranslationResultSchema,
       prompt,
     });

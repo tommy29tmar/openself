@@ -169,8 +169,8 @@ Keep the summary concise (under 500 words). Write in third person.`;
   const fullPrompt = journalDigest ? `${prompt}\n\n${journalDigest}` : prompt;
 
   try {
-    const model = getModelForTier("medium");
-    const modelId = getModelIdForTier("medium");
+    const model = getModelForTier("standard");
+    const modelId = getModelIdForTier("standard");
 
     const result = await generateText({
       model,

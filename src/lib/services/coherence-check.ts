@@ -15,7 +15,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { Section } from "@/lib/page-config/schema";
 import type { FactRow } from "@/lib/services/kb-service";
-import { getModel } from "@/lib/ai/provider";
+import { getModelForTier } from "@/lib/ai/provider";
 
 export type CoherenceIssue = {
   type: "role_mismatch" | "timeline_overlap" | "skill_gap" | "level_mismatch" | "completeness_gap";
@@ -205,7 +205,7 @@ export async function checkPageCoherence(
   // Circuit I: pass soul context so LLM can check tone/style coherence
   const llmResult = await Promise.race([
     generateObject({
-      model: getModel(),
+      model: getModelForTier("fast"),
       schema: coherenceSchema,
       prompt: buildCoherencePrompt(sections, soulCompiled),
     }),
