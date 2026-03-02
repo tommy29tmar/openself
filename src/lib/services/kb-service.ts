@@ -11,7 +11,7 @@ import {
   type TaxonomyStore,
 } from "@/lib/taxonomy/normalizeCategory";
 import { initialVisibility, isSensitiveCategory, type Visibility } from "@/lib/visibility/policy";
-import { logEvent } from "@/lib/services/event-service";
+import { logEvent, type Actor } from "@/lib/services/event-service";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
 import { validateFactValue } from "@/lib/services/fact-validation";
 import { FactConstraintError, CURRENT_UNIQUE_CATEGORIES } from "@/lib/services/fact-constraints";
@@ -94,6 +94,7 @@ export async function createFact(
   input: CreateFactInput,
   sessionId: string = "__default__",
   profileId?: string,
+  options?: { actor?: Actor },
 ): Promise<FactRow> {
   // Validate fact value before persisting
   validateFactValue(input.category, input.key, input.value);
@@ -196,7 +197,7 @@ export async function createFact(
 
   logEvent({
     eventType: "fact_created",
-    actor: "assistant",
+    actor: options?.actor ?? "assistant",
     payload: {
       category: normalized.canonical,
       key: input.key,
