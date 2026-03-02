@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-02-28
+Last updated: 2026-03-02
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -296,9 +296,18 @@ Deliverables:
 2. Store media via existing service
 3. Render avatar URL in hero section from stored media id
 
-#### NEXT-14: Connector MVP (start with one connector)
+#### NEXT-14: Connector MVP ✅ (Done — GitHub + LinkedIn ZIP)
 
-Suggested first connector: GitHub (projects activity into facts)
+Implemented both GitHub (OAuth sync) and LinkedIn ZIP (file upload import) connectors.
+16 commits, 194 new tests (1834 total, 153 files).
+
+Implemented:
+1. **Connector infrastructure** — Registry pattern, sync handler with syncFn dispatch, AES-256-GCM credential encryption, batch fact writer with actor:"connector", provenance tracking via connector_items
+2. **GitHub connector** — OAuth flow (subdirectory callback routing), API client (profile + repos + languages with pagination), fact mappers (profile → 6 fact types, repos → projects + skills + stats), sync orchestration with cursor-based updates
+3. **LinkedIn ZIP connector** — ZIP upload API (100MB limit), yauzl-promise extraction, CSV parsing (BOM + preamble handling), date normalization (5 formats), 12 fact mappers (profile, positions, education, skills, languages, certifications, courses, causes, email, phone), sensitive file exclusion
+4. **Hardening** — private-contact category (forces private visibility), date placeholder validation extended to start/end fields
+5. **API routes** — GitHub: connect, callback, manual sync. LinkedIn: multipart upload. All auth-gated.
+6. **Dependencies** — csv-parse, yauzl-promise
 
 #### NEXT-15: Public page translation for visitors
 
@@ -336,7 +345,7 @@ Main deliverables:
 4. Layout control plane v1 (inspect_layout_state, simulate_layout_patch, apply_layout_patch)
 5. Domain control-plane expansion (facts, heartbeat, publish preflight) — Sprint 4 (publish_preflight + inspect_page_state)
 6. Skills package v1 aligned to journey states (onboarding/returning/layout/publish/heartbeat/conflicts)
-7. MCP connector gateway foundation with GitHub pilot
+7. ~~MCP connector gateway foundation with GitHub pilot~~ → Superseded by direct connector implementation (GitHub + LinkedIn ZIP)
 
 **Sprint 1 — Journey Intelligence (Done):**
 
@@ -430,7 +439,7 @@ Reference:
 1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
 2. Session persistence across browser reloads
 3. Community component registry enforcement with certified workflow
-4. Additional connector ecosystem
+4. Additional connectors (Strava, Spotify, Goodreads, ORCID, etc.)
 5. Advanced theming and design packs
 6. Multi-profile / multi-tenant model if product direction requires it
 
@@ -453,7 +462,7 @@ Required:
 1. Phase 1a complete (memory, heartbeat, context assembly) ✅
 2. Phase 1b complete (education + experience + at least 2 more section types) ✅
 3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks) ✅
-4. Phase 1d: at least avatar support + one connector
+4. Phase 1d: at least avatar support + one connector (connector: ✅ GitHub + LinkedIn ZIP)
 
 Outcome:
 - The agent remembers users across sessions and writes personalized page copy

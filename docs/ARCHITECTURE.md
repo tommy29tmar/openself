@@ -2432,104 +2432,157 @@ connectors, using conversation alone.
 ```
 ┌───────────────┐     ┌──────────────────┐     ┌──────────────┐
 │  External     │     │   CONNECTOR      │     │  Knowledge   │
-│  Service      │────▶│                  │────▶│  Base        │
-│  (GitHub API) │     │  - Authenticate  │     │              │
-│               │     │  - Fetch data    │     │  (new facts) │
-│               │     │  - Transform     │     │              │
-│               │◀────│  - Schedule      │     │              │
-│  (webhooks)   │     │                  │     │              │
+│  Service      │────▶│   DEFINITION     │────▶│  Base        │
+│  (GitHub API, │     │                  │     │              │
+│   LinkedIn    │     │  - Authenticate  │     │  (new facts  │
+│   ZIP export) │     │  - Fetch/Parse   │     │   via batch  │
+│               │     │  - Map to facts  │     │   writer)    │
+│               │     │  - syncFn /      │     │              │
+│               │     │    importFn      │     │              │
 └───────────────┘     └──────────────────┘     └──────────────┘
+                              │
+                      ┌───────┴────────┐
+                      │  WORKER JOB    │
+                      │ connector_sync │
+                      │  (periodic)    │
+                      └────────────────┘
 ```
+
+Two connector modes:
+1. **Sync connectors** (e.g., GitHub) — periodic worker-based sync via `syncFn`. OAuth authentication, cursor-based incremental updates, scheduled via `connector_sync` job.
+2. **Import connectors** (e.g., LinkedIn ZIP) — one-shot user-initiated import via API upload. No OAuth, no scheduling.
 
 Each connector:
-1. **Authenticates** with the external service (OAuth, API key, or public API)
-2. **Fetches** relevant data (repos, activities, listening history, etc.)
-3. **Transforms** raw data into facts (structured, categorized)
-4. **Writes** facts to the KB with `source` set to the connector name
-5. **Schedules** periodic checks (via heartbeat or cron)
+1. **Authenticates** with the external service (OAuth) or receives data directly (file upload)
+2. **Fetches/parses** relevant data (API calls, ZIP extraction, CSV parsing)
+3. **Maps** raw data into facts using connector-specific mappers
+4. **Writes** facts to the KB via `batchCreateFacts()` with `actor: "connector"`
+5. **Tracks provenance** via `connector_items` table (connector_id → fact_id mapping)
 
-### 7.2 Connector Interface
+### 7.2 Connector Definition
 
-Every connector implements a standard interface:
+Every connector registers a `ConnectorDefinition` in the registry:
 
 ```typescript
-interface Connector {
-  // Metadata
-  id: string;                    // e.g., "github"
-  name: string;                  // e.g., "GitHub"
-  description: string;
-  icon: string;                  // Icon for the UI
-  category: "code" | "sports" | "music" | "reading" | "academic" | "social" | "other";
+type ConnectorDefinition = {
+  type: string;              // e.g., "github", "linkedin_zip"
+  displayName: string;       // e.g., "GitHub", "LinkedIn ZIP"
+  supportsSync: boolean;     // periodic worker sync (GitHub)
+  supportsImport: boolean;   // one-shot import (LinkedIn ZIP)
+  syncFn?: (connectorId: string, ownerKey: string) => Promise<SyncResult>;
+};
 
-  // Authentication
-  authType: "oauth" | "api_key" | "public" | "none";
-  authConfig?: OAuthConfig;
-
-  // Data fetching
-  fetch(credentials: Credentials): Promise<Fact[]>;
-
-  // Scheduling
-  schedule: {
-    interval: string;            // "1h", "6h", "24h", "7d"
-    webhook?: boolean;           // Supports real-time webhooks?
-  };
-
-  // What categories of facts this connector produces
-  produces: string[];            // e.g., ["project", "skill", "achievement", "stats"]
-}
+type SyncResult = {
+  factsCreated: number;
+  factsUpdated: number;
+  error?: string;
+};
 ```
 
-### 7.3 Planned Connectors
+Registration is side-effect based — `src/lib/connectors/register-all.ts` is imported
+by the worker to populate the registry at startup.
 
-| Connector | Category | Data Produced | Auth | Priority |
+### 7.3 Implemented Connectors
+
+| Connector | Mode | Data Produced | Auth | Status |
 |---|---|---|---|---|
-| **GitHub** | Code | Repos, languages, contributions, bio | OAuth | Phase 1 |
-| **Strava** | Sports | Activities, stats, achievements | OAuth | Phase 1 |
-| **Spotify** | Music | Top artists, genres, listening stats | OAuth | Phase 1 |
-| **Goodreads** | Reading | Books read, currently reading, favorites | OAuth/scrape | Phase 1 |
-| **Google Scholar** | Academic | Publications, citations, h-index | Public API | Phase 1 |
-| **ORCID** | Academic | Publications, affiliations | Public API | Phase 2 |
-| **Letterboxd** | Movies | Watched, rated, favorites | Scrape/RSS | Phase 2 |
-| **Steam** | Gaming | Games owned, playtime, achievements | Public API | Phase 2 |
-| **LinkedIn** | Professional | Import profile data (one-time) | Manual/export | Phase 2 |
-| **Instagram** | Social | Public posts, bio (read-only) | Public API | Phase 2 |
-| **YouTube** | Content | Channel stats, videos (for creators) | OAuth | Phase 2 |
-| **Duolingo** | Learning | Languages studied, streaks | Public API | Phase 2 |
-| **Chess.com** | Gaming | Rating, games played | Public API | Phase 2 |
-| **Last.fm** | Music | Scrobbles, top artists, history | API key | Phase 2 |
-| **RSS/Atom** | Content | Blog posts, articles (any feed) | Public | Phase 1 |
-| **Manual import** | Any | CSV/JSON upload of arbitrary data | None | Phase 1 |
+| **GitHub** | Sync | Profile, repos, languages, skills, stats | OAuth (`read:user`) | Implemented |
+| **LinkedIn ZIP** | Import | Profile, positions, education, skills, languages, certifications, causes | File upload (.zip) | Implemented |
 
-Phase 0 includes connector architecture/design only (interface, registry, contracts), not
-production connector ingestion.
+### 7.4 GitHub Connector
 
-### 7.4 Community Connectors
+**OAuth flow** (subdirectory routing):
+- Login callback: `/api/auth/github/callback` (uses `oauth_state` cookie)
+- Connector callback: `/api/auth/github/callback/connector` (uses `gh_connector_state` cookie)
+- Both share `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` env vars
+- Connector requests `read:user` scope (login uses `user:email`)
 
-The connector interface is designed so that anyone can build a connector:
+**Sync flow** (`syncGitHub`):
+1. Decrypt stored credentials (AES-256-GCM via `connector-encryption.ts`)
+2. Fetch profile + repos + per-repo languages from GitHub API (paginated)
+3. Map to facts via `mapProfile()` and `mapRepos()`:
+   - `social/gh-profile`, `identity/gh-bio`, `identity/gh-company`, `identity/gh-location`
+   - `project/gh-{node_id}` per non-fork repo
+   - `skill/gh-{language}` aggregated across repos
+   - `stat/github-repos` (total count)
+4. Write facts via `batchCreateFacts()` (sequential writes + single recompose)
+5. Record provenance in `connector_items`, update `lastSync`/`syncCursor`
 
-1. Implement the `Connector` interface
-2. Package as an npm module (or include in the repo)
-3. Register in the connector registry
-4. The agent automatically discovers and can use it
+**API routes:**
+- `GET /api/connectors/github/connect` — Initiates OAuth flow
+- `GET /api/auth/github/callback/connector` — Handles OAuth callback, creates connector, enqueues sync
+- `POST /api/connectors/github/sync` — Manual sync trigger (auth-gated)
 
-In later phases, a **connector marketplace** could allow the community to share
-connectors (like OpenClaw's ClawHub for skills).
+### 7.5 LinkedIn ZIP Connector
 
-### 7.5 How Connectors Feed the Agent
+**Import flow** (`importLinkedInZip`):
+1. User uploads `.zip` file exported from LinkedIn (Settings → Get a copy of your data)
+2. API validates file (100MB limit, `.zip` MIME type)
+3. Extract ZIP in memory via `yauzl-promise` (bounded by size limit)
+4. For each CSV file, match filename to mapper via `FILE_MAPPERS`:
+   - `Profile.csv` → identity facts (name, headline, location, summary)
+   - `Positions.csv` → experience facts (chronological sort, single "current" role)
+   - `Education.csv` → education facts
+   - `Skills.csv` → skill facts
+   - `Languages.csv` → language facts with proficiency mapping
+   - `Certifications.csv` → achievement facts
+   - `Courses.csv` → education/course facts
+   - `Causes You Care About.csv` → interest/cause facts
+   - `Email Addresses.csv`, `PhoneNumbers.csv` → private-contact facts (opt-in, not wired by default)
+5. Date normalization handles 5 LinkedIn formats (ISO, "Mon YYYY", "DD Mon YYYY", US short, year-only)
+6. CSV parsing handles BOM, preamble rows, relaxed column counts
+7. Sensitive files excluded: `Connections.csv`, `messages.csv`, `Endorsement*`, `Recommendations*`
 
-Connectors don't just dump data — they create facts that the agent can reason about:
+**API routes:**
+- `POST /api/connectors/linkedin-zip/import` — Multipart upload (auth-gated, 100MB limit)
+
+### 7.6 Connector Infrastructure
+
+**Database tables** (migration 0016):
+- `connectors` — Registered connector instances per owner (id, type, status, encrypted credentials, config, sync cursor)
+- `connector_items` — Provenance tracking (connector_id → fact_id mapping)
+- `sync_log` — Per-sync audit trail (status, facts created/updated, errors)
+
+**Shared services:**
+- `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`)
+- `connector-encryption.ts` — AES-256-GCM encrypt/decrypt for OAuth tokens (key from `CONNECTOR_ENCRYPTION_KEY` env var)
+- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", sequential writes + single recompose
+- `connector-sync-handler.ts` — Worker job handler, fans out by ownerKey, calls `syncFn` per active connector
+- `register-all.ts` — Side-effect module that registers all connector definitions at import time
+
+**Worker integration:**
+- `connector_sync` job type in worker handlers
+- Worker imports `register-all.ts` to populate the registry
+- Manual sync enqueues via `enqueueJob("connector_sync", { ownerKey })`
+
+### 7.7 Planned Connectors (Future)
+
+| Connector | Category | Auth | Priority |
+|---|---|---|---|
+| **Strava** | Sports | OAuth | Phase 2 |
+| **Spotify** | Music | OAuth | Phase 2 |
+| **Goodreads** | Reading | OAuth/scrape | Phase 2 |
+| **Google Scholar** | Academic | Public API | Phase 2 |
+| **ORCID** | Academic | Public API | Phase 2 |
+| **Chess.com** | Gaming | Public API | Phase 2 |
+| **Last.fm** | Music | API key | Phase 2 |
+
+### 7.8 How Connectors Feed the Agent
+
+Connectors create facts that the agent reasons about during page composition:
 
 ```
-GitHub connector fetches repos →
+GitHub connector syncs →
 
 Creates facts:
-  { category: "project", key: "repo-name", value: { name: "...", stars: 42, ... }, source: "github" }
-  { category: "skill", key: "python", value: { name: "Python", evidence: "12 repos" }, source: "github" }
+  { category: "project", key: "gh-MDEwOlJl...", value: { name: "openself", ... }, source: "github" }
+  { category: "skill", key: "gh-typescript", value: { name: "TypeScript", ... }, source: "github" }
+  { category: "stat", key: "github-repos", value: { label: "GitHub Repos", number: 42 }, source: "github" }
 
-The agent then:
-  - Merges with existing facts (user already said they know Python → increase confidence)
-  - Decides whether to update the page
-  - Queues a message if user approval is needed
+The page composer then:
+  - Includes connector facts in the deterministic skeleton (same as conversation facts)
+  - Auto-recomposes draft after batch write (single recompose, not per-fact)
+  - Connector facts appear in preview immediately via SSE
 ```
 
 ---
@@ -3400,13 +3453,14 @@ OpenSelf ships as one codebase with environment-driven runtime profiles:
 
 ### 12.2 Connector Security
 
-- OAuth tokens stored encrypted in the database
-- Encryption keys are externalized (`OPENSELF_ENCRYPTION_KEY` self-hosted, KMS in cloud)
-- Key rotation uses key versioning + background re-encryption
-- Connectors have read-only access to external services by default
-- API keys can be rotated without data loss
-- Connector permissions are granular (user chooses what to share)
-- Connector credentials are never exposed to the LLM context
+- OAuth tokens stored encrypted in SQLite via AES-256-GCM (`connector-encryption.ts`)
+- Encryption key externalized as `CONNECTOR_ENCRYPTION_KEY` env var (32-byte hex)
+- `getConnectorWithCredentials()` returns `decryptedCredentials` (never raw `credentials` column)
+- GitHub connector requests minimal `read:user` scope (read-only)
+- LinkedIn ZIP import: file processed in memory, no credential storage, sensitive CSVs excluded
+- Connector credentials never exposed to the LLM context
+- `private-contact` category forces `private` visibility via `SENSITIVE_CATEGORIES`
+- All connector API routes are auth-gated (require active session)
 
 ### 12.3 Page Visibility
 

@@ -1,6 +1,6 @@
 # OpenSelf — Deploy Guide (Hetzner + Coolify)
 
-Last updated: 2026-02-25
+Last updated: 2026-03-02
 
 ---
 
@@ -201,6 +201,19 @@ Add these variables (click "New Environment Variable" for each):
 > **Note:** OAuth buttons on `/login` appear for all providers — the server returns 404 if a provider is not configured.
 > Each provider is independent: configure only the ones you need.
 > If no OAuth provider is configured, users can still sign up with email+password (when `AUTH_V2=true`).
+
+**Connectors (optional — enable GitHub sync and LinkedIn import):**
+
+| Name | Value | How to get it |
+|---|---|---|
+| `CONNECTOR_ENCRYPTION_KEY` | 64 hex chars | Generate: `openssl rand -hex 32`. Used for AES-256-GCM encryption of OAuth tokens stored in SQLite. |
+| `GITHUB_CLIENT_ID` | `Ov23li...` | Same OAuth App used for login (see OAuth section above). The connector reuses the same app with a subdirectory callback: `https://openself.dev/api/auth/github/callback/connector` |
+| `GITHUB_CLIENT_SECRET` | `999219f...` | Same OAuth App as above |
+
+> **Note:** `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` are shared between login OAuth and the GitHub connector.
+> The connector callback URL (`/api/auth/github/callback/connector`) is a subdirectory of the login callback
+> (`/api/auth/github/callback`), which GitHub validates automatically.
+> LinkedIn ZIP import requires no additional env vars — it's a file upload connector.
 
 Optional cost guardrails (recommended):
 

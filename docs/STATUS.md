@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-02-28
+Last updated: 2026-03-02
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,7 +12,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 1301 automated tests passing (92 test files)
+- 1834 automated tests passing (153 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -335,9 +335,37 @@ All items complete. 81 new tests (1221 total, 77 files).
    - `publish-incomplete.eval.ts` — Hardcoded prompt: preflight issue communication, fix-or-publish choice, error priority
    - `low-signal.eval.ts` — Hardcoded prompt: guided options after low signal, minimal page fallback, no passive closings
 
+### Connector MVP (GitHub + LinkedIn ZIP) ✅
+
+All items complete. Two connectors implemented end-to-end with full test coverage. 16 commits, 194 new tests (1834 total, 153 files).
+
+**Connector infrastructure:**
+1. **Sync handler** — `connector-sync-handler.ts` replaced no-op placeholder with `syncFn` dispatch. Fans out by ownerKey, writes `sync_log` entries per connector, handles success/error/partial states.
+2. **Registration** — `register-all.ts` side-effect module registers both connectors at import. Worker imports it at startup.
+3. **Fact writer** — `batchCreateFacts()` with `actor: "connector"`, sequential writes + single recompose after all facts.
+4. **Encryption** — AES-256-GCM via `connector-encryption.ts` for OAuth token storage. Key from `CONNECTOR_ENCRYPTION_KEY` env var.
+
+**GitHub connector:**
+1. **API client** — `fetchProfile`, `fetchRepos`, `fetchRepoLanguages` with Bearer auth, Link header pagination, rate-limit warning, `GitHubAuthError` for 401.
+2. **Fact mapper** — `mapProfile()` (6 fact types: social, identity, location, company, website, twitter), `mapRepos()` (project per non-fork repo + aggregated skill per language + total repo stat).
+3. **Sync orchestration** — `syncGitHub()`: decrypt credentials → fetch → map → batchCreateFacts → record provenance → update syncCursor/lastSync.
+4. **OAuth flow** — Subdirectory routing: connector callback at `/api/auth/github/callback/connector` (separate `gh_connector_state` cookie), login callback at `/api/auth/github/callback`. Shared `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`.
+5. **API routes** — `GET /connect` (initiate OAuth), `GET callback/connector` (handle callback + enqueue sync), `POST /sync` (manual trigger).
+
+**LinkedIn ZIP connector:**
+1. **Date normalizer** — `normalizeLinkedInDate()` handles 5 LinkedIn date formats (ISO, "Mon YYYY", "DD Mon YYYY", US short M/D/YY, year-only). Rejects placeholders.
+2. **CSV parser** — `parseLinkedInCsv()` strips BOM, detects preamble rows, uses `csv-parse/sync` with `relax_column_count`.
+3. **Fact mappers** — 12 mapper functions: `mapProfile`, `mapProfileSummary`, `mapPositions`, `mapEducation`, `mapSkills`, `mapLanguages`, `mapCertifications`, `mapCourses`, `mapCompanyFollows`, `mapCauses`, `mapEmailAddresses`, `mapPhoneNumbers`. Positions: chronological sort, single "current" role, key collision handling.
+4. **Import orchestration** — `importLinkedInZip()`: open ZIP via `yauzl-promise` → iterate entries → match filenames to mappers → batchCreateFacts. Sensitive files excluded (connections, messages, endorsements, recommendations).
+5. **API route** — `POST /api/connectors/linkedin-zip/import` (multipart, 100MB limit, auth-gated).
+
+**Hardening:**
+1. **private-contact category** — Forces `private` visibility via `SENSITIVE_CATEGORIES`. Email validation widened for private-contact category.
+2. **Date placeholder validation** — Extended to `start`/`end` fields (not just `period`).
+
 ### Phase 1d — Other Phase 1
 1. Media upload API and avatar end-to-end support
-2. Connector MVP (GitHub)
+2. ~~Connector MVP (GitHub)~~ — Done (GitHub + LinkedIn ZIP)
 3. Public page auto-translation for visitors (on-demand + cached)
 
 ### Later
@@ -361,7 +389,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 1221 passed / 1221 total (Vitest, 77 test files)
+- Automated tests: 1834 passed / 1834 total (Vitest, 153 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -436,9 +464,23 @@ Builder interface layouts (chat experience):
   70. Undo awareness — policy output, keyword sets, reversal steps, per-tool scope (10 tests)
   71. Expertise calibration — 3 levels (novice/familiar/expert), behavioral instructions, expertise-specific content (7 tests)
   72. Cross-provider evals — 8 scenarios × N providers: onboarding, translation, personalization, layout, undo, returning, publish, low-signal (52 tests)
+  73. Connector sync handler — syncFn dispatch, error handling, sync_log entries (9 tests)
+  74. Connector registration — both connectors registered in registry (2 tests)
+  75. GitHub client — fetchProfile, fetchRepos, fetchRepoLanguages, pagination, auth errors (12 tests)
+  76. GitHub mapper — mapProfile (6 fact types), mapRepos (projects + skills + stats) (16 tests)
+  77. GitHub sync — full flow, auth error, empty repos, cursor update (11 tests)
+  78. GitHub OAuth — connect initiation, callback, state validation, cookie handling (13 tests)
+  79. GitHub API routes — manual sync trigger, auth gates (4 tests)
+  80. GitHub E2E — full flow integration: OAuth → sync → facts → page (7 tests)
+  81. LinkedIn date normalizer — 5 formats, edge cases, placeholder rejection (17 tests)
+  82. LinkedIn CSV parser — BOM handling, preamble detection, relaxed columns (8 tests)
+  83. LinkedIn ZIP mapper — 12 mappers, position sorting, proficiency mapping, key collision (48 tests)
+  84. LinkedIn ZIP import — full flow, sensitive file exclusion, corrupt ZIP handling (10 tests)
+  85. LinkedIn ZIP API — multipart upload, file validation, size limit, auth gate (11 tests)
+  86. LinkedIn ZIP E2E — full flow integration: upload → parse → facts → page (18 tests)
+  87. Connector hardening — private-contact category, date placeholder validation (8 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
-  2. Connector and worker lifecycle integration
 
 ## 6) Definition of Done (Project-Level)
 
