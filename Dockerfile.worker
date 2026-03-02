@@ -1,0 +1,53 @@
+# Worker-only Dockerfile — skips Next.js build, only runs tsup.
+
+# Stage 1: Install dependencies
+FROM node:20-alpine AS deps
+
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Stage 2: Build worker bundle (tsup)
+FROM node:20-alpine AS build
+
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ENV NODE_ENV=production
+
+RUN npx tsup src/worker.ts --format cjs --out-dir dist --external better-sqlite3
+
+# Stage 3: Production runtime
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy worker bundle
+COPY --from=build /app/dist ./dist
+
+# Copy better-sqlite3 native module (external dependency)
+COPY --from=build /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=build /app/node_modules/bindings ./node_modules/bindings
+COPY --from=build /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
+COPY --from=build /app/node_modules/prebuild-install ./node_modules/prebuild-install
+COPY --from=build /app/node_modules/node-addon-api ./node_modules/node-addon-api
+
+# Copy migration SQL files to /app/migrations (outside volume-mounted /app/db)
+COPY --from=build /app/db/migrations ./migrations
+
+# Create db directory for SQLite volume mount
+RUN mkdir -p /app/db && chown nextjs:nodejs /app/db
+
+USER nextjs
+
+CMD ["node", "dist/worker.js"]
