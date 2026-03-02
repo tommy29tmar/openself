@@ -193,15 +193,22 @@ export function validateFactValue(
     }
   }
 
-  // Rule 5: reject date-placeholder patterns like YYYY-YYYY in period fields
-  const PERIOD_PLACEHOLDER_RE = /^[XY]{2,4}\s*[-–]\s*[XY]{2,4}$/i;
-  const periodValue = value.period;
-  if (typeof periodValue === "string" && PERIOD_PLACEHOLDER_RE.test(periodValue.trim())) {
-    throw new FactValidationError(
-      `Fact field "period" contains a placeholder date pattern ("${periodValue}"). Use real years (e.g. "2018-2022") or omit.`,
-      category,
-      key,
-    );
+  // Rule 5: reject date-placeholder patterns like YYYY-YYYY, YYYY-MM, YYYY in period/start/end fields
+  const PERIOD_PLACEHOLDER_RE = /^[A-Z]{2,4}\s*[-–]\s*[A-Z]{2,4}$/;  // YYYY-YYYY, XX-XX, etc.
+  const DATE_FIELD_PLACEHOLDER_RE = /^[A-Z]{4}(-[A-Z]{2}){0,2}$/;     // YYYY, YYYY-MM, YYYY-MM-DD
+
+  for (const field of ["period", "start", "end"]) {
+    const fv = value[field];
+    if (typeof fv === "string" && fv.trim().length > 0) {
+      const trimmed = fv.trim();
+      if (PERIOD_PLACEHOLDER_RE.test(trimmed) || DATE_FIELD_PLACEHOLDER_RE.test(trimmed)) {
+        throw new FactValidationError(
+          `Fact field "${field}" contains a placeholder date ("${fv}"). Use real dates (e.g. "2018-06") or omit.`,
+          category,
+          key,
+        );
+      }
+    }
   }
 
   // Rule 6: all string values must not be placeholders (generic fallback)
@@ -209,7 +216,7 @@ export function validateFactValue(
   const PRIMARY_VALUE_FIELDS = new Set([
     "full", "name", "value", "full_name", "title", "role", "company",
     "organization", "institution", "school", "label", "language",
-    "description", "text", "tagline",
+    "description", "text", "tagline", "start", "end",
   ]);
 
   for (const [fieldKey, fieldVal] of entries) {
@@ -219,6 +226,25 @@ export function validateFactValue(
         category,
         key,
       );
+    }
+  }
+
+  // Rule 7: identity name fields must contain only a name (max 5 words / 80 chars)
+  if (category === "identity") {
+    const nameOnlyFields = ["full", "full_name"];
+    const keySpecificFields = (key === "name" || key === "full-name") ? ["name", "value"] : [];
+    for (const nameField of [...nameOnlyFields, ...keySpecificFields]) {
+      const nv = value[nameField];
+      if (typeof nv === "string" && nv.trim().length > 0) {
+        const wordCount = nv.trim().split(/\s+/).length;
+        if (wordCount > 5 || nv.length > 80) {
+          throw new FactValidationError(
+            `identity "${nameField}" must contain only a name (got ${wordCount} words)`,
+            category,
+            key,
+          );
+        }
+      }
     }
   }
 }
