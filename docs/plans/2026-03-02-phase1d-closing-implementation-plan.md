@@ -623,6 +623,41 @@ describe("Connector Idempotency", () => {
       expect(isSyncRateLimited(null)).toBe(false);
     });
   });
+
+  describe("import lock (in-memory)", () => {
+    it("acquireImportLock returns true on first call, false on second", async () => {
+      const { acquireImportLock, releaseImportLock } = await import(
+        "@/lib/connectors/idempotency"
+      );
+      const key = `test-import-${Date.now()}`;
+      expect(acquireImportLock(key)).toBe(true);
+      expect(acquireImportLock(key)).toBe(false); // already locked
+      releaseImportLock(key); // cleanup
+    });
+
+    it("releaseImportLock allows re-acquire", async () => {
+      const { acquireImportLock, releaseImportLock } = await import(
+        "@/lib/connectors/idempotency"
+      );
+      const key = `test-release-${Date.now()}`;
+      acquireImportLock(key);
+      releaseImportLock(key);
+      expect(acquireImportLock(key)).toBe(true); // can lock again
+      releaseImportLock(key); // cleanup
+    });
+
+    it("locks are independent per ownerKey", async () => {
+      const { acquireImportLock, releaseImportLock } = await import(
+        "@/lib/connectors/idempotency"
+      );
+      const key1 = `test-owner1-${Date.now()}`;
+      const key2 = `test-owner2-${Date.now()}`;
+      expect(acquireImportLock(key1)).toBe(true);
+      expect(acquireImportLock(key2)).toBe(true); // different owner, not blocked
+      releaseImportLock(key1);
+      releaseImportLock(key2);
+    });
+  });
 });
 ```
 
@@ -664,6 +699,11 @@ export function hasPendingJob(ownerKey: string): boolean {
  * In-memory lock for LinkedIn import (synchronous, not job-queued).
  * Safe because: single-process SQLite model = one web server process.
  * Auto-cleans on process restart (no stale DB rows).
+ *
+ * SCALING NOTE: If the architecture moves to multi-instance or serverless
+ * (ARCHITECTURE.md:3325, 3779), this must be replaced with a DB-backed lock
+ * (e.g., a dedicated `import_locks` table or advisory lock). For now, the
+ * SQLite single-writer constraint already implies single-process.
  */
 const activeImports = new Set<string>();
 
@@ -726,6 +766,7 @@ In `src/app/api/connectors/linkedin-zip/import/route.ts`, add the import lock:
 import { acquireImportLock, releaseImportLock } from "@/lib/connectors/idempotency";
 
 // ... inside POST handler, after scope/auth checks:
+const ownerKey = scope.cognitiveOwnerKey;
 
 // Idempotency: atomic acquire (returns false if already locked)
 if (!acquireImportLock(ownerKey)) {
