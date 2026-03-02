@@ -25,6 +25,11 @@ vi.mock("@/lib/services/preferences-service", () => ({
 
 vi.mock("@/lib/db", () => ({ db: {}, sqlite: {} }));
 
+const mockWriteImportEvent = vi.fn();
+vi.mock("@/lib/connectors/import-event", () => ({
+  writeImportEvent: (...args: unknown[]) => mockWriteImportEvent(...args),
+}));
+
 const ownerScope = {
   cognitiveOwnerKey: "owner-1",
   knowledgePrimaryKey: "sess-1",
@@ -267,5 +272,20 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+  });
+
+  it("writes import event flag on successful import", async () => {
+    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockGetAuthContext.mockReturnValue({ username: "alice" });
+
+    const file = new File([new Uint8Array(100)], "export.zip", {
+      type: "application/zip",
+    });
+
+    const { POST } = await import(
+      "@/app/api/connectors/linkedin-zip/import/route"
+    );
+    await POST(createUploadRequest(file));
+    expect(mockWriteImportEvent).toHaveBeenCalledWith("sess-1", 5);
   });
 });

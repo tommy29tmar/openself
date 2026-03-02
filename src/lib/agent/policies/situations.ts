@@ -79,3 +79,59 @@ export function coherenceIssuesDirective(issues: Array<{ type: string; severity:
   const lines = issues.map(i => `- ${i.severity}: [${i.type}] ${i.description}\n  → ${i.suggestion}`);
   return `COHERENCE ISSUES (from last page generation):\n${lines.join("\n")}`;
 }
+
+// ---------------------------------------------------------------------------
+// Post-import reaction
+// ---------------------------------------------------------------------------
+
+import type { ImportGapReport } from "@/lib/connectors/import-gap-analyzer";
+
+/** Sanitize text: strip control chars, cap length (G5). */
+function sanitize(text: string, maxLen = 100): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\x00-\x1f\x7f]/g, "").slice(0, maxLen);
+}
+
+export function recentImportDirective(report: ImportGapReport): string {
+  const s = report.summary;
+  const role = s.currentRole ? sanitize(s.currentRole) : "not specified";
+
+  const contextBlock = [
+    "--- BEGIN IMPORT CONTEXT ---",
+    "LINKEDIN IMPORT JUST COMPLETED:",
+    "The user just imported their LinkedIn profile.",
+    "",
+    "IMPORTED DATA SUMMARY:",
+    `- Current role: ${role}`,
+    `- Past experiences: ${s.pastRoles} roles`,
+    `- Education: ${s.educationCount} entries`,
+    `- Languages: ${s.languageCount}`,
+    `- Skills: ${s.skillCount}`,
+    `- Certifications: ${s.certificationCount}`,
+  ];
+
+  if (report.gaps.length > 0) {
+    contextBlock.push("");
+    contextBlock.push("GAPS TO EXPLORE (prioritized):");
+    for (const gap of report.gaps) {
+      contextBlock.push(`${gap.priority}. ${sanitize(gap.description, 200)}`);
+    }
+  }
+
+  contextBlock.push("--- END IMPORT CONTEXT ---");
+
+  const policy = `POST-IMPORT REVIEW MODE:
+The user just imported their LinkedIn profile. Your job is to review the data
+and fill the gaps that LinkedIn doesn't cover.
+
+RULES:
+- Briefly acknowledge the import (1-2 sentences, mention current role + one distinctive element)
+- Ask ONE open-ended question about the top gap
+- Do NOT recite numbers, lists, or inventory of imported data
+- In subsequent turns, explore remaining gaps one at a time
+- If the user asks to generate the page at any point, do it immediately — no resistance
+- After 3-5 enrichment questions, propose generating the page
+- Keep the tone conversational, not interrogative`;
+
+  return `${contextBlock.join("\n")}\n\n${policy}`;
+}
