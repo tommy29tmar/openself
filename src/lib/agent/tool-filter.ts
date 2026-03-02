@@ -9,21 +9,23 @@ import type { JourneyState } from "@/lib/agent/journey";
  * - ONBOARDING (first_visit, returning_no_page) → fact + generate tools only
  * - FULL (draft_ready, active_fresh, active_stale) → all tools
  */
+// SYNC: When adding tools to createAgentTools (tools.ts), review this list.
+// Tools NOT here are excluded from onboarding states (first_visit, returning_no_page).
 const ONBOARDING_TOOLS = [
   "create_fact",
   "update_fact",
   "delete_fact",
   "search_facts",
   "batch_facts",
-  "archive_fact",
+  "archive_fact",        // user may say "actually remove that"
   "unarchive_fact",
-  "reorder_items",
+  "reorder_items",       // ordering facts within a section
   "save_memory",
   "resolve_conflict",
   "generate_page",
   "propose_soul_change",
-  "set_fact_visibility",
-  "inspect_page_state",
+  "set_fact_visibility", // user may say "don't show my email" during onboarding
+  "inspect_page_state",  // read-only diagnostic, helps agent before generate_page
 ] as const;
 
 export const TOOL_SETS: Partial<Record<JourneyState, readonly string[]>> = {

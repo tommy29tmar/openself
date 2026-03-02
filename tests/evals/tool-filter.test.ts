@@ -5,7 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { filterToolsByJourneyState, TOOL_SETS } from "@/lib/agent/tool-filter";
 
-// Complete tool inventory matching createAgentTools in tools.ts
+// SYNC: Must match tool names exported by createAgentTools in tools.ts.
+// When adding a new tool, add it here AND review ONBOARDING_TOOLS in tool-filter.ts.
 const ALL_TOOL_NAMES = [
   "create_fact", "update_fact", "delete_fact", "search_facts",
   "set_fact_visibility", "save_memory", "resolve_conflict",
