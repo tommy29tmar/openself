@@ -641,9 +641,20 @@ function ChatPanelInner({
 
   // Auto-trigger message after LinkedIn import (G4)
   useEffect(() => {
+    const IMPORT_TRIGGER_MSG: Record<string, string> = {
+      en: "I just imported my LinkedIn profile.",
+      it: "Ho importato il mio profilo LinkedIn.",
+      de: "Ich habe mein LinkedIn-Profil importiert.",
+      fr: "Je viens d'importer mon profil LinkedIn.",
+      es: "Acabo de importar mi perfil de LinkedIn.",
+      pt: "Acabei de importar meu perfil do LinkedIn.",
+      ja: "LinkedInのプロフィールをインポートしました。",
+      zh: "我刚刚导入了我的LinkedIn个人资料。",
+    };
     const handler = () => {
+      const triggerText = IMPORT_TRIGGER_MSG[language] || IMPORT_TRIGGER_MSG.en;
       append(
-        { role: "user", content: "I just imported my LinkedIn profile." },
+        { role: "user", content: triggerText },
         { body: { language, metadata: { source: "auto_import_trigger" } } },
       );
     };

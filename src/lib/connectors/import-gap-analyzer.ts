@@ -50,8 +50,10 @@ function buildSummary(facts: FactRow[]): ImportSummary {
     }
   }
 
+  // Exclude the current role from past count; experiences with no status are ambiguous
+  // so we only count those explicitly marked as "past"
   const pastRoles = experiences.filter(
-    (f) => (f.value as Record<string, string>).status !== "current",
+    (f) => (f.value as Record<string, string>).status === "past",
   ).length;
 
   return {

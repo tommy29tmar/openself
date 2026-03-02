@@ -53,12 +53,14 @@ export function consumeImportEvent(sessionId: string): ImportEventFlag | null {
   // Atomic CAS: use json_set to update ONLY the status field (not the entire metadata blob).
   // This avoids overwriting concurrent changes to other metadata fields (e.g., journal).
   // The WHERE clause ensures only one caller transitions pending → processing.
+  // importId check prevents consuming a re-import's flag that overwrote between read and CAS.
   const result = sqlite.prepare(`
     UPDATE sessions
     SET metadata = json_set(metadata, '$.pending_import_event.status', 'processing')
     WHERE id = ?
     AND json_extract(metadata, '$.pending_import_event.status') = 'pending'
-  `).run(sessionId);
+    AND json_extract(metadata, '$.pending_import_event.importId') = ?
+  `).run(sessionId, raw.importId);
 
   // If changes === 0, another request already consumed the flag (CAS failed)
   if (result.changes === 0) return null;
@@ -69,24 +71,26 @@ export function consumeImportEvent(sessionId: string): ImportEventFlag | null {
 
 /**
  * Mark the flag as consumed after successful LLM response.
+ * Uses json_set to avoid overwriting concurrent metadata changes.
  */
 export function markImportEventConsumed(sessionId: string): void {
-  const meta = getSessionMeta(sessionId);
-  const raw = meta[FLAG_KEY] as ImportEventFlag | undefined;
-  if (!raw) return;
-  raw.status = "consumed";
-  meta[FLAG_KEY] = raw;
-  setSessionMeta(sessionId, meta);
+  sqlite.prepare(`
+    UPDATE sessions
+    SET metadata = json_set(metadata, '$.pending_import_event.status', 'consumed')
+    WHERE id = ?
+    AND json_extract(metadata, '$.pending_import_event.status') = 'processing'
+  `).run(sessionId);
 }
 
 /**
  * Revert the flag to pending after LLM failure (G2).
+ * Uses json_set to avoid overwriting concurrent metadata changes.
  */
 export function revertImportEvent(sessionId: string): void {
-  const meta = getSessionMeta(sessionId);
-  const raw = meta[FLAG_KEY] as ImportEventFlag | undefined;
-  if (!raw || raw.status !== "processing") return;
-  raw.status = "pending";
-  meta[FLAG_KEY] = raw;
-  setSessionMeta(sessionId, meta);
+  sqlite.prepare(`
+    UPDATE sessions
+    SET metadata = json_set(metadata, '$.pending_import_event.status', 'pending')
+    WHERE id = ?
+    AND json_extract(metadata, '$.pending_import_event.status') = 'processing'
+  `).run(sessionId);
 }
