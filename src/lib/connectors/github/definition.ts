@@ -1,9 +1,10 @@
 import type { ConnectorDefinition } from "../types";
+import { syncGitHub } from "./sync";
 
 export const githubDefinition: ConnectorDefinition = {
   type: "github",
   displayName: "GitHub",
   supportsSync: true,
   supportsImport: false,
-  // syncFn will be set in Task 5 after client/mapper exist
+  syncFn: syncGitHub,
 };
