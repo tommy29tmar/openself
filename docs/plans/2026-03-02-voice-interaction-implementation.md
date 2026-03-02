@@ -104,7 +104,8 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
     speechSynthesis: false,
     serverSTT: null,
   });
-  const serverChecked = useRef(false);
+  const lastCheckAt = useRef(0);
+  const RETRY_AFTER_MS = 30_000; // retry failed checks after 30s
 
   useEffect(() => {
     const SpeechRecognition =
@@ -117,10 +118,14 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
   }, []);
 
   const checkServerSTT = useCallback(async (): Promise<boolean> => {
-    if (serverChecked.current) return caps.serverSTT ?? false;
+    // Cache successful results permanently, but retry failures after RETRY_AFTER_MS
+    if (caps.serverSTT === true) return true;
+    if (caps.serverSTT === false && Date.now() - lastCheckAt.current < RETRY_AFTER_MS) {
+      return false;
+    }
     if (!isServerSttEnabled()) {
       setCaps((prev) => ({ ...prev, serverSTT: false }));
-      serverChecked.current = true;
+      lastCheckAt.current = Date.now();
       return false;
     }
     try {
@@ -130,11 +135,11 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
       clearTimeout(timeout);
       const available = res.ok;
       setCaps((prev) => ({ ...prev, serverSTT: available }));
-      serverChecked.current = true;
+      lastCheckAt.current = Date.now();
       return available;
     } catch {
       setCaps((prev) => ({ ...prev, serverSTT: false }));
-      serverChecked.current = true;
+      lastCheckAt.current = Date.now();
       return false;
     }
   }, [caps.serverSTT]);
@@ -148,9 +153,10 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
 Add to `.env.example` at the end:
 ```
 # === Voice ===
-# NEXT_PUBLIC_VOICE_ENABLED=true
-# NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED=true
-# STT_SERVICE_URL=http://stt:8080    # Internal URL for STT container
+# NEXT_PUBLIC_VOICE_ENABLED=true                      # Client: master switch for mic button
+# NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED=true   # Client: enables fallback path UI
+# VOICE_STT_SERVER_FALLBACK_ENABLED=true               # Server: enables /api/transcribe route
+# STT_SERVICE_URL=http://stt:8080                      # Server: internal URL for STT container
 ```
 
 **Step 6: Run tests to verify they pass**
@@ -280,6 +286,11 @@ export function useSttProvider({
         onFinalResult(finalText.trim());
       }
     };
+
+    // NOTE for implementer: All error-recovery setTimeout calls (3s → IDLE)
+    // should store their IDs in a ref and be cleared in stop()/cleanup to prevent
+    // state updates after unmount. Use: errorTimerRef.current = setTimeout(...)
+    // and clearTimeout(errorTimerRef.current) in stop().
 
     recognition.onerror = (event: any) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -516,14 +527,10 @@ export enum VoiceState {
 
 type UseVoiceManagerOptions = {
   language: string;
-  onTranscript: (text: string) => void;
-  isAssistantResponding: boolean;
 };
 
 export function useVoiceManager({
   language,
-  onTranscript,
-  isAssistantResponding,
 }: UseVoiceManagerOptions) {
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>(VoiceState.IDLE);
@@ -598,15 +605,19 @@ export function useVoiceManager({
       setVoiceState(VoiceState.IDLE);
       setInterimText("");
     } else {
-      // Enter voice mode — check capabilities first
+      // Enter voice mode — check capabilities first, then try to start
       const hasSTT = caps.webSpeechSTT || (await caps.checkServerSTT());
       if (!hasSTT) {
         setVoiceState(VoiceState.UNAVAILABLE);
         return;
       }
+      // Start STT first — only set voiceMode if it doesn't immediately fail
+      startStt();
+      // voiceMode set after startStt() so STT state sync (useEffect on sttState)
+      // can detect PERMISSION_DENIED and prevent entering voice mode.
+      // If sttState goes to PERMISSION_DENIED, the sync effect clears voiceMode.
       setVoiceMode(true);
       voiceModeRef.current = true;
-      startStt();
     }
   }, [enabled, voiceMode, caps, stopStt, stopSpeaking, startStt]);
 
@@ -687,6 +698,8 @@ type VoiceContextType = {
   voiceMode: boolean;
   voiceState: VoiceState;
   interimText: string;
+  lastFinalTranscript: string | null;
+  consumeTranscript: () => void;
   enabled: boolean;
   canUseVoice: boolean;
   toggleVoiceMode: () => void;
@@ -705,18 +718,14 @@ export function useVoice(): VoiceContextType {
 
 type VoiceProviderProps = {
   language: string;
-  onTranscript: (text: string) => void;
-  isAssistantResponding: boolean;
   children: ReactNode;
 };
 
 export function VoiceProvider({
   language,
-  onTranscript,
-  isAssistantResponding,
   children,
 }: VoiceProviderProps) {
-  const voice = useVoiceManager({ language, onTranscript, isAssistantResponding });
+  const voice = useVoiceManager({ language });
 
   return <VoiceContext.Provider value={voice}>{children}</VoiceContext.Provider>;
 }
@@ -758,6 +767,9 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
     toggleVoiceMode();
   };
 
+  // NOTE for implementer: These labels should be localized via getUiL10n(language).
+  // Add voice* keys to src/lib/i18n/ui-strings.ts (8 keys × 8 languages).
+  // For v1, English hardcoded; L10N wired during implementation if time allows.
   const stateLabel: Record<VoiceState, string> = {
     [VoiceState.IDLE]: "Start voice",
     [VoiceState.LISTENING]: "Listening...",
@@ -896,12 +908,11 @@ In `src/components/voice/VoiceProvider.tsx`:
 ```typescript
 type VoiceProviderProps = {
   language: string;
-  isAssistantResponding: boolean;
   children: ReactNode;
 };
 
-export function VoiceProvider({ language, isAssistantResponding, children }: VoiceProviderProps) {
-  const voice = useVoiceManager({ language, isAssistantResponding });
+export function VoiceProvider({ language, children }: VoiceProviderProps) {
+  const voice = useVoiceManager({ language });
   return <VoiceContext.Provider value={voice}>{children}</VoiceContext.Provider>;
 }
 ```
@@ -1005,15 +1016,19 @@ In `src/components/chat/ChatPanel.tsx`:
 
 5. TTS in onFinish (line 567, after existing recovery logic):
    ```typescript
+   // Add ref for isPrimaryVoiceConsumer (avoids stale closure in onFinish):
+   const isPrimaryRef = useRef(isPrimaryVoiceConsumer);
+   useEffect(() => { isPrimaryRef.current = isPrimaryVoiceConsumer; }, [isPrimaryVoiceConsumer]);
+
    onFinish: (message) => {
      // existing step-exhaustion recovery...
-     // NEW: TTS in voice mode (guarded)
-     if (isPrimaryVoiceConsumer && voiceRef.current && message.content?.trim()) {
+     // NEW: TTS in voice mode (guarded via refs to avoid stale closures)
+     if (isPrimaryRef.current && voiceRef.current && message.content?.trim()) {
        voice.speakResponse(message.content);
      }
    },
    ```
-   Note: `voice` is captured via ref to avoid stale closure. Use `voiceRef.current` for the boolean check and call `voice.speakResponse` (stable callback ref).
+   Note: Both `isPrimaryVoiceConsumer` and `voiceMode` are accessed via refs to avoid stale closures. `useChat.onFinish` is captured at init time; if the viewport changes (resize triggers `useIsMobile` update), the ref ensures the latest value is used.
 
 6. Wire typing to disable voice mode:
    ```typescript
@@ -1048,7 +1063,7 @@ In `src/components/layout/SplitView.tsx`:
 2. Wrap return with VoiceProvider (no onTranscript — transcript is internal now):
    ```typescript
    return (
-     <VoiceProvider language={language} isAssistantResponding={false}>
+     <VoiceProvider language={language}>
        <>
          {/* existing: SignupModal, desktop, mobile */}
        </>
@@ -1209,7 +1224,7 @@ import { NextResponse } from "next/server";
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || "http://stt:8080";
 
 export async function GET() {
-  if (process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
+  if (process.env.VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
     return NextResponse.json({ available: false }, { status: 503 });
   }
   try {
@@ -1252,12 +1267,18 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  if (process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
+  if (process.env.VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
     return NextResponse.json({ error: "Voice STT not enabled" }, { status: 503 });
   }
 
-  // Rate limit
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  // Session check — same pattern as /api/chat route
+  const sessionId = req.cookies.get("session_id")?.value;
+  if (!sessionId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit — prefer req.ip (set by Next.js from trusted proxy), fall back to header
+  const ip = req.ip || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (!checkRateLimit(ip)) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
@@ -1275,8 +1296,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Parse FormData — framework-level body size enforced in next.config.ts (Step 2b).
-    // We also enforce here as defense-in-depth.
+    // Parse FormData — this buffers the full body in memory (Next.js route handlers
+    // don't support streaming FormData parsing). Acceptable for ≤5MB audio clips.
+    // Framework-level body size enforced in next.config.ts (Step 2b) as primary defense.
     const formData = await req.formData();
     const file = formData.get("file");
     if (!file || !(file instanceof Blob)) {
@@ -1318,32 +1340,21 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-**Step 2b: Enforce body size limit at framework level in next.config.ts**
+**Step 2b: Body size enforcement strategy**
 
-This is NOT optional — it's the primary defense against large payloads. The route-level check is defense-in-depth.
+`serverActions.bodySizeLimit` does NOT apply to App Router route handlers (only server actions). For route handlers, body size enforcement is:
 
-In `next.config.ts`, add `serverActions.bodySizeLimit` to the `experimental` block:
+1. **Primary defense (route-level):** `req.formData()` + `file.size` check (already in Step 2). This is the actual enforcement.
+2. **Pre-flight rejection:** `Content-Length` header check (already in Step 2, untrusted but fast).
+3. **Infrastructure defense (Coolify/Caddy):** Add `client_max_body_size 6m` to Caddyfile or reverse proxy config. Document in `docs/DEPLOY.md`.
 
-```typescript
-const nextConfig: NextConfig = {
-  output: "standalone",
-  serverExternalPackages: ["better-sqlite3", "yauzl-promise"],
-  experimental: {
-    optimizePackageImports: ["radix-ui"],
-    serverActions: {
-      bodySizeLimit: "6mb", // 5MB audio + FormData overhead
-    },
-  },
-};
-```
-
-Note: `serverActions.bodySizeLimit` applies to all API routes in Next.js App Router, not just server actions. The 6MB allows for multipart boundary overhead on top of the 5MB audio limit.
+No `next.config.ts` modification needed — the route-level FormData + file.size check IS the primary defense.
 
 **Step 3: Commit**
 
 ```bash
-git add src/app/api/transcribe/route.ts src/app/api/transcribe/health/route.ts next.config.ts
-git commit -m "feat(voice): add /api/transcribe proxy route with rate limiting and body size limit"
+git add src/app/api/transcribe/route.ts src/app/api/transcribe/health/route.ts
+git commit -m "feat(voice): add /api/transcribe proxy route with auth gate, rate limiting, body size check"
 ```
 
 ---
@@ -1532,7 +1543,7 @@ git commit -m "feat(voice): add faster-whisper STT Docker container + dev compos
 **Files:**
 - Modify: `src/hooks/useSttProvider.ts` (replace `startServerFallback` stub)
 
-**Step 1: Implement server fallback with MediaRecorder + VAD**
+**Step 1: Implement server fallback with MediaRecorder (manual start/stop, no VAD in v1)**
 
 Replace the `startServerFallback` stub in `useSttProvider.ts`:
 
@@ -1798,6 +1809,14 @@ export const rateLimitMap = new Map<string, { count: number; resetAt: number }>(
 
 export function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+
+  // Periodic cleanup: evict expired entries every 100 calls (prevents unbounded growth)
+  if (rateLimitMap.size > 100) {
+    for (const [key, val] of rateLimitMap) {
+      if (now > val.resetAt) rateLimitMap.delete(key);
+    }
+  }
+
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
@@ -1826,16 +1845,28 @@ describe("/api/transcribe route contracts", () => {
     process.env = originalEnv;
   });
 
-  it("feature flag guard: isServerSttEnabled false when env unset", async () => {
-    delete process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED;
-    const { isServerSttEnabled } = await import("@/lib/voice/feature-flags");
-    expect(isServerSttEnabled()).toBe(false);
+  it("route guard: POST returns 503 when VOICE_STT_SERVER_FALLBACK_ENABLED unset", async () => {
+    delete process.env.VOICE_STT_SERVER_FALLBACK_ENABLED;
+    const { POST } = await import("@/app/api/transcribe/route");
+    const req = new Request("http://localhost/api/transcribe", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=test" },
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(503);
   });
 
-  it("feature flag guard: isServerSttEnabled true when env is 'true'", async () => {
-    process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED = "true";
-    const { isServerSttEnabled } = await import("@/lib/voice/feature-flags");
-    expect(isServerSttEnabled()).toBe(true);
+  it("route guard: POST proceeds when VOICE_STT_SERVER_FALLBACK_ENABLED is true", async () => {
+    process.env.VOICE_STT_SERVER_FALLBACK_ENABLED = "true";
+    const { POST } = await import("@/app/api/transcribe/route");
+    // Missing file → 400, not 503 (guard passed)
+    const formData = new FormData();
+    const req = new Request("http://localhost/api/transcribe", {
+      method: "POST",
+      body: formData,
+    });
+    const res = await POST(req as any);
+    expect(res.status).not.toBe(503); // past the guard
   });
 
   it("rate limiter allows 10 requests then blocks", async () => {
@@ -1993,7 +2024,7 @@ Run: `npm run dev`
 | 5 | VoiceProvider + MicButton | 2 new | — |
 | 6 | Desktop integration (ChatPanel/ChatInput/SplitView) | 1 new (useIsMobile), 4 modify | — |
 | 7 | Mobile VoiceOverlay | 1 new, 1 modify | — |
-| 8 | Transcribe API route (proxy) | 2 new, 1 modify (next.config.ts) | — |
+| 8 | Transcribe API route (proxy) | 2 new | — |
 | 9 | STT Docker container | 3 new, 1 new (docker-compose.dev.yml) | — |
 | 10 | Server fallback wiring | 1 modify | — |
 | 11 | VAD for auto-stop (optional v1) | 1 dep, 1 modify | — |
