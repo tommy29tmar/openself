@@ -199,7 +199,7 @@ export async function prepareAndPublish(
     // Persist rendered (translated) config and publish
     upsertDraft(username, renderedConfig, sessionId);
     requestPublish(username, sessionId);
-    confirmPublish(username, sessionId);
+    confirmPublish(username, sessionId, factLang);
   });
 
   try {

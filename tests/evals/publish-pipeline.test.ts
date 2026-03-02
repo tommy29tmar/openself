@@ -184,7 +184,7 @@ describe("prepareAndPublish", () => {
     // Pipeline always calls upsertDraft with the recomposed+translated config
     expect(upsertDraft).toHaveBeenCalled();
     expect(requestPublish).toHaveBeenCalledWith("testuser", "session-1");
-    expect(confirmPublish).toHaveBeenCalledWith("testuser", "session-1");
+    expect(confirmPublish).toHaveBeenCalledWith("testuser", "session-1", "en");
   });
 
   it("promotes proposed facts to public in the transaction", async () => {
