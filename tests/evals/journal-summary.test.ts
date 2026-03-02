@@ -151,39 +151,56 @@ describe("enqueueSummaryJob data flow", () => {
 // generateSummary — journal integration
 // ---------------------------------------------------------------------------
 
-describe("generateSummary journal integration", () => {
-  it("includes journal digest in LLM prompt when journal entries exist", async () => {
-    // Setup: mock DB to return enough messages
-    const { db, sqlite } = await import("@/lib/db");
-    vi.mocked(sqlite.prepare).mockImplementation((sql: string) => {
-      if (sql.includes("cursor")) {
+// Helper: set up DB mocks for generateSummary to succeed end-to-end
+async function setupGenerateSummaryMocks(messageRows: Array<{ id: string; role: string; content: string; createdAt: string }>) {
+  const { db, sqlite } = await import("@/lib/db");
+
+  // Track calls to disambiguate first cursor SELECT (getUnsummarizedMessages)
+  // from second cursor SELECT (inside CAS transaction)
+  let cursorSelectCount = 0;
+  vi.mocked(sqlite.prepare).mockImplementation((sqlStr: string) => {
+    if (sqlStr.includes("cursor_created_at") && sqlStr.includes("SELECT")) {
+      cursorSelectCount++;
+      if (cursorSelectCount === 1) {
+        // First call: getUnsummarizedMessages → no existing summary
         return { get: vi.fn(() => undefined), run: vi.fn(() => ({ changes: 0 })) } as any;
       }
+      // Second call: CAS read inside transaction → return init cursor
       return {
-        get: vi.fn(() => undefined),
-        run: vi.fn(() => ({ changes: 1 })),
+        get: vi.fn(() => ({ cursor_created_at: "1970-01-01T00:00:00Z", cursor_message_id: "__init__" })),
+        run: vi.fn(() => ({ changes: 0 })),
       } as any;
-    });
-    vi.mocked(sqlite.transaction).mockImplementation((fn: any) => () => fn());
+    }
+    // INSERT (ensure row) + UPDATE (CAS)
+    return {
+      get: vi.fn(() => undefined),
+      run: vi.fn(() => ({ changes: 1 })),
+    } as any;
+  });
+  vi.mocked(sqlite.transaction).mockImplementation((fn: any) => () => fn());
 
-    vi.mocked(db.select).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({
-            all: vi.fn(() => [
-              { id: "m1", role: "user", content: "Update my bio", createdAt: "2026-01-01T00:00:00Z" },
-              { id: "m2", role: "assistant", content: "Done!", createdAt: "2026-01-01T00:00:01Z" },
-              { id: "m3", role: "user", content: "Add skills", createdAt: "2026-01-01T00:00:02Z" },
-              { id: "m4", role: "assistant", content: "Added", createdAt: "2026-01-01T00:00:03Z" },
-              { id: "m5", role: "user", content: "Thanks", createdAt: "2026-01-01T00:00:04Z" },
-            ]),
-          })),
-          get: vi.fn(() => null),
+  vi.mocked(db.select).mockReturnValue({
+    from: vi.fn(() => ({
+      where: vi.fn(() => ({
+        orderBy: vi.fn(() => ({
+          all: vi.fn(() => messageRows),
         })),
+        get: vi.fn(() => null),
       })),
-    } as any);
+    })),
+  } as any);
+}
 
-    // Mock getSessionMeta to return journal entries
+describe("generateSummary journal integration", () => {
+  it("includes journal digest in LLM prompt when journal entries exist", async () => {
+    await setupGenerateSummaryMocks([
+      { id: "m1", role: "user", content: "Update my bio", createdAt: "2026-01-01T00:00:00Z" },
+      { id: "m2", role: "assistant", content: "Done!", createdAt: "2026-01-01T00:00:01Z" },
+      { id: "m3", role: "user", content: "Add skills", createdAt: "2026-01-01T00:00:02Z" },
+      { id: "m4", role: "assistant", content: "Added", createdAt: "2026-01-01T00:00:03Z" },
+      { id: "m5", role: "user", content: "Thanks", createdAt: "2026-01-01T00:00:04Z" },
+    ]);
+
     mockGetSessionMeta.mockReturnValue({
       journal: [
         { toolName: "create_fact", timestamp: "2026-01-01T00:00:00Z", durationMs: 10, success: true },
@@ -191,9 +208,9 @@ describe("generateSummary journal integration", () => {
       ],
     });
 
-    await generateSummary("owner-1", ["sess-1"]);
+    const result = await generateSummary("owner-1", ["sess-1"]);
+    expect(result).toBe(true);
 
-    // Verify LLM was called with prompt containing journal digest
     expect(vi.mocked(generateText)).toHaveBeenCalled();
     const callArgs = vi.mocked(generateText).mock.calls[0][0] as any;
     expect(callArgs.prompt).toContain("Actions taken in this conversation:");
@@ -202,33 +219,18 @@ describe("generateSummary journal integration", () => {
   });
 
   it("omits journal section when no journal entries exist", async () => {
-    const { db, sqlite } = await import("@/lib/db");
-    vi.mocked(sqlite.prepare).mockImplementation(() => ({
-      get: vi.fn(() => undefined),
-      run: vi.fn(() => ({ changes: 1 })),
-    }) as any);
-    vi.mocked(sqlite.transaction).mockImplementation((fn: any) => () => fn());
-
-    vi.mocked(db.select).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({
-            all: vi.fn(() => [
-              { id: "m1", role: "user", content: "Hello", createdAt: "2026-01-01T00:00:00Z" },
-              { id: "m2", role: "assistant", content: "Hi!", createdAt: "2026-01-01T00:00:01Z" },
-              { id: "m3", role: "user", content: "How?", createdAt: "2026-01-01T00:00:02Z" },
-              { id: "m4", role: "assistant", content: "Sure", createdAt: "2026-01-01T00:00:03Z" },
-              { id: "m5", role: "user", content: "Ok", createdAt: "2026-01-01T00:00:04Z" },
-            ]),
-          })),
-          get: vi.fn(() => null),
-        })),
-      })),
-    } as any);
+    await setupGenerateSummaryMocks([
+      { id: "m1", role: "user", content: "Hello", createdAt: "2026-01-01T00:00:00Z" },
+      { id: "m2", role: "assistant", content: "Hi!", createdAt: "2026-01-01T00:00:01Z" },
+      { id: "m3", role: "user", content: "How?", createdAt: "2026-01-01T00:00:02Z" },
+      { id: "m4", role: "assistant", content: "Sure", createdAt: "2026-01-01T00:00:03Z" },
+      { id: "m5", role: "user", content: "Ok", createdAt: "2026-01-01T00:00:04Z" },
+    ]);
 
     mockGetSessionMeta.mockReturnValue({}); // no journal
 
-    await generateSummary("owner-1", ["sess-1"]);
+    const result = await generateSummary("owner-1", ["sess-1"]);
+    expect(result).toBe(true);
 
     expect(vi.mocked(generateText)).toHaveBeenCalled();
     const callArgs = vi.mocked(generateText).mock.calls[0][0] as any;
@@ -236,29 +238,13 @@ describe("generateSummary journal integration", () => {
   });
 
   it("aggregates journal entries from multiple session keys", async () => {
-    const { db, sqlite } = await import("@/lib/db");
-    vi.mocked(sqlite.prepare).mockImplementation(() => ({
-      get: vi.fn(() => undefined),
-      run: vi.fn(() => ({ changes: 1 })),
-    }) as any);
-    vi.mocked(sqlite.transaction).mockImplementation((fn: any) => () => fn());
-
-    vi.mocked(db.select).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({
-            all: vi.fn(() => [
-              { id: "m1", role: "user", content: "a", createdAt: "t1" },
-              { id: "m2", role: "assistant", content: "b", createdAt: "t2" },
-              { id: "m3", role: "user", content: "c", createdAt: "t3" },
-              { id: "m4", role: "assistant", content: "d", createdAt: "t4" },
-              { id: "m5", role: "user", content: "e", createdAt: "t5" },
-            ]),
-          })),
-          get: vi.fn(() => null),
-        })),
-      })),
-    } as any);
+    await setupGenerateSummaryMocks([
+      { id: "m1", role: "user", content: "a", createdAt: "t1" },
+      { id: "m2", role: "assistant", content: "b", createdAt: "t2" },
+      { id: "m3", role: "user", content: "c", createdAt: "t3" },
+      { id: "m4", role: "assistant", content: "d", createdAt: "t4" },
+      { id: "m5", role: "user", content: "e", createdAt: "t5" },
+    ]);
 
     // Two sessions, each with journal entries
     mockGetSessionMeta.mockImplementation((sessionKey: string) => {
@@ -271,7 +257,8 @@ describe("generateSummary journal integration", () => {
       return {};
     });
 
-    await generateSummary("owner-1", ["sess-1", "sess-2"]);
+    const result = await generateSummary("owner-1", ["sess-1", "sess-2"]);
+    expect(result).toBe(true);
 
     expect(vi.mocked(generateText)).toHaveBeenCalled();
     const callArgs = vi.mocked(generateText).mock.calls[0][0] as any;

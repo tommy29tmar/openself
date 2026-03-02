@@ -99,6 +99,7 @@ export function buildJournalDigest(journal: JournalEntry[]): string {
     toolCounts.set(entry.toolName, (toolCounts.get(entry.toolName) ?? 0) + 1);
   }
   const lines = Array.from(toolCounts.entries())
+    .sort((a, b) => b[1] - a[1])
     .map(([tool, count]) => `- ${tool}: ${count}x`)
     .slice(0, 3);
   return `\nActions taken in this conversation:\n${lines.join("\n")}`;
