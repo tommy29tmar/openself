@@ -85,6 +85,10 @@ vi.mock("@/lib/services/personalization-projection", () => ({
   mergeActiveSectionCopy: vi.fn((config: unknown) => config),
 }));
 
+vi.mock("@/lib/services/session-service", () => ({
+  getSession: vi.fn(() => null),
+}));
+
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";

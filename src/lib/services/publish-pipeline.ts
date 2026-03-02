@@ -13,6 +13,7 @@ import type { PageConfig } from "@/lib/page-config/schema";
 import { normalizeConfigForWrite } from "@/lib/page-config/normalize";
 import { PublishError } from "@/lib/services/errors";
 import { setProfileUsername } from "@/lib/services/auth-service";
+import { getSession } from "@/lib/services/session-service";
 import { resolveLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { validateLayoutComposition } from "@/lib/layout/quality";
@@ -103,11 +104,15 @@ export async function prepareAndPublish(
       }
     : undefined;
 
+  const session = getSession(sessionId);
+  const profileId = session?.profileId ?? sessionId;
+
   const canonicalConfig = projectPublishableConfig(
     facts,
     username,
     factLang,
     draftMeta,
+    profileId,
   );
 
   if (expectedHash) {

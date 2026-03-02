@@ -81,6 +81,7 @@ export async function batchCreateFacts(
       currentDraft?.username ?? username,
       factLang,
       draftMeta,
+      scope.cognitiveOwnerKey,
     );
 
     // Idempotency: skip write if hash matches

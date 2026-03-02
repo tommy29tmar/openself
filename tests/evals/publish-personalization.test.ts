@@ -129,6 +129,10 @@ vi.mock("@/lib/services/personalization-projection", () => ({
   mergeActiveSectionCopy: mockMergeActiveSectionCopy,
 }));
 
+vi.mock("@/lib/services/session-service", () => ({
+  getSession: vi.fn(() => null),
+}));
+
 import { prepareAndPublish } from "@/lib/services/publish-pipeline";
 
 describe("publish pipeline personalization integration", () => {

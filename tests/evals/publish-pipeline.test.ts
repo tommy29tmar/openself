@@ -88,6 +88,10 @@ vi.mock("@/lib/flags", () => ({
   PROFILE_ID_CANONICAL: false,
 }));
 
+vi.mock("@/lib/services/session-service", () => ({
+  getSession: vi.fn(() => null),
+}));
+
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 import {
   getDraft,
