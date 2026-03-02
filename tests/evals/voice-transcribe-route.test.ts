@@ -12,7 +12,7 @@ describe("/api/transcribe route contracts", () => {
   });
 
   it("rate limiter allows 10 requests then blocks", async () => {
-    const { checkRateLimit, rateLimitMap } = await import("@/app/api/transcribe/route");
+    const { checkRateLimit, rateLimitMap } = await import("@/lib/middleware/transcribe-rate-limit");
     rateLimitMap.clear();
     const ip = "test-ip-" + Date.now();
     for (let i = 0; i < 10; i++) {
@@ -22,7 +22,7 @@ describe("/api/transcribe route contracts", () => {
   });
 
   it("rate limiter resets after 60s window", async () => {
-    const { checkRateLimit, rateLimitMap } = await import("@/app/api/transcribe/route");
+    const { checkRateLimit, rateLimitMap } = await import("@/lib/middleware/transcribe-rate-limit");
     rateLimitMap.clear();
     const ip = "test-ip-reset-" + Date.now();
     for (let i = 0; i < 10; i++) checkRateLimit(ip);
@@ -34,7 +34,7 @@ describe("/api/transcribe route contracts", () => {
   });
 
   it("MAX_CONTENT_LENGTH is 5MB (5242880 bytes)", async () => {
-    const { MAX_CONTENT_LENGTH } = await import("@/app/api/transcribe/route");
+    const { MAX_CONTENT_LENGTH } = await import("@/lib/middleware/transcribe-rate-limit");
     expect(MAX_CONTENT_LENGTH).toBe(5242880);
   });
 });
