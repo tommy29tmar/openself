@@ -3193,7 +3193,42 @@ for data loads that fire on every page mount.
 9. **Celebrate the person, not the app.** The page showcases YOU, not OpenSelf.
 10. **If usage time decreases, we are winning.** Less time in the app = more value delivered.
 
-### 9.2 Conversation Design
+### 9.2 Layout Strategy: Two Faces, Two Priorities
+
+OpenSelf has two distinct surfaces that serve opposite contexts. Each must be
+optimized for its primary usage scenario.
+
+**1. Published Page → Obsessively Mobile-First**
+
+The published page (e.g. `openself.dev/tommaso`) is the output — what people share
+and what others see. 70-80% of visitors will open it from their phone: a LinkedIn
+link-in-bio tap, a Twitter profile click, a WhatsApp message. If the published page
+is ugly or broken on mobile, the product has failed.
+
+Design rules:
+- Touch targets, font sizes, and spacing must be phone-native
+- Content hierarchy must work in a single narrow column
+- Images and sections must load fast on mobile networks
+- Desktop is a nice-to-have bonus, not the design target
+
+**2. Builder → Perfect on Desktop**
+
+The builder (split-screen: chat left, preview right) is where professionals craft
+their page. Even with voice-based onboarding making the phone flow viable for
+initial setup, the serious editing — reviewing your story, reordering skills,
+deciding on your professional image — happens on a laptop or office computer.
+
+Design rules:
+- The split-screen layout must shine on wide screens (1280px+)
+- Dense information display is acceptable (professionals expect it)
+- Keyboard shortcuts and precise interactions are valued
+- Mobile builder is a fallback, not the primary experience
+
+This dual focus is not a compromise — it reflects how the product is actually used.
+The builder is a creation tool (desktop). The published page is a consumption
+artifact (mobile).
+
+### 9.3 Conversation Design
 
 **The agent's persona:** A reflective companion. Not a fake friend, not a motivational
 coach, not a robot. Like a good journalist who helps you tell your story.
@@ -3211,7 +3246,7 @@ coach, not a robot. Like a good journalist who helps you tell your story.
 > "Your page is up to date. Nothing new from your connected services.
 > If you have something new to tell me, I'm here. Otherwise, see you next time!"
 
-### 9.3 Landing Page
+### 9.4 Landing Page
 
 The first screen sets the tone. Before any interaction, the landing page communicates
 internationality and simplicity:
@@ -3231,7 +3266,7 @@ Design principles:
 - Typography-forward: elegant, distinctive, readable at large sizes
 - The animation conveys "this works in your language" without explanation
 
-### 9.4 Onboarding (Guided Setup + Conversation)
+### 9.5 Onboarding (Guided Setup + Conversation)
 
 Onboarding has two layers: a quick structured setup (3-4 screens, ~30 seconds) that
 gives the agent context, followed by the guided conversation interview.
@@ -3314,7 +3349,7 @@ When the user is not new, the agent's opening message adapts based on context:
 
 This requires Tier 2/3 memory (Phase 1a) to work well.
 
-### 9.5 Accessibility
+### 9.6 Accessibility
 
 - **Voice as primary modality** — not an accessory. If someone can only speak
   (no typing), they should still get a full page. The agent listens (Whisper),
