@@ -104,7 +104,8 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
     speechSynthesis: false,
     serverSTT: null,
   });
-  const serverChecked = useRef(false);
+  const lastCheckAt = useRef(0);
+  const RETRY_AFTER_MS = 30_000; // retry failed checks after 30s
 
   useEffect(() => {
     const SpeechRecognition =
@@ -117,10 +118,14 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
   }, []);
 
   const checkServerSTT = useCallback(async (): Promise<boolean> => {
-    if (serverChecked.current) return caps.serverSTT ?? false;
+    // Cache successful results permanently, but retry failures after RETRY_AFTER_MS
+    if (caps.serverSTT === true) return true;
+    if (caps.serverSTT === false && Date.now() - lastCheckAt.current < RETRY_AFTER_MS) {
+      return false;
+    }
     if (!isServerSttEnabled()) {
       setCaps((prev) => ({ ...prev, serverSTT: false }));
-      serverChecked.current = true;
+      lastCheckAt.current = Date.now();
       return false;
     }
     try {
@@ -130,11 +135,11 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
       clearTimeout(timeout);
       const available = res.ok;
       setCaps((prev) => ({ ...prev, serverSTT: available }));
-      serverChecked.current = true;
+      lastCheckAt.current = Date.now();
       return available;
     } catch {
       setCaps((prev) => ({ ...prev, serverSTT: false }));
-      serverChecked.current = true;
+      lastCheckAt.current = Date.now();
       return false;
     }
   }, [caps.serverSTT]);
@@ -148,9 +153,10 @@ export function useCapabilityDetection(): VoiceCapabilities & { checkServerSTT: 
 Add to `.env.example` at the end:
 ```
 # === Voice ===
-# NEXT_PUBLIC_VOICE_ENABLED=true
-# NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED=true
-# STT_SERVICE_URL=http://stt:8080    # Internal URL for STT container
+# NEXT_PUBLIC_VOICE_ENABLED=true                      # Client: master switch for mic button
+# NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED=true   # Client: enables fallback path UI
+# VOICE_STT_SERVER_FALLBACK_ENABLED=true               # Server: enables /api/transcribe route
+# STT_SERVICE_URL=http://stt:8080                      # Server: internal URL for STT container
 ```
 
 **Step 6: Run tests to verify they pass**
@@ -280,6 +286,11 @@ export function useSttProvider({
         onFinalResult(finalText.trim());
       }
     };
+
+    // NOTE for implementer: All error-recovery setTimeout calls (3s → IDLE)
+    // should store their IDs in a ref and be cleared in stop()/cleanup to prevent
+    // state updates after unmount. Use: errorTimerRef.current = setTimeout(...)
+    // and clearTimeout(errorTimerRef.current) in stop().
 
     recognition.onerror = (event: any) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -516,14 +527,10 @@ export enum VoiceState {
 
 type UseVoiceManagerOptions = {
   language: string;
-  onTranscript: (text: string) => void;
-  isAssistantResponding: boolean;
 };
 
 export function useVoiceManager({
   language,
-  onTranscript,
-  isAssistantResponding,
 }: UseVoiceManagerOptions) {
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>(VoiceState.IDLE);
@@ -598,15 +605,19 @@ export function useVoiceManager({
       setVoiceState(VoiceState.IDLE);
       setInterimText("");
     } else {
-      // Enter voice mode — check capabilities first
+      // Enter voice mode — check capabilities first, then try to start
       const hasSTT = caps.webSpeechSTT || (await caps.checkServerSTT());
       if (!hasSTT) {
         setVoiceState(VoiceState.UNAVAILABLE);
         return;
       }
+      // Start STT first — only set voiceMode if it doesn't immediately fail
+      startStt();
+      // voiceMode set after startStt() so STT state sync (useEffect on sttState)
+      // can detect PERMISSION_DENIED and prevent entering voice mode.
+      // If sttState goes to PERMISSION_DENIED, the sync effect clears voiceMode.
       setVoiceMode(true);
       voiceModeRef.current = true;
-      startStt();
     }
   }, [enabled, voiceMode, caps, stopStt, stopSpeaking, startStt]);
 
@@ -687,6 +698,8 @@ type VoiceContextType = {
   voiceMode: boolean;
   voiceState: VoiceState;
   interimText: string;
+  lastFinalTranscript: string | null;
+  consumeTranscript: () => void;
   enabled: boolean;
   canUseVoice: boolean;
   toggleVoiceMode: () => void;
@@ -705,18 +718,14 @@ export function useVoice(): VoiceContextType {
 
 type VoiceProviderProps = {
   language: string;
-  onTranscript: (text: string) => void;
-  isAssistantResponding: boolean;
   children: ReactNode;
 };
 
 export function VoiceProvider({
   language,
-  onTranscript,
-  isAssistantResponding,
   children,
 }: VoiceProviderProps) {
-  const voice = useVoiceManager({ language, onTranscript, isAssistantResponding });
+  const voice = useVoiceManager({ language });
 
   return <VoiceContext.Provider value={voice}>{children}</VoiceContext.Provider>;
 }
@@ -758,6 +767,9 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
     toggleVoiceMode();
   };
 
+  // NOTE for implementer: These labels should be localized via getUiL10n(language).
+  // Add voice* keys to src/lib/i18n/ui-strings.ts (8 keys × 8 languages).
+  // For v1, English hardcoded; L10N wired during implementation if time allows.
   const stateLabel: Record<VoiceState, string> = {
     [VoiceState.IDLE]: "Start voice",
     [VoiceState.LISTENING]: "Listening...",
@@ -838,11 +850,12 @@ git commit -m "feat(voice): add VoiceProvider context and MicButton component"
 ## Task 6: Integrate voice into ChatPanel + ChatInput (desktop)
 
 **Files:**
+- Create: `src/hooks/useIsMobile.ts` (viewport-aware mobile detection)
 - Modify: `src/hooks/useVoiceManager.ts` (add transcript queue)
 - Modify: `src/components/voice/VoiceProvider.tsx` (expose new fields)
 - Modify: `src/components/chat/ChatInput.tsx` (add mic button + interim overlay)
 - Modify: `src/components/chat/ChatPanel.tsx:514-582,700-730` (consume voice, TTS, append)
-- Modify: `src/components/layout/SplitView.tsx:500-545` (wrap with VoiceProvider)
+- Modify: `src/components/layout/SplitView.tsx:500-545` (wrap with VoiceProvider, useIsMobile)
 
 **Architecture decision — transcript flow:**
 
@@ -850,9 +863,15 @@ One approach only: `lastFinalTranscript` + `consumeTranscript()` pattern.
 
 VoiceManager stores the last final transcript. ChatPanelInner watches it via `useEffect` and calls `useChat.append()` + `consumeTranscript()`. No callback refs, no onTranscript prop.
 
-**Dual-ChatPanel guard:** SplitView mounts TWO ChatPanel instances (desktop line 513 + mobile line 533), both visible in DOM (one hidden via CSS). To prevent both from appending the same transcript, ChatPanel receives an `isPrimaryVoiceConsumer` prop. Only the primary instance reacts to transcripts/TTS. Desktop gets `isPrimaryVoiceConsumer={true}` always (it's the visible one on desktop). Mobile Chat tab gets `isPrimaryVoiceConsumer={activeTab === "chat"}` (only when visible). On mobile, VoiceOverlay is in Preview tab and transcript flows through the mobile ChatPanel when the user switches to chat — but since the voice auto-sends, the user never sees the chat tab during voice mode. The desktop ChatPanel is always primary on md+ screens; on mobile, neither ChatPanel needs to be primary since VoiceOverlay handles the UX.
+**Dual-ChatPanel guard:** SplitView mounts TWO ChatPanel instances (desktop line 513 + mobile line 533). Both are always in the DOM — one hidden via CSS (`hidden md:flex` / `md:hidden`), but React hooks (useEffect) still run on CSS-hidden components. A static `isPrimaryVoiceConsumer={true}` on the desktop ChatPanel would fire transcript consumption even on mobile viewport.
 
-Simplified: pass `isPrimaryVoiceConsumer` to ChatPanelInner. When false, skip the transcript effect and TTS.
+**Solution: viewport-aware `useIsMobile` hook.** Create `src/hooks/useIsMobile.ts` using `window.matchMedia("(max-width: 767px)")` (matches Tailwind's `md:` breakpoint). Then:
+- Desktop ChatPanel: `isPrimaryVoiceConsumer={!isMobile}` — only consumes on desktop viewport
+- Mobile ChatPanel: `isPrimaryVoiceConsumer={isMobile}` — only consumes on mobile viewport
+
+This guarantees exactly ONE ChatPanel is primary at any viewport width. On mobile, the mobile ChatPanel consumes transcripts even while the user sees the Preview tab (VoiceOverlay), which is correct — voice auto-sends, and `useChat.append()` works regardless of tab visibility.
+
+Pass `isPrimaryVoiceConsumer` to ChatPanelInner. When false, skip the transcript effect and TTS.
 
 **Step 1: Add transcript queue to useVoiceManager**
 
@@ -889,12 +908,11 @@ In `src/components/voice/VoiceProvider.tsx`:
 ```typescript
 type VoiceProviderProps = {
   language: string;
-  isAssistantResponding: boolean;
   children: ReactNode;
 };
 
-export function VoiceProvider({ language, isAssistantResponding, children }: VoiceProviderProps) {
-  const voice = useVoiceManager({ language, isAssistantResponding });
+export function VoiceProvider({ language, children }: VoiceProviderProps) {
+  const voice = useVoiceManager({ language });
   return <VoiceContext.Provider value={voice}>{children}</VoiceContext.Provider>;
 }
 ```
@@ -998,15 +1016,19 @@ In `src/components/chat/ChatPanel.tsx`:
 
 5. TTS in onFinish (line 567, after existing recovery logic):
    ```typescript
+   // Add ref for isPrimaryVoiceConsumer (avoids stale closure in onFinish):
+   const isPrimaryRef = useRef(isPrimaryVoiceConsumer);
+   useEffect(() => { isPrimaryRef.current = isPrimaryVoiceConsumer; }, [isPrimaryVoiceConsumer]);
+
    onFinish: (message) => {
      // existing step-exhaustion recovery...
-     // NEW: TTS in voice mode (guarded)
-     if (isPrimaryVoiceConsumer && voiceRef.current && message.content?.trim()) {
+     // NEW: TTS in voice mode (guarded via refs to avoid stale closures)
+     if (isPrimaryRef.current && voiceRef.current && message.content?.trim()) {
        voice.speakResponse(message.content);
      }
    },
    ```
-   Note: `voice` is captured via ref to avoid stale closure. Use `voiceRef.current` for the boolean check and call `voice.speakResponse` (stable callback ref).
+   Note: Both `isPrimaryVoiceConsumer` and `voiceMode` are accessed via refs to avoid stale closures. `useChat.onFinish` is captured at init time; if the viewport changes (resize triggers `useIsMobile` update), the ref ensures the latest value is used.
 
 6. Wire typing to disable voice mode:
    ```typescript
@@ -1041,7 +1063,7 @@ In `src/components/layout/SplitView.tsx`:
 2. Wrap return with VoiceProvider (no onTranscript — transcript is internal now):
    ```typescript
    return (
-     <VoiceProvider language={language} isAssistantResponding={false}>
+     <VoiceProvider language={language}>
        <>
          {/* existing: SignupModal, desktop, mobile */}
        </>
@@ -1049,17 +1071,43 @@ In `src/components/layout/SplitView.tsx`:
    );
    ```
 
-3. Pass `isPrimaryVoiceConsumer` to ChatPanel instances:
-   - Desktop (line 513): `isPrimaryVoiceConsumer={true}` (always primary on md+)
-   - Mobile (line 533): `isPrimaryVoiceConsumer={false}` (voice uses VoiceOverlay, not chat tab)
+3. Create `src/hooks/useIsMobile.ts`:
+   ```typescript
+   "use client";
+   import { useState, useEffect } from "react";
 
-4. Add `isPrimaryVoiceConsumer` prop forwarding through ChatPanel → ChatPanelInner.
+   const MOBILE_QUERY = "(max-width: 767px)"; // matches Tailwind md: breakpoint
+
+   export function useIsMobile(): boolean {
+     const [isMobile, setIsMobile] = useState(false);
+     useEffect(() => {
+       const mql = window.matchMedia(MOBILE_QUERY);
+       setIsMobile(mql.matches);
+       const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+       mql.addEventListener("change", handler);
+       return () => mql.removeEventListener("change", handler);
+     }, []);
+     return isMobile;
+   }
+   ```
+
+4. In SplitView, use viewport-aware primary consumer:
+   ```typescript
+   import { useIsMobile } from "@/hooks/useIsMobile";
+   const isMobile = useIsMobile();
+   ```
+   - Desktop ChatPanel (line 513): `isPrimaryVoiceConsumer={!isMobile}`
+   - Mobile ChatPanel (line 533): `isPrimaryVoiceConsumer={isMobile}`
+
+   This guarantees exactly ONE ChatPanel is primary at any viewport width. Both are always mounted (CSS-hidden), but only the viewport-appropriate one consumes transcripts.
+
+5. Add `isPrimaryVoiceConsumer` prop forwarding through ChatPanel → ChatPanelInner.
 
 **Step 6: Commit**
 
 ```bash
-git add src/hooks/useVoiceManager.ts src/components/voice/VoiceProvider.tsx src/components/chat/ChatInput.tsx src/components/chat/ChatPanel.tsx src/components/layout/SplitView.tsx
-git commit -m "feat(voice): integrate voice into ChatPanel, ChatInput, SplitView (desktop)"
+git add src/hooks/useIsMobile.ts src/hooks/useVoiceManager.ts src/components/voice/VoiceProvider.tsx src/components/chat/ChatInput.tsx src/components/chat/ChatPanel.tsx src/components/layout/SplitView.tsx
+git commit -m "feat(voice): integrate voice into ChatPanel, ChatInput, SplitView with viewport-aware consumer"
 ```
 
 ---
@@ -1176,7 +1224,7 @@ import { NextResponse } from "next/server";
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || "http://stt:8080";
 
 export async function GET() {
-  if (process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
+  if (process.env.VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
     return NextResponse.json({ available: false }, { status: 503 });
   }
   try {
@@ -1219,12 +1267,18 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  if (process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
+  if (process.env.VOICE_STT_SERVER_FALLBACK_ENABLED !== "true") {
     return NextResponse.json({ error: "Voice STT not enabled" }, { status: 503 });
   }
 
-  // Rate limit
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  // Session check — same pattern as /api/chat route
+  const sessionId = req.cookies.get("session_id")?.value;
+  if (!sessionId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit — prefer req.ip (set by Next.js from trusted proxy), fall back to header
+  const ip = req.ip || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (!checkRateLimit(ip)) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
@@ -1241,13 +1295,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
   }
 
-  // NOTE: Also add to next.config.ts to enforce body size at framework level:
-  // export default { experimental: { serverActions: { bodySizeLimit: '6mb' } } }
-  // This limits ALL API routes. The 6MB allows for FormData overhead on top of 5MB audio.
-
   try {
-    // Parse FormData — Next.js limits body size via config (see next.config.ts).
-    // We also enforce here as defense-in-depth.
+    // Parse FormData — this buffers the full body in memory (Next.js route handlers
+    // don't support streaming FormData parsing). Acceptable for ≤5MB audio clips.
+    // Framework-level body size enforced in next.config.ts (Step 2b) as primary defense.
     const formData = await req.formData();
     const file = formData.get("file");
     if (!file || !(file instanceof Blob)) {
@@ -1289,11 +1340,21 @@ export async function POST(req: NextRequest) {
 }
 ```
 
+**Step 2b: Body size enforcement strategy**
+
+`serverActions.bodySizeLimit` does NOT apply to App Router route handlers (only server actions). For route handlers, body size enforcement is:
+
+1. **Primary defense (route-level):** `req.formData()` + `file.size` check (already in Step 2). This is the actual enforcement.
+2. **Pre-flight rejection:** `Content-Length` header check (already in Step 2, untrusted but fast).
+3. **Infrastructure defense (Coolify/Caddy):** Add `client_max_body_size 6m` to Caddyfile or reverse proxy config. Document in `docs/DEPLOY.md`.
+
+No `next.config.ts` modification needed — the route-level FormData + file.size check IS the primary defense.
+
 **Step 3: Commit**
 
 ```bash
 git add src/app/api/transcribe/route.ts src/app/api/transcribe/health/route.ts
-git commit -m "feat(voice): add /api/transcribe proxy route with rate limiting"
+git commit -m "feat(voice): add /api/transcribe proxy route with auth gate, rate limiting, body size check"
 ```
 
 ---
@@ -1482,7 +1543,7 @@ git commit -m "feat(voice): add faster-whisper STT Docker container + dev compos
 **Files:**
 - Modify: `src/hooks/useSttProvider.ts` (replace `startServerFallback` stub)
 
-**Step 1: Implement server fallback with MediaRecorder + VAD**
+**Step 1: Implement server fallback with MediaRecorder (manual start/stop, no VAD in v1)**
 
 Replace the `startServerFallback` stub in `useSttProvider.ts`:
 
@@ -1738,6 +1799,37 @@ describe("voice integration contracts", () => {
 
 **Step 2: Write behavioral tests for /api/transcribe proxy**
 
+To make the transcribe route testable, first extract the rate limiter as a named export in `src/app/api/transcribe/route.ts`:
+
+```typescript
+// At the top of route.ts, export for testing:
+export const MAX_CONTENT_LENGTH = 5 * 1024 * 1024; // 5MB
+
+export const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+export function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+
+  // Periodic cleanup: evict expired entries every 100 calls (prevents unbounded growth)
+  if (rateLimitMap.size > 100) {
+    for (const [key, val] of rateLimitMap) {
+      if (now > val.resetAt) rateLimitMap.delete(key);
+    }
+  }
+
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count++;
+  return true;
+}
+```
+
+Then write real tests:
+
 ```typescript
 // tests/evals/voice-transcribe-route.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -1753,53 +1845,112 @@ describe("/api/transcribe route contracts", () => {
     process.env = originalEnv;
   });
 
-  it("returns 503 when VOICE_STT_SERVER_FALLBACK_ENABLED is not true", async () => {
-    delete process.env.NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED;
-    // Test the guard logic — the route should early-return 503
-    // This tests the feature flag guard, not the full route handler
-    const { isServerSttEnabled } = await import("@/lib/voice/feature-flags");
-    expect(isServerSttEnabled()).toBe(false);
+  it("route guard: POST returns 503 when VOICE_STT_SERVER_FALLBACK_ENABLED unset", async () => {
+    delete process.env.VOICE_STT_SERVER_FALLBACK_ENABLED;
+    const { POST } = await import("@/app/api/transcribe/route");
+    const req = new Request("http://localhost/api/transcribe", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=test" },
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(503);
   });
 
-  it("rate limiter allows 10 requests per minute per IP", () => {
-    // Test the rate limiter function directly when extracted
-    // This is a contract test — exact implementation tested at integration level
+  it("route guard: POST proceeds when VOICE_STT_SERVER_FALLBACK_ENABLED is true", async () => {
+    process.env.VOICE_STT_SERVER_FALLBACK_ENABLED = "true";
+    const { POST } = await import("@/app/api/transcribe/route");
+    // Missing file → 400, not 503 (guard passed)
+    const formData = new FormData();
+    const req = new Request("http://localhost/api/transcribe", {
+      method: "POST",
+      body: formData,
+    });
+    const res = await POST(req as any);
+    expect(res.status).not.toBe(503); // past the guard
   });
 
-  it("MAX_CONTENT_LENGTH is 5MB", async () => {
-    // Verify the constant matches design spec
-    expect(5 * 1024 * 1024).toBe(5242880);
+  it("rate limiter allows 10 requests then blocks", async () => {
+    const { checkRateLimit, rateLimitMap } = await import("@/app/api/transcribe/route");
+    rateLimitMap.clear();
+    const ip = "test-ip-" + Date.now();
+    for (let i = 0; i < 10; i++) {
+      expect(checkRateLimit(ip)).toBe(true);
+    }
+    expect(checkRateLimit(ip)).toBe(false); // 11th request blocked
+  });
+
+  it("rate limiter resets after 60s window", async () => {
+    const { checkRateLimit, rateLimitMap } = await import("@/app/api/transcribe/route");
+    rateLimitMap.clear();
+    const ip = "test-ip-reset-" + Date.now();
+    for (let i = 0; i < 10; i++) checkRateLimit(ip);
+    expect(checkRateLimit(ip)).toBe(false);
+    // Manually expire the entry
+    const entry = rateLimitMap.get(ip)!;
+    entry.resetAt = Date.now() - 1;
+    expect(checkRateLimit(ip)).toBe(true); // reset happened
+  });
+
+  it("MAX_CONTENT_LENGTH is 5MB (5242880 bytes)", async () => {
+    const { MAX_CONTENT_LENGTH } = await import("@/app/api/transcribe/route");
+    expect(MAX_CONTENT_LENGTH).toBe(5242880);
   });
 });
 ```
 
 **Step 3: Write abort-safety test for STT provider**
 
+To test abort safety without browser APIs, we verify the pattern structurally by reading the source code at test time:
+
 ```typescript
 // tests/evals/voice-abort-safety.test.ts
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 describe("STT abort safety contracts", () => {
-  it("abortedRef pattern: onstop must check flag before upload", () => {
-    // This is a design contract test.
-    // The implementation MUST:
-    // 1. Set abortedRef.current = true in stop() BEFORE calling recorder.stop()
-    // 2. Check abortedRef.current at the TOP of recorder.onstop handler
-    // 3. Check abortedRef.current AGAIN after each await in onstop
-    // Verified by code review during implementation.
-    expect(true).toBe(true); // Placeholder — real test requires browser APIs
+  const sttSource = readFileSync(
+    join(process.cwd(), "src/hooks/useSttProvider.ts"),
+    "utf-8"
+  );
+
+  it("stop() sets abortedRef.current = true BEFORE calling recorder.stop()", () => {
+    // In the stop function, abortedRef must be set before recorder.stop()
+    const stopFn = sttSource.slice(
+      sttSource.indexOf("const stop = useCallback"),
+      sttSource.indexOf("}, [])", sttSource.indexOf("const stop = useCallback")) + 6
+    );
+    const abortedIdx = stopFn.indexOf("abortedRef.current = true");
+    const recorderStopIdx = stopFn.indexOf("mediaRecorderRef.current.stop");
+    expect(abortedIdx).toBeGreaterThan(-1);
+    expect(recorderStopIdx).toBeGreaterThan(-1);
+    expect(abortedIdx).toBeLessThan(recorderStopIdx);
   });
 
-  it("VoiceSttState transitions follow spec", async () => {
+  it("onstop handler checks abortedRef at the top before any upload", () => {
+    // The onstop handler must check abortedRef.current early
+    const onstopIdx = sttSource.indexOf("recorder.onstop");
+    expect(onstopIdx).toBeGreaterThan(-1);
+    const afterOnstop = sttSource.slice(onstopIdx, onstopIdx + 500);
+    // abortedRef check must appear before fetch("/api/transcribe")
+    const abortCheckIdx = afterOnstop.indexOf("abortedRef.current");
+    const fetchIdx = afterOnstop.indexOf('fetch("/api/transcribe"');
+    expect(abortCheckIdx).toBeGreaterThan(-1);
+    expect(fetchIdx).toBeGreaterThan(-1);
+    expect(abortCheckIdx).toBeLessThan(fetchIdx);
+  });
+
+  it("onstop handler checks abortedRef again after fetch completes", () => {
+    const onstopIdx = sttSource.indexOf("recorder.onstop");
+    const afterOnstop = sttSource.slice(onstopIdx);
+    const fetchIdx = afterOnstop.indexOf('fetch("/api/transcribe"');
+    const afterFetch = afterOnstop.slice(fetchIdx);
+    // Must have at least one more abortedRef check after the fetch
+    expect(afterFetch.indexOf("abortedRef.current")).toBeGreaterThan(0);
+  });
+
+  it("VoiceSttState enum has exactly 5 states", async () => {
     const { VoiceSttState } = await import("@/hooks/useSttProvider");
-    // Valid transitions:
-    // IDLE -> LISTENING (start)
-    // LISTENING -> TRANSCRIBING (speech end, server path)
-    // LISTENING -> IDLE (speech end with final result, web speech path)
-    // TRANSCRIBING -> IDLE (result received or error)
-    // ANY -> IDLE (abort/stop)
-    // ANY -> ERROR (failure)
-    // ANY -> PERMISSION_DENIED (mic blocked)
     const validStates = ["idle", "listening", "transcribing", "error", "permission_denied"];
     expect(Object.values(VoiceSttState).sort()).toEqual(validStates.sort());
   });
@@ -1819,8 +1970,8 @@ Expected: All existing tests pass + new voice tests pass
 **Step 4: Commit**
 
 ```bash
-git add tests/evals/voice-integration.test.ts
-git commit -m "test(voice): add integration contract tests"
+git add tests/evals/voice-integration.test.ts tests/evals/voice-transcribe-route.test.ts tests/evals/voice-abort-safety.test.ts
+git commit -m "test(voice): add integration, route, and abort-safety contract tests"
 ```
 
 ---
@@ -1871,17 +2022,17 @@ Run: `npm run dev`
 | 3 | TTS provider (SpeechSynthesis) | 1 new | voice-tts-provider.test.ts |
 | 4 | Voice manager (state machine) | 1 new | voice-manager.test.ts |
 | 5 | VoiceProvider + MicButton | 2 new | — |
-| 6 | Desktop integration (ChatPanel/ChatInput/SplitView) | 3 modify, 1 modify hook | — |
+| 6 | Desktop integration (ChatPanel/ChatInput/SplitView) | 1 new (useIsMobile), 4 modify | — |
 | 7 | Mobile VoiceOverlay | 1 new, 1 modify | — |
 | 8 | Transcribe API route (proxy) | 2 new | — |
-| 9 | STT Docker container | 3 new | — |
+| 9 | STT Docker container | 3 new, 1 new (docker-compose.dev.yml) | — |
 | 10 | Server fallback wiring | 1 modify | — |
 | 11 | VAD for auto-stop (optional v1) | 1 dep, 1 modify | — |
-| 12 | Integration tests | 1 new | voice-integration.test.ts |
-| 13 | Enable + verify | 1 modify | manual |
+| 12 | Integration tests | 3 new | voice-integration, voice-transcribe-route, voice-abort-safety |
+| 13 | Enable + verify | — | manual |
 
-**Total new files:** ~15
-**Modified files:** ~6
-**New tests:** 5 test files
+**Total new files:** ~17
+**Modified files:** ~7
+**New tests:** 7 test files
 **New dependency:** `@ricky0123/vad-web`
 **New Docker service:** `docker/stt/` (faster-whisper)

@@ -1,0 +1,16 @@
+# docker-compose.dev.yml — local dev only (STT service alongside npm run dev)
+services:
+  stt:
+    build: ./docker/stt
+    ports:
+      - "8080:8080"
+    volumes:
+      - whisper-models:/models/whisper
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-tiny}
+      - WHISPER_COMPUTE_TYPE=int8
+      - MAX_AUDIO_DURATION=60
+    restart: unless-stopped
+
+volumes:
+  whisper-models:

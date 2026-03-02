@@ -21,6 +21,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { VoiceProvider } from "@/components/voice/VoiceProvider";
+import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
+import { isVoiceEnabled } from "@/lib/voice/feature-flags";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 type SplitViewProps = {
   language: string;
@@ -125,6 +129,10 @@ export function SplitView({
   onPublishedConfigHashChange,
   openSettings,
 }: SplitViewProps) {
+  const isMobile = useIsMobile();
+  const voiceEnabled = isVoiceEnabled();
+  const [activeTab, setActiveTab] = useState(voiceEnabled ? "preview" : "chat");
+
   // Lifted chat data fetching — bootstrap + messages fetched once, shared by both ChatPanel instances
   const [bootstrapData, setBootstrapData] = useState<Record<string, unknown> | null>(null);
   const [chatInitialMessages, setChatInitialMessages] = useState<Array<{id: string; role: string; content: string}>>([]);
@@ -498,48 +506,51 @@ export function SplitView({
   );
 
   return (
-    <>
-      {/* Signup modal — rendered at top level */}
-      <SignupModal
-        open={signupOpen}
-        onClose={() => setSignupOpen(false)}
-        initialUsername={publishUsername !== "draft" ? publishUsername : deriveUsernameFromConfig(config)}
-        language={language}
-      />
+    <VoiceProvider language={language}>
+      <>
+        {/* Signup modal — rendered at top level */}
+        <SignupModal
+          open={signupOpen}
+          onClose={() => setSignupOpen(false)}
+          initialUsername={publishUsername !== "draft" ? publishUsername : deriveUsernameFromConfig(config)}
+          language={language}
+        />
 
-      {/* Desktop: side-by-side */}
-      <div className="hidden h-screen md:flex">
-        <div className="w-[400px] shrink-0 overflow-hidden border-r">
-          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
+        {/* Desktop: side-by-side */}
+        <div className="hidden h-screen md:flex">
+          <div className="w-[400px] shrink-0 overflow-hidden border-r">
+            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={!isMobile} />}
+          </div>
+          <div className="relative flex-1">{previewPane}</div>
         </div>
-        <div className="relative flex-1">{previewPane}</div>
-      </div>
 
-      {/* Mobile: tabs */}
-      <Tabs defaultValue="chat" className="flex h-screen flex-col md:hidden">
-        <TabsList className="sticky top-0 z-40 w-full rounded-none">
-          <TabsTrigger value="chat" className="flex-1">
-            Chat
-          </TabsTrigger>
-          <TabsTrigger value="preview" className="flex-1">
-            Preview
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent
-          value="chat"
-          forceMount
-          className="flex-1 overflow-hidden data-[state=inactive]:hidden"
-        >
-          {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} />}
-        </TabsContent>
-        <TabsContent
-          value="preview"
-          forceMount
-          className="relative flex-1 overflow-hidden data-[state=inactive]:hidden"
-        >
-          {previewPane}
-        </TabsContent>
-      </Tabs>
-    </>
+        {/* Mobile: tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-screen flex-col md:hidden">
+          <TabsList className="sticky top-0 z-40 w-full rounded-none">
+            <TabsTrigger value="chat" className="flex-1">
+              Chat
+            </TabsTrigger>
+            <TabsTrigger value="preview" className="flex-1">
+              Preview
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="chat"
+            forceMount
+            className="flex-1 overflow-hidden data-[state=inactive]:hidden"
+          >
+            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={isMobile} />}
+          </TabsContent>
+          <TabsContent
+            value="preview"
+            forceMount
+            className="relative flex-1 overflow-hidden data-[state=inactive]:hidden"
+          >
+            {previewPane}
+            {voiceEnabled && <VoiceOverlay onOpenChat={() => setActiveTab("chat")} />}
+          </TabsContent>
+        </Tabs>
+      </>
+    </VoiceProvider>
   );
 }
