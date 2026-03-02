@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { sessions } from "@/lib/db/schema";
 
 export type SessionMeta = Record<string, unknown>;
@@ -46,4 +46,33 @@ export function mergeSessionMeta(sessionId: string, partial: Record<string, unkn
   }
   setSessionMeta(sessionId, current);
   return current;
+}
+
+/**
+ * Aggregate journal entries from the N most recent sessions for the given owner.
+ * Reads sessions.metadata.journal for each session, flattens into a single array.
+ *
+ * Matches on profile_id (auth users) or id (anon/single-user) to cover both cases.
+ */
+export function getRecentJournalEntries(ownerKey: string, sessionCount: number): JournalEntry[] {
+  const rows = sqlite.prepare(`
+    SELECT metadata FROM sessions
+    WHERE (profile_id = ? OR id = ?)
+    AND metadata IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(ownerKey, ownerKey, sessionCount) as Array<{ metadata: string }>;
+
+  const entries: JournalEntry[] = [];
+  for (const row of rows) {
+    try {
+      const meta = JSON.parse(row.metadata);
+      if (Array.isArray(meta.journal)) {
+        entries.push(...meta.journal);
+      }
+    } catch {
+      // Skip malformed metadata
+    }
+  }
+  return entries;
 }

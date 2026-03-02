@@ -18,7 +18,9 @@ import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { getDraft } from "@/lib/services/page-service";
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { checkPageCoherence } from "@/lib/services/coherence-check";
-import { mergeSessionMeta } from "@/lib/services/session-metadata";
+import { mergeSessionMeta, getRecentJournalEntries } from "@/lib/services/session-metadata";
+import { detectJournalPatterns } from "@/lib/services/journal-patterns";
+import { saveMemory } from "@/lib/services/memory-service";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -186,7 +188,32 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
     console.error("[heartbeat] Coherence check failed:", err);
   }
 
-  const outcome = expired > 0 || dismissed > 0 || conformityActions > 0 || coherenceWarningCount > 0 ? "action_taken" : "ok";
+  // Circuit F2: journal patterns → meta-memories
+  let journalPatternCount = 0;
+  try {
+    const recentJournals = getRecentJournalEntries(ownerKey, 5);
+    const patterns = detectJournalPatterns(recentJournals);
+    for (const pattern of patterns) {
+      saveMemory(
+        ownerKey,
+        `${pattern.description}. ${pattern.suggestion}`,
+        "pattern",
+        "journal_analysis",
+      );
+      journalPatternCount++;
+    }
+    if (journalPatternCount > 0) {
+      logEvent({
+        eventType: "heartbeat_journal_patterns",
+        actor: "worker",
+        payload: { ownerKey, patternsFound: journalPatternCount },
+      });
+    }
+  } catch (err) {
+    console.error("[heartbeat] Journal pattern analysis failed:", err);
+  }
+
+  const outcome = expired > 0 || dismissed > 0 || conformityActions > 0 || coherenceWarningCount > 0 || journalPatternCount > 0 ? "action_taken" : "ok";
   recordHeartbeatRun(ownerKey, "deep", outcome, 0, config.timezone, startMs);
 }
 
