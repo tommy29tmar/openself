@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-03-02
+Last updated: 2026-03-03
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -12,7 +12,8 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 2077 automated tests passing (168 test files)
+- Post-import agent reaction: after LinkedIn import, agent auto-reviews data and asks targeted gap-filling questions
+- 2110 automated tests passing (174 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 4 templates (The Monolith, Cinematic, The Curator, The Architect), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -51,8 +52,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - Phase 1d Closing: Connector UI in SettingsPanel (status cards, OAuth connect, file picker, disconnect), avatar upload pipeline (magic bytes + EXIF strip + POST/DELETE API + composer wiring + AvatarSection UI), public page auto-translation (Accept-Language parser, TranslationBanner, bot detection, source_language column, ?lang=original bypass). ~230 new tests (2063 total, 165 files)
 - Architect layout refactoring: affinity-based slot ranking with anti-clustering for non-vertical layouts, compact widget variants (reading, education, achievements, music), expanded slot accepts, strict accepts validation, backfill script
 - UAT Round 6 (12 findings): Architect layout 400 fix (draftSlots carry-over in 3 call sites), layout name cleanup (user-facing names: The Monolith/Cinematic/The Curator/The Architect, case-insensitive resolveLayoutAlias, legacy alias compat), avatar visibility fix (onAvatarChange callback wiring + profileId in 4 compose paths), agent prompt improvements (contradiction handling, unsupported features, response variety, registration CTA). 14 new tests (2077 total, 168 files)
+- Post-import agent reaction: After LinkedIn import, agent auto-reacts with data review + targeted gap-filling questions (interests, description, social). Deterministic gap analyzer, atomic CAS import event flag (pending→processing→consumed), `has_recent_import` situation in Journey Intelligence, `recentImportDirective` policy with prompt hygiene (sanitize + delimiters), DOM event bridge for auto-trigger message (localized, 8 langs), error recovery (revert on failure). 33 new tests (2110 total, 174 files)
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete. Sprint 5 — Conversation Polish + Eval Matrix complete. UAT Round 4 (21 findings) complete. UAT Round 5 (23 findings) complete. Connector MVP (GitHub + LinkedIn ZIP) complete. Phase 1d Closing (connector UI, avatar, public page translation) complete. Architect layout refactoring (affinity-based slot ranking, compact widgets) complete. UAT Round 6 (12 findings) complete. **Phase 1 is fully complete.**
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete. Sprint 5 — Conversation Polish + Eval Matrix complete. UAT Round 4 (21 findings) complete. UAT Round 5 (23 findings) complete. Connector MVP (GitHub + LinkedIn ZIP) complete. Phase 1d Closing (connector UI, avatar, public page translation) complete. Architect layout refactoring (affinity-based slot ranking, compact widgets) complete. UAT Round 6 (12 findings) complete. Post-import agent reaction complete. **Phase 1 is fully complete.**
 
 ## 2) Implemented Today
 
@@ -417,6 +419,18 @@ Sixth E2E UAT session. 5 groups of fixes: layout 400 error, layout naming, avata
 4. **Agent contradiction handling (Medium)** — Agent sometimes bypassed identity/role fact when user stated a new profession. Fix: added directive to update identity/role FIRST, wait for confirmation before proceeding.
 5. **Agent prompt improvements (Medium)** — Added unsupported features block (video, audio, custom CSS), response variety rule ("NEVER repeat the same sentence pattern"), registration CTA in first-visit Phase C ("Register to get your own URL like openself.dev/yourname!").
 
+### Post-Import Agent Reaction ✅
+
+After a LinkedIn ZIP import, the agent automatically reacts with a brief data review and
+asks targeted gap-filling questions. 12 commits, 33 new tests (2110 total, 174 files).
+
+1. **Import gap analyzer** (`src/lib/connectors/import-gap-analyzer.ts`) — Deterministic, zero-LLM analysis of all active facts. Produces `ImportGapReport` with summary (current role, past roles, education/language/skill/certification counts) and prioritized gaps (no_interests > no_personal_description > no_social_links).
+2. **Import event flag** (`src/lib/connectors/import-event.ts`) — Three-state machine (pending → processing → consumed) stored in `sessions.metadata` JSON. Atomic CAS via `json_set`/`json_extract` in SQL WHERE clause (G1). 24h TTL with automatic cleanup (G3). Error recovery: reverts to pending on LLM failure (G2).
+3. **Situation detection** — `has_recent_import` situation in Journey Intelligence (`journey.ts`). Detected when connector-sourced facts exist within 30 minutes.
+4. **Policy directive** — `recentImportDirective()` in `policies/situations.ts`. Generates POST-IMPORT REVIEW MODE prompt block with sanitized summary, gap descriptions, and `--- BEGIN/END IMPORT CONTEXT ---` delimiters (G5).
+5. **Chat route wiring** — Flag consumed AFTER quota checks (avoids stuck "processing" on 429). Gap report injected into `bootstrap.importGapReport` and passed through to `assembleContext()`. Error recovery in `onFinish`, `getErrorMessage`, and outer catch blocks.
+6. **Frontend auto-trigger** — DOM CustomEvent bridge between `ConnectorSection` (import success) and `ChatPanelInner` (event listener + `append()`). Localized trigger message (8 languages). `metadata.source = "auto_import_trigger"` for telemetry (G4).
+
 ### Post-Phase 1d Fixes
 
 - `fix(avatar)`: `profileId` fallback aligned to `__default__` for consistency across all projection/composition paths.
@@ -445,7 +459,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 2077 passed / 2077 total (Vitest, 168 test files)
+- Automated tests: 2110 passed / 2110 total (Vitest, 174 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -541,6 +555,13 @@ Builder interface layouts (chat experience):
   91. Compact widgets — compact variant resolution, slot assignment for third-sized slots (8 tests)
   92. Architect layout — affinity-based slot ranking, anti-clustering, expanded accepts (6 tests)
   93. Connector UI — ConnectorSection status fetch, OAuth return flow, sync idempotency, rate limiting (10 tests)
+  94. Import gap analyzer — category counts, role derivation, gap detection/absence, experience fallback (10 tests)
+  95. Import event flag — write, consume, CAS idempotency, TTL expiry, revert, no-flag (6 tests)
+  96. Journey import situation — recent connector facts, old facts, non-connector facts (3 tests)
+  97. Import policy directive — role rendering, gap descriptions, sanitization, delimiters, policy rules (5 tests)
+  98. Import reaction pipeline — full lifecycle (write→detect→consume→analyze→directive), error recovery (2 tests)
+  99. Chat route import flag — flag wiring, bootstrap population, no-flag skip, situation forcing, quota guard, error revert (6 tests)
+  100. LinkedIn ZIP API (updated) — import event flag write on success (1 new test)
 - Current gaps in tests:
   1. End-to-end browser integration tests
 

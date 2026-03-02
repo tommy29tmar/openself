@@ -2633,6 +2633,49 @@ The page composer then:
   - Connector facts appear in preview immediately via SSE
 ```
 
+### 7.9 Post-Import Agent Reaction
+
+After a connector import (currently LinkedIn ZIP), the agent automatically reacts with a
+brief review of imported data and asks targeted questions to fill gaps that connectors
+don't cover (interests, personal description, social links).
+
+**Architecture:**
+
+```
+Import route (success) → writeImportEvent(sessionId, factsWritten)
+                        → dispatch CustomEvent("openself:import-complete")
+                        ↓
+ChatPanel listener      → append() auto-trigger message (localized, 8 languages)
+                        → POST /api/chat with metadata.source = "auto_import_trigger"
+                        ↓
+Chat route              → consumeImportEvent(sessionId) [atomic CAS]
+                        → analyzeImportGaps(allFacts) [deterministic, zero-LLM]
+                        → bootstrap.importGapReport = report
+                        → bootstrap.situations.push("has_recent_import")
+                        → assembleContext() → recentImportDirective in system prompt
+                        ↓
+Agent responds          → acknowledges import summary (role, counts)
+                        → asks first gap question (interests > description > social)
+```
+
+**Key components:**
+
+| Component | File | Purpose |
+|---|---|---|
+| Import gap analyzer | `src/lib/connectors/import-gap-analyzer.ts` | Deterministic analysis of missing categories (interests, description, social links) |
+| Import event flag | `src/lib/connectors/import-event.ts` | Three-state machine (pending → processing → consumed) with atomic CAS via `json_set`/`json_extract` |
+| Situation detection | `src/lib/agent/journey.ts` | `has_recent_import` flag when connector facts exist within 30 min |
+| Policy directive | `src/lib/agent/policies/situations.ts` | `recentImportDirective()` with sanitized summary + gap descriptions + prompt delimiters |
+| Frontend bridge | `ConnectorSection.tsx` → `ChatPanel.tsx` | DOM CustomEvent bridge (no prop drilling through 3 component layers) |
+
+**Guardrails:**
+
+- **G1 (Atomic CAS):** `json_extract` in SQL WHERE clause ensures only one request transitions pending → processing
+- **G2 (Error recovery):** Flag reverted to pending on LLM failure (`onFinish`, `getErrorMessage`, outer catch)
+- **G3 (TTL):** 24h expiry on pending flags, cleaned up on next consume attempt
+- **G4 (Provenance):** `metadata.source = "auto_import_trigger"` tags auto-triggered messages for telemetry
+- **G5 (Prompt hygiene):** `sanitize()` strips control chars + caps length; `--- BEGIN/END IMPORT CONTEXT ---` delimiters
+
 ---
 
 ## 8. Data Model
