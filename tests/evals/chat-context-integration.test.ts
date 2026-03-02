@@ -89,6 +89,7 @@ vi.mock("@/lib/agent/journey", () => ({
       archivableFacts: [],
       language: "en",
       conversationContext: null,
+      archetype: "generalist",
     },
     data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] },
   })),

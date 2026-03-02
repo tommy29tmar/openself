@@ -12,7 +12,7 @@ export type WidgetDefinition = {
   label: string;
 };
 
-const WIDGET_REGISTRY: WidgetDefinition[] = [
+export const WIDGET_REGISTRY: WidgetDefinition[] = [
   // Hero
   {
     id: "hero-split",

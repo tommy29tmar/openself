@@ -22,6 +22,7 @@ const mockBootstrapPayload = {
   archivableFacts: [],
   language: "en",
   conversationContext: null,
+  archetype: "generalist",
 };
 
 vi.mock("@/lib/agent/journey", () => ({

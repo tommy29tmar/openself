@@ -37,6 +37,7 @@ function buildOnboardingPrompt(language = "en"): string {
     archivableFacts: [],
     language,
     conversationContext: null,
+    archetype: "generalist",
   };
   return buildSystemPrompt(bootstrap);
 }

@@ -36,6 +36,7 @@ function buildFamiliarUserPrompt(): string {
     archivableFacts: [],
     language: "en",
     conversationContext: null,
+    archetype: "generalist",
   };
   return buildSystemPrompt(bootstrap);
 }

@@ -11,7 +11,7 @@
 import { sqlite } from "@/lib/db";
 import { countFacts, getAllFacts, type FactRow } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage, getDraft, getPublishedUsername } from "@/lib/services/page-service";
-import { getActiveSoul } from "@/lib/services/soul-service";
+import { getActiveSoul, proposeSoulChange, getPendingProposals } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
 import { createProposalService } from "@/lib/services/proposal-service";
 import { classifySectionRichness } from "@/lib/services/section-richness";
@@ -20,7 +20,7 @@ import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing"
 import type { OwnerScope } from "@/lib/auth/session";
 import type { AuthInfo } from "@/lib/agent/context";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
-import { detectArchetypeFromSignals, refineArchetype, type Archetype } from "@/lib/agent/archetypes";
+import { detectArchetypeFromSignals, refineArchetype, ARCHETYPE_STRATEGIES, type Archetype } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ export interface BootstrapPayload {
 export interface BootstrapData {
   facts: FactRow[];
   soul: { compiled: string | null } | null;
-  openConflictRecords: Array<{ id: string; category: string; key: string; factAId: string; sourceA: string; factBId?: string; sourceB?: string }>;
+  openConflictRecords: Array<{ id: string; category: string; key: string; factAId: string; sourceA: string | null; factBId?: string | null; sourceB?: string | null }>;
   publishableFacts: FactRow[];
 }
 
@@ -447,13 +447,27 @@ export function assembleBootstrapPayload(
     if (sessionId) {
       mergeSessionMeta(sessionId, { archetype });
     }
-    // TODO(Circuito A): When archetype !== "generalist" and no soul exists,
-    // propose an initial soul profile based on archetype strategies.
-    // Deferred — cross-cutting concern tracked in v2 plan.
   }
 
   // Read soul for data passthrough (avoids re-query in assembleContext)
   const soul = getActiveSoul(ownerKey);
+
+  // Circuito A: Archetype → Soul auto-proposal
+  // When archetype is non-generalist, no soul exists, and no pending proposals,
+  // propose an initial soul profile based on archetype strategies.
+  // Guard against duplicates: assembleBootstrapPayload runs every message (R7-S6).
+  if (archetype !== "generalist" && !soul) {
+    const pendingSoulProposals = getPendingProposals(ownerKey);
+    if (pendingSoulProposals.length === 0) {
+      const strategy = ARCHETYPE_STRATEGIES[archetype];
+      try {
+        proposeSoulChange(ownerKey, {
+          tone: strategy.toneHint,
+          communicationStyle: strategy.communicationStyle,
+        }, `Auto-suggested from detected archetype: ${archetype}`);
+      } catch { /* best-effort: don't block bootstrap */ }
+    }
+  }
 
   return {
     payload: {

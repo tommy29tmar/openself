@@ -326,11 +326,14 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
   }
 
   // --- Resume injection: incomplete operation from previous turn ---
+  // Use anchor session (knowledgePrimaryKey) — route.ts writes journal/pendingOps
+  // to writeSessionId which equals knowledgePrimaryKey. Reading from currentSessionId
+  // would miss data in multi-session authenticated setups.
   const PENDING_OPS_TTL_MS = 60 * 60 * 1000; // 1 hour
-  const sessionId = scope.currentSessionId;
-  if (sessionId) {
+  const anchorSessionId = scope.knowledgePrimaryKey;
+  if (anchorSessionId) {
     try {
-      const meta = getSessionMeta(sessionId);
+      const meta = getSessionMeta(anchorSessionId);
       const pending = meta.pendingOperations as { timestamp: string; journal: unknown[]; finishReason: string } | undefined;
       if (pending?.timestamp) {
         const age = Date.now() - new Date(pending.timestamp).getTime();
@@ -343,16 +346,16 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
           );
         } else if (age >= PENDING_OPS_TTL_MS) {
           // Stale — clean up
-          mergeSessionMeta(sessionId, { pendingOperations: undefined });
+          mergeSessionMeta(anchorSessionId, { pendingOperations: undefined });
         }
       }
     } catch { /* best-effort */ }
   }
 
   // --- Coherence issues injection (circuit D1, steady_state only) ---
-  if (sessionId && mode === "steady_state") {
+  if (anchorSessionId && mode === "steady_state") {
     try {
-      const meta = getSessionMeta(sessionId);
+      const meta = getSessionMeta(anchorSessionId);
       const warnings = (meta.coherenceWarnings ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
       const infos = (meta.coherenceInfos ?? []) as Array<{ type: string; severity: string; description: string; suggestion: string }>;
       const allIssues = [...warnings, ...infos];
