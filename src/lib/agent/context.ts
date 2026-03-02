@@ -280,7 +280,7 @@ export function assembleContext(
 
   if (mode === "onboarding" && includeRichness) {
     // Onboarding: show archetype + priorities to guide fact collection
-    const publishable = filterPublishableFacts(existingFacts);
+    const publishable = bootstrapData?.publishableFacts ?? filterPublishableFacts(existingFacts);
     const weighted = strategy.explorationOrder
       .map(category => ({
         category,
@@ -298,7 +298,7 @@ export function assembleContext(
   } else if (mode === "steady_state") {
     // Steady state: richness + layout intelligence (conditional)
     if (includeRichness) {
-      const publishable = filterPublishableFacts(existingFacts);
+      const publishable = bootstrapData?.publishableFacts ?? filterPublishableFacts(existingFacts);
       const weighted = strategy.explorationOrder
         .map(category => ({
           category,

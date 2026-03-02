@@ -69,8 +69,10 @@ vi.mock("@/lib/middleware/rate-limit", () => ({
 
 vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => "mock-model"),
+  getModelForTier: vi.fn(() => "mock-model"),
   getProviderName: vi.fn(() => "anthropic"),
   getModelId: vi.fn(() => "mock-model-id"),
+  getModelIdForTier: vi.fn(() => "mock-model-id"),
 }));
 
 vi.mock("ai", () => ({
