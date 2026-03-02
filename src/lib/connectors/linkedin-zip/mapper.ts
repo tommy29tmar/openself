@@ -202,7 +202,7 @@ export function mapSkills(rows: CsvRow[]): FactInput[] {
         value: { name: name.trim() },
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -227,7 +227,7 @@ export function mapLanguages(rows: CsvRow[]): FactInput[] {
         value,
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -258,7 +258,7 @@ export function mapCertifications(rows: CsvRow[]): FactInput[] {
         value,
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -283,7 +283,7 @@ export function mapCourses(rows: CsvRow[]): FactInput[] {
         value,
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -300,7 +300,7 @@ export function mapCompanyFollows(rows: CsvRow[]): FactInput[] {
         value: { name: name.trim(), source: "linkedin-follow" },
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -317,7 +317,7 @@ export function mapCauses(rows: CsvRow[]): FactInput[] {
         value: { name: name.trim(), source: "linkedin-cause" },
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -334,7 +334,7 @@ export function mapEmailAddresses(rows: CsvRow[]): FactInput[] {
         value: { email: email.trim(), type: "email" },
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
 
 /**
@@ -351,5 +351,5 @@ export function mapPhoneNumbers(rows: CsvRow[]): FactInput[] {
         value: { phone: phone.trim(), type: "phone" },
       };
     })
-    .filter((f): f is FactInput => f !== null);
+    .filter((f) => f !== null) as FactInput[];
 }
