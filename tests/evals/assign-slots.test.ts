@@ -112,6 +112,101 @@ describe("assignSlotsFromFacts", () => {
     expect(Array.isArray(issues)).toBe(true);
   });
 
+  it("emits unplaceable_section when section type has no compatible slot", () => {
+    const sections = [
+      makeSection({ id: "h1", type: "hero" }),
+      makeSection({ id: "c1", type: "custom" }),
+      makeSection({ id: "f1", type: "footer" }),
+    ];
+    const tinyTemplate = {
+      id: "architect" as const,
+      name: "Test",
+      description: "Test",
+      heroSlot: "hero",
+      footerSlot: "footer",
+      slots: [
+        { id: "hero", size: "wide" as const, required: true, maxSections: 1, accepts: ["hero" as const], order: 0, mobileOrder: 0 },
+        { id: "card-1", size: "third" as const, required: false, maxSections: 1, accepts: ["skills" as const], order: 1, mobileOrder: 1 },
+        { id: "footer", size: "wide" as const, required: true, maxSections: 1, accepts: ["footer" as const], order: 99, mobileOrder: 99 },
+      ],
+    };
+    const { sections: result, issues } = assignSlotsFromFacts(tinyTemplate, sections);
+    const custom = result.find(s => s.id === "c1");
+    expect(custom).toBeDefined();
+    expect(custom!.slot).toBeUndefined();
+    const unplaceable = issues.find(i => i.issue === "unplaceable_section");
+    expect(unplaceable).toBeDefined();
+    expect(unplaceable!.severity).toBe("warning");
+    expect(unplaceable!.message).toContain("custom");
+  });
+
+  it("does not emit unplaceable_section for sections with compatible slots", () => {
+    const sections = [
+      makeSection({ id: "h1", type: "hero" }),
+      makeSection({ id: "b1", type: "bio" }),
+      makeSection({ id: "s1", type: "skills", content: { groups: [{ label: "A", skills: ["x"] }] } }),
+      makeSection({ id: "f1", type: "footer" }),
+    ];
+    const { issues } = assignSlotsFromFacts(architect, sections);
+    const unplaceable = issues.filter(i => i.issue === "unplaceable_section");
+    expect(unplaceable).toHaveLength(0);
+  });
+
+  describe("affinity-based assignment (architect)", () => {
+    it("bio lands in feature-left (highest affinity)", () => {
+      const sections = [
+        makeSection({ id: "h1", type: "hero" }),
+        makeSection({ id: "b1", type: "bio" }),
+        makeSection({ id: "f1", type: "footer" }),
+      ];
+      const { sections: result } = assignSlotsFromFacts(architect, sections);
+      expect(result.find(s => s.id === "b1")?.slot).toBe("feature-left");
+    });
+
+    it("stats lands in a card-* slot (highest affinity for stats)", () => {
+      const sections = [
+        makeSection({ id: "h1", type: "hero" }),
+        makeSection({ id: "st1", type: "stats", content: { items: [{ label: "x", value: "1" }] } }),
+        makeSection({ id: "f1", type: "footer" }),
+      ];
+      const { sections: result } = assignSlotsFromFacts(architect, sections);
+      const statsSlot = result.find(s => s.id === "st1")?.slot;
+      expect(statsSlot).toMatch(/^card-/);
+    });
+
+    it("spreads 3 card-preferring sections across card-1/2/3 (anti-clustering)", () => {
+      // Use types whose highest affinity is in card-* slots (not feature-*)
+      const sections = [
+        makeSection({ id: "h1", type: "hero" }),
+        makeSection({ id: "st1", type: "stats", content: { items: [{ label: "x", value: "1" }] } }),
+        makeSection({ id: "co1", type: "contact", content: { items: [{ type: "email", value: "a@b.c" }] } }),
+        makeSection({ id: "la1", type: "languages", content: { items: [{ name: "EN" }] } }),
+        makeSection({ id: "f1", type: "footer" }),
+      ];
+      const { sections: result } = assignSlotsFromFacts(architect, sections);
+      const cardSlots = result
+        .filter(s => s.slot?.startsWith("card-"))
+        .map(s => s.slot);
+      // All 3 should be in different card slots (anti-clustering)
+      const unique = new Set(cardSlots);
+      expect(unique.size).toBe(3);
+    });
+
+    it("monolith assignment is unchanged (no affinity defined)", () => {
+      const monolith = getLayoutTemplate("monolith");
+      const sections = [
+        makeSection({ id: "h1", type: "hero" }),
+        makeSection({ id: "b1", type: "bio" }),
+        makeSection({ id: "s1", type: "skills", content: { groups: [{ label: "A", skills: ["x"] }] } }),
+        makeSection({ id: "f1", type: "footer" }),
+      ];
+      const { sections: result } = assignSlotsFromFacts(monolith, sections);
+      // All non-hero/footer go to main
+      expect(result.find(s => s.id === "b1")?.slot).toBe("main");
+      expect(result.find(s => s.id === "s1")?.slot).toBe("main");
+    });
+  });
+
   it("post-assign invariant: all core sections have slot + widgetId", () => {
     const sections = [
       makeSection({ id: "h1", type: "hero" }),

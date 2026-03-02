@@ -10,6 +10,7 @@ export type FullSlotDefinition = {
   accepts: ComponentType[];
   order: number;
   mobileOrder: number;
+  affinity?: Partial<Record<ComponentType, number>>;
 };
 
 export type LayoutTemplateDefinition = {
