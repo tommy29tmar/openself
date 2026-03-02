@@ -12,9 +12,9 @@ OpenSelf has a working MVP with a hardened core flow:
 - Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
-- 2063 automated tests passing (165 test files)
+- 2077 automated tests passing (168 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
-- Layout template engine: 3 templates (vertical, sidebar-left, bento-standard), slot-based section assignment, widget registry, lock system, validation gates
+- Layout template engine: 4 templates (The Monolith, Cinematic, The Curator, The Architect), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
 - Signup-before-publish: anonymous users must sign up before publishing (multi-user mode)
 - Builder banner: authenticated users see "Live page" / "Share" / "Log out" in builder; visitors see "OpenSelf" + "Log in" on published pages
@@ -47,8 +47,12 @@ OpenSelf has a working MVP with a hardened core flow:
 - Sprint 5 — Conversation Polish + Eval Matrix: Action-awareness policy (explain-before-act for high-impact tools), undo-awareness policy (graceful reversal with detection keywords EN/IT), enhanced expertise calibration (detailed behavioral instructions per level), cross-provider eval matrix (8 parameterized LLM eval scenarios across providers). 81 new tests (1221 total, 77 files)
 - UAT Round 4 (21 findings): auto-recompose after fact mutations, freelance bio detection (FREELANCE_MARKERS + L10N), experience types (employment/freelance/client routing), section header L10N, layout alias resolution, hero proficiency L10N, experience date localization, At-a-Glance L10N, secure cookie flag, profile row on registration, centralized UI L10N (getUiL10n, 45 keys × 8 langs), music dedup, activity type L10N, lowerRole acronym preservation, HMR import fix, proposals error handling, website in hero. 1151 tests pass
 - UAT Round 5 (23 findings): bootstrap skipPace, deduplicated chat data prefetch (SplitView), token limit raised (150k→500k, migration 0019), robust error extraction (extractErrorMessage), freelance stripping (stripFreelanceFromRole), Italian passionateAbout fix, gender-neutral L10N templates (no /a or /(e) patterns), activity frequency L10N (7 keys × 8 langs), skill domain label L10N (7 keys × 8 langs), experience period formatting (start–end with localized "Present"), education graceful degradation (optional period), website platform L10N (canonical platform + localized label), experience freelance/company redundancy guard, experience key collision guardrail (getFactByKey), auth detection (userId || username), layout validation error details. 1301 tests pass (92 files)
+- Connector MVP (GitHub + LinkedIn ZIP): GitHub OAuth sync (repos, languages, skills, stats), LinkedIn ZIP import (12 CSV mappers), AES-256-GCM credential encryption, batch fact writer, provenance tracking, sync idempotency + rate limiting. 194 new tests (1834 total, 153 files)
+- Phase 1d Closing: Connector UI in SettingsPanel (status cards, OAuth connect, file picker, disconnect), avatar upload pipeline (magic bytes + EXIF strip + POST/DELETE API + composer wiring + AvatarSection UI), public page auto-translation (Accept-Language parser, TranslationBanner, bot detection, source_language column, ?lang=original bypass). ~230 new tests (2063 total, 165 files)
+- Architect layout refactoring: affinity-based slot ranking with anti-clustering for non-vertical layouts, compact widget variants (reading, education, achievements, music), expanded slot accepts, strict accepts validation, backfill script
+- UAT Round 6 (12 findings): Architect layout 400 fix (draftSlots carry-over in 3 call sites), layout name cleanup (user-facing names: The Monolith/Cinematic/The Curator/The Architect, case-insensitive resolveLayoutAlias, legacy alias compat), avatar visibility fix (onAvatarChange callback wiring + profileId in 4 compose paths), agent prompt improvements (contradiction handling, unsupported features, response variety, registration CTA). 14 new tests (2077 total, 168 files)
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete. Sprint 5 — Conversation Polish + Eval Matrix complete. UAT Round 4 (21 findings) complete. UAT Round 5 (23 findings) complete.
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete. Sprint 5 — Conversation Polish + Eval Matrix complete. UAT Round 4 (21 findings) complete. UAT Round 5 (23 findings) complete. Connector MVP (GitHub + LinkedIn ZIP) complete. Phase 1d Closing (connector UI, avatar, public page translation) complete. Architect layout refactoring (affinity-based slot ranking, compact widgets) complete. UAT Round 6 (12 findings) complete. **Phase 1 is fully complete.**
 
 ## 2) Implemented Today
 
@@ -138,7 +142,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Media retrieval route | Done | `/api/media/[id]` returns stored blobs |
-| Avatar upload service function | Done (service layer) | No public upload API endpoint yet |
+| Avatar upload (full pipeline) | Done | POST/DELETE `/api/media/avatar`, magic bytes validation, EXIF stripping, composer wiring, AvatarSection UI in SettingsPanel |
 
 ## 3) What Is Not Done Yet
 
@@ -392,6 +396,32 @@ All 3 remaining Phase 1 items complete. 16 commits, ~230 new tests (2063 total, 
 - LinkedIn mapper type predicate fix for strict TS in `next build`.
 - `EXPECTED_SCHEMA_VERSION` bumped to 24.
 
+### Architect Layout Refactoring ✅
+
+Affinity-based slot ranking for non-monolith layouts (curator, architect). Compact widget variants for denser layouts. Part of feat/phase1d-closing branch.
+
+1. **Affinity-based slot ranking** — Each slot definition includes optional `affinity` map (`Record<ComponentType, number>`, 0-1 scale). `rankSlotsForSection()` scores slots by type affinity + anti-clustering penalty.
+2. **Anti-clustering** — Diversity penalty for slots already containing sections of the same type.
+3. **Compact widget variants** — New compact widgets for reading, education, achievements, and music sections. Fit in `third`-sized slots. Components check `variant === "compact"` for condensed rendering.
+4. **Expanded accepts** — Slot `accepts` arrays expanded across all 3 templates.
+5. **Strict accepts check** — Explicit slot path validates `accepts` before assignment. Unplaceable sections emit `unplaceable_section` warning instead of silent fallback.
+6. **Backfill script** — `scripts/backfill-architect-slots.ts` re-assigns existing drafts.
+
+### UAT Hardening Round 6 (12 Findings) ✅
+
+Sixth E2E UAT session. 5 groups of fixes: layout 400 error, layout naming, avatar visibility, agent prompt quality, and regression tests. 14 new tests (2077 total, 168 files).
+
+1. **Architect layout 400 (Critical)** — Switching to The Architect layout via Settings returned 400 because existing slot assignments were lost. Fix: build `draftSlots` map from existing sections before calling `assignSlotsFromFacts()` in all 3 call sites (draft/style route, `set_layout` tool, `generate_page` tool). Soft-pin phase preserves slots when compatible with the new template.
+2. **Avatar not appearing (High)** — Avatar uploaded via Settings didn't appear in any layout. Root cause: missing `profileId` in 4 compose paths (`ensureDraft`, `generate_page`, `draft/style`, `preferences`). Additionally, `SettingsPanel` didn't pass `onAvatarChange` to `AvatarSection`, so no preview refresh triggered after upload. Fix: thread `profileId` through all compose paths + wire callback via `onAvatarChange={() => { void fetchPreview(); }}`.
+3. **Layout name cleanup (Medium)** — Internal layout IDs (`monolith`, `cinematic`, `curator`, `architect`) exposed to users/agent. Fix: expanded `LAYOUT_ALIASES` with user-facing names (The Monolith, Cinematic, The Curator, The Architect) + legacy aliases (`bento` → `architect`, `sidebar` → `curator`, `vertical` → `monolith`). Made `resolveLayoutAlias()` case-insensitive with 3-step resolution. Updated agent tool descriptions and DATA_MODEL_REFERENCE.
+4. **Agent contradiction handling (Medium)** — Agent sometimes bypassed identity/role fact when user stated a new profession. Fix: added directive to update identity/role FIRST, wait for confirmation before proceeding.
+5. **Agent prompt improvements (Medium)** — Added unsupported features block (video, audio, custom CSS), response variety rule ("NEVER repeat the same sentence pattern"), registration CTA in first-visit Phase C ("Register to get your own URL like openself.dev/yourname!").
+
+### Post-Phase 1d Fixes
+
+- `fix(avatar)`: `profileId` fallback aligned to `__default__` for consistency across all projection/composition paths.
+- `fix(uat)`: Settings overlay z-index, style persistence after theme change, signup modal validation, quota nudge messaging.
+
 ### Later
 1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
 2. Full builder UI persistence across browser reloads (beyond chat history)
@@ -402,18 +432,20 @@ All 3 remaining Phase 1 items complete. 16 commits, ~230 new tests (2063 total, 
 ## 4) Layout Count (Requested Snapshot)
 
 Page web layout counts at current code state:
-- Layout templates: 3 (`vertical`, `sidebar-left`, `bento-standard`) — all fully functional
+- Layout templates: 4 (`monolith`, `cinematic`, `curator`, `architect`) — all fully functional
+- User-facing names: The Monolith, Cinematic, The Curator, The Architect
+- Legacy aliases: `vertical` → monolith, `sidebar`/`sidebar-left` → curator, `bento`/`bento-standard` → architect
 - Legacy `style.layout` field (`centered`, `split`, `stack`): retained for backward compat but ignored for layout resolution; canonicalized to `"centered"` when `layoutTemplate` is present
-- Default without explicit `layoutTemplate`: vertical (renders identically to the original centered layout)
+- Default without explicit `layoutTemplate`: monolith (renders identically to the original centered layout)
 
 Builder interface layouts (chat experience):
 - Desktop split view: 1
 - Mobile tab view: 1
-- Settings panel: template picker with 3 options
+- Settings panel: template picker with 4 options
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 2063 passed / 2063 total (Vitest, 165 test files)
+- Automated tests: 2077 passed / 2077 total (Vitest, 168 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
@@ -503,6 +535,12 @@ Builder interface layouts (chat experience):
   85. LinkedIn ZIP API — multipart upload, file validation, size limit, auth gate (11 tests)
   86. LinkedIn ZIP E2E — full flow integration: upload → parse → facts → page (18 tests)
   87. Connector hardening — private-contact category, date placeholder validation (8 tests)
+  88. Avatar — magic bytes detection, EXIF stripping, POST/DELETE endpoints, composer wiring (12 tests)
+  89. Accept-Language parser — q-weight sorting, region fallback, bot detection, supported languages (15 tests)
+  90. Public page translation — language precedence, cache key hardening, TranslationBanner, bot bypass (18 tests)
+  91. Compact widgets — compact variant resolution, slot assignment for third-sized slots (8 tests)
+  92. Architect layout — affinity-based slot ranking, anti-clustering, expanded accepts (6 tests)
+  93. Connector UI — ConnectorSection status fetch, OAuth return flow, sync idempotency, rate limiting (10 tests)
 - Current gaps in tests:
   1. End-to-end browser integration tests
 

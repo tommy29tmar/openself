@@ -80,7 +80,7 @@ When choosing work, apply this order:
 Layout template engine was originally planned as NEXT-8 in Phase 1b. It was anticipated
 and implemented ahead of schedule as a standalone deliverable.
 
-- **Layout Registry**: 3 templates (vertical, sidebar-left, bento-standard) with slot-based section placement
+- **Layout Registry**: 4 templates (monolith, cinematic, curator, architect) with slot-based section placement
   - Slot definitions with size, capacity, accepted section types, desktop/mobile ordering
   - `resolveLayoutTemplate()` — no legacy mapping, always defaults to "vertical"
 - **Widget Registry**: 20+ widget definitions with section type + slot size compatibility
@@ -210,19 +210,23 @@ favicon, CSS, and DB safety. No new tests (all fixes covered by existing 846-tes
 7. **Dot separator polish** — opacity 0.3 → 0.4.
 8. **WAL checkpoint on registration** — `PASSIVE` checkpoint after last critical DB write.
 
-## 4) Now (High Priority)
+## 4) Phase 1: Living Agent ✅ (Complete)
 
-### Phase 1: Living Agent
+Phase 1 built in dependency order: memory/heartbeat → extended sections → hybrid page personalization → connectors/media/translation.
 
-Phase 1 builds in dependency order: memory/heartbeat first, then extended sections,
-then hybrid page personalization. Each sub-phase builds on the previous.
+All sub-phases complete:
+- Phase 1a (Memory, Soul & Heartbeat) ✅
+- Phase 1b (Extended Sections) ✅
+- Phase 1c (Hybrid Page Compiler) ✅
+- Phase 1d (Connector UI, Avatar, Public Page Translation) ✅
+- Quality/Privacy/Themes hardening ✅
+- UAT Rounds 1-6 (80+ findings total) ✅
+- Layout Template Engine + Architect Layout Refactoring ✅
+- NEXT-16 Sprints 1-5 (Journey Intelligence → Conversation Polish) ✅
 
-Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
-Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
-NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete. Sprint 4 (Reliable Execution) complete. Sprint 5 (Conversation Polish + Eval Matrix) complete.
-Phase 1d (media/connectors/translation) complete. All Phase 1 sub-phases are now done.
+Final stats: 2077 automated tests, 168 test files, 24 DB migrations.
 
-#### NEXT-7: Additional themes — bold, elegant, hacker
+#### NEXT-7: Additional themes — bold, elegant, hacker (Deferred to Phase 2)
 
 Deliverables:
 1. CSS design tokens for each theme (light + dark)
@@ -233,11 +237,11 @@ Deliverables:
 
 **Completed ahead of schedule** as part of the Layout Template Engine work.
 Superseded by a more comprehensive slot-based template system:
-1. ~~Split layout: two-column with sidebar~~ → `sidebar-left` template (grid-cols-12, 7/5 split)
-2. ~~Stack layout: full-width sections~~ → `vertical` template (reproduces original layout)
+1. ~~Split layout: two-column with sidebar~~ → `curator` template (grid-cols-12, 7/5 split)
+2. ~~Stack layout: full-width sections~~ → `monolith` template (reproduces original layout)
 3. ~~CSS rules replace fallback-to-centered behavior~~ → CSS Grid layouts with `--md-order` for desktop reordering
 4. ~~Layout-aware component variants~~ → Widget registry with slot-size-aware widget selection
-5. **Additional**: `bento-standard` template (magazine-style 6-column grid) — not originally planned
+5. **Additional**: `architect` template (magazine-style 6-column grid) + `cinematic` template (snap-scrolling)
 
 ### Phase 1c: Hybrid Page Compiler (Done)
 
@@ -324,6 +328,32 @@ Implemented:
 Cost risk (unchanged):
 - Each unique (page content x language) pair costs one LLM call (~$0.001)
 - Mitigated by: translation_cache, llm_limits budget guardrails, hard cap on 8 languages
+
+#### Architect Layout Refactoring ✅ (Done)
+
+Affinity-based slot ranking for non-monolith layouts (curator, architect):
+1. **Affinity scores** — Optional `affinity` map on slot definitions (`Record<ComponentType, number>`, 0-1 scale)
+2. **Anti-clustering** — `rankSlotsForSection()` applies diversity penalty for same-type sections in one slot
+3. **Compact widget variants** — New compact widgets for reading, education, achievements, music (fit in `third` slots)
+4. **Expanded accepts** — Slot `accepts` arrays widened across all 3 templates
+5. **Strict accepts check** — Explicit slot path validates `accepts`; unplaceable sections emit warning
+6. **Backfill script** — `scripts/backfill-architect-slots.ts` for existing drafts
+
+#### Phase 1d Closing Fixes ✅ (Done)
+
+Post-merge fixes:
+- `profileId` fallback aligned to `__default__` for consistency across projection paths
+- Settings overlay z-index, style persistence after theme change, signup modal validation, quota nudge messaging
+
+#### UAT Hardening Round 6 ✅ (Done)
+
+12 findings across 5 groups. 14 new tests (2077 total, 168 files).
+
+1. **Architect layout 400 fix** — `draftSlots` carry-over in `assignSlotsFromFacts` (3 call sites)
+2. **Layout name cleanup** — User-facing names (The Monolith, Cinematic, The Curator, The Architect), case-insensitive `resolveLayoutAlias`, legacy alias compat
+3. **Avatar visibility** — `onAvatarChange` callback wiring + `profileId` in 4 compose paths
+4. **Agent contradiction handling** — Identity/role update-first directive
+5. **Agent prompt quality** — Unsupported features, response variety, registration CTA
 
 ### Cross-Cutting Program: Model-Agnostic Control Plane
 
@@ -417,13 +447,11 @@ Branch: `feature/sprint-5-conversation-polish`. 3 commits, 81 new tests (1221 to
 - 8 eval scenarios: onboarding-flow, translation, personalization, layout-change, undo-request,
   returning-stale, publish-incomplete, low-signal
 
-### Deferred Until Phase 1 Closure
+## 5) Now (High Priority — Post Phase 1)
 
-#### Layout Phase 5: Heartbeat + Memory Integration
+### Layout Phase 5: Heartbeat + Memory Integration
 
-Start condition:
-1. Phase 1b, 1c, and 1d complete
-2. Phase 1 stabilization complete
+Start condition met: Phase 1 is complete and stabilized.
 
 Scope:
 1. Lock-safe heartbeat mutations (`canMutateSection` with actor `heartbeat`)
@@ -431,21 +459,29 @@ Scope:
 3. Proposal-first flow for locked sections (no direct override)
 4. Heartbeat-side layout validation and dedicated observability events
 
-Reference:
-1. `docs/ARCHITECTURE.md` section 6.6.2
+Reference: `docs/ARCHITECTURE.md` section 6.6.2
 
-## 5) Later (Lower Priority)
+### Additional themes — bold, elegant, hacker (NEXT-7)
+
+1. CSS design tokens for each theme (light + dark)
+2. Add to `AVAILABLE_THEMES` constant
+3. Visual QA for all theme × colorScheme combinations
+
+### Session persistence
+
+Full builder UI state persistence across browser reloads (beyond chat history).
+
+## 6) Later (Lower Priority)
 
 1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
-2. Session persistence across browser reloads
-3. Community component registry enforcement with certified workflow
-4. Additional connectors (Strava, Spotify, Goodreads, ORCID, etc.)
-5. Advanced theming and design packs
-6. Multi-profile / multi-tenant model if product direction requires it
+2. Community component registry enforcement with certified workflow
+3. Additional connectors (Strava, Spotify, Goodreads, ORCID, etc.)
+4. Advanced theming and design packs
+5. Multi-profile / multi-tenant model if product direction requires it
 
-## 6) Milestones
+## 7) Milestones
 
-### Milestone A — Phase 0 Gate (Dogfooding)
+### Milestone A — Phase 0 Gate (Dogfooding) ✅ Achieved
 
 Required:
 1. Phase 0.2.1 complete ✅
@@ -456,20 +492,26 @@ Required:
 Outcome:
 - OpenSelf is usable by real people for its core purpose
 
-### Milestone B — Living Agent (Phase 1)
+### Milestone B — Living Agent (Phase 1) ✅ Achieved
 
 Required:
 1. Phase 1a complete (memory, heartbeat, context assembly) ✅
 2. Phase 1b complete (education + experience + at least 2 more section types) ✅
 3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks) ✅
-4. Phase 1d: at least avatar support + one connector ✅ (all 3: connector UI, avatar, translation)
+4. Phase 1d: avatar + connectors + public page translation ✅
 
 Outcome:
 - The agent remembers users across sessions and writes personalized page copy
 - Pages from different users are noticeably distinct in tone and narrative
 - OpenSelf is credible as a living-page product, not just onboarding demo
+- Two external data connectors (GitHub + LinkedIn) feed the knowledge base
+- Public pages auto-translate for international visitors
 
-## 7) Tracking Process
+### Milestone C — Phase 2 (Not Started)
+
+TBD: community components, additional connectors, advanced theming, multi-tenant.
+
+## 8) Tracking Process
 
 At each iteration:
 1. Pick items from `Now` first
@@ -477,7 +519,7 @@ At each iteration:
 3. Update `docs/STATUS.md` and this roadmap
 4. Add ADR when significant decisions are made
 
-## 8) Documentation Ownership
+## 9) Documentation Ownership
 
 1. `docs/ROADMAP.md` is the source of truth for sequencing and priorities.
 2. `docs/STATUS.md` is the source of truth for runtime reality.

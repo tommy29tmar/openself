@@ -613,15 +613,16 @@ Hash-based idempotency (`computeConfigHash`) skips the write if the composed con
 the current draft. Each call is wrapped in try/catch so that recompose failures (e.g.,
 missing draft) never mask the successful fact operation.
 
-**Layout alias resolution:** The `set_layout` tool normalizes shorthand layout names via
-`resolveLayoutAlias()` in `contracts.ts`: `"bento"` → `"bento-standard"`, `"sidebar"` →
-`"sidebar-left"`. Invalid aliases return `null` and the tool returns an error listing
-available templates.
+**Layout alias resolution:** The `set_layout` tool normalizes layout names via
+`resolveLayoutAlias()` in `contracts.ts`. Case-insensitive, supports user-facing names
+("The Monolith", "Cinematic", "The Curator", "The Architect") and legacy aliases
+(`"bento"` → `"architect"`, `"sidebar"` → `"curator"`, `"vertical"` → `"monolith"`).
+Unknown values pass through trimmed for error messages.
 
 Key files:
 - `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas, role/title priority)
 - `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback in `streamText()`
-- `src/lib/layout/contracts.ts` — `resolveLayoutAlias()`, `LAYOUT_ALIAS_MAP`
+- `src/lib/layout/contracts.ts` — `resolveLayoutAlias()`, `LAYOUT_TEMPLATES`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
 
@@ -1492,7 +1493,7 @@ type PageConfig = {
   username: string;
   sourceLanguage: string;     // ISO 639-1 code (e.g., "it", "en", "de") — set from onboarding
   theme: string;
-  layoutTemplate?: LayoutTemplateId;   // top-level, not in style — "vertical" | "sidebar-left" | "bento-standard"
+  layoutTemplate?: LayoutTemplateId;   // top-level, not in style — "monolith" | "cinematic" | "curator" | "architect"
   style: StyleConfig;
   sections: Section[];
 };
@@ -1880,8 +1881,8 @@ it does not regenerate everything:
 | "Add a section for my books" | Add `reading` component, populate from KB |
 | "Use a different color" | `style.primaryColor = "#..."` |
 | "Make it more minimal" | `theme = "minimal"`, reduce variant complexity |
-| "Use a two-column layout" | `set_layout("sidebar-left")` — re-assigns slots with lock awareness |
-| "Use a bento grid" | `set_layout("bento-standard")` — sections redistributed across grid slots |
+| "Use a two-column layout" | `set_layout("The Curator")` — re-assigns slots with lock awareness |
+| "Use a bento grid" | `set_layout("The Architect")` — sections redistributed across grid slots |
 | "Lock the skills section" | `propose_lock("skills-1")` — creates pending proposal for user confirmation |
 
 ### 6.5 OpenSelf Visual Identity
@@ -2001,13 +2002,14 @@ PageConfig
 - `ThemeLayout` controls *how* they look (background, typography, animations, texture)
 - These are composed, not fused: `ThemeLayout` wraps `LayoutComponent`
 
-**Layout Templates (3):**
+**Layout Templates (4):**
 
-| Template | Description | Grid |
-|---|---|---|
-| `vertical` | Classic single-column (default, backward-compatible) | `flex-col`, max-w-5xl |
-| `sidebar-left` | Two-column with main content + sidebar | `grid-cols-12` (7/5 split) |
-| `bento-standard` | Magazine-style grid with varying card sizes | `grid-cols-6` |
+| Template ID | User-Facing Name | Description | Grid |
+|---|---|---|---|
+| `monolith` | The Monolith | Classic single-column (default, backward-compatible) | `flex-col`, max-w-5xl |
+| `cinematic` | Cinematic | Immersive snap-scrolling journey | snap-y sections |
+| `curator` | The Curator | Two-column editorial split-screen | `grid-cols-12` (7/5 split) |
+| `architect` | The Architect | Dynamic asymmetric bento grid | `grid-cols-6` |
 
 Each template defines named **slots** with constraints:
 - `size`: wide, half, third (determines compatible widgets)
@@ -2030,9 +2032,39 @@ Resolution: `section.widgetId` → widget variant (source of truth). Fallback: `
 Deterministic, lock-aware algorithm:
 1. Locked sections keep their current slot
 2. Hero → heroSlot, footer → footerSlot (always, regardless of metadata)
-3. Remaining sections assigned to best available slot based on type compatibility + widget match
-4. Overflow sections go to the main slot as fallback
-5. Auto-repair (draft only): changes widget/slot, **never truncates user content**
+3. **Soft-pin via `draftSlots`**: when provided, sections try to keep their previous slot assignment (Phase 2). If the slot exists in the new template and has capacity, the section stays put.
+4. Remaining sections ranked by **affinity-based slot scoring** with anti-clustering
+5. Overflow sections go to the main slot as fallback
+6. Auto-repair (draft only): changes widget/slot, **never truncates user content**
+
+All callers that switch layouts (draft/style route, `set_layout` tool, `generate_page` tool)
+build a `draftSlots` map from existing sections before calling `assignSlotsFromFacts()`.
+This prevents section slot loss when switching to templates with stricter constraints
+(e.g., The Architect's half/third slots).
+
+**Architect Layout Refactoring (Phase 1d):**
+
+The slot assignment engine was upgraded from simple type-based routing to an
+affinity-based ranking system for the non-monolith layouts (curator, architect):
+
+1. **Affinity scores** — Each slot definition includes an optional `affinity` map
+   (`Record<ComponentType, number>`, 0-1 scale) expressing how well a section type
+   fits in that slot. Example: `bio` has high affinity for sidebar slots, `projects`
+   for wide main slots.
+2. **Anti-clustering** — `rankSlotsForSection()` applies a diversity penalty to slots
+   that already contain sections of the same type, preventing all similar sections
+   from clustering in one area.
+3. **Compact widget variants** — New compact widgets for `reading`, `education`,
+   `achievements`, and `music` sections. These fit in `third`-sized slots, enabling
+   denser bento/sidebar layouts. Components check `variant === "compact"` for
+   condensed rendering.
+4. **Expanded accepts** — Slot `accepts` arrays expanded across all 3 templates to
+   accommodate more section types in more positions, especially for architect.
+5. **Strict accepts check** — The explicit slot path now validates `accepts` before
+   assignment. Sections that cannot fit any slot emit an `unplaceable_section`
+   warning instead of silently falling back.
+6. **Backfill script** — `scripts/backfill-architect-slots.ts` re-assigns existing
+   drafts to the new affinity-based slot layout.
 
 **Lock System:**
 
@@ -2066,15 +2098,20 @@ without `layoutTemplate` render **identically** to before.
 `mobileOrder` from the registry (not hardcoded in components).
 
 **Backward Compatibility:**
-- Pages without `layoutTemplate` → always `"vertical"` (no legacy mapping)
+- Pages without `layoutTemplate` → always `"monolith"` (no legacy mapping)
 - `style.layout` field retained in schema but **ignored** for template resolution
 - When `layoutTemplate` is present, `style.layout` is canonicalized to `"centered"` by `normalizeConfigForWrite()`
 - All new fields (`widgetId`, `slot`, `lock`, `lockProposal`, `layoutTemplate`) are optional
 
 **Layout Alias Resolution:**
-`resolveLayoutAlias()` in `contracts.ts` maps shorthand layout names to canonical IDs:
-`"bento"` → `"bento-standard"`, `"sidebar"` → `"sidebar-left"`. Used by the `set_layout`
-tool so users (and the LLM) can use natural names. Returns `null` for unknown aliases.
+`resolveLayoutAlias()` in `contracts.ts` maps layout names to canonical IDs. Case-insensitive
+with a 3-step resolution: (1) check alias map (user-facing names + legacy aliases),
+(2) check if normalized value is a canonical ID, (3) fallback to trimmed input.
+
+Aliases: `"The Architect"` → `"architect"`, `"The Curator"` → `"curator"`,
+`"The Monolith"` → `"monolith"`, `"The Cinematic"` → `"cinematic"`.
+Legacy: `"bento"` / `"bento-standard"` → `"architect"`, `"sidebar"` / `"sidebar-left"` → `"curator"`,
+`"vertical"` → `"monolith"`.
 
 **Key files:**
 - `src/lib/layout/contracts.ts` — pure constants, `resolveLayoutAlias()` (zero deps, breaks import cycles)
@@ -2188,12 +2225,23 @@ names, company names, proper nouns, URLs, tech acronyms (AI, API, TypeScript, et
 The source language is stored in user preferences (`factLanguage`). The agent sets
 it based on the user's onboarding language selection.
 
-**Future: public page visitor translation (not yet implemented):**
-1. The public page detects the visitor's browser language (`Accept-Language` header).
-2. If it differs from the page's source language, a translation banner appears:
-   "This page is originally in Italian. [View in English]"
-3. On request, the page content is translated on-demand and served from the same
-   `translation_cache` (same hash = instant on repeat visits).
+**Public page visitor translation (implemented — Phase 1d, NEXT-15):**
+
+The public page auto-translates content for visitors whose browser language differs
+from the page's source language:
+
+1. **Language detection:** `parseAcceptLanguage()` parses the `Accept-Language` header
+   with q-weight sorting, region-to-base fallback (e.g., `fr-CA` → `fr`), and 8
+   supported languages. Bot detection (Googlebot, Bingbot, etc.) skips translation
+   for SEO.
+2. **Language precedence:** `?lang=` param > `os_lang` cookie > `Accept-Language` >
+   page `sourceLanguage` (stored at publish time, migration 0024).
+3. **Translation banner:** `TranslationBanner` component shows "Machine-translated
+   from {language}. [View original]" with link to `?lang=original`.
+4. **Cache:** Translation cache key hardened with composite SHA-256 of content hash +
+   source language + target language + model ID. Same `translation_cache` table —
+   same hash = instant on repeat visits.
+5. **Bypass:** `?lang=original` serves the original content without translation.
 
 #### 6.7.1 Translation Cost Model
 
@@ -3024,26 +3072,34 @@ To keep behavior stable when chat, heartbeat, and connectors all write concurren
 
 ### 8.5 Media Storage
 
-MVP decision: avatar-only uploads. No gallery/media wall uploads in MVP.
+Avatar-only uploads. No gallery/media wall uploads.
 
 Binary assets are not stored as base64 blobs in `facts` or `page.config`.
 
-Default strategy (self-hosted, MVP):
+**Current implementation (Phase 1d):**
 - Metadata + binary in SQLite (`media_assets`, `storage_backend='sqlite'`)
 - `page.config` references avatar via media id (preferred) or resolved URL path
 - Single-file backup remains true for personal instances
 
+**Avatar upload pipeline (implemented):**
+1. `POST /api/media/avatar` — auth-gated, accepts `FormData` with image file
+2. **Validation:** 2 MB size limit, MIME whitelist (`image/jpeg`, `image/png`, `image/webp`),
+   magic bytes detection (`detectMimeFromMagicBytes`) for JPEG/PNG/GIF/WebP
+3. **Processing:** EXIF stripping for JPEG (`stripExifFromJpeg` removes APP1 markers),
+   MIME mismatch check (declared vs actual bytes)
+4. **Storage:** delete-before-insert pattern for partial unique index
+   (`uniq_media_avatar_per_profile`). One avatar per profile.
+5. `DELETE /api/media/avatar` — removes avatar (auth-gated)
+6. **Composer wiring:** `profileId` threaded through `projectCanonicalConfig()` →
+   `composeOptimisticPage()` → `buildHeroSection()` → `getProfileAvatar()`.
+   All new params optional for backward compatibility. Wired into preview, stream,
+   tools, publish pipeline, and connector fact writer.
+7. **UI:** `AvatarSection` in SettingsPanel — 64px circular preview, upload button
+   (file picker → POST FormData), remove button (DELETE), loading/error states.
+
 Optional strategy (later/advanced deployments):
 - Filesystem or S3-compatible backend (`storage_backend='fs'|'s3'`)
 - Same metadata table, different resolver
-
-MVP guardrails:
-- One avatar per profile (enforced by `uniq_media_avatar_per_profile` index)
-- Max upload size: 2 MB
-- Allowed MIME: `image/jpeg`, `image/png`, `image/webp`
-- Processing pipeline: strip EXIF, generate normalized WebP sizes (`128x128`, `512x512`)
-- Deduplication by SHA-256 hash
-- Avatar visibility follows the same `private/proposed/public/archived` lifecycle as facts
 
 Non-avatar visual elements should be text/icons/emoticons from the design system,
 not user-uploaded binaries.
