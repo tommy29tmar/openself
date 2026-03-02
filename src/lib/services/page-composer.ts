@@ -848,8 +848,8 @@ function buildExperienceSection(experienceFacts: FactRow[], language: string): S
       }
       // Build period from start/end dates or raw period
       const rawPeriod = str(v.period) ?? str(v.date);
-      const start = str(v.start);
-      const end = str(v.end);
+      const start = str(v.startDate) ?? str(v.start);
+      const end = str(v.endDate) ?? str(v.end);
       const l10n = getL10n(language);
       const isCurrent = v.status === "current" || v.current === true;
       if (start) {
@@ -892,8 +892,20 @@ function buildEducationSection(educationFacts: FactRow[], language: string): Sec
       if (degree) item.degree = degree;
       const field = str(v.field);
       if (field) item.field = field;
-      const period = str(v.period) ?? str(v.date);
-      if (period) item.period = period;
+      const startDate = str(v.startDate);
+      const endDate = str(v.endDate);
+      const rawPeriod = str(v.period) ?? str(v.date);
+      if (startDate || endDate) {
+        const startFormatted = startDate ? formatFactDate(startDate, language) : null;
+        const endFormatted = endDate ? formatFactDate(endDate, language) : null;
+        if (startFormatted && endFormatted) {
+          item.period = `${startFormatted} – ${endFormatted}`;
+        } else {
+          item.period = (startFormatted ?? endFormatted)!;
+        }
+      } else if (rawPeriod) {
+        item.period = rawPeriod;
+      }
       const description = str(v.description);
       if (description) item.description = description;
       return item;
