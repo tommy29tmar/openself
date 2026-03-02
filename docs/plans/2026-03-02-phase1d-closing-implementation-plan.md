@@ -10,6 +10,14 @@
 
 **Design doc:** `docs/plans/2026-03-02-phase1d-closing-design.md`
 
+**Supervisor Constraints (non-negotiable):**
+- Enforce server-side auth/ownership checks on all connector routes (`connect`, `status`, `sync`, `import`, `disconnect`) regardless of UI gating.
+- Use a standard connector error envelope on all connector mutation endpoints: `{ success: false, code, error, retryable }`.
+- Keep backend idempotency/locking for sync/import as the primary protection (frontend button disabling is secondary UX only).
+- Public translation precedence must be: `?lang=` explicit > language cookie (if present) > `Accept-Language` > page `sourceLanguage`.
+- Translation cache identity must include source language and model version (not only page content hash + target language).
+- Translation banner must explicitly disclose machine translation and must not render for crawler traffic.
+
 ---
 
 ## Feature 1: Connector UI in SettingsPanel
@@ -551,14 +559,16 @@ git commit -m "feat(connectors): detect OAuth return param, auto-open settings, 
 
 ---
 
-### Task 4: Sync/Import Idempotency Guards
+### Task 4: GitHub Sync Idempotency + Rate Limiting
 
 **Files:**
-- Modify: `src/app/api/connectors/github/sync/route.ts` — add in-flight check
-- Modify: `src/app/api/connectors/linkedin-zip/import/route.ts` — add in-flight check
+- Create: `src/lib/connectors/idempotency.ts`
+- Modify: `src/app/api/connectors/github/sync/route.ts` — add in-flight check + rate limit
 - Test: `tests/evals/connector-idempotency.test.ts`
 
-**Context:** The sync route at `src/app/api/connectors/github/sync/route.ts` (30 lines) currently enqueues a `connector_sync` job without checking for in-flight operations. Per the design doc, we need: (a) check if a `connector_sync` job is already queued/running, (b) reject with `ALREADY_SYNCING` if so. The LinkedIn import route at `src/app/api/connectors/linkedin-zip/import/route.ts` (68 lines) needs a similar guard using connector status.
+**Context:** The sync route at `src/app/api/connectors/github/sync/route.ts` (30 lines) currently enqueues a `connector_sync` job without checking for in-flight operations. We need: (a) check if a `connector_sync` job is already queued/running, (b) reject with `ALREADY_SYNCING` if so, (c) rate limit to 60s between syncs.
+
+**LinkedIn import does NOT need a server-side lock.** It's synchronous (no job queue), and `batchCreateFacts()` already has per-fact dedup via the `(sessionId, category, key)` unique constraint + draft hash idempotency. Re-importing the same ZIP → all facts skip → same draft hash → no-op. Client-side button disable (Task 1's LinkedInCard `importing` state) is sufficient UX protection.
 
 **Step 1: Write tests**
 
@@ -679,6 +689,69 @@ Expected: PASS
 ```bash
 git add src/lib/connectors/idempotency.ts src/app/api/connectors/github/sync/route.ts src/app/api/connectors/linkedin-zip/import/route.ts tests/evals/connector-idempotency.test.ts
 git commit -m "feat(connectors): add idempotency guards and rate limiting for sync/import"
+```
+
+---
+
+### Task 4b: Connector API Hardening — Auth Coverage + Error Contract
+
+**Files:**
+- Create: `src/lib/connectors/api-errors.ts`
+- Modify: `src/app/api/connectors/status/route.ts`
+- Modify: `src/app/api/connectors/github/connect/route.ts`
+- Modify: `src/app/api/connectors/github/sync/route.ts`
+- Modify: `src/app/api/connectors/linkedin-zip/import/route.ts`
+- Modify: `src/app/api/connectors/[id]/disconnect/route.ts`
+- Test: `tests/evals/connector-api-contract.test.ts`
+
+**Context:** The UI gating in SettingsPanel is not a security boundary. Connector endpoints must consistently enforce auth/ownership and return predictable machine-readable errors for reconnect/retry UX. We already started this in Task 4 for sync; this task normalizes all connector routes.
+
+**Step 1: Add shared connector API error helper**
+
+Create `src/lib/connectors/api-errors.ts`:
+
+```typescript
+import { NextResponse } from "next/server";
+
+type ConnectorError = {
+  success: false;
+  code: string;
+  error: string;
+  retryable: boolean;
+};
+
+export function connectorError(
+  code: string,
+  error: string,
+  status: number,
+  retryable: boolean,
+) {
+  return NextResponse.json<ConnectorError>(
+    { success: false, code, error, retryable },
+    { status },
+  );
+}
+```
+
+**Step 2: Use helper and enforce auth/ownership checks on every connector endpoint**
+
+- `connect`: unauthenticated -> `AUTH_REQUIRED` with `retryable: false`
+- `status`: unauthenticated in multi-user -> `AUTH_REQUIRED` with `retryable: false`
+- `sync`: not connected -> `NOT_CONNECTED` with `retryable: true`
+- `import`: invalid payload -> `INVALID_FORMAT`/`NO_FILE` with `retryable: false`
+- `disconnect`: wrong owner -> `FORBIDDEN` with `retryable: false`
+
+Ensure each error response includes `code`, `error`, and `retryable`.
+
+**Step 3: Add contract tests**
+
+Create `tests/evals/connector-api-contract.test.ts` with assertions that each endpoint returns the standardized error envelope shape for at least one failure path.
+
+**Step 4: Commit**
+
+```bash
+git add src/lib/connectors/api-errors.ts src/app/api/connectors/status/route.ts src/app/api/connectors/github/connect/route.ts src/app/api/connectors/github/sync/route.ts src/app/api/connectors/linkedin-zip/import/route.ts src/app/api/connectors/[id]/disconnect/route.ts tests/evals/connector-api-contract.test.ts
+git commit -m "feat(connectors): harden connector API auth checks and standardize error contract"
 ```
 
 ---
@@ -1255,15 +1328,56 @@ Pass it through to `composeOptimisticPage()`:
 
 Do the same for `projectPublishableConfig()` and `publishableFromCanonical()`.
 
-**Step 5: Pass profileId from callers**
+**Step 5: Pass profileId from each caller**
 
-Search for all callers of `projectCanonicalConfig` and `projectPublishableConfig`. Key callers:
-- `src/lib/services/publish-pipeline.ts` (line 106) — has access to `sessionId`, can derive `profileId` from auth
-- `src/app/api/preview/route.ts` — has access to scope
-- `src/app/api/preview/stream/route.ts` — has access to scope
-- `src/lib/agent/tools.ts` (recomposeAfterMutation) — has access to scope
+Wire `profileId` through every caller of `projectCanonicalConfig` / `projectPublishableConfig`. Use `scope.cognitiveOwnerKey` where OwnerScope is available (it equals `profileId` for authenticated users, `sessionId` for anonymous — both map correctly to `media_assets.profile_id`).
 
-Each caller should pass `profileId` if available. Use a best-effort approach: if `profileId` is available, pass it; if not, avatar simply won't appear (graceful degradation).
+**a) `src/app/api/preview/route.ts`** (has `scope` from `resolveOwnerScope(req)`):
+```typescript
+const profileId = scope?.cognitiveOwnerKey ?? "__default__";
+// ... pass to projectCanonicalConfig:
+const previewConfig = projectCanonicalConfig(facts, canonicalUsername, factLang, draftMeta, profileId);
+```
+
+**b) `src/app/api/preview/stream/route.ts`** (same pattern):
+```typescript
+const profileId = scope?.cognitiveOwnerKey ?? "__default__";
+// ... inside poll():
+const previewConfig = projectCanonicalConfig(facts, canonicalUsername, factLang, draftMeta, profileId);
+```
+
+**c) `src/lib/agent/tools.ts` — `recomposeAfterMutation()`** (has `ownerKey` in closure, which equals `cognitiveOwnerKey`):
+```typescript
+const composed = projectCanonicalConfig(
+  allFacts,
+  currentDraft?.username ?? "draft",
+  factLang,
+  draftMeta,
+  ownerKey ?? sessionId,  // ownerKey = profileId for authenticated, sessionId for anon
+);
+```
+
+**d) `src/lib/services/publish-pipeline.ts` — `prepareAndPublish()`** (has `sessionId`, needs to derive profileId):
+```typescript
+// At top of prepareAndPublish(), after getting scope:
+import { getSession } from "@/lib/services/session-service";
+
+const session = getSession(sessionId);
+const profileId = session?.profileId ?? sessionId;
+
+// ... pass to projectPublishableConfig:
+const canonicalConfig = projectPublishableConfig(facts, username, factLang, draftMeta, profileId);
+```
+
+**e) `src/lib/connectors/connector-fact-writer.ts` — `batchCreateFacts()`** (has `scope` passed from caller):
+The `batchCreateFacts` function calls `projectCanonicalConfig` for recompose. It has access to `scope.cognitiveOwnerKey`:
+```typescript
+const composed = projectCanonicalConfig(allFacts, username, factLang, draftMeta, scope.cognitiveOwnerKey);
+```
+
+**Graceful degradation:** If `profileId` is absent (e.g., tests), `getProfileAvatar(profileId)` returns `null` → no avatar URL → hero renders initials. No error.
+
+**Avatar preview auto-refresh:** No manual refresh trigger needed. The SSE stream (`/api/preview/stream`) polls `projectCanonicalConfig()` every 1-5s. After avatar upload changes `media_assets`, the next SSE poll produces a different config hash (avatarUrl changed) → sends new config → preview re-renders automatically within 1-5s.
 
 **Step 6: Run all existing tests to verify no regressions**
 
@@ -1273,7 +1387,7 @@ Expected: All existing tests pass (new optional parameter doesn't break callers)
 **Step 7: Commit**
 
 ```bash
-git add src/lib/services/media-service.ts src/lib/services/page-composer.ts src/lib/services/page-projection.ts tests/evals/avatar-composer.test.ts
+git add src/lib/services/media-service.ts src/lib/services/page-composer.ts src/lib/services/page-projection.ts src/app/api/preview/route.ts src/app/api/preview/stream/route.ts src/lib/agent/tools.ts src/lib/services/publish-pipeline.ts src/lib/connectors/connector-fact-writer.ts tests/evals/avatar-composer.test.ts
 git commit -m "feat(avatar): wire avatar into page composer and projection pipeline"
 ```
 
@@ -1285,7 +1399,9 @@ git commit -m "feat(avatar): wire avatar into page composer and projection pipel
 - Create: `src/components/settings/AvatarSection.tsx`
 - Modify: `src/components/settings/SettingsPanel.tsx` — add Avatar section above Integrations
 
-**Context:** The SettingsPanel has a `!languageOnly` guard. Avatar section should go between Layout and Integrations. It shows a circular 64px avatar or initials placeholder, with Upload and Remove buttons. Upload uses FormData POST to `/api/media/avatar`. Remove uses DELETE. After each, the preview updates (via page recomposition triggered by the draft update).
+**Context:** The SettingsPanel has a `!languageOnly` guard. Avatar section should go between Layout and Integrations. It shows a circular 64px avatar or initials placeholder, with Upload and Remove buttons. Upload uses FormData POST to `/api/media/avatar`. Remove uses DELETE.
+
+**Preview auto-refresh:** After upload/delete, the avatar URL in `media_assets` changes. The SSE stream (`/api/preview/stream`) calls `projectCanonicalConfig()` every 1-5s → calls `buildHeroSection()` → calls `getProfileAvatar()` → detects new/removed avatar → config hash changes → SSE sends updated config → preview re-renders automatically. No manual refresh trigger needed. The `onAvatarChange` callback is only for immediate local state update in the SettingsPanel avatar preview circle (so the user doesn't wait 1-5s to see their new avatar in the settings UI).
 
 **Step 1: Create AvatarSection component**
 
@@ -1740,6 +1856,44 @@ git commit -m "feat(i18n): store sourceLanguage at publish time in page row"
 
 ---
 
+### Task 11b: Translation Cache Key Hardening (source + model aware)
+
+**Files:**
+- Modify: `src/lib/ai/translate.ts`
+- Modify: `tests/evals/translate.test.ts`
+
+**Context:** Current cache identity is content hash + target language. To avoid stale or cross-source collisions, cache identity must include source language and model version.
+
+**Step 1: Add a composite cache-key helper**
+
+In `src/lib/ai/translate.ts`, add a helper that derives cache identity from:
+- translatable content hash
+- normalized source language (`sourceLanguage ?? "unknown"`)
+- target language
+- translation model id (`getModelId()`)
+
+Use this composite digest as `contentHash` for cache read/write and event logs.
+
+**Step 2: Keep schema unchanged**
+
+Do not add a migration. Keep the existing `translation_cache` table and store the stronger composite key in `content_hash`.
+
+**Step 3: Extend tests**
+
+In `tests/evals/translate.test.ts`, add assertions that:
+- changing source language yields a cache miss (different key)
+- changing model id yields a cache miss (different key)
+- same source/target/model/content yields cache hit
+
+**Step 4: Commit**
+
+```bash
+git add src/lib/ai/translate.ts tests/evals/translate.test.ts
+git commit -m "feat(i18n): harden translation cache key with source language and model version"
+```
+
+---
+
 ### Task 12: Public Page Translation Logic
 
 **Files:**
@@ -1747,6 +1901,12 @@ git commit -m "feat(i18n): store sourceLanguage at publish time in page row"
 - Test: `tests/evals/public-page-translation.test.ts`
 
 **Context:** The public page route (44 lines) currently calls `getPublishedPage(username)` and renders directly. The translation pipeline `translatePageContent(config, targetLang, sourceLang)` in `src/lib/ai/translate.ts` returns a translated `PageConfig` (cache-first, graceful degradation on error). The `parseAcceptLanguage()` from Task 9 returns the best matching language. The `isCrawler()` function detects bots.
+
+Language selection precedence must be:
+1. explicit `?lang=` override (`?lang=original` disables translation)
+2. language preference cookie (`os_lang`) if present and valid
+3. `Accept-Language` header
+4. fallback to page source language (no translation)
 
 **Step 1: Write tests**
 
@@ -1778,6 +1938,14 @@ describe("Public page translation logic", () => {
       const acceptLang = parseAcceptLanguage("it;q=0.9,en;q=0.8");
       const effective = explicitLang ?? acceptLang;
       expect(effective).toBe("it");
+    });
+
+    it("cookie language overrides Accept-Language when no ?lang= param", () => {
+      const explicitLang = null;
+      const cookieLang = "fr";
+      const acceptLang = parseAcceptLanguage("de;q=0.9,en;q=0.8");
+      const effective = explicitLang ?? cookieLang ?? acceptLang;
+      expect(effective).toBe("fr");
     });
 
     it("no translation when visitor language matches source", () => {
@@ -1867,8 +2035,10 @@ export default async function UsernamePage({ params, searchParams }: Props) {
   // Determine visitor language
   const sourceLanguage = getPublishedPageSourceLanguage(username);
   const explicitLang = langParam && isLanguageCode(langParam) ? langParam : null;
+  const cookieLangRaw = cookieStore.get("os_lang")?.value;
+  const cookieLang = cookieLangRaw && isLanguageCode(cookieLangRaw) ? cookieLangRaw : null;
   const acceptLang = parseAcceptLanguage(headerStore.get("accept-language"));
-  const visitorLang = explicitLang ?? acceptLang;
+  const visitorLang = explicitLang ?? cookieLang ?? acceptLang;
 
   // No translation needed if: no visitor lang detected, or same as source
   if (!visitorLang || visitorLang === sourceLanguage) {
@@ -1932,7 +2102,7 @@ git commit -m "feat(i18n): add public page auto-translation with Accept-Language
 **Files:**
 - Create: `src/components/page/TranslationBanner.tsx`
 
-**Context:** The banner appears above `PageRenderer` on translated pages. Text: "Automatically translated from {languageName}. [View original]". "View original" links to `?lang=original`. Styling should be subtle, match the page theme, and be dismissible. The existing `VisitorBanner.tsx` at `src/components/page/VisitorBanner.tsx` is a good reference for styling.
+**Context:** The banner appears above `PageRenderer` on translated pages. Text: "Machine-translated from {languageName}. [View original]". "View original" links to `?lang=original`. Styling should be subtle, match the page theme, and be dismissible. The existing `VisitorBanner.tsx` at `src/components/page/VisitorBanner.tsx` is a good reference for styling. Do not render this banner for crawlers (already enforced in Task 12 route logic).
 
 **Step 1: Read VisitorBanner for style reference**
 
@@ -1960,7 +2130,7 @@ export function TranslationBanner({
 
   return (
     <div className="w-full bg-[var(--page-bg-secondary,#f5f5f5)] border-b border-[var(--page-border,#e5e5e5)] px-4 py-2 text-center text-xs text-[var(--page-fg-secondary,#666)]">
-      Automatically translated from {langName}.{" "}
+      Machine-translated from {langName}.{" "}
       <a
         href={`/${username}?lang=original`}
         className="underline hover:text-[var(--page-fg,#111)] transition-colors"
@@ -2073,9 +2243,9 @@ git commit -m "fix: resolve regressions from Phase 1d features"
 **Step 1: Update STATUS.md**
 
 Add a new section "Phase 1d Closing" with:
-- Connector UI: SettingsPanel Integrations section, GitHub/LinkedIn cards, OAuth return flow, idempotency guards
+- Connector UI: SettingsPanel Integrations section, GitHub/LinkedIn cards, OAuth return flow, idempotency guards, connector API auth/error hardening
 - Avatar Upload: POST/DELETE endpoints, magic bytes validation, EXIF stripping, composer wiring, SettingsPanel UI
-- Public Page Translation: Accept-Language parsing, TranslationBanner, sourceLanguage snapshot, bot detection
+- Public Page Translation: Accept-Language parsing + cookie precedence, sourceLanguage snapshot, source/model-aware cache key, TranslationBanner disclosure, bot detection
 
 Update test counts.
 
@@ -2100,6 +2270,7 @@ git commit -m "docs: update STATUS and ROADMAP for Phase 1d closing"
 | 2 | Connector UI | Wire into SettingsPanel |
 | 3 | Connector UI | OAuth return flow (?connector= param) |
 | 4 | Connector UI | Sync/import idempotency guards |
+| 4b | Connector UI | Connector API auth hardening + standard error contract |
 | 5 | Avatar | Magic bytes + EXIF stripping utilities |
 | 6 | Avatar | POST/DELETE /api/media/avatar endpoints |
 | 7 | Avatar | Wire avatar into page composer pipeline |
@@ -2107,6 +2278,7 @@ git commit -m "docs: update STATUS and ROADMAP for Phase 1d closing"
 | 9 | Translation | Accept-Language parser + bot detection |
 | 10 | Translation | DB migration (source_language column) |
 | 11 | Translation | Store sourceLanguage at publish time |
+| 11b | Translation | Hardening translation cache key (source/model aware) |
 | 12 | Translation | Public page translation logic |
 | 13 | Translation | TranslationBanner component |
 | 14 | Translation | Full integration tests |
