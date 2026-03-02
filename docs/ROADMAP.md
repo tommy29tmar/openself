@@ -220,7 +220,7 @@ then hybrid page personalization. Each sub-phase builds on the previous.
 Phase 1a (memory/heartbeat), Phase 1b (extended sections), and Phase 1c (hybrid page compiler) are complete.
 Quality/Privacy/Themes hardening complete. UAT hardening (10 findings + 8 findings) complete. Layout Redesign complete.
 NEXT-16 Sprint 1 (Journey Intelligence) complete. Sprint 2 (Onboarding Rewrite) complete. Sprint 3 (Returning User Policies + Strategic Memory) complete. Sprint 4 (Reliable Execution) complete. Sprint 5 (Conversation Polish + Eval Matrix) complete.
-Phase 1d (media/connectors/translation) is next.
+Phase 1d (media/connectors/translation) complete. All Phase 1 sub-phases are now done.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker
 
@@ -287,14 +287,15 @@ Implemented:
 8. `markStaleProposals()` automatically marks proposals as stale when underlying state changes
 9. Deep heartbeat also runs `cleanupExpiredCache(30)` for cache hygiene
 
-### Phase 1d: Other Phase 1 Items
+### Phase 1d: Other Phase 1 Items (Done)
 
-#### NEXT-13: Media upload API and avatar end-to-end support
+#### NEXT-13: Media upload API and avatar end-to-end support ✅ (Done)
 
-Deliverables:
-1. Upload endpoint with MIME/size validation
-2. Store media via existing service
-3. Render avatar URL in hero section from stored media id
+Implemented:
+1. Magic bytes validation (JPEG/PNG/GIF/WebP) + JPEG EXIF stripping
+2. POST/DELETE `/api/media/avatar` endpoints (2MB limit, MIME whitelist, auth-gated)
+3. Avatar wired into page composer via `profileId` threading through projection pipeline
+4. AvatarSection UI in SettingsPanel (upload, preview, remove)
 
 #### NEXT-14: Connector MVP ✅ (Done — GitHub + LinkedIn ZIP)
 
@@ -309,21 +310,20 @@ Implemented:
 5. **API routes** — GitHub: connect, callback, manual sync. LinkedIn: multipart upload. All auth-gated.
 6. **Dependencies** — csv-parse, yauzl-promise
 
-#### NEXT-15: Public page translation for visitors
+#### NEXT-15: Public page translation for visitors ✅ (Done)
 
-Deliverables:
-1. Detect visitor language from `Accept-Language` header on `/{username}` route
-2. If page language != visitor language, translate on-demand (same LLM pipeline)
-3. Serve from `translation_cache` on repeat visits (same hash = instant)
-4. Optional: translation banner "This page is originally in {language}. [View original]"
-5. Optional: pre-translate top N languages on publish (background job)
+Implemented:
+1. Accept-Language parser with q-weight sorting, region-to-base fallback, 8 supported languages
+2. Language precedence: `?lang=` > `os_lang` cookie > `Accept-Language` > page sourceLanguage
+3. Translation cache key hardened with source language + model version (composite SHA-256)
+4. `source_language` column on page table, stored at publish time (migration 0024)
+5. TranslationBanner disclosure: "Machine-translated from {language}. [View original]"
+6. Bot detection (Googlebot, Bingbot, etc.) — serve original for SEO
+7. `?lang=original` bypass for explicit original viewing
 
-Cost risk:
+Cost risk (unchanged):
 - Each unique (page content x language) pair costs one LLM call (~$0.001)
-- 1,000 pages x 7 languages = ~$7.00 one-time (cached after first visit)
-- Risk grows if supported languages expand or pages become very long
-- Mitigated by: translation_cache (no repeated costs), llm_limits budget guardrails,
-  hard cap on supported languages
+- Mitigated by: translation_cache, llm_limits budget guardrails, hard cap on 8 languages
 
 ### Cross-Cutting Program: Model-Agnostic Control Plane
 
@@ -462,7 +462,7 @@ Required:
 1. Phase 1a complete (memory, heartbeat, context assembly) ✅
 2. Phase 1b complete (education + experience + at least 2 more section types) ✅
 3. Phase 1c complete (hybrid personalizer, drill-down, conformity checks) ✅
-4. Phase 1d: at least avatar support + one connector (connector: ✅ GitHub + LinkedIn ZIP)
+4. Phase 1d: at least avatar support + one connector ✅ (all 3: connector UI, avatar, translation)
 
 Outcome:
 - The agent remembers users across sessions and writes personalized page copy
