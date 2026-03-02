@@ -293,7 +293,10 @@ export function getSystemPromptText(
  *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration,
  *  turnManagementRules, memoryUsageDirectives, planningProtocol, undoAwarenessPolicy]
  */
-export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
+export function buildSystemPrompt(
+  bootstrap: BootstrapPayload,
+  opts?: { includeSchemaReference?: boolean },
+): string {
   const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
 
   // Build situation context from bootstrap data
@@ -313,12 +316,13 @@ export function buildSystemPrompt(bootstrap: BootstrapPayload): string {
 
   const expertiseCalibration = getExpertiseCalibration(bootstrap.expertiseLevel);
 
+  const includeSchema = opts?.includeSchemaReference !== false; // default true
+
   const blocks = [
     CORE_CHARTER,
     SAFETY_POLICY,
     TOOL_POLICY,
-    FACT_SCHEMA_REFERENCE,
-    DATA_MODEL_REFERENCE,
+    ...(includeSchema ? [FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE] : []),
     OUTPUT_CONTRACT,
     journeyPolicy,
   ];

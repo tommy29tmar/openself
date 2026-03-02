@@ -41,6 +41,85 @@ export type ContextResult = {
 };
 
 /**
+ * Context profile per journey state.
+ * Controls which blocks are injected and their budgets.
+ * Omitted blocks skip DB queries entirely (saves tokens AND latency).
+ */
+export type ContextProfile = {
+  facts: { include: boolean; budget: number };
+  soul: { include: boolean; budget: number };
+  summary: { include: boolean; budget: number };
+  memories: { include: boolean; budget: number };
+  conflicts: { include: boolean; budget: number };
+  richness: { include: boolean };
+  layoutIntelligence: { include: boolean };
+  includeSchemaReference: boolean;
+};
+
+export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
+  first_visit: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: false, budget: 0 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: false, budget: 0 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: true,
+  },
+  returning_no_page: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: true, budget: 800 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: true,
+  },
+  draft_ready: {
+    facts: { include: true, budget: 1500 },
+    soul: { include: true, budget: 1500 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: true },
+    includeSchemaReference: false,
+  },
+  active_fresh: {
+    facts: { include: true, budget: 1500 },
+    soul: { include: true, budget: 1000 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: true },
+    includeSchemaReference: false,
+  },
+  active_stale: {
+    facts: { include: true, budget: 2000 },
+    soul: { include: true, budget: 1000 },
+    summary: { include: true, budget: 800 },
+    memories: { include: true, budget: 400 },
+    conflicts: { include: true, budget: 200 },
+    richness: { include: true },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: false,
+  },
+  blocked: {
+    facts: { include: false, budget: 0 },
+    soul: { include: false, budget: 0 },
+    summary: { include: false, budget: 0 },
+    memories: { include: false, budget: 0 },
+    conflicts: { include: false, budget: 0 },
+    richness: { include: false },
+    layoutIntelligence: { include: false },
+    includeSchemaReference: false,
+  },
+};
+
+/**
  * Detect agent mode based on knowledge state across all sessions.
  */
 export function detectMode(readKeys: string[]): PromptMode {
@@ -98,55 +177,75 @@ export function assembleContext(
     ? mapJourneyStateToMode(bootstrap.journeyState)
     : detectMode(scope.knowledgeReadKeys);
 
-  // --- Build context blocks ---
+  // --- Determine context profile ---
+  const profile = bootstrap ? CONTEXT_PROFILES[bootstrap.journeyState] : null;
+
+  // --- Build context blocks (conditional on profile) ---
 
   // Facts block
-  const existingFacts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
-  const topFacts = existingFacts.slice(0, 50);
-  let factsBlock =
-    topFacts.length > 0
-      ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts
-          .map((f) => `- [${f.category}/${f.key}]: ${JSON.stringify(f.value)}`)
-          .join("\n")}`
-      : "";
-  factsBlock = truncateToTokenBudget(factsBlock, BUDGET.facts);
+  let existingFacts: ReturnType<typeof getAllFacts> = [];
+  let factsBlock = "";
+  if (!profile || profile.facts.include) {
+    existingFacts = getAllFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+    const topFacts = existingFacts.slice(0, 50);
+    factsBlock =
+      topFacts.length > 0
+        ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts
+            .map((f) => `- [${f.category}/${f.key}]: ${JSON.stringify(f.value)}`)
+            .join("\n")}`
+        : "";
+    factsBlock = truncateToTokenBudget(factsBlock, profile?.facts.budget ?? BUDGET.facts);
+  }
 
   // Soul block (compiled identity overlay)
-  const activeSoul = getActiveSoul(scope.cognitiveOwnerKey);
-  let soulBlock = activeSoul?.compiled ?? "";
-  soulBlock = truncateToTokenBudget(soulBlock, BUDGET.soul);
+  let soulBlock = "";
+  if (!profile || profile.soul.include) {
+    const activeSoul = getActiveSoul(scope.cognitiveOwnerKey);
+    soulBlock = activeSoul?.compiled ?? "";
+    soulBlock = truncateToTokenBudget(soulBlock, profile?.soul.budget ?? BUDGET.soul);
+  }
 
   // Summary block (Tier 2)
-  let summaryBlock = getSummary(scope.cognitiveOwnerKey) ?? "";
-  summaryBlock = truncateToTokenBudget(summaryBlock, BUDGET.summary);
+  let summaryBlock = "";
+  if (!profile || profile.summary.include) {
+    summaryBlock = getSummary(scope.cognitiveOwnerKey) ?? "";
+    summaryBlock = truncateToTokenBudget(summaryBlock, profile?.summary.budget ?? BUDGET.summary);
+  }
 
   // Memories block (Tier 3)
-  const activeMemories = getActiveMemories(scope.cognitiveOwnerKey, 10);
-  let memoriesBlock =
-    activeMemories.length > 0
-      ? activeMemories
-          .map((m) => `- [${m.memoryType}] ${m.content}`)
-          .join("\n")
-      : "";
-  memoriesBlock = truncateToTokenBudget(memoriesBlock, BUDGET.memories);
+  let memoriesBlock = "";
+  if (!profile || profile.memories.include) {
+    const activeMemories = getActiveMemories(scope.cognitiveOwnerKey, 10);
+    memoriesBlock =
+      activeMemories.length > 0
+        ? activeMemories
+            .map((m) => `- [${m.memoryType}] ${m.content}`)
+            .join("\n")
+        : "";
+    memoriesBlock = truncateToTokenBudget(memoriesBlock, profile?.memories.budget ?? BUDGET.memories);
+  }
 
   // Conflicts block
-  const openConflicts = getOpenConflicts(scope.cognitiveOwnerKey);
-  let conflictsBlock =
-    openConflicts.length > 0
-      ? openConflicts
-          .map(
-            (c) =>
-              `- [${c.id}] ${c.category}/${c.key}: fact_a=${c.factAId}(${c.sourceA}) vs fact_b=${c.factBId ?? "?"}(${c.sourceB ?? "?"})`,
-          )
-          .join("\n")
-      : "";
-  conflictsBlock = truncateToTokenBudget(conflictsBlock, BUDGET.conflicts);
+  let conflictsBlock = "";
+  if (!profile || profile.conflicts.include) {
+    const openConflicts = getOpenConflicts(scope.cognitiveOwnerKey);
+    conflictsBlock =
+      openConflicts.length > 0
+        ? openConflicts
+            .map(
+              (c) =>
+                `- [${c.id}] ${c.category}/${c.key}: fact_a=${c.factAId}(${c.sourceA}) vs fact_b=${c.factBId ?? "?"}(${c.sourceB ?? "?"})`,
+            )
+            .join("\n")
+        : "";
+    conflictsBlock = truncateToTokenBudget(conflictsBlock, profile?.conflicts.budget ?? BUDGET.conflicts);
+  }
 
-  // Base system prompt
   // Base system prompt — use new composable path when bootstrap available
   const basePrompt = bootstrap
-    ? buildSystemPrompt(bootstrap)
+    ? buildSystemPrompt(bootstrap, {
+        includeSchemaReference: profile?.includeSchemaReference ?? true,
+      })
     : getSystemPromptText(mode, language);
 
   // Compose full system prompt
@@ -169,11 +268,13 @@ export function assembleContext(
     );
   }
 
-  // Archetype-weighted exploration priorities (replaces static richness + layout blocks)
+  // Archetype-weighted exploration priorities — conditional on profile.richness
   const archetype = bootstrap?.archetype ?? "generalist";
   const strategy = ARCHETYPE_STRATEGIES[archetype];
+  const includeRichness = !profile || profile.richness.include;
+  const includeLayout = !profile || profile.layoutIntelligence.include;
 
-  if (mode === "onboarding") {
+  if (mode === "onboarding" && includeRichness) {
     // Onboarding: show archetype + priorities to guide fact collection
     const publishable = filterPublishableFacts(existingFacts);
     const weighted = strategy.explorationOrder
@@ -191,30 +292,33 @@ export function assembleContext(
       contextParts.push(`\n\n---\n\n${explorationBlock}`);
     }
   } else if (mode === "steady_state") {
-    // Steady state: richness + layout intelligence combined
-    const publishable = filterPublishableFacts(existingFacts);
-    const weighted = strategy.explorationOrder
-      .map(category => ({
-        category,
-        richness: classifySectionRichness(publishable, category),
-      }))
-      .filter(x => x.richness !== "rich");
+    // Steady state: richness + layout intelligence (conditional)
+    if (includeRichness) {
+      const publishable = filterPublishableFacts(existingFacts);
+      const weighted = strategy.explorationOrder
+        .map(category => ({
+          category,
+          richness: classifySectionRichness(publishable, category),
+        }))
+        .filter(x => x.richness !== "rich");
 
-    if (weighted.length > 0) {
-      const priorityLines = weighted.map(
-        (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
-      );
-      const explorationBlock = `EXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
-      contextParts.push(`\n\n---\n\n${explorationBlock}`);
+      if (weighted.length > 0) {
+        const priorityLines = weighted.map(
+          (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
+        );
+        const explorationBlock = `EXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
+        contextParts.push(`\n\n---\n\n${explorationBlock}`);
+      }
     }
 
-    // Layout intelligence
-    const layoutIntelligence = `PAGE LAYOUT INTELLIGENCE:
+    if (includeLayout) {
+      const layoutIntelligence = `PAGE LAYOUT INTELLIGENCE:
 Profile archetype: ${archetype}
 Section priority: ${strategy.sectionPriority.join(" → ")}
 
 Before proposing a reorder, explain reasoning and ask for confirmation.`;
-    contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+      contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+    }
   }
 
   // --- Resume injection: incomplete operation from previous turn ---
