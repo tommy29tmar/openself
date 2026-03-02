@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { disconnectConnector, getConnectorById } from "@/lib/connectors/connector-service";
+import { connectorError } from "@/lib/connectors/api-errors";
 
 export async function POST(
   req: Request,
@@ -10,10 +11,7 @@ export async function POST(
   const scope = resolveOwnerScope(req);
 
   if (isMultiUserEnabled() && !scope) {
-    return NextResponse.json(
-      { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
-      { status: 403 },
-    );
+    return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }
 
   const { id } = await params;
@@ -23,25 +21,16 @@ export async function POST(
     // Verify connector exists and belongs to this owner
     const connector = getConnectorById(id);
     if (!connector) {
-      return NextResponse.json(
-        { success: false, code: "NOT_FOUND", error: "Connector not found." },
-        { status: 404 },
-      );
+      return connectorError("NOT_FOUND", "Connector not found.", 404, false);
     }
     if (connector.ownerKey !== ownerKey) {
-      return NextResponse.json(
-        { success: false, code: "FORBIDDEN", error: "Connector does not belong to this user." },
-        { status: 403 },
-      );
+      return connectorError("FORBIDDEN", "Connector does not belong to this user.", 403, false);
     }
 
     disconnectConnector(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { success: false, code: "INTERNAL", error: message },
-      { status: 500 },
-    );
+    return connectorError("INTERNAL", message, 500, true);
   }
 }
