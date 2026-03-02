@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-03-02
+Last updated: 2026-03-03
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -224,7 +224,7 @@ All sub-phases complete:
 - Layout Template Engine + Architect Layout Refactoring ✅
 - NEXT-16 Sprints 1-5 (Journey Intelligence → Conversation Polish) ✅
 
-Final stats: 2077 automated tests, 168 test files, 24 DB migrations.
+Final stats: 2110 automated tests, 174 test files, 24 DB migrations.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker (Deferred to Phase 2)
 
@@ -354,6 +354,19 @@ Post-merge fixes:
 3. **Avatar visibility** — `onAvatarChange` callback wiring + `profileId` in 4 compose paths
 4. **Agent contradiction handling** — Identity/role update-first directive
 5. **Agent prompt quality** — Unsupported features, response variety, registration CTA
+
+#### Post-Import Agent Reaction ✅ (Done)
+
+After a LinkedIn ZIP import, the agent auto-reacts with a data review and targeted gap-filling questions.
+12 commits, 33 new tests (2110 total, 174 files).
+
+Implemented:
+1. **Import gap analyzer** — Deterministic, zero-LLM analysis of active facts producing prioritized gaps (interests > description > social)
+2. **Import event flag** — Atomic CAS flag lifecycle in `sessions.metadata` (pending → processing → consumed), 24h TTL, error recovery
+3. **Situation detection** — `has_recent_import` flag in Journey Intelligence when connector facts < 30 min old
+4. **Policy directive** — `recentImportDirective()` with sanitized summary + gap descriptions + prompt delimiters
+5. **Chat route wiring** — Flag consumed after quota checks, gap report injected into bootstrap, error recovery in 3 code paths
+6. **Frontend auto-trigger** — DOM CustomEvent bridge (ConnectorSection → ChatPanel), localized message (8 langs), telemetry tag
 
 ### Cross-Cutting Program: Model-Agnostic Control Plane
 

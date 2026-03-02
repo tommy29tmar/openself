@@ -36,22 +36,47 @@ You are a QA Automation Engineer simulating **real users** — not a robot filli
 **Section types** (18 total):
 hero, bio, skills, projects, interests, achievements, stats, at-a-glance, social, reading, music, contact, experience, education, languages, activities, footer, custom
 
-## Setup
+## Setup — Fully Automated (no user interaction needed)
 
-1. Create `uat/` directory at project root
-2. Navigate to `http://localhost:3000` — screenshot to confirm server is up
-3. If server not running, tell user to start it and WAIT
+Execute ALL of the following steps automatically, in order. Do NOT stop to ask the user anything.
 
----
+### 1. Create UAT directory
+```bash
+mkdir -p ~/dev/repos/openself/uat
+```
 
-## STEP 1 — Reset Database
+### 2. Kill existing local instances
+Kill any Next.js dev server or node process already running on port 3000:
+```bash
+# Kill anything on port 3000
+lsof -ti:3000 | xargs -r kill -9 2>/dev/null || true
+# Also kill any lingering next-server or npm run dev processes for this project
+pkill -f "next-router-worker" 2>/dev/null || true
+pkill -f "next dev.*openself" 2>/dev/null || true
+```
+Wait 2 seconds for ports to free up.
 
+### 3. Reset Database
 ```bash
 cd ~/dev/repos/openself
 rm -f db/openself.db db/openself.db-shm db/openself.db-wal
 ```
 
-Tell user DB deleted, they need to restart dev server (`npm run dev`). **Wait for confirmation.**
+### 4. Start dev server in background
+```bash
+cd ~/dev/repos/openself && npm run dev
+```
+Run this command **in background** (use `run_in_background: true`). The server needs ~5 seconds to boot and run migrations on first start.
+
+### 5. Wait for server ready
+Poll `http://localhost:3000` until it responds (max 30 seconds, check every 3 seconds):
+```bash
+for i in $(seq 1 10); do curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 && break; sleep 3; done
+```
+If after 30 seconds it's still not responding, check console output for errors and report to user.
+
+### 6. Confirm server is up
+Navigate to `http://localhost:3000` with Playwright and take a screenshot to confirm the app loaded.
 
 ---
 

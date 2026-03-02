@@ -542,6 +542,7 @@ function ChatPanelInner({
   const isPrimaryRef = useRef(false);
   const voiceSpeakRef = useRef<(text: string) => void>(() => {});
 
+
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append } =
     useChat({
       api: "/api/chat",
@@ -675,6 +676,29 @@ function ChatPanelInner({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-trigger message after LinkedIn import (G4)
+  useEffect(() => {
+    const IMPORT_TRIGGER_MSG: Record<string, string> = {
+      en: "I just imported my LinkedIn profile.",
+      it: "Ho importato il mio profilo LinkedIn.",
+      de: "Ich habe mein LinkedIn-Profil importiert.",
+      fr: "Je viens d'importer mon profil LinkedIn.",
+      es: "Acabo de importar mi perfil de LinkedIn.",
+      pt: "Acabei de importar meu perfil do LinkedIn.",
+      ja: "LinkedInのプロフィールをインポートしました。",
+      zh: "我刚刚导入了我的LinkedIn个人资料。",
+    };
+    const handler = () => {
+      const triggerText = IMPORT_TRIGGER_MSG[language] || IMPORT_TRIGGER_MSG.en;
+      append(
+        { role: "user", content: triggerText },
+        { body: { language, metadata: { source: "auto_import_trigger" } } },
+      );
+    };
+    window.addEventListener("openself:import-complete", handler);
+    return () => window.removeEventListener("openself:import-complete", handler);
+  }, [append, language]);
 
   const handleRequestPublish = useCallback(async (usernameOverride?: string) => {
     setRequestingPublish(true);

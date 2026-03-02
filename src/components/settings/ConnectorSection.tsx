@@ -238,6 +238,14 @@ function LinkedInCard({ onRefresh }: { onRefresh: () => void }) {
       if (res.success && res.report) {
         setResult({ factsWritten: res.report.factsWritten });
         onRefresh();
+        // Dispatch event for ChatPanel to pick up (G4)
+        if (res.report.factsWritten > 0) {
+          window.dispatchEvent(
+            new CustomEvent("openself:import-complete", {
+              detail: { factsWritten: res.report.factsWritten },
+            }),
+          );
+        }
       } else {
         setResult({ error: res.error ?? "Import failed" });
       }
