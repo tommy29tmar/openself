@@ -2,11 +2,18 @@ export type ConnectorType = "github" | "linkedin_zip";
 
 export type ConnectorStatus = "connected" | "paused" | "error" | "disconnected";
 
+export type SyncResult = {
+  factsCreated: number;
+  factsUpdated: number;
+  error?: string;
+};
+
 export type ConnectorDefinition = {
   type: string;
   displayName: string;
   supportsSync: boolean; // periodic worker sync (GitHub)
   supportsImport: boolean; // one-shot import (LinkedIn ZIP)
+  syncFn?: (connectorId: string, ownerKey: string) => Promise<SyncResult>;
 };
 
 export type ConnectorRow = {

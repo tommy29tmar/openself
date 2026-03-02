@@ -55,9 +55,25 @@ export async function handleConnectorSync(
         continue;
       }
 
-      // Dispatch will be filled in Milestone B/C per connector type.
-      // For now, write a no-op sync_log entry.
-      insertSyncLog(connector.id, "partial", 0, 0, null);
+      if (!def.supportsSync || !def.syncFn) {
+        insertSyncLog(connector.id, "partial", 0, 0, "no sync implementation");
+        continue;
+      }
+
+      const result = await def.syncFn(connector.id, ownerKey);
+      insertSyncLog(
+        connector.id,
+        result.error ? "error" : "success",
+        result.factsCreated,
+        result.factsUpdated,
+        result.error ?? null,
+      );
+
+      if (result.error) {
+        updateConnectorStatus(connector.id, "error", result.error);
+      } else {
+        updateConnectorStatus(connector.id, "connected");
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       updateConnectorStatus(connector.id, "error", message);

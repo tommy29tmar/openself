@@ -27,9 +27,10 @@ vi.mock("@/lib/connectors/registry", () => ({
   getConnector: (...args: unknown[]) => mockGetConnector(...args),
 }));
 
-// Mock sync_log insert
+// Mock sync_log insert — capture values for assertion
+const mockSyncLogValues = vi.fn().mockReturnValue({ run: vi.fn() });
 const mockInsertSyncLog = vi.fn().mockReturnValue({
-  values: vi.fn().mockReturnValue({ run: vi.fn() }),
+  values: (...args: unknown[]) => mockSyncLogValues(...args),
 });
 
 vi.mock("@/lib/db", () => ({
@@ -71,12 +72,22 @@ describe("connector-sync-handler", () => {
       { id: "c1", connectorType: "github", status: "connected" },
       { id: "c2", connectorType: "linkedin_zip", status: "connected" },
     ]);
-    mockGetConnector.mockReturnValue({ type: "github", displayName: "GitHub" });
+    mockGetConnector.mockReturnValue({
+      type: "github",
+      displayName: "GitHub",
+      supportsSync: true,
+      supportsImport: false,
+      // no syncFn — both get "partial" with "no sync implementation"
+    });
 
     await handleConnectorSync({ ownerKey: "owner-1" });
 
     // sync_log insert called twice (once per connector)
     expect(mockInsertSyncLog).toHaveBeenCalledTimes(2);
+    // Both should have "no sync implementation" error since no syncFn
+    expect(mockSyncLogValues).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "partial", error: "no sync implementation" }),
+    );
   });
 
   it("logs warning for unknown connector type", async () => {
@@ -105,14 +116,103 @@ describe("connector-sync-handler", () => {
     mockGetConnector.mockImplementation(() => {
       callCount++;
       if (callCount === 1) throw new Error("API down");
-      return { type: "github", displayName: "GitHub" };
+      return { type: "github", displayName: "GitHub", supportsSync: true, supportsImport: false };
     });
 
     await handleConnectorSync({ ownerKey: "owner-1" });
 
     // First connector marked as error
     expect(mockUpdateConnectorStatus).toHaveBeenCalledWith("c-fail", "error", "API down");
-    // Both get sync_log entries (error + partial)
+    // Both get sync_log entries (error + partial for no syncFn)
     expect(mockInsertSyncLog).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls syncFn when connector supports sync", async () => {
+    const mockSyncFn = vi.fn().mockResolvedValue({ factsCreated: 3, factsUpdated: 1 });
+    mockGetActiveConnectors.mockReturnValue([
+      { id: "c1", connectorType: "github", status: "connected" },
+    ]);
+    mockGetConnector.mockReturnValue({
+      type: "github",
+      displayName: "GitHub",
+      supportsSync: true,
+      supportsImport: false,
+      syncFn: mockSyncFn,
+    });
+
+    await handleConnectorSync({ ownerKey: "owner-1" });
+
+    expect(mockSyncFn).toHaveBeenCalledWith("c1", "owner-1");
+    expect(mockInsertSyncLog).toHaveBeenCalledTimes(1);
+    expect(mockSyncLogValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: "c1",
+        status: "success",
+        factsCreated: 3,
+        factsUpdated: 1,
+        error: null,
+      }),
+    );
+    expect(mockUpdateConnectorStatus).toHaveBeenCalledWith("c1", "connected");
+  });
+
+  it("writes error sync_log when syncFn returns error", async () => {
+    const mockSyncFn = vi.fn().mockResolvedValue({
+      factsCreated: 0,
+      factsUpdated: 0,
+      error: "token expired",
+    });
+    mockGetActiveConnectors.mockReturnValue([
+      { id: "c1", connectorType: "github", status: "connected" },
+    ]);
+    mockGetConnector.mockReturnValue({
+      type: "github",
+      displayName: "GitHub",
+      supportsSync: true,
+      supportsImport: false,
+      syncFn: mockSyncFn,
+    });
+
+    await handleConnectorSync({ ownerKey: "owner-1" });
+
+    expect(mockInsertSyncLog).toHaveBeenCalledTimes(1);
+    expect(mockSyncLogValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: "c1",
+        status: "error",
+        factsCreated: 0,
+        factsUpdated: 0,
+        error: "token expired",
+      }),
+    );
+    expect(mockUpdateConnectorStatus).toHaveBeenCalledWith("c1", "error", "token expired");
+  });
+
+  it("writes partial sync_log for connector without syncFn", async () => {
+    mockGetActiveConnectors.mockReturnValue([
+      { id: "c1", connectorType: "github", status: "connected" },
+    ]);
+    mockGetConnector.mockReturnValue({
+      type: "github",
+      displayName: "GitHub",
+      supportsSync: true,
+      supportsImport: false,
+      // no syncFn
+    });
+
+    await handleConnectorSync({ ownerKey: "owner-1" });
+
+    expect(mockInsertSyncLog).toHaveBeenCalledTimes(1);
+    expect(mockSyncLogValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: "c1",
+        status: "partial",
+        factsCreated: 0,
+        factsUpdated: 0,
+        error: "no sync implementation",
+      }),
+    );
+    // Should NOT update connector status for partial
+    expect(mockUpdateConnectorStatus).not.toHaveBeenCalled();
   });
 });
