@@ -9,6 +9,7 @@ import { getActiveFacts } from "@/lib/services/kb-service";
 import { generateSummary } from "@/lib/services/summary-service";
 import { handleHeartbeatLight, handleHeartbeatDeep } from "./heartbeat";
 import { expireStaleProposals } from "@/lib/services/soul-service";
+import { handleConnectorSync } from "@/lib/connectors/connector-sync-handler";
 
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MINUTES = [1, 5, 15];
@@ -49,9 +50,7 @@ const handlers: Record<string, JobHandler> = {
     // Placeholder — soul proposals are created via agent tool, not worker
   },
 
-  connector_sync: () => {
-    // Placeholder — connector sync not yet implemented
-  },
+  connector_sync: handleConnectorSync,
 
   page_regen: (payload) => {
     const username = payload.username as string;
