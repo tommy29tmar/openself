@@ -8,9 +8,6 @@ import {
   mapSkills,
   mapLanguages,
   mapCertifications,
-  mapCourses,
-  mapCompanyFollows,
-  mapCauses,
   type FactInput,
 } from "./mapper";
 import { batchCreateFacts } from "../connector-fact-writer";
@@ -19,18 +16,22 @@ import type { ImportReport } from "../types";
 
 type MapperFn = (rows: CsvRow[]) => FactInput[];
 
+/** Standard mappers (no cross-file dependencies) */
 const FILE_MAPPERS: Record<string, MapperFn> = {
   "Profile.csv": mapProfile,
   "Profile Summary.csv": mapProfileSummary,
   "Positions.csv": mapPositions,
   "Education.csv": mapEducation,
-  "Skills.csv": mapSkills,
   "Languages.csv": mapLanguages,
   "Certifications.csv": mapCertifications,
-  "Courses.csv": mapCourses,
-  "Company Follows.csv": mapCompanyFollows,
-  "Causes You Care About.csv": mapCauses,
 };
+
+/**
+ * Files that need special handling (cross-file dependencies).
+ * Skills.csv needs language names from Languages.csv to filter duplicates.
+ * All lowercase so comparison with filename.toLowerCase() works correctly.
+ */
+const DEFERRED_FILES = new Set(["skills.csv"]);
 
 // All lowercase so comparison with filename.toLowerCase() works correctly
 const EXCLUDE_FILES = new Set([
@@ -40,6 +41,9 @@ const EXCLUDE_FILES = new Set([
   "ad_targeting.csv",
   "receipts_v2.csv",
   "registration.csv",
+  "courses.csv",
+  "company follows.csv",
+  "causes you care about.csv",
 ]);
 
 export async function importLinkedInZip(
@@ -66,28 +70,46 @@ export async function importLinkedInZip(
     };
   }
 
+  // Two-pass approach: first extract all CSV content, then process with cross-file deps
+  const csvContents = new Map<string, string>();
+
   // Wrap in try/finally to ensure ZIP reader is closed
   try {
     for await (const entry of zipReader) {
-      // Get just the filename (LinkedIn ZIPs often have directory prefixes)
       const filename = entry.filename.split("/").pop() ?? entry.filename;
-
       if (EXCLUDE_FILES.has(filename.toLowerCase())) continue;
-
-      const mapper = FILE_MAPPERS[filename];
-      if (!mapper) continue;
+      if (!FILE_MAPPERS[filename] && !DEFERRED_FILES.has(filename.toLowerCase())) continue;
 
       const stream = await entry.openReadStream();
       const chunks: Buffer[] = [];
       for await (const chunk of stream) chunks.push(chunk as Buffer);
-      const content = Buffer.concat(chunks).toString("utf-8");
-
-      const rows = parseLinkedInCsv(content);
-      const facts = mapper(rows);
-      allFacts.push(...facts);
+      csvContents.set(filename, Buffer.concat(chunks).toString("utf-8"));
     }
   } finally {
     await zipReader.close();
+  }
+
+  // Pass 1: process standard mappers (including Languages.csv)
+  for (const [filename, content] of csvContents) {
+    const mapper = FILE_MAPPERS[filename];
+    if (!mapper) continue;
+    const rows = parseLinkedInCsv(content);
+    allFacts.push(...mapper(rows));
+  }
+
+  // Pass 2: process Skills.csv with language names for dedup
+  const skillsEntry = [...csvContents.entries()].find(
+    ([k]) => k.toLowerCase() === "skills.csv",
+  );
+  if (skillsEntry) {
+    const skillsCsv = skillsEntry[1];
+    const languageNames = new Set(
+      allFacts
+        .filter((f) => f.category === "language")
+        .map((f) => String(f.value.language).toLowerCase()),
+    );
+    const rows = parseLinkedInCsv(skillsCsv);
+    allFacts.push(...mapSkills(rows, languageNames));
   }
 
   if (allFacts.length === 0) {

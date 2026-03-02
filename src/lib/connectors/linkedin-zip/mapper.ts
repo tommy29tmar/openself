@@ -16,11 +16,18 @@ function slug(s: string): string {
 }
 
 const PROFICIENCY_MAP: Record<string, string> = {
+  // Enum keys (used by some LinkedIn export formats)
   NATIVE_OR_BILINGUAL: "native",
   FULL_PROFESSIONAL: "fluent",
   PROFESSIONAL_WORKING: "advanced",
   LIMITED_WORKING: "intermediate",
   ELEMENTARY: "beginner",
+  // Descriptive strings (Basic LinkedIn export)
+  "native or bilingual proficiency": "native",
+  "full professional proficiency": "fluent",
+  "professional working proficiency": "advanced",
+  "limited working proficiency": "intermediate",
+  "elementary proficiency": "beginner",
 };
 
 /**
@@ -107,7 +114,7 @@ export function mapProfileSummary(rows: CsvRow[]): FactInput[] {
 export function mapPositions(rows: CsvRow[]): FactInput[] {
   if (rows.length === 0) return [];
 
-  // Parse and sort by start date ascending
+  // Parse and sort by start date descending (most recent first)
   const parsed = rows
     .map((row) => ({
       company: row["Company Name"] ?? "",
@@ -118,16 +125,17 @@ export function mapPositions(rows: CsvRow[]): FactInput[] {
       endDate: normalizeLinkedInDate(row["Finished On"]),
       raw: row,
     }))
-    .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
+    .sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""));
 
   const facts: FactInput[] = [];
   const keyCount = new Map<string, number>();
 
   // Find the latest position without end date → "current"
+  // With descending sort, the first open position is the most recent
   const openPositions = parsed.filter((p) => !p.endDate);
   const currentIdx =
     openPositions.length > 0
-      ? parsed.indexOf(openPositions[openPositions.length - 1])
+      ? parsed.indexOf(openPositions[0])
       : -1;
 
   for (let i = 0; i < parsed.length; i++) {
@@ -188,14 +196,33 @@ export function mapEducation(rows: CsvRow[]): FactInput[] {
     .filter((f) => f.value.institution || f.value.degree);
 }
 
+/** Well-known language name prefixes to filter from skills */
+const LANGUAGE_PREFIXES = ["lingua ", "language "];
+const KNOWN_LANGUAGES = new Set([
+  "english", "italian", "german", "french", "spanish", "portuguese",
+  "chinese", "japanese", "korean", "arabic", "russian", "hindi",
+  "mandarin", "cantonese", "dutch", "swedish", "norwegian", "danish",
+  "finnish", "polish", "czech", "turkish", "greek", "hebrew",
+]);
+
+function isLanguageSkill(name: string, languageNames?: Set<string>): boolean {
+  const lower = name.toLowerCase();
+  if (LANGUAGE_PREFIXES.some((p) => lower.startsWith(p))) return true;
+  if (KNOWN_LANGUAGES.has(lower)) return true;
+  if (languageNames?.has(lower)) return true;
+  return false;
+}
+
 /**
- * Skills.csv
+ * Skills.csv — filters out skills that are actually languages
+ * @param languageNames optional set of lowercased language names from Languages.csv
  */
-export function mapSkills(rows: CsvRow[]): FactInput[] {
+export function mapSkills(rows: CsvRow[], languageNames?: Set<string>): FactInput[] {
   return rows
     .map((row) => {
       const name = row["Name"] ?? row["Skill"] ?? "";
       if (!name.trim()) return null;
+      if (isLanguageSkill(name.trim(), languageNames)) return null;
       return {
         category: "skill",
         key: `li-${slug(name)}`,
@@ -214,9 +241,11 @@ export function mapLanguages(rows: CsvRow[]): FactInput[] {
       const name = row["Name"] ?? row["Language"] ?? "";
       if (!name.trim()) return null;
       const rawProficiency = row["Proficiency"] ?? "";
+      const trimmed = rawProficiency.trim();
       const proficiency =
-        PROFICIENCY_MAP[rawProficiency.trim()] ??
-        (rawProficiency.toLowerCase() || undefined);
+        PROFICIENCY_MAP[trimmed] ??
+        PROFICIENCY_MAP[trimmed.toLowerCase()] ??
+        (trimmed.toLowerCase() || undefined);
 
       const value: Record<string, unknown> = { language: name.trim() };
       if (proficiency) value.proficiency = proficiency;
@@ -256,65 +285,6 @@ export function mapCertifications(rows: CsvRow[]): FactInput[] {
         category: "achievement",
         key: `li-cert-${slug(name)}-${i}`,
         value,
-      };
-    })
-    .filter((f) => f !== null) as FactInput[];
-}
-
-/**
- * Courses.csv
- */
-export function mapCourses(rows: CsvRow[]): FactInput[] {
-  return rows
-    .map((row, i) => {
-      const name = row["Name"] ?? "";
-      if (!name.trim()) return null;
-      const number = row["Number"] ?? "";
-
-      const value: Record<string, unknown> = {
-        title: name.trim(),
-        type: "course",
-      };
-      if (number) value.code = number;
-
-      return {
-        category: "achievement",
-        key: `li-course-${slug(name)}-${i}`,
-        value,
-      };
-    })
-    .filter((f) => f !== null) as FactInput[];
-}
-
-/**
- * Company Follows.csv — mapped to interests
- */
-export function mapCompanyFollows(rows: CsvRow[]): FactInput[] {
-  return rows
-    .map((row) => {
-      const name = row["Organization"] ?? row["Company"] ?? "";
-      if (!name.trim()) return null;
-      return {
-        category: "interest",
-        key: `li-follow-${slug(name)}`,
-        value: { name: name.trim(), source: "linkedin-follow" },
-      };
-    })
-    .filter((f) => f !== null) as FactInput[];
-}
-
-/**
- * Causes You Care About.csv — mapped to interests
- */
-export function mapCauses(rows: CsvRow[]): FactInput[] {
-  return rows
-    .map((row) => {
-      const name = row["Name"] ?? row["Cause"] ?? "";
-      if (!name.trim()) return null;
-      return {
-        category: "interest",
-        key: `li-cause-${slug(name)}`,
-        value: { name: name.trim(), source: "linkedin-cause" },
       };
     })
     .filter((f) => f !== null) as FactInput[];

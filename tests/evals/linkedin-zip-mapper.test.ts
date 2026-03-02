@@ -7,9 +7,6 @@ import {
   mapSkills,
   mapLanguages,
   mapCertifications,
-  mapCourses,
-  mapCompanyFollows,
-  mapCauses,
   mapEmailAddresses,
   mapPhoneNumbers,
 } from "@/lib/connectors/linkedin-zip/mapper";
@@ -144,11 +141,14 @@ describe("mapPositions", () => {
     },
   ];
 
-  it("maps multiple positions with correct dates", () => {
+  it("maps multiple positions with correct dates in descending order", () => {
     const facts = mapPositions(positions);
     expect(facts).toHaveLength(2);
 
-    // Sorted by start date ascending, StartupX first
+    // Sorted by start date descending, Acme Corp first (most recent)
+    expect(facts[0].value.company).toBe("Acme Corp");
+    expect(facts[1].value.company).toBe("StartupX");
+
     const startupFact = facts.find((f) => f.value.company === "StartupX");
     expect(startupFact?.value.role).toBe("Junior Dev");
     expect(startupFact?.value.startDate).toBe("2019-03");
@@ -310,6 +310,42 @@ describe("mapSkills", () => {
     const facts = mapSkills(rows);
     expect(facts[0].value.name).toBe("React");
   });
+
+  it("filters out skills starting with 'Lingua '", () => {
+    const rows = [
+      { Name: "Python" },
+      { Name: "Lingua inglese" },
+      { Name: "Lingua tedesca" },
+      { Name: "Data Analysis" },
+    ];
+    const facts = mapSkills(rows);
+    expect(facts).toHaveLength(2);
+    expect(facts.map((f) => f.value.name)).toEqual(["Python", "Data Analysis"]);
+  });
+
+  it("filters out well-known language names", () => {
+    const rows = [
+      { Name: "English" },
+      { Name: "French" },
+      { Name: "TypeScript" },
+    ];
+    const facts = mapSkills(rows);
+    expect(facts).toHaveLength(1);
+    expect(facts[0].value.name).toBe("TypeScript");
+  });
+
+  it("filters out language names from Languages.csv via languageNames param", () => {
+    const rows = [
+      { Name: "Lingua cinese mandarino" },
+      { Name: "Tedesco" },
+      { Name: "Forecasting" },
+    ];
+    const languageNames = new Set(["tedesco", "italiano"]);
+    const facts = mapSkills(rows, languageNames);
+    // "Lingua cinese mandarino" filtered by prefix, "Tedesco" by languageNames set
+    expect(facts).toHaveLength(1);
+    expect(facts[0].value.name).toBe("Forecasting");
+  });
 });
 
 describe("mapLanguages", () => {
@@ -344,6 +380,31 @@ describe("mapLanguages", () => {
 
   it("maps ELEMENTARY -> beginner", () => {
     const rows = [{ Name: "Japanese", Proficiency: "ELEMENTARY" }];
+    const facts = mapLanguages(rows);
+    expect(facts[0].value.proficiency).toBe("beginner");
+  });
+
+  // Basic LinkedIn export descriptive strings
+  it("maps 'Native or bilingual proficiency' -> native", () => {
+    const rows = [{ Name: "Italiano", Proficiency: "Native or bilingual proficiency" }];
+    const facts = mapLanguages(rows);
+    expect(facts[0].value.proficiency).toBe("native");
+  });
+
+  it("maps 'Full professional proficiency' -> fluent", () => {
+    const rows = [{ Name: "Tedesco", Proficiency: "Full professional proficiency" }];
+    const facts = mapLanguages(rows);
+    expect(facts[0].value.proficiency).toBe("fluent");
+  });
+
+  it("maps 'Limited working proficiency' -> intermediate", () => {
+    const rows = [{ Name: "Francese", Proficiency: "Limited working proficiency" }];
+    const facts = mapLanguages(rows);
+    expect(facts[0].value.proficiency).toBe("intermediate");
+  });
+
+  it("maps 'Elementary proficiency' -> beginner", () => {
+    const rows = [{ Name: "Chinese", Proficiency: "Elementary proficiency" }];
     const facts = mapLanguages(rows);
     expect(facts[0].value.proficiency).toBe("beginner");
   });
@@ -400,84 +461,6 @@ describe("mapCertifications", () => {
     const rows = [{ Name: "PMP", URL: "https://pmi.org/cert" }];
     const facts = mapCertifications(rows);
     expect(facts[0].value.url).toBe("https://pmi.org/cert");
-  });
-});
-
-describe("mapCourses", () => {
-  it("maps title and code", () => {
-    const rows = [{ Name: "Advanced Algorithms", Number: "CS-201" }];
-    const facts = mapCourses(rows);
-    expect(facts).toHaveLength(1);
-    expect(facts[0].category).toBe("achievement");
-    expect(facts[0].value).toEqual({
-      title: "Advanced Algorithms",
-      type: "course",
-      code: "CS-201",
-    });
-  });
-
-  it("skips empty course names", () => {
-    const rows = [{ Name: "", Number: "101" }];
-    expect(mapCourses(rows)).toEqual([]);
-  });
-
-  it("omits code when Number is empty", () => {
-    const rows = [{ Name: "Intro to ML" }];
-    const facts = mapCourses(rows);
-    expect(facts[0].value).not.toHaveProperty("code");
-  });
-});
-
-describe("mapCompanyFollows", () => {
-  it("maps to interest with linkedin-follow source", () => {
-    const rows = [{ Organization: "Google" }, { Organization: "Stripe" }];
-    const facts = mapCompanyFollows(rows);
-    expect(facts).toHaveLength(2);
-    expect(facts[0]).toEqual({
-      category: "interest",
-      key: "li-follow-google",
-      value: { name: "Google", source: "linkedin-follow" },
-    });
-    expect(facts[1]).toEqual({
-      category: "interest",
-      key: "li-follow-stripe",
-      value: { name: "Stripe", source: "linkedin-follow" },
-    });
-  });
-
-  it("uses Company column as fallback", () => {
-    const rows = [{ Company: "Meta" }];
-    const facts = mapCompanyFollows(rows);
-    expect(facts[0].value.name).toBe("Meta");
-  });
-
-  it("skips empty names", () => {
-    const rows = [{ Organization: "" }];
-    expect(mapCompanyFollows(rows)).toEqual([]);
-  });
-});
-
-describe("mapCauses", () => {
-  it("maps to interest with linkedin-cause source", () => {
-    const rows = [{ Name: "Education" }, { Name: "Environment" }];
-    const facts = mapCauses(rows);
-    expect(facts).toHaveLength(2);
-    expect(facts[0]).toEqual({
-      category: "interest",
-      key: "li-cause-education",
-      value: { name: "Education", source: "linkedin-cause" },
-    });
-  });
-
-  it("uses Cause column as fallback", () => {
-    const rows = [{ Cause: "Poverty Alleviation" }];
-    const facts = mapCauses(rows);
-    expect(facts[0].value.name).toBe("Poverty Alleviation");
-  });
-
-  it("skips empty names", () => {
-    const rows = [{ Name: "  " }];
-    expect(mapCauses(rows)).toEqual([]);
   });
 });
 

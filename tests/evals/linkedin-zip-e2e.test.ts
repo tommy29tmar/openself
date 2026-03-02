@@ -378,12 +378,6 @@ describe("LinkedIn ZIP E2E — real parser + real mappers", () => {
       "PMP,PMI,Jun 2021,,",
     ].join("\n");
 
-    const coursesCsv = ["Name,Number", "Agile Methodology,PM-301"].join("\n");
-
-    const followsCsv = ["Organization", "Google", "Stripe"].join("\n");
-
-    const causesCsv = ["Name", "Education", "Environment"].join("\n");
-
     mockFromBuffer.mockResolvedValue(
       createMockZipReader([
         createMockEntry("Profile.csv", profileCsv),
@@ -393,9 +387,6 @@ describe("LinkedIn ZIP E2E — real parser + real mappers", () => {
         createMockEntry("Skills.csv", skillsCsv),
         createMockEntry("Languages.csv", langCsv),
         createMockEntry("Certifications.csv", certCsv),
-        createMockEntry("Courses.csv", coursesCsv),
-        createMockEntry("Company Follows.csv", followsCsv),
-        createMockEntry("Causes You Care About.csv", causesCsv),
       ]),
     );
 
@@ -416,8 +407,7 @@ describe("LinkedIn ZIP E2E — real parser + real mappers", () => {
     expect(categories).toContain("education"); // Education
     expect(categories).toContain("skill"); // Skills
     expect(categories).toContain("language"); // Languages
-    expect(categories).toContain("achievement"); // Certifications + Courses
-    expect(categories).toContain("interest"); // Company Follows + Causes
+    expect(categories).toContain("achievement"); // Certifications
 
     // Verify identity facts include both name and summary
     const identityFacts = capturedFacts.filter(
@@ -443,35 +433,18 @@ describe("LinkedIn ZIP E2E — real parser + real mappers", () => {
     );
     expect(langFacts[0].value.proficiency).toBe("fluent");
 
-    // Verify certifications and courses both in achievement
+    // Verify certifications in achievement (courses, follows, causes excluded)
     const achFacts = capturedFacts.filter(
       (f) => f.category === "achievement",
     );
-    expect(achFacts).toHaveLength(2);
-    expect(achFacts.some((f) => f.value.type === "certification")).toBe(true);
-    expect(achFacts.some((f) => f.value.type === "course")).toBe(true);
-    const courseFact = achFacts.find((f) => f.value.type === "course")!;
-    expect(courseFact.value.code).toBe("PM-301");
+    expect(achFacts).toHaveLength(1);
+    expect(achFacts[0].value.type).toBe("certification");
 
-    // Verify interests include both follows and causes
+    // Verify no interest facts (company follows and causes are excluded)
     const intFacts = capturedFacts.filter(
       (f) => f.category === "interest",
     );
-    expect(intFacts).toHaveLength(4); // 2 follows + 2 causes
-    expect(
-      intFacts.some(
-        (f) =>
-          f.value.name === "Google" &&
-          f.value.source === "linkedin-follow",
-      ),
-    ).toBe(true);
-    expect(
-      intFacts.some(
-        (f) =>
-          f.value.name === "Education" &&
-          f.value.source === "linkedin-cause",
-      ),
-    ).toBe(true);
+    expect(intFacts).toHaveLength(0);
   });
 
   it("position key generation: unique keys + collision handling", async () => {

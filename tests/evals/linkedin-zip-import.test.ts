@@ -46,16 +46,6 @@ const mockMapLanguages = vi.fn().mockReturnValue([
 const mockMapCertifications = vi.fn().mockReturnValue([
   { category: "achievement", key: "li-cert-aws-0", value: { title: "AWS" } },
 ]);
-const mockMapCourses = vi.fn().mockReturnValue([
-  { category: "achievement", key: "li-course-ml-0", value: { title: "ML" } },
-]);
-const mockMapCompanyFollows = vi.fn().mockReturnValue([
-  { category: "interest", key: "li-follow-google", value: { name: "Google" } },
-]);
-const mockMapCauses = vi.fn().mockReturnValue([
-  { category: "interest", key: "li-cause-env", value: { name: "Environment" } },
-]);
-
 vi.mock("@/lib/connectors/linkedin-zip/mapper", () => ({
   mapProfile: (...args: unknown[]) => mockMapProfile(...args),
   mapProfileSummary: (...args: unknown[]) => mockMapProfileSummary(...args),
@@ -64,9 +54,6 @@ vi.mock("@/lib/connectors/linkedin-zip/mapper", () => ({
   mapSkills: (...args: unknown[]) => mockMapSkills(...args),
   mapLanguages: (...args: unknown[]) => mockMapLanguages(...args),
   mapCertifications: (...args: unknown[]) => mockMapCertifications(...args),
-  mapCourses: (...args: unknown[]) => mockMapCourses(...args),
-  mapCompanyFollows: (...args: unknown[]) => mockMapCompanyFollows(...args),
-  mapCauses: (...args: unknown[]) => mockMapCauses(...args),
 }));
 
 // --- yauzl-promise mock ---
@@ -275,7 +262,7 @@ describe("importLinkedInZip", () => {
     expect(zipReader.close).toHaveBeenCalledTimes(1);
   });
 
-  it("processes all 10 supported file types", async () => {
+  it("processes all 7 supported file types", async () => {
     const zipReader = createMockZipReader([
       createMockEntry("Profile.csv", "[]"),
       createMockEntry("Profile Summary.csv", "[]"),
@@ -284,9 +271,6 @@ describe("importLinkedInZip", () => {
       createMockEntry("Skills.csv", "[]"),
       createMockEntry("Languages.csv", "[]"),
       createMockEntry("Certifications.csv", "[]"),
-      createMockEntry("Courses.csv", "[]"),
-      createMockEntry("Company Follows.csv", "[]"),
-      createMockEntry("Causes You Care About.csv", "[]"),
     ]);
     mockFromBuffer.mockResolvedValue(zipReader);
 
@@ -304,13 +288,54 @@ describe("importLinkedInZip", () => {
     expect(mockMapSkills).toHaveBeenCalledTimes(1);
     expect(mockMapLanguages).toHaveBeenCalledTimes(1);
     expect(mockMapCertifications).toHaveBeenCalledTimes(1);
-    expect(mockMapCourses).toHaveBeenCalledTimes(1);
-    expect(mockMapCompanyFollows).toHaveBeenCalledTimes(1);
-    expect(mockMapCauses).toHaveBeenCalledTimes(1);
 
-    // 10 facts total (1 per mapper)
+    // 7 facts total (1 per mapper)
     const [facts] = mockBatchCreateFacts.mock.calls[0];
-    expect(facts).toHaveLength(10);
+    expect(facts).toHaveLength(7);
+  });
+
+  it("excludes Courses.csv, Company Follows.csv, and Causes You Care About.csv", async () => {
+    const zipReader = createMockZipReader([
+      createMockEntry("Profile.csv", "[]"),
+      createMockEntry("Courses.csv", "[]"),
+      createMockEntry("Company Follows.csv", "[]"),
+      createMockEntry("Causes You Care About.csv", "[]"),
+    ]);
+    mockFromBuffer.mockResolvedValue(zipReader);
+
+    await importLinkedInZip(
+      Buffer.from("fake-zip"),
+      mockScope,
+      "testuser",
+      "en",
+    );
+
+    expect(mockMapProfile).toHaveBeenCalledTimes(1);
+    // Only Profile.csv fact should be in the batch
+    const [facts] = mockBatchCreateFacts.mock.calls[0];
+    expect(facts).toHaveLength(1);
+    expect(facts[0].category).toBe("identity");
+  });
+
+  it("passes language names to mapSkills for dedup filtering", async () => {
+    const zipReader = createMockZipReader([
+      createMockEntry("Languages.csv", "[]"),
+      createMockEntry("Skills.csv", "[]"),
+    ]);
+    mockFromBuffer.mockResolvedValue(zipReader);
+
+    await importLinkedInZip(
+      Buffer.from("fake-zip"),
+      mockScope,
+      "testuser",
+      "en",
+    );
+
+    // mapSkills should receive a Set of language names as second arg
+    expect(mockMapSkills).toHaveBeenCalledTimes(1);
+    const [, languageNames] = mockMapSkills.mock.calls[0];
+    expect(languageNames).toBeInstanceOf(Set);
+    expect(languageNames.has("english")).toBe(true);
   });
 
   it("handles non-Error thrown by fromBuffer", async () => {
