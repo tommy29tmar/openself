@@ -243,7 +243,7 @@ async function triggerSync(): Promise<{ success: boolean; error?: string }> {
 /* ── LinkedIn import helper ── */
 async function importLinkedIn(
   file: File,
-): Promise<{ success: boolean; factsWritten?: number; factsSkipped?: number; error?: string }> {
+): Promise<{ success: boolean; report?: { factsWritten: number; factsSkipped: number }; error?: string }> {
   try {
     const form = new FormData();
     form.append("file", file);
@@ -383,8 +383,8 @@ function LinkedInCard({ onRefresh }: { onRefresh: () => void }) {
       setResult(null);
       const res = await importLinkedIn(file);
       setImporting(false);
-      if (res.success) {
-        setResult({ factsWritten: res.factsWritten });
+      if (res.success && res.report) {
+        setResult({ factsWritten: res.report.factsWritten });
         onRefresh();
       } else {
         setResult({ error: res.error ?? "Import failed" });
@@ -768,7 +768,7 @@ Create `tests/evals/connector-api-contract.test.ts` with assertions that each en
 **Step 4: Commit**
 
 ```bash
-git add src/lib/connectors/api-errors.ts src/app/api/connectors/status/route.ts src/app/api/connectors/github/connect/route.ts src/app/api/connectors/github/sync/route.ts src/app/api/connectors/linkedin-zip/import/route.ts src/app/api/connectors/[id]/disconnect/route.ts tests/evals/connector-api-contract.test.ts
+git add src/lib/connectors/api-errors.ts src/app/api/connectors/status/route.ts src/app/api/connectors/github/connect/route.ts src/app/api/connectors/github/sync/route.ts src/app/api/connectors/linkedin-zip/import/route.ts 'src/app/api/connectors/[id]/disconnect/route.ts' tests/evals/connector-api-contract.test.ts
 git commit -m "feat(connectors): harden connector API auth checks and standardize error contract"
 ```
 
@@ -1040,13 +1040,22 @@ import { describe, it, expect } from "vitest";
 
 describe("Avatar Upload", () => {
   describe("POST /api/media/avatar validation", () => {
-    it("rejects files over 2MB", () => {
-      // The media-service already enforces this, but route should also check
-      // Test the validateAvatarUpload helper
+    it("rejects files over 2MB", async () => {
+      const { processAvatarImage } = await import(
+        "@/lib/services/image-utils"
+      );
+      const oversized = Buffer.alloc(2 * 1024 * 1024 + 1); // 2MB + 1 byte
+      // Write valid JPEG header so it passes magic-byte check
+      oversized[0] = 0xFF; oversized[1] = 0xD8; oversized[2] = 0xFF;
+      expect(() => processAvatarImage(oversized, "image/jpeg")).toThrow();
     });
 
-    it("rejects non-image MIME types", () => {
-      // Route-level MIME check before passing to service
+    it("rejects non-image MIME types", async () => {
+      const { processAvatarImage } = await import(
+        "@/lib/services/image-utils"
+      );
+      const buf = Buffer.from("not an image");
+      expect(() => processAvatarImage(buf, "application/pdf")).toThrow();
     });
 
     it("rejects files with mismatched magic bytes", async () => {
@@ -1070,25 +1079,15 @@ describe("Avatar Upload", () => {
       const id = uploadAvatar(profileId, buf, "image/jpeg");
       expect(id).toBeTruthy();
       expect(typeof id).toBe("string");
+      // getMediaById returns { data, mimeType } — no profileId field
       const media = getMediaById(id);
       expect(media).not.toBeNull();
-      expect(media!.profileId).toBe(profileId);
-    });
-
-    it("replaces existing avatar for same profile", async () => {
-      const { uploadAvatar, getProfileAvatar } = await import(
-        "@/lib/services/media-service"
-      );
-      const profileId = "test-profile-replace";
-      const buf1 = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
-      const buf2 = Buffer.from([0xFF, 0xD8, 0xFF, 0xE1]);
-      const id1 = uploadAvatar(profileId, buf1, "image/jpeg");
-      const id2 = uploadAvatar(profileId, buf2, "image/jpeg");
-      expect(id2).not.toBe(id1);
-      const current = getProfileAvatar(profileId);
-      expect(current).toBe(id2);
+      expect(media!.mimeType).toBe("image/jpeg");
+      expect(media!.data.length).toBeGreaterThan(0);
     });
   });
+
+  // NOTE: getProfileAvatar is created in Task 7 — test it there, not here
 });
 ```
 
@@ -1258,11 +1257,21 @@ vi.mock("@/lib/services/media-service", () => ({
 
 describe("Avatar Composer Wiring", () => {
   it("getProfileAvatar returns media ID when avatar exists", async () => {
+    const { uploadAvatar, getProfileAvatar } = await import(
+      "@/lib/services/media-service"
+    );
+    const profileId = "test-composer-wiring";
+    const buf = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+    const id = uploadAvatar(profileId, buf, "image/jpeg");
+    const result = getProfileAvatar(profileId);
+    expect(result).toBe(id);
+  });
+
+  it("getProfileAvatar returns null when no avatar", async () => {
     const { getProfileAvatar } = await import(
       "@/lib/services/media-service"
     );
-    // The mock — test that the function is called correctly
-    expect(typeof getProfileAvatar).toBe("function");
+    expect(getProfileAvatar("nonexistent-profile")).toBeNull();
   });
 });
 ```
@@ -1617,7 +1626,7 @@ git commit -m "feat(avatar): add AvatarSection UI in SettingsPanel"
 Create `tests/evals/accept-language.test.ts`:
 
 ```typescript
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 
 describe("Accept-Language parser", () => {
   let parseAcceptLanguage: (header: string | null) => string | null;
@@ -2237,9 +2246,8 @@ describe("Graceful degradation", () => {
 });
 
 describe("TranslationBanner", () => {
-  it("shows source language name", () => {
-    // This would be a component test; for now test the data lookup
-    const { LANGUAGE_NAMES } = require("@/lib/i18n/language-names");
+  it("shows source language name", async () => {
+    const { LANGUAGE_NAMES } = await import("@/lib/i18n/language-names");
     expect(LANGUAGE_NAMES.fr).toBe("French");
     expect(LANGUAGE_NAMES.it).toBe("Italian");
   });
