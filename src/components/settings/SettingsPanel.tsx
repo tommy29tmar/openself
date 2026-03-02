@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { ConnectorSection } from "@/components/settings/ConnectorSection";
+import { AvatarSection } from "@/components/settings/AvatarSection";
 
 type SettingsPanelProps = {
   open: boolean;
@@ -224,6 +225,12 @@ export function SettingsPanel({
                       );
                     })}
                   </div>
+                </div>
+
+                {/* Avatar */}
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Avatar</SectionLabel>
+                  <AvatarSection />
                 </div>
 
                 {/* Integrations */}
