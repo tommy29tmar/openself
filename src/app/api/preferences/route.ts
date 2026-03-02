@@ -75,7 +75,8 @@ export async function POST(req: Request) {
         // Always compose in the fact language so values and templates are
         // in the same language, then translate the coherent result.
         const factLanguage = getFactLanguage(primaryKey) ?? language;
-        const regeneratedConfig = composeOptimisticPage(facts, username, factLanguage);
+        const profileId = scope?.cognitiveOwnerKey ?? primaryKey;
+        const regeneratedConfig = composeOptimisticPage(facts, username, factLanguage, undefined, undefined, profileId);
         const nextConfig = currentDraft
           ? {
               ...regeneratedConfig,

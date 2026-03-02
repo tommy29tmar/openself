@@ -30,6 +30,8 @@ type SettingsPanelProps = {
   onFontFamilyChange: (font: AvailableFont) => void;
   layoutTemplate?: LayoutTemplateId;
   onLayoutTemplateChange?: (t: LayoutTemplateId) => void;
+  /** Called after avatar upload/remove to trigger preview refresh */
+  onAvatarChange?: () => void;
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -87,6 +89,7 @@ export function SettingsPanel({
   onFontFamilyChange,
   layoutTemplate = "monolith",
   onLayoutTemplateChange,
+  onAvatarChange,
 }: SettingsPanelProps) {
   // Close on Escape
   useEffect(() => {
@@ -230,7 +233,7 @@ export function SettingsPanel({
                 {/* Avatar */}
                 <div className="flex flex-col gap-2.5">
                   <SectionLabel>Avatar</SectionLabel>
-                  <AvatarSection />
+                  <AvatarSection onAvatarChange={onAvatarChange} />
                 </div>
 
                 {/* Integrations */}

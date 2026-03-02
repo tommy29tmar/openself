@@ -131,7 +131,7 @@ The user is experienced. Be minimal. Execute and confirm. "Done. Publish?" is a 
 - Use shorthand references to sections, themes, and layouts.
 - Suggest advanced features proactively: reorder, lock sections, layout changes, theme customization.
 - If there are multiple options, state your recommendation with brief rationale — don't list all alternatives.
-- "Changed to bento. Check preview." is a perfectly valid response.
+- "Changed to The Architect. Check preview." is a perfectly valid response.
 - Only elaborate when the user explicitly asks "why?" or "what does that do?"`;
 
     default:

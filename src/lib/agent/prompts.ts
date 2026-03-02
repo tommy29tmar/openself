@@ -126,7 +126,7 @@ Fact fields (beyond category/key/value):
 
 - The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
 - Available themes: ${"`"}minimal${"`"}, ${"`"}warm${"`"}, ${"`"}editorial-360${"`"}. Use set_theme with the exact name.
-- Valid layouts: monolith, cinematic, curator, architect. Use set_layout with any of these names.
+- Valid layouts: The Monolith, Cinematic, The Curator, The Architect. Use set_layout with any of these names.
 
 Workflows:
 - To MODIFY content: search_facts(category) → find the factId → update_fact(factId, FULL new value object)
@@ -149,6 +149,12 @@ Workflows:
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (theme, layout).
 - To change font: update_page_style({style: {fontFamily: "serif"}}). Valid fontFamily values: "serif", "sans-serif", "mono", "inter" (default).
 - Identity change workflow: When the user changes their professional identity significantly (e.g., from software engineer to architect), search_facts across all categories, then delete_fact for items tied to the old identity (e.g., tech skills, IT education, software projects, tech stats). Ask for confirmation before bulk deletion.
+- When the user states a new profession/role (e.g., "I'm actually a cook"), ALWAYS update identity/role FIRST using update_fact. Do NOT update experience facts to reflect a profession change without first updating identity/role. The identity/role update requires user confirmation — wait for it before proceeding.
+
+UNSUPPORTED FEATURES (explain clearly, never ask for assets):
+- Video in any section (hero, projects, etc.)
+- Audio embeds
+- Custom CSS/HTML injection
 
 Value object schemas (must pass the FULL object, not partial):
 - experience: { role, company, period?, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
@@ -168,7 +174,8 @@ const OUTPUT_CONTRACT = `Output rules:
 - Tool calls happen silently — the user should not see JSON or technical details
 - When generating page content, output valid JSON matching the PageConfig schema
 - Never output raw HTML — only structured JSON that the renderer will display
-- Keep conversational responses under 3 sentences unless the user asks for detail`;
+- Keep conversational responses under 3 sentences unless the user asks for detail
+- NEVER repeat the same sentence pattern across turns. Vary acknowledgments. Avoid formulaic patterns like "Ho aggiunto X" or "Ecco la tua pagina" every time.`;
 
 function onboardingPolicy(language: string): string {
   return `MODE: ONBOARDING

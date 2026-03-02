@@ -406,6 +406,7 @@ export function SplitView({
       onFontFamilyChange={handleFontFamilyChange}
       layoutTemplate={layoutTemplate}
       onLayoutTemplateChange={handleLayoutTemplateChange}
+      onAvatarChange={() => { void fetchPreview(); }}
     />
   );
 

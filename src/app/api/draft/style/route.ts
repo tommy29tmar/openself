@@ -41,7 +41,8 @@ export async function POST(req: Request) {
       const draftUsername = authCtx?.username ?? "draft";
       const { factLanguage, language } = getPreferences(primaryKey);
       const factLang = factLanguage ?? language ?? "en";
-      const composed = projectCanonicalConfig(facts, draftUsername, factLang);
+      const authProfileId = scope?.cognitiveOwnerKey ?? authCtx?.profileId ?? primaryKey;
+      const composed = projectCanonicalConfig(facts, draftUsername, factLang, undefined, authProfileId);
       upsertDraft(draftUsername, composed, primaryKey);
       draft = getDraft(primaryKey);
       if (!draft) {
@@ -93,13 +94,19 @@ export async function POST(req: Request) {
     ) {
       config.layoutTemplate = resolvedLayout as LayoutTemplateId;
 
-      // Re-assign slots for the new template
+      // Re-assign slots for the new template (carry over existing slot assignments)
       const template = getLayoutTemplate(config.layoutTemplate);
       const locks = extractLocks(config.sections);
+      const draftSlots = new Map<string, string>();
+      for (const s of config.sections) {
+        if (s.slot) draftSlots.set(s.id, s.slot);
+      }
       const { sections, issues } = assignSlotsFromFacts(
         template,
         config.sections,
         locks,
+        undefined,
+        draftSlots.size > 0 ? draftSlots : undefined,
       );
 
       const errors = issues.filter((i) => i.severity === "error");

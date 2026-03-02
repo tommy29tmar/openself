@@ -162,7 +162,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     const allFacts = getActiveFacts(sessionId, readKeys);
     if (allFacts.length === 0) throw new Error("No facts yet — ask the user for information first");
     const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
-    const composed = composeOptimisticPage(allFacts, "draft", factLang);
+    const composed = composeOptimisticPage(allFacts, "draft", factLang, undefined, undefined, effectiveOwnerKey);
     upsertDraft("draft", composed, sessionId);
     return composed;
   }
@@ -837,21 +837,33 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         const targetLang = language ?? sessionLanguage;
         const factLang = getFactLanguage(sessionId) ?? targetLang;
         const existingTemplate = currentDraft?.config.layoutTemplate;
+        // Build slot map once from previous draft for carry-over in both compose and assign
+        const previousSlots = new Map<string, string>();
+        if (currentDraft) {
+          for (const s of currentDraft.config.sections) {
+            if (s.slot) previousSlots.set(s.id, s.slot);
+          }
+        }
+        const slotsArg = previousSlots.size > 0 ? previousSlots : undefined;
         const composed = composeOptimisticPage(
           facts,
           username,
           factLang,
           existingTemplate,
+          slotsArg,
+          effectiveOwnerKey,
         );
         let styled: PageConfig = currentDraft
           ? { ...composed, theme: currentDraft.config.theme, style: currentDraft.config.style }
           : composed;
-        // Preserve layoutTemplate and re-assign slots with locks
+        // Preserve layoutTemplate and re-assign slots with locks (carry over existing slot assignments)
         if (existingTemplate && currentDraft) {
           styled.layoutTemplate = existingTemplate;
           const template = getLayoutTemplate(existingTemplate);
           const locks = extractLocks(currentDraft.config.sections);
-          const { sections } = assignSlotsFromFacts(template, styled.sections, locks);
+          const { sections } = assignSlotsFromFacts(
+            template, styled.sections, locks, undefined, slotsArg,
+          );
           styled = { ...styled, sections };
         }
 
@@ -1073,12 +1085,12 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
   set_layout: tool({
     description:
-      "Change the page layout template. Available: monolith, cinematic, curator, architect.",
+      "Change the page layout template. Available: The Monolith, Cinematic, The Curator, The Architect.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       layoutTemplate: z
         .string()
-        .describe("Layout template: monolith, cinematic, curator, architect"),
+        .describe("Layout template: The Monolith, Cinematic, The Curator, The Architect"),
     }),
     execute: async ({ username, layoutTemplate }) => {
       try {
@@ -1090,10 +1102,16 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
 
         const template = getLayoutTemplate(resolved as any);
         const locks = extractLocks(config.sections);
+        const draftSlots = new Map<string, string>();
+        for (const s of config.sections) {
+          if (s.slot) draftSlots.set(s.id, s.slot);
+        }
         const { sections, issues } = assignSlotsFromFacts(
           template,
           config.sections,
           locks,
+          undefined,
+          draftSlots.size > 0 ? draftSlots : undefined,
         );
 
         const errors = issues.filter((i) => i.severity === "error");

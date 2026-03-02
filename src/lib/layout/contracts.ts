@@ -14,8 +14,20 @@ const LAYOUT_ALIASES: Record<string, LayoutTemplateId> = {
   vertical: "monolith",
   bento: "architect",
   sidebar: "curator",
+  "bento-standard": "architect",
+  "sidebar-left": "curator",
+  "the monolith": "monolith",
+  "the cinematic": "cinematic",
+  "the curator": "curator",
+  "the architect": "architect",
 };
 
 export function resolveLayoutAlias(value: string): string {
-  return LAYOUT_ALIASES[value] ?? value;
+  const normalized = value.toLowerCase().trim();
+  // 1. Check aliases (case-insensitive)
+  if (LAYOUT_ALIASES[normalized]) return LAYOUT_ALIASES[normalized];
+  // 2. Check if normalized is a valid canonical ID
+  if ((LAYOUT_TEMPLATES as readonly string[]).includes(normalized)) return normalized;
+  // 3. Fallback to original trimmed value (preserves error messages)
+  return value.trim();
 }
