@@ -516,7 +516,8 @@ useEffect(() => {
   if (url.searchParams.has("connector")) {
     setConnectorReturn(true);
     url.searchParams.delete("connector");
-    window.history.replaceState({}, "", url.pathname);
+    // Preserve any other query params (use full url minus the connector param)
+    window.history.replaceState({}, "", url.pathname + url.search);
   }
 }, []);
 ```
@@ -579,13 +580,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("Connector Idempotency", () => {
   describe("hasPendingJob", () => {
-    it("returns true when a connector_sync job exists for ownerKey", async () => {
-      // Test the hasPendingJob helper that checks the jobs table
+    it("returns false when no jobs exist for ownerKey", async () => {
       const { hasPendingJob } = await import(
         "@/lib/connectors/idempotency"
       );
-      // This needs a DB setup — test the logic shape
-      expect(typeof hasPendingJob).toBe("function");
+      // No jobs in test DB → must return false
+      expect(hasPendingJob("nonexistent_owner")).toBe(false);
+    });
+
+    it("SQL references correct columns (job_type, json_extract, queued/running)", async () => {
+      // Verify the query doesn't throw on a real DB — schema alignment test
+      const { hasPendingJob } = await import(
+        "@/lib/connectors/idempotency"
+      );
+      // Should not throw (correct column names + JSON path)
+      expect(() => hasPendingJob("test_owner")).not.toThrow();
     });
   });
 
@@ -628,14 +637,23 @@ const SYNC_COOLDOWN_MS = 60_000; // 60 seconds
 
 /**
  * Check if a connector_sync job is already queued or running for this ownerKey.
+ *
+ * Schema reality (schema.ts:262, migration 0016):
+ *   - Column is `job_type` (not `type`)
+ *   - ownerKey lives inside `payload` JSON: json_extract(payload, '$.ownerKey')
+ *   - Statuses are `queued` / `running` (not `pending` / `claimed`)
+ *   - There is a UNIQUE INDEX `uniq_jobs_dedup` on
+ *     (job_type, json_extract(payload,'$.ownerKey')) WHERE status IN ('queued','running')
+ *     so enqueueJob already does onConflictDoNothing — but we still want to
+ *     return a clear ALREADY_SYNCING error to the caller instead of a silent no-op.
  */
 export function hasPendingJob(ownerKey: string): boolean {
   const row = sqlite
     .prepare(
       `SELECT 1 FROM jobs
-       WHERE type = 'connector_sync'
-         AND owner_key = ?
-         AND status IN ('pending', 'claimed')
+       WHERE job_type = 'connector_sync'
+         AND json_extract(payload, '$.ownerKey') = ?
+         AND status IN ('queued', 'running')
        LIMIT 1`,
     )
     .get(ownerKey);
@@ -1007,7 +1025,11 @@ git commit -m "feat(avatar): add magic bytes detection and JPEG EXIF stripping"
 - Create: `src/app/api/media/avatar/route.ts`
 - Test: `tests/evals/avatar-upload.test.ts`
 
-**Context:** `uploadAvatar(profileId, data, mimeType)` in `src/lib/services/media-service.ts` handles the DB write. It generates a new UUID per upload (cache-busting). The `mediaAssets` table has a unique index on `(profileId) WHERE kind='avatar'` enforcing one avatar per profile. Auth uses `resolveOwnerScope()` for multi-user or defaults to `"__default__"`. The `getAuthContext()` helper returns `{ sessionId, profileId, userId, username }`.
+**Context:** `uploadAvatar(profileId, data, mimeType)` in `src/lib/services/media-service.ts` handles the DB write. It generates a new UUID per upload. Auth uses `resolveOwnerScope()` for multi-user or defaults to `"__default__"`. The `getAuthContext()` helper returns `{ sessionId, profileId, userId, username }`.
+
+**IMPORTANT — upsert bug in current `uploadAvatar()`:** The DB has a unique index `uniq_media_avatar_per_profile ON media_assets(profile_id) WHERE kind = 'avatar'` (migration 0001, line 122). But `uploadAvatar()` currently does `onConflictDoUpdate({ target: mediaAssets.id })` — conflict on the `id` primary key, NOT on the partial unique index. Since each upload generates a new `crypto.randomUUID()` for `id`, the PK never conflicts. A second upload for the same profile will violate the partial unique index and **throw a SQLITE_CONSTRAINT error**.
+
+**Fix required in this task:** Before calling `uploadAvatar()`, the route must first DELETE the existing avatar for this profile (if any), then insert the new one. Alternatively, modify `uploadAvatar()` itself to do a delete-then-insert instead of relying on `onConflictDoUpdate`. The simplest approach: add a `deleteExistingAvatar(profileId)` call before `uploadAvatar()` in the route handler.
 
 **Step 1: Write tests**
 
@@ -1039,12 +1061,32 @@ describe("Avatar Upload", () => {
   });
 
   describe("media-service uploadAvatar", () => {
-    it("returns a new UUID on each upload", async () => {
-      const { uploadAvatar } = await import(
+    it("stores avatar and returns media ID", async () => {
+      const { uploadAvatar, getMediaById } = await import(
         "@/lib/services/media-service"
       );
-      // This requires DB — tested in integration
-      expect(typeof uploadAvatar).toBe("function");
+      const profileId = "test-profile-avatar";
+      const buf = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]); // minimal JPEG header
+      const id = uploadAvatar(profileId, buf, "image/jpeg");
+      expect(id).toBeTruthy();
+      expect(typeof id).toBe("string");
+      const media = getMediaById(id);
+      expect(media).not.toBeNull();
+      expect(media!.profileId).toBe(profileId);
+    });
+
+    it("replaces existing avatar for same profile", async () => {
+      const { uploadAvatar, getProfileAvatar } = await import(
+        "@/lib/services/media-service"
+      );
+      const profileId = "test-profile-replace";
+      const buf1 = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+      const buf2 = Buffer.from([0xFF, 0xD8, 0xFF, 0xE1]);
+      const id1 = uploadAvatar(profileId, buf1, "image/jpeg");
+      const id2 = uploadAvatar(profileId, buf2, "image/jpeg");
+      expect(id2).not.toBe(id1);
+      const current = getProfileAvatar(profileId);
+      expect(current).toBe(id2);
     });
   });
 });
@@ -1131,7 +1173,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // Upload (media-service handles upsert with unique constraint)
+  // Delete existing avatar first (partial unique index prevents insert of second avatar)
+  db.delete(mediaAssets)
+    .where(and(eq(mediaAssets.profileId, profileId), eq(mediaAssets.kind, "avatar")))
+    .run();
+
+  // Upload new avatar
   try {
     const id = uploadAvatar(profileId, processed.data, processed.mimeType);
     return NextResponse.json({
@@ -1870,7 +1917,7 @@ In `src/lib/ai/translate.ts`, add a helper that derives cache identity from:
 - translatable content hash
 - normalized source language (`sourceLanguage ?? "unknown"`)
 - target language
-- translation model id (`getModelId()`)
+- translation model id (`getModelIdForTier("fast")` — NOT `getModelId()`, which resolves the default tier, not the `fast` tier used by translation. Import from `@/lib/ai/provider`)
 
 Use this composite digest as `contentHash` for cache read/write and event logs.
 
@@ -1884,6 +1931,8 @@ In `tests/evals/translate.test.ts`, add assertions that:
 - changing source language yields a cache miss (different key)
 - changing model id yields a cache miss (different key)
 - same source/target/model/content yields cache hit
+
+**Also fix existing bug in `translate.ts`:** Lines 176 and 182 use `getModelId()` (which resolves the default/standard tier model via `AI_MODEL` env var) to store the model in cache. But the LLM call at line 162 uses `getModelForTier("fast")`. The `model` column in the cache should use `getModelIdForTier("fast")` for consistency. Fix this alongside the cache key change.
 
 **Step 4: Commit**
 
@@ -2040,8 +2089,12 @@ export default async function UsernamePage({ params, searchParams }: Props) {
   const acceptLang = parseAcceptLanguage(headerStore.get("accept-language"));
   const visitorLang = explicitLang ?? cookieLang ?? acceptLang;
 
-  // No translation needed if: no visitor lang detected, or same as source
-  if (!visitorLang || visitorLang === sourceLanguage) {
+  // No translation needed if:
+  // - no visitor lang detected
+  // - visitor lang matches page source language
+  // - sourceLanguage is null (old pages published before migration 0024 — we don't
+  //   know the source language, so translating would be unreliable)
+  if (!visitorLang || !sourceLanguage || visitorLang === sourceLanguage) {
     return <PageRenderer config={config} isOwner={isOwner} />;
   }
 
