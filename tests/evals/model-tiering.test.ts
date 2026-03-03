@@ -16,7 +16,7 @@ vi.mock("@ai-sdk/anthropic", () => ({
   anthropic: vi.fn((modelId: string) => ({ modelId, provider: "anthropic" })),
 }));
 
-import { getModelForTier, getModelIdForTier } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
 
 describe("model tiering", () => {
   const originalEnv = { ...process.env };
@@ -117,5 +117,88 @@ describe("model tiering", () => {
     expect(fastId).toBe("single-model");
     expect(standardId).toBe("single-model");
     expect(reasoningId).toBe("single-model");
+  });
+});
+
+describe("multi-provider tier routing", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    delete process.env.AI_PROVIDER;
+    delete process.env.AI_MODEL;
+    delete process.env.AI_MODEL_FAST;
+    delete process.env.AI_MODEL_STANDARD;
+    delete process.env.AI_MODEL_REASONING;
+    delete process.env.AI_MODEL_MEDIUM;
+    delete process.env.AI_MODEL_CAPABLE;
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it("AI_MODEL_FAST with known provider prefix returns model from that provider", () => {
+    process.env.AI_PROVIDER = "anthropic";
+    process.env.AI_MODEL_FAST = "google:gemini-2.0-flash";
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+    const model = getModelForTier("fast") as any;
+    expect(model.modelId).toBe("gemini-2.0-flash");
+    expect(model.provider).toBe("google");
+  });
+
+  it("AI_MODEL_STANDARD with known provider prefix overrides AI_PROVIDER", () => {
+    process.env.AI_PROVIDER = "google";
+    process.env.AI_MODEL_STANDARD = "anthropic:claude-sonnet-4-6";
+    const model = getModelForTier("standard") as any;
+    expect(model.modelId).toBe("claude-sonnet-4-6");
+    expect(model.provider).toBe("anthropic");
+  });
+
+  it("getModelIdForTier strips known provider prefix", () => {
+    process.env.AI_PROVIDER = "anthropic";
+    process.env.AI_MODEL_FAST = "google:gemini-2.0-flash";
+    expect(getModelIdForTier("fast")).toBe("gemini-2.0-flash");
+  });
+
+  it("backward compat: plain model id without prefix uses AI_PROVIDER", () => {
+    process.env.AI_PROVIDER = "google";
+    process.env.AI_MODEL_FAST = "gemini-2.0-flash-lite";
+    const model = getModelForTier("fast") as any;
+    expect(model.modelId).toBe("gemini-2.0-flash-lite");
+    expect(model.provider).toBe("google");
+  });
+
+  it("backward compat: model id with unknown prefix (e.g. ollama tag) treated as plain id", () => {
+    process.env.AI_PROVIDER = "ollama";
+    process.env.AI_MODEL_FAST = "llama3.2:latest";
+    const model = getModelForTier("fast") as any;
+    // unknown prefix → whole value is modelId, provider = AI_PROVIDER (ollama)
+    expect(model.modelId).toBe("llama3.2:latest");
+    expect(model.provider).toBe("ollama");
+  });
+
+  it("getProviderForTier returns overridden provider when known prefix is set", () => {
+    process.env.AI_PROVIDER = "google";
+    process.env.AI_MODEL_STANDARD = "anthropic:claude-sonnet-4-6";
+    expect(getProviderForTier("standard")).toBe("anthropic");
+  });
+
+  it("getProviderForTier falls back to AI_PROVIDER without known prefix", () => {
+    process.env.AI_PROVIDER = "anthropic";
+    delete process.env.AI_MODEL_FAST;
+    expect(getProviderForTier("fast")).toBe("anthropic");
+  });
+
+  it("throws only when known provider prefix is followed by empty model id", () => {
+    process.env.AI_MODEL_FAST = "google:";
+    expect(() => getModelForTier("fast")).toThrow(/empty model-id/);
+  });
+
+  it("does NOT throw on unknown prefix (treats as plain id)", () => {
+    process.env.AI_PROVIDER = "openai";
+    process.env.AI_MODEL_FAST = "ft:gpt-4:my-fine-tune";
+    expect(() => getModelForTier("fast")).not.toThrow();
   });
 });

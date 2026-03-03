@@ -67,32 +67,59 @@ const TIER_ENV_KEYS: Record<ModelTier, string[]> = {
   reasoning: ["AI_MODEL_REASONING", "AI_MODEL_CAPABLE"],
 };
 
+interface ModelSpec {
+  provider: Provider | null;
+  modelId: string;
+}
+
+/**
+ * Parses "provider:model-id" or bare "model-id".
+ * A known provider prefix (google|openai|anthropic|ollama) triggers cross-provider dispatch.
+ * Unknown prefix (e.g. "llama3.2:latest", "ft:gpt-4:xxx") → plain model id, uses AI_PROVIDER.
+ * Throws only when a KNOWN provider prefix is found but model-id is empty.
+ */
+function parseTierEnvValue(val: string): ModelSpec {
+  const colonIdx = val.indexOf(":");
+  if (colonIdx === -1) return { provider: null, modelId: val };
+  const prefix = val.slice(0, colonIdx);
+  const id = val.slice(colonIdx + 1);
+  const valid: Provider[] = ["google", "openai", "anthropic", "ollama"];
+  if (!valid.includes(prefix as Provider)) {
+    // Not a provider prefix → treat full value as model id (e.g. llama3.2:latest, ft:gpt-4:xxx)
+    return { provider: null, modelId: val };
+  }
+  if (!id) {
+    throw new Error(
+      `Invalid AI_MODEL_* value "${val}": known provider prefix "${prefix}" has empty model-id after ":".`
+    );
+  }
+  return { provider: prefix as Provider, modelId: id };
+}
+
+function resolveModelSpecForTier(resolved: ModelTier): ModelSpec {
+  for (const envKey of TIER_ENV_KEYS[resolved]) {
+    const val = process.env[envKey];
+    if (val) return parseTierEnvValue(val);
+  }
+  const globalOverride = process.env.AI_MODEL;
+  if (globalOverride) return { provider: null, modelId: globalOverride };
+  const provider = getProvider();
+  return { provider, modelId: TIER_MODEL_TABLES[resolved][provider] };
+}
+
 function resolveTier(tier: ModelTier | LegacyModelTier): ModelTier {
   return TIER_ALIAS[tier] ?? tier as ModelTier;
 }
 
 function resolveModelIdForTier(resolved: ModelTier): string {
-  const provider = getProvider();
-  for (const envKey of TIER_ENV_KEYS[resolved]) {
-    const val = process.env[envKey];
-    if (val) return val;
-  }
-  // Fall back to AI_MODEL if set (single-model setup)
-  return process.env.AI_MODEL ?? TIER_MODEL_TABLES[resolved][provider];
+  return resolveModelSpecForTier(resolved).modelId;
 }
 
-export function getModelForTier(tier: ModelTier | LegacyModelTier): LanguageModel {
-  const resolved = resolveTier(tier);
-  const provider = getProvider();
-  const modelId = resolveModelIdForTier(resolved);
-
+function buildModel(provider: Provider, modelId: string): LanguageModel {
   switch (provider) {
     case "google": {
-      const apiKey =
-        process.env.GOOGLE_GENERATIVE_AI_API_KEY ??
-        process.env.GOOGLE_API_KEY;
-      const google = createGoogleGenerativeAI({ apiKey });
-      return google(modelId);
+      const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY;
+      return createGoogleGenerativeAI(apiKey ? { apiKey } : {})(modelId);
     }
     case "openai":
       return openai(modelId);
@@ -100,10 +127,22 @@ export function getModelForTier(tier: ModelTier | LegacyModelTier): LanguageMode
       return anthropic(modelId);
     case "ollama": {
       const baseURL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
-      const ollama = createOpenAI({ baseURL, apiKey: "ollama" });
-      return ollama(modelId);
+      return createOpenAI({ baseURL, apiKey: "ollama" })(modelId);
     }
   }
+}
+
+export function getModelForTier(tier: ModelTier | LegacyModelTier): LanguageModel {
+  const resolved = resolveTier(tier);
+  const { provider: specProvider, modelId } = resolveModelSpecForTier(resolved);
+  return buildModel(specProvider ?? getProvider(), modelId);
+}
+
+/** Returns the effective provider for a tier, respecting provider:model prefix overrides. */
+export function getProviderForTier(tier: ModelTier | LegacyModelTier): string {
+  const resolved = resolveTier(tier);
+  const { provider: specProvider } = resolveModelSpecForTier(resolved);
+  return specProvider ?? getProvider();
 }
 
 export function getModelIdForTier(tier: ModelTier | LegacyModelTier): string {
@@ -139,28 +178,6 @@ export function getModelId(): string {
 
 export function getModel(): LanguageModel {
   const provider = getProvider();
-  const modelId =
-    process.env.AI_MODEL ?? DEFAULT_MODELS[provider];
-
-  switch (provider) {
-    case "google": {
-      const apiKey =
-        process.env.GOOGLE_GENERATIVE_AI_API_KEY ??
-        process.env.GOOGLE_API_KEY;
-      const google = createGoogleGenerativeAI({ apiKey });
-      return google(modelId);
-    }
-
-    case "openai":
-      return openai(modelId);
-
-    case "anthropic":
-      return anthropic(modelId);
-
-    case "ollama": {
-      const baseURL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
-      const ollama = createOpenAI({ baseURL, apiKey: "ollama" });
-      return ollama(modelId);
-    }
-  }
+  const modelId = process.env.AI_MODEL ?? DEFAULT_MODELS[provider];
+  return buildModel(provider, modelId);
 }
