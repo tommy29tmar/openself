@@ -320,6 +320,9 @@ npx vitest run tests/evals/presence-prompt-builder.test.ts
 
 ```ts
 // src/lib/presence/prompt-builder.ts
+// Side-effect imports ensure surfaces/voices are registered before listSurfaces/listVoices is called
+import "./surfaces";
+import "./voices";
 import { listSurfaces, listVoices } from "./registry";
 import { SIGNATURE_COMBOS } from "./combos";
 
@@ -382,6 +385,20 @@ git commit -m "feat(presence): add buildPresenceReference() for agent prompts"
 npx vitest run tests/evals/page-config-schema.test.ts 2>&1 | head -30
 ```
 
+**Step 1b: Check what test files exist**
+
+Before running tests, verify what test files exist for schema and related services:
+
+```bash
+ls tests/evals/ | grep -E "schema|config|style|composer"
+```
+
+Use those filenames in subsequent `vitest run` commands. If none exist, run the full suite:
+
+```bash
+npx vitest run 2>&1 | grep -E "FAIL|ERROR" | head -40
+```
+
 **Step 2: Update schema**
 
 In `src/lib/page-config/schema.ts`:
@@ -398,7 +415,7 @@ c) Add `surface`, `voice`, `light` to `PageConfig`:
 
 ```ts
 // Add these imports at the top
-import { isValidSurface, isValidVoice, isValidLight } from "@/lib/presence";
+import { isValidSurface, isValidVoice, isValidLight, listSurfaces, listVoices } from "@/lib/presence";
 
 // In PageConfig type definition, add:
 surface?: string;  // "canvas" | "clay" | "archive" | future
@@ -452,43 +469,107 @@ git commit -m "feat(schema): replace theme/colorScheme/fontFamily with surface/v
 
 **Files:**
 - Create: `db/migrations/0025_presence_system.sql`
+- Create: `scripts/cleanup-presence-reset.ts` (one-off cleanup script — NOT auto-applied)
 
-**Step 1: Write migration**
+**Step 0: Run explicit cleanup script (before migration)**
+
+The destructive DELETE is extracted to a standalone script — NOT embedded in the migration.
+This prevents it from running automatically in staging/prod.
+
+```ts
+// scripts/cleanup-presence-reset.ts
+// ONE-OFF: delete all existing pages + caches for the Presence System clean cut.
+// Only run in local dev environments with no real user data.
+// Requires explicit ENV confirmation to prevent accidental runs.
+
+import Database from "better-sqlite3";
+
+if (process.env.CONFIRM_RESET !== "yes") {
+  console.error("Set CONFIRM_RESET=yes to run this script. Check row counts first.");
+  console.error("  SELECT COUNT(*) FROM page;");
+  process.exit(1);
+}
+
+const db = new Database(process.env.DATABASE_PATH ?? "db/data.db");
+const before = (db.prepare("SELECT COUNT(*) as n FROM page").get() as { n: number }).n;
+console.log(`Deleting ${before} page rows...`);
+
+db.exec(`
+  DELETE FROM page;
+  DELETE FROM section_copy_cache;
+  DELETE FROM section_copy_state;
+  DELETE FROM section_copy_proposals;
+  DELETE FROM translation_cache;
+`);
+
+const after = (db.prepare("SELECT COUNT(*) as n FROM page").get() as { n: number }).n;
+console.log(`Done. page rows remaining: ${after}`);
+```
+
+Run it:
+```bash
+CONFIRM_RESET=yes npx tsx scripts/cleanup-presence-reset.ts
+```
+
+**Step 1: Write migration (non-destructive — no DELETEs)**
 
 ```sql
 -- db/migrations/0025_presence_system.sql
--- Presence System: clean cut — delete all existing pages (app not live).
+-- Presence System: schema registration only.
 -- PageConfig is stored as JSON in the `config` column so no DDL changes needed
 -- for surface/voice/light fields — they live inside the JSON blob.
--- We just purge stale rows.
+-- Data cleanup is handled by scripts/cleanup-presence-reset.ts (run separately).
 
-DELETE FROM page;
-DELETE FROM section_copy_cache;
-DELETE FROM section_copy_state;
-DELETE FROM section_copy_proposals;
-DELETE FROM translation_cache;
+-- This migration intentionally contains no DDL changes.
+-- It is a version marker for the migration system.
+SELECT 1; -- no-op to satisfy migration runner
 ```
 
 **Step 2: Apply migration**
 
+Use the standalone migration runner only (do NOT run `npm run dev` here — the dev server
+will fail to boot until the runtime field migration is complete in Task 5+):
+
 ```bash
-npx tsx src/lib/db/migrate-cli.ts
+npx tsx src/lib/db/migrate.ts
 ```
 
-Or restart the dev server (auto-migration runs on startup).
+If the standalone runner filename differs, check `src/lib/db/` first:
+
+```bash
+ls src/lib/db/*.ts | grep -i migrat
+```
 
 **Step 3: Verify**
 
 ```bash
-npx tsx -e "import { db } from './src/lib/db'; const rows = db.prepare('SELECT count(*) as n FROM page').get(); console.log(rows);"
+# Use the raw SQLite file directly (not Drizzle instance — Drizzle doesn't expose .prepare())
+npx tsx -e "
+import Database from 'better-sqlite3';
+const db = new Database('db/data.db');
+console.log(db.prepare('SELECT count(*) as n FROM page').get());
+"
 ```
-Expected: `{ n: 0 }`
+Expected: `{ n: 0 }`. Adjust the DB path to match `DATABASE_URL` in `.env`.
 
-**Step 4: Commit**
+**Step 4: Bump EXPECTED_SCHEMA_VERSION**
+
+Open `src/lib/db/migrate.ts` and update:
+
+```ts
+// Change:
+const EXPECTED_SCHEMA_VERSION = 24; // (or whatever the current number is)
+// To:
+const EXPECTED_SCHEMA_VERSION = 25;
+```
+
+This constant gates the worker follower startup — without this bump the follower may treat schema as ready before 0025 runs.
+
+**Step 5: Commit**
 
 ```bash
-git add db/migrations/0025_presence_system.sql
-git commit -m "feat(db): migration 0025 — purge legacy pages for Presence System clean cut"
+git add db/migrations/0025_presence_system.sql src/lib/db/migrate.ts
+git commit -m "feat(db): migration 0025 — purge legacy pages, bump schema version to 25"
 ```
 
 ---
@@ -535,17 +616,38 @@ In `src/lib/services/page-composer.ts`:
 - Remove carry-forward logic for `theme` field
 - Add carry-forward for `surface`, `voice`, `light` from existing draft/published page
 
-**Step 3: Run style-related tests**
+**Step 3: Migrate all other runtime paths that read/write `theme`, `colorScheme`, `fontFamily`**
+
+These files must also be updated — the schema change alone is not enough:
+
+- **`src/lib/services/page-projection.ts`**: `projectCanonicalConfig()` and related functions may pass through or default the old fields — update to use `surface/voice/light`.
+- **`src/app/api/preview/route.ts`** and **`src/app/api/preview/stream/route.ts`**: check for any theme/style serialization in the preview response.
+- **`src/lib/services/publish-pipeline.ts`** (if it exists): verify it passes presence fields through to the published page config.
+- **`src/app/api/preferences/route.ts`**: language switch triggers recomposition — ensure draftMeta carry-forward uses `surface/voice/light`.
+- **`src/lib/agent/tools.ts`** → `inspect_page_state` tool: if it outputs page style fields, update to show `surface/voice/light`.
+
+For each file, search for `theme`, `colorScheme`, `fontFamily` and replace accordingly. If a field is missing from the carry-forward chain, presence changes will silently reset on next compose.
 
 ```bash
-npx vitest run tests/evals/page-composer.test.ts tests/evals/style-api.test.ts 2>&1 | tail -20
+grep -rn "colorScheme\|fontFamily\|\.theme\b" src/ --include="*.ts" --include="*.tsx" | grep -v node_modules | grep -v ".test."
 ```
 
-**Step 4: Commit**
+Fix every occurrence in non-test source files.
+
+**Step 4: Run style-related tests**
 
 ```bash
-git add src/app/api/draft/style/route.ts src/lib/services/page-composer.ts
-git commit -m "feat(api): style route + composer use surface/voice/light"
+# First check what test files exist:
+ls tests/evals/ | grep -E "style|composer|draft|schema"
+# Then run matching files, or run the full suite and look for regressions:
+npx vitest run 2>&1 | grep -E "FAIL|ERROR" | head -20
+```
+
+**Step 5: Commit**
+
+```bash
+git add src/app/api/draft/style/route.ts src/lib/services/page-composer.ts src/lib/services/page-projection.ts src/app/api/preview/ src/app/api/preferences/
+git commit -m "feat(api): style route + all runtime paths use surface/voice/light"
 ```
 
 ---
@@ -601,6 +703,18 @@ Remove all references to:
 - `"Available themes: minimal, warm, editorial-360"`
 - `"fontFamily": "serif", "sans-serif", "mono", "inter"`
 - `set_theme` tool description
+
+**Step 2b: Policy sweep — remove `set_theme` from ALL policy files**
+
+The agent has policy files in `src/lib/agent/policies/` that may reference `set_theme` in instructions, undo flows, or examples. Sweep all of them:
+
+```bash
+grep -rn "set_theme\|colorScheme\|fontFamily\|theme.*minimal\|theme.*warm\|editorial-360" \
+  src/lib/agent/policies/ src/lib/agent/prompts.ts \
+  --include="*.ts" | grep -v node_modules
+```
+
+For every match, replace with the `update_page_style` equivalent. The undo-awareness policy (if it references reversing `set_theme`) must be updated to reference `update_page_style({ surface, voice, light })`.
 
 **Step 3: Run prompt contract tests**
 
@@ -712,14 +826,38 @@ git commit -m "feat(fonts): add Cormorant, Lato, JetBrains Mono for Narrative an
 
 **Step 1: Rewrite globals.css**
 
-Keep existing Tailwind directives (`@tailwind base/components/utilities`) and any app-level UI component styles (shadcn/ui vars). Replace all theme-specific CSS with the new Presence token system.
+**IMPORTANT:** This project uses Tailwind v4 and shadcn/ui. First, read the top of `globals.css` to understand the exact current structure. Preserve ALL of the following (do NOT replace them):
 
-Structure:
 ```css
-/* 1. Tailwind */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";  /* or equivalent shadcn import */
+@theme inline { /* ... shadcn theme tokens ... */ }
+/* Any shadcn-specific :root vars that the UI components depend on */
+```
+
+Also preserve the **Layout Template Engine** CSS rules that are currently in `globals.css` (check around line 336+):
+
+```css
+/* --- Layout Template Engine — desktop order via CSS custom property --- */
+@media (min-width: 768px) {
+  .layout-architect > * { order: var(--md-order, 0); }
+  .layout-curator > * { order: var(--md-order, 0); }
+}
+
+/* --- Slot spacing for compact layouts (non-monolith) --- */
+.layout-architect .slot-third [data-section] h2,
+.layout-curator .slot-third [data-section] h2 { /* ... */ }
+/* etc. */
+```
+
+These rules are critical for Architect and Curator layouts — without them, desktop ordering regresses (sections render in mobile order on desktop). Read the full globals.css and copy all non-theme layout rules verbatim into the new file.
+
+Then, **after** the preserved Tailwind/shadcn + layout-engine block, replace only the legacy theme CSS (`.minimal`, `.warm`, `.editorial-360`, `--theme-*` vars) with the new Presence token system below. Do NOT delete shadcn tokens or layout-engine rules.
+
+Structure (new Presence block added after existing framework imports):
+```css
+/* ↑ KEEP: @import "tailwindcss", tw-animate-css, shadcn, @theme, shadcn :root vars ↑ */
 
 /* 2. DNA constants on :root */
 :root {
@@ -746,6 +884,10 @@ Structure:
   /* Voice defaults (Signal) */
   --h-font: var(--font-plus-jakarta-sans, 'Plus Jakarta Sans'), sans-serif;
   --b-font: var(--font-figtree, 'Figtree'), sans-serif;
+  /* Bridge: existing section components use --page-font-heading/--page-font-body.
+     Map to the new voice vars so all components benefit from Voice switching. */
+  --page-font-heading: var(--h-font);
+  --page-font-body: var(--b-font);
 
   background: var(--page-bg);
   color: var(--page-fg);
@@ -945,13 +1087,38 @@ Structure:
 }
 ```
 
-**Step 2: Verify Tailwind still works**
+**Step 2: Audit existing section components for CSS token usage**
+
+Before the build passes, grep for any CSS variables consumed by the existing section components
+that are NOT in the new token set above:
+
+```bash
+grep -r "var(--page-" src/components/page/ src/components/layout-templates/ \
+  src/themes/ | grep -v "node_modules" | sed 's/.*var(--/--/' | sed 's/).*//' \
+  | sort -u
+```
+
+Compare against the token set defined in the new `.surface-*` / `.voice-*` / `.light-night` blocks.
+Any token in the grep output that is missing from the new CSS definitions will render as an empty
+value (silent visual regression). For each missing token, add a fallback alias in `.os-page`:
+
+```css
+.os-page {
+  /* CSS variable bridge — backward compatibility for existing section components */
+  --page-font-heading: var(--h-font);
+  --page-font-body: var(--b-font);
+  /* Add any additional tokens from the audit here, mapping to their nearest new equivalent */
+  /* e.g. --page-badge-bg: var(--page-card-bg); */
+}
+```
+
+**Step 3: Verify Tailwind still works**
 
 ```bash
 npm run build 2>&1 | tail -20
 ```
 
-**Step 3: Commit**
+**Step 4: Commit**
 
 ```bash
 git add src/app/globals.css
@@ -1048,44 +1215,52 @@ export function OsPageWrapper({ config, previewMode = false, children }: OsPageW
     <div
       ref={wrapperRef}
       className={presenceClasses}
-      style={{ minHeight: "100%", position: "relative", overflow: "hidden" }}
+      style={{ minHeight: "100%", position: "relative", overflowX: "hidden" }}
+      // NOTE: do NOT use overflow: "hidden" here — it breaks position:sticky descendants
+      // (Curator sidebar, StickyNav, OwnerBanner). Use overflowX only for horizontal clip.
     >
-      {children}
+      {/* Shared page shell — equivalent to what EditorialLayout provided.
+          Wraps content in a min-height 100svh container with base vertical flow.
+          Non-Monolith layout templates (Curator, Architect, Cinematic) rely on
+          this outer shell for their page-level spacing and flow. */}
+      <main style={{ minHeight: "100svh", display: "flex", flexDirection: "column" }}>
+        {children}
+      </main>
     </div>
   );
 }
 ```
 
+> **Note:** Before removing `EditorialLayout`, read `src/themes/editorial-360/Layout.tsx` and check if it contributes any global padding or spacing styles that are not already covered by layout template CSS or Tailwind. If yes, carry those styles into the `.os-page` base in `globals.css` (so all layout templates inherit them). The `<main>` wrapper above preserves page-level flex flow; check that this doesn't conflict with how `VerticalLayout`, `SidebarLayout`, and `BentoLayout` currently handle their outer containers.
+
 **Step 2: Create sections index**
 
 ```ts
 // src/components/sections/index.ts
-// Re-export all section components from editorial-360 for now.
-// These will be progressively updated to use var(--page-*) tokens directly.
-export { Hero } from "@/themes/editorial-360/components/Hero";
-export { Bio } from "@/themes/editorial-360/components/Bio";
-export { Projects } from "@/themes/editorial-360/components/Projects";
-export { Skills } from "@/themes/editorial-360/components/Skills";
-export { Interests } from "@/themes/editorial-360/components/Interests";
-export { Social } from "@/themes/editorial-360/components/Social";
-export { Footer } from "@/themes/editorial-360/components/Footer";
-export { Experience } from "@/themes/editorial-360/components/Experience";
-export { Education } from "@/themes/editorial-360/components/Education";
-export { Achievements } from "@/themes/editorial-360/components/Achievements";
-export { Stats } from "@/themes/editorial-360/components/Stats";
-export { Reading } from "@/themes/editorial-360/components/Reading";
-export { Music } from "@/themes/editorial-360/components/Music";
-export { Languages } from "@/themes/editorial-360/components/Languages";
-export { Activities } from "@/themes/editorial-360/components/Activities";
-export { Contact } from "@/themes/editorial-360/components/Contact";
-export { Custom } from "@/themes/editorial-360/components/Custom";
-export { Timeline } from "@/themes/editorial-360/components/Timeline";
-export { AtAGlance } from "@/themes/editorial-360/components/AtAGlance";
-
-// Section type → component map (used by PageRenderer)
+// Use named imports (not re-exports) to create local bindings for SECTION_COMPONENTS.
 import type React from "react";
 import type { SectionProps } from "@/themes/types";
-// ... import all above
+import { Hero } from "@/themes/editorial-360/components/Hero";
+import { Bio } from "@/themes/editorial-360/components/Bio";
+import { Projects } from "@/themes/editorial-360/components/Projects";
+import { Skills } from "@/themes/editorial-360/components/Skills";
+import { Interests } from "@/themes/editorial-360/components/Interests";
+import { Social } from "@/themes/editorial-360/components/Social";
+import { Footer } from "@/themes/editorial-360/components/Footer";
+import { Experience } from "@/themes/editorial-360/components/Experience";
+import { Education } from "@/themes/editorial-360/components/Education";
+import { Achievements } from "@/themes/editorial-360/components/Achievements";
+import { Stats } from "@/themes/editorial-360/components/Stats";
+import { Reading } from "@/themes/editorial-360/components/Reading";
+import { Music } from "@/themes/editorial-360/components/Music";
+import { Languages } from "@/themes/editorial-360/components/Languages";
+import { Activities } from "@/themes/editorial-360/components/Activities";
+import { Contact } from "@/themes/editorial-360/components/Contact";
+import { Custom } from "@/themes/editorial-360/components/Custom";
+import { Timeline } from "@/themes/editorial-360/components/Timeline";
+import { AtAGlance } from "@/themes/editorial-360/components/AtAGlance";
+
+// Section type → component map (used by PageRenderer)
 export const SECTION_COMPONENTS: Record<string, React.ComponentType<SectionProps<any>>> = {
   hero: Hero,
   bio: Bio,
@@ -1106,6 +1281,13 @@ export const SECTION_COMPONENTS: Record<string, React.ComponentType<SectionProps
   custom: Custom,
   timeline: Timeline,
   "at-a-glance": AtAGlance,
+};
+
+// Re-export components so consumers can import them directly
+export {
+  Hero, Bio, Projects, Skills, Interests, Social, Footer,
+  Experience, Education, Achievements, Stats, Reading, Music,
+  Languages, Activities, Contact, Custom, Timeline, AtAGlance,
 };
 ```
 
@@ -1152,7 +1334,7 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     }
     const variant = resolveVariant(section);
     return (
-      <div key={section.id} data-section={section.type}>
+      <div key={section.id} id={`section-${section.id}`} data-section={section.type}>
         <SectionComponent content={section.content} variant={variant} />
       </div>
     );
@@ -1162,6 +1344,8 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
       {!isOwner && !previewMode && <VisitorBanner />}
+      {/* StickyNav is added in Task 12 — leave this placeholder comment */}
+      {/* {showStickyNav && <StickyNav sections={sections} name={heroName} avatarUrl={heroAvatar} />} */}
       <OsPageWrapper config={config} previewMode={previewMode}>
         <LayoutComponent slots={slots} renderSection={renderSection} />
       </OsPageWrapper>
@@ -1474,7 +1658,12 @@ export function StickyNav({ sections, name, avatarUrl }: StickyNavProps) {
       className="os-sticky-nav"
       style={{
         position: "fixed",
-        top: 0,
+        top: 0,  // NOTE: OwnerBanner and VisitorBanner also render at top.
+        // StickyNav only shows on published pages for non-owners (visitor mode),
+        // and VisitorBanner is relatively positioned (not fixed). OwnerBanner is shown
+        // when the user is the owner — in that case StickyNav is NOT shown (it renders
+        // only on published pages for non-owners). Verify this exclusion logic holds.
+        // If banners are fixed-positioned, add their height as a top offset (e.g. top: 40px).
         left: 0,
         right: 0,
         zIndex: 50,
@@ -1535,14 +1724,50 @@ In `PageRenderer.tsx`, after the banners and before `OsPageWrapper`:
 ```tsx
 import { StickyNav, shouldShowStickyNav } from "@/components/page/StickyNav";
 
-// Inside PageRenderer, find hero section for name/avatar:
-const heroSection = config.sections?.find(s => s.type === "hero");
+// Inside PageRenderer, use the already-filtered `sections` (not raw config.sections)
+// so StickyNav only links to sections actually rendered on the page.
+const heroSection = sections.find(s => s.type === "hero");
 const heroName = (heroSection?.content as any)?.name ?? "";
 const heroAvatar = (heroSection?.content as any)?.avatarUrl;
-const showStickyNav = !previewMode && shouldShowStickyNav(config.sections ?? []);
+
+// StickyNav and VisitorBanner are mutually exclusive — both are sticky/fixed top-0 z-50.
+// When StickyNav is active (8+ sections, visitor), VisitorBanner must be hidden.
+// This is enforced in PageRenderer JSX (not just a comment — the condition must be there).
+const showStickyNav = !previewMode && !isOwner && shouldShowStickyNav(sections);
+const showVisitorBanner = !isOwner && !previewMode && !showStickyNav;
 ```
 
-Render `{showStickyNav && <StickyNav sections={config.sections} name={heroName} avatarUrl={heroAvatar} />}` before `OsPageWrapper`.
+In the Task 9 PageRenderer JSX, replace the current banner block with:
+
+```tsx
+{isOwner && !previewMode && <OwnerBanner username={config.username} />}
+{showVisitorBanner && <VisitorBanner />}
+{showStickyNav && <StickyNav sections={sections} name={heroName} avatarUrl={heroAvatar} />}
+```
+
+Note: `sections` is the already-filtered list from PageRenderer (`filterCompleteSections` in non-preview mode).
+
+**Add tests for mutual exclusion** (add to `tests/evals/sticky-nav.test.ts`):
+
+```ts
+it("hides VisitorBanner when StickyNav is shown (8+ sections, visitor)", () => {
+  const sections = Array.from({ length: 8 }, (_, i) => ({ type: "bio", id: String(i) }));
+  const isOwner = false; const previewMode = false;
+  const showStickyNav = !previewMode && !isOwner && shouldShowStickyNav(sections as any);
+  const showVisitorBanner = !isOwner && !previewMode && !showStickyNav;
+  expect(showStickyNav).toBe(true);
+  expect(showVisitorBanner).toBe(false);
+});
+
+it("shows VisitorBanner when StickyNav is hidden (<8 sections, visitor)", () => {
+  const sections = Array.from({ length: 5 }, (_, i) => ({ type: "bio", id: String(i) }));
+  const isOwner = false; const previewMode = false;
+  const showStickyNav = !previewMode && !isOwner && shouldShowStickyNav(sections as any);
+  const showVisitorBanner = !isOwner && !previewMode && !showStickyNav;
+  expect(showStickyNav).toBe(false);
+  expect(showVisitorBanner).toBe(true);
+});
+```
 
 **Step 5: Run tests**
 
@@ -1563,6 +1788,7 @@ git commit -m "feat(page): StickyNav — auto-shows on scroll-up for 8+ section 
 
 **Files:**
 - Modify: `src/components/layout/BuilderNavBar.tsx`
+- Modify: `src/components/layout/SplitView.tsx` (prop rename: `onSettingsOpen` → `onPresenceOpen`)
 
 **Step 1: Rewrite BuilderNavBar**
 
@@ -1571,6 +1797,10 @@ git commit -m "feat(page): StickyNav — auto-shows on scroll-up for 8+ section 
 "use client";
 import { useState } from "react";
 import type { AuthState } from "@/app/builder/page";
+
+// NOTE: Logout is preserved — it moves inline to the nav right side for authenticated users.
+// The existing BuilderNavBar has handleLogout (POST /api/auth/logout → redirect to "/").
+// Port this exact logic into the rewrite.
 
 type BuilderNavBarProps = {
   authState?: AuthState;
@@ -1595,6 +1825,17 @@ export function BuilderNavBar({
 }: BuilderNavBarProps) {
   const authenticated = authState?.authenticated ?? false;
   const username = authState?.username ?? null;
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/";
+    } catch {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <div
@@ -1656,6 +1897,22 @@ export function BuilderNavBar({
         </button>
       )}
 
+      {/* Logout — visible to authenticated users, preserved from existing BuilderNavBar */}
+      {authenticated && (
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          style={{
+            fontFamily: "var(--font-figtree, sans-serif)", fontSize: 11,
+            padding: "4px 10px", borderRadius: 5, cursor: "pointer",
+            background: "none", color: "rgba(255,255,255,0.35)",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          {loggingOut ? "…" : "Log out"}
+        </button>
+      )}
+
       {/* Publish button */}
       {hasUnpublishedChanges && !publishing && authenticated && (
         <button
@@ -1689,18 +1946,21 @@ export function BuilderNavBar({
 }
 ```
 
-Update `SplitView.tsx` to pass `onPresenceOpen` prop to `BuilderNavBar` and remove `onSettingsOpen`.
+In `SplitView.tsx`, rename `onSettingsOpen` → `onPresenceOpen` in the `BuilderNavBar` prop call.
+This must happen in the same commit to prevent a compilation error from the changed prop API.
 
 **Step 2: Commit**
 
 ```bash
-git add src/components/layout/BuilderNavBar.tsx
+git add src/components/layout/BuilderNavBar.tsx src/components/layout/SplitView.tsx
 git commit -m "feat(builder): rewrite BuilderNavBar — Presence button, dark editorial style"
 ```
 
 ---
 
 ## Task 14: PresencePanel + MiniPreview + SignatureCombos
+
+> **Dependency:** Task 15 (SourcesPanel/ConnectorCard) must be completed first — PresencePanel imports `@/components/sources/SourcesPanel`.
 
 **Files:**
 - Create: `src/components/presence/PresencePanel.tsx`
@@ -1762,15 +2022,20 @@ type MiniPreviewProps = {
   config: PageConfig;
 };
 
-const MINI_CONFIG: PageConfig = {
+// MINI_CONFIG: check PageConfig for all required fields before filling this in.
+// Use the PageConfig type from schema.ts to identify required vs optional fields.
+// If PageConfig has a `version` field or other required fields, include them here.
+// Use `satisfies PageConfig` instead of `: PageConfig` to catch missing fields at compile time.
+const MINI_CONFIG = {
   username: "preview",
+  // Add any other required PageConfig fields here (check schema.ts)
   sections: [
     { id: "h", type: "hero", content: { name: "Elena Vasquez", tagline: "Senior Product Designer" } },
     { id: "b", type: "bio", content: { text: "I design products at the intersection of system thinking and human warmth." } },
     { id: "s", type: "skills", content: { skills: [{ name: "Product Design", level: "expert" }, { name: "Figma" }, { name: "Systems" }] } },
   ],
   layoutTemplate: "monolith",
-};
+} satisfies PageConfig;
 
 export function MiniPreview({ config }: MiniPreviewProps) {
   const previewConfig = { ...MINI_CONFIG, surface: config.surface, voice: config.voice, light: config.light };
@@ -1807,11 +2072,14 @@ export function MiniPreview({ config }: MiniPreviewProps) {
 // src/components/presence/PresencePanel.tsx
 "use client";
 import { listSurfaces, listVoices, SIGNATURE_COMBOS } from "@/lib/presence";
+import type { SurfaceDefinition, VoiceDefinition } from "@/lib/presence";
 import { SignatureCombos } from "./SignatureCombos";
 import { MiniPreview } from "./MiniPreview";
 import { ConnectorSection } from "@/components/sources/SourcesPanel";
 import type { PageConfig } from "@/lib/page-config/schema";
-import type { LayoutTemplateId } from "@/lib/layout/contracts";
+import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
+import { getLayoutTemplate } from "@/lib/layout/registry";
+import { AvatarSection } from "@/components/settings/AvatarSection";
 
 type PresencePanelProps = {
   open: boolean;
@@ -1824,25 +2092,64 @@ type PresencePanelProps = {
   onSurfaceChange: (s: string) => void;
   onVoiceChange: (v: string) => void;
   onLightChange: (l: string) => void;
+  /** Atomic: sets surface+voice+light in one API call — avoids write races when applying a combo */
+  onComboSelect: (s: string, v: string, l: string) => void;
   onLayoutChange: (l: LayoutTemplateId) => void;
   onAvatarChange: () => void;
   language: string;
+  /** When true, renders as a full-screen sheet (no fixed right-drawer geometry, no backdrop) — used for mobile Style tab */
+  inlineFullscreen?: boolean;
 };
 
 export function PresencePanel({
   open, onClose, config,
   surface, voice, light, layoutTemplate,
-  onSurfaceChange, onVoiceChange, onLightChange, onLayoutChange,
+  onSurfaceChange, onVoiceChange, onLightChange, onComboSelect, onLayoutChange,
   onAvatarChange, language,
+  inlineFullscreen = false,
 }: PresencePanelProps) {
   if (!open) return null;
 
   const surfaces = listSurfaces();
   const voices = listVoices();
 
-  const previewConfig = config
+  // Build a valid PageConfig for the preview.
+  // AFTER completing Task 3 (schema update), check PageConfig for all required fields
+  // and fill them in here. Use the actual required fields from the updated schema.ts.
+  // The pattern below will fail to compile if required fields are missing — fix them:
+  const fallbackConfig: PageConfig = {
+    username: "preview",
+    sections: [],
+    surface,
+    voice,
+    light,
+    layoutTemplate,
+    // Add all other required PageConfig fields from schema.ts here.
+    // Common required fields in this codebase include things like `sections` (already above).
+    // If the TS compiler flags missing fields, add them with sensible defaults.
+  };
+  const previewConfig: PageConfig = config
     ? { ...config, surface, voice, light }
-    : { username: "preview", sections: [], surface, voice, light, layoutTemplate };
+    : fallbackConfig;
+
+  // inlineFullscreen = mobile Style tab: no backdrop, no fixed drawer geometry
+  // Normal = desktop: right drawer with backdrop
+  if (inlineFullscreen) {
+    return (
+      <div style={{ width: "100%", height: "100%", background: "#0e0e10", overflowY: "auto", padding: "24px 20px" }}>
+        {/* Controls only (no mini preview on mobile — too small) */}
+        <PresencePanelControls
+          surfaces={surfaces} voices={voices}
+          surface={surface} voice={voice} light={light}
+          layoutTemplate={layoutTemplate}
+          onSurfaceChange={onSurfaceChange} onVoiceChange={onVoiceChange} onLightChange={onLightChange}
+          onComboSelect={onComboSelect}
+          onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
+          onClose={onClose}
+        />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1858,96 +2165,160 @@ export function PresencePanel({
         borderLeft: "1px solid rgba(255,255,255,0.08)",
         display: "flex", overflow: "hidden",
       }}>
-        {/* Left column: controls */}
-        <div style={{ width: 280, flexShrink: 0, overflowY: "auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: 28 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a96e" }}>
-              Presence
-            </h2>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
-          </div>
-
-          {/* Surface */}
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Surface</div>
-            {surfaces.map(s => (
-              <button key={s.id} onClick={() => onSurfaceChange(s.id)}
-                style={{
-                  width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
-                  border: `1px solid ${surface === s.id ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
-                  background: surface === s.id ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 500, color: surface === s.id ? "#c9a96e" : "#e8e4de" }}>{s.displayName}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{s.description.split(".")[0]}</div>
-              </button>
-            ))}
-          </div>
-
-          {/* Voice */}
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Voice</div>
-            {voices.map(v => (
-              <button key={v.id} onClick={() => onVoiceChange(v.id)}
-                style={{
-                  width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
-                  border: `1px solid ${voice === v.id ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
-                  background: voice === v.id ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 500, color: voice === v.id ? "#c9a96e" : "#e8e4de" }}>{v.displayName}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{v.headingFont} + {v.bodyFont}</div>
-              </button>
-            ))}
-          </div>
-
-          {/* Light */}
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Light</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {(["day", "night"] as const).map(l => (
-                <button key={l} onClick={() => onLightChange(l)}
-                  style={{
-                    flex: 1, padding: "8px", borderRadius: 8, textTransform: "capitalize",
-                    fontSize: 12, fontWeight: 500, cursor: "pointer",
-                    border: `1px solid ${light === l ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
-                    background: light === l ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
-                    color: light === l ? "#c9a96e" : "#e8e4de",
-                  }}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Signature Combinations */}
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Signature Combinations</div>
-            <SignatureCombos
-              activeSurface={surface} activeVoice={voice} activeLight={light}
-              onSelect={(s, v, l) => { onSurfaceChange(s); onVoiceChange(v); onLightChange(l); }}
-            />
-          </div>
-
-          {/* Sources */}
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Sources</div>
-            <ConnectorSection />
-          </div>
+        {/* Left column: controls — shared with mobile via PresencePanelControls */}
+        <div style={{ width: 280, flexShrink: 0, overflowY: "auto", padding: "24px 20px" }}>
+          <PresencePanelControls
+            surfaces={surfaces} voices={voices}
+            surface={surface} voice={voice} light={light}
+            layoutTemplate={layoutTemplate}
+            onSurfaceChange={onSurfaceChange} onVoiceChange={onVoiceChange} onLightChange={onLightChange}
+            onComboSelect={onComboSelect}
+            onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
+            onClose={onClose}
+          />
         </div>
 
         {/* Right column: live preview */}
         <div style={{ flex: 1, padding: "24px 20px", borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto" }}>
           <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Live Preview</div>
-          <MiniPreview config={previewConfig as PageConfig} />
+          <MiniPreview config={previewConfig} />
         </div>
       </div>
     </>
   );
 }
+
+// PresencePanelControls: concrete shared implementation used by BOTH desktop and mobile.
+// Both the left desktop column and inlineFullscreen mobile sheet call this component.
+// This prevents divergence between the two render paths.
+//
+// BEFORE IMPLEMENTING: read src/components/settings/SettingsPanel.tsx
+// and port (not duplicate) its AvatarSection and layout selector into this component.
+
+function PresencePanelControls({
+  surfaces, voices, surface, voice, light, layoutTemplate,
+  onSurfaceChange, onVoiceChange, onLightChange, onComboSelect, onLayoutChange, onAvatarChange, onClose,
+}: {
+  surfaces: SurfaceDefinition[];
+  voices: VoiceDefinition[];
+  surface: string; voice: string; light: string; layoutTemplate: LayoutTemplateId;
+  onSurfaceChange: (s: string) => void;
+  onVoiceChange: (v: string) => void;
+  onLightChange: (l: string) => void;
+  /** Atomic handler for combo selection — sends all three values in a single API call, preventing write races */
+  onComboSelect: (s: string, v: string, l: string) => void;
+  onLayoutChange: (l: LayoutTemplateId) => void;
+  onAvatarChange: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h2 style={{ fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a96e" }}>
+          Presence
+        </h2>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
+      </div>
+
+      {/* Surface */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Surface</div>
+        {surfaces.map(s => (
+          <button key={s.id} onClick={() => onSurfaceChange(s.id)}
+            style={{
+              width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
+              border: `1px solid ${surface === s.id ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
+              background: surface === s.id ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 500, color: surface === s.id ? "#c9a96e" : "#e8e4de" }}>{s.displayName}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{s.description.split(".")[0]}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Voice */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Voice</div>
+        {voices.map(v => (
+          <button key={v.id} onClick={() => onVoiceChange(v.id)}
+            style={{
+              width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
+              border: `1px solid ${voice === v.id ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
+              background: voice === v.id ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 500, color: voice === v.id ? "#c9a96e" : "#e8e4de" }}>{v.displayName}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{v.headingFont} + {v.bodyFont}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Light */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Light</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {(["day", "night"] as const).map(l => (
+            <button key={l} onClick={() => onLightChange(l)}
+              style={{
+                flex: 1, padding: "8px", borderRadius: 8, textTransform: "capitalize",
+                fontSize: 12, fontWeight: 500, cursor: "pointer",
+                border: `1px solid ${light === l ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
+                background: light === l ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
+                color: light === l ? "#c9a96e" : "#e8e4de",
+              }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Signature Combinations */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Signature Combinations</div>
+        <SignatureCombos activeSurface={surface} activeVoice={voice} activeLight={light}
+          onSelect={onComboSelect} />
+      </div>
+
+      {/* Layout selector — same cards as SettingsPanel.tsx */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Layout</div>
+        {LAYOUT_TEMPLATES.map(t => {
+          const tmpl = getLayoutTemplate(t);
+          return (
+            <button key={t} onClick={() => onLayoutChange(t)}
+              style={{
+                width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
+                border: `1px solid ${layoutTemplate === t ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
+                background: layoutTemplate === t ? "rgba(201,169,110,0.12)" : "rgba(255,255,255,0.03)",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 500, color: layoutTemplate === t ? "#c9a96e" : "#e8e4de" }}>{tmpl?.name ?? t}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Avatar/Photo — port AvatarSection from SettingsPanel.tsx */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Photo</div>
+        <AvatarSection onAvatarChange={onAvatarChange} />
+      </div>
+
+      {/* Sources */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Sources</div>
+        <ConnectorSection />
+      </div>
+    </div>
+  );
+}
+// PresencePanelControls is used by BOTH the desktop drawer left column and the mobile inlineFullscreen sheet.
+// This is the single source of truth for Surface/Voice/Light selectors.
 ```
 
 **Step 4: Wire PresencePanel into SplitView**
@@ -1959,6 +2330,14 @@ In `SplitView.tsx`:
 - Pass `onPresenceOpen={() => setPresenceOpen(true)}` to `BuilderNavBar`
 - Update `displayConfig` to use `surface`, `voice`, `light` instead of legacy fields
 - Update `persistStyle` calls to use new field names
+- Add `handleComboSelect` for atomic combo application (prevents write races when signature combo sets all 3 axes simultaneously):
+  ```ts
+  const handleComboSelect = useCallback(async (s: string, v: string, l: string) => {
+    setSurface(s); setVoice(v); setLight(l);
+    await persistStyle({ surface: s, voice: v, light: l });
+  }, [persistStyle]);
+  ```
+  Pass `onComboSelect={handleComboSelect}` to `PresencePanelControls` (via `PresencePanel`).
 
 **Step 5: Commit**
 
@@ -1970,6 +2349,8 @@ git commit -m "feat(builder): PresencePanel replaces SettingsPanel — Surface/V
 ---
 
 ## Task 15: Generic ConnectorCard + SourcesPanel
+
+> **Execute this task BEFORE Task 14** — PresencePanel imports `@/components/sources/SourcesPanel`.
 
 **Files:**
 - Create: `src/components/sources/SourcesPanel.tsx`
@@ -1992,6 +2373,8 @@ export type ConnectorUIDefinition = {
   disconnectUrl: string;
 };
 ```
+
+Also ensure `ConnectorStatusRow` (or its equivalent — check the existing type in `types.ts`) is exported. The `ConnectorCard` component imports it. If the existing type is named differently (e.g. `ConnectorRow`), use that name consistently throughout Task 15.
 
 **Step 2: Add UI definitions to GitHub and LinkedIn**
 
@@ -2048,6 +2431,7 @@ registerConnectorUI(LinkedInUIDefinition);
 // src/components/sources/ConnectorCard.tsx
 "use client";
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import type { ConnectorUIDefinition, ConnectorStatusRow } from "@/lib/connectors/types";
 
 type ConnectorCardProps = {
@@ -2155,9 +2539,9 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
         </div>
       )}
 
-      {/* Import button for zip when already imported (always show) */}
-      {definition.authType === "zip_upload" && (
-        <button onClick={handleImport} disabled={loading} style={{ ...btnStyle("rgba(255,255,255,0.06)", "#e8e4de"), marginTop: isConnected ? 8 : 0, width: "100%" }}>
+      {/* Re-import button for zip — only shown when already imported (isConnected) */}
+      {definition.authType === "zip_upload" && isConnected && (
+        <button onClick={handleImport} disabled={loading} style={{ ...btnStyle("rgba(255,255,255,0.06)", "#e8e4de"), marginTop: 8, width: "100%" }}>
           {loading ? "Importing…" : "Re-import ZIP"}
         </button>
       )}
@@ -2171,7 +2555,7 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
   );
 }
 
-function btnStyle(bg: string, color: string): React.CSSProperties {
+function btnStyle(bg: string, color: string): CSSProperties {
   return {
     padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 500,
     background: bg, color, border: "none", cursor: "pointer",
@@ -2235,6 +2619,13 @@ git commit -m "feat(sources): generic ConnectorCard + SourcesPanel driven by UI 
 
 **Step 1: Replace mobile top tabs with bottom tab bar**
 
+Ensure these imports are present in `SplitView.tsx` (carry over from existing file):
+```tsx
+import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
+import { isVoiceEnabled } from "@/lib/voice/feature-flags";
+```
+Ensure `const voiceEnabled = isVoiceEnabled();` is declared in the component body (already present in current SplitView.tsx — do not remove).
+
 In `SplitView.tsx`, find the mobile section:
 
 ```tsx
@@ -2283,9 +2674,10 @@ Replace with:
     {/* Preview */}
     <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "preview" ? "block" : "hidden"}`}>
       {previewPane}
+      {voiceEnabled && <VoiceOverlay onOpenChat={() => setActiveMobileTab("chat")} />}
     </div>
 
-    {/* Style (Presence panel as full-height sheet) */}
+    {/* Style (Presence panel as full-height sheet — inlineFullscreen on mobile) */}
     {activeMobileTab === "style" && (
       <div className="absolute inset-0 overflow-y-auto" style={{ background: "#0e0e10" }}>
         <PresencePanel
@@ -2300,6 +2692,7 @@ Replace with:
           onLayoutChange={handleLayoutTemplateChange}
           onAvatarChange={() => { void fetchPreview(); }}
           language={language}
+          inlineFullscreen={true}
         />
       </div>
     )}
@@ -2474,31 +2867,42 @@ export function detectConnectorUrls(text: string): DetectedConnector[] {
 
 **Step 4: Wire into chat context**
 
-In `src/lib/agent/context.ts` or `src/app/api/chat/route.ts`, after receiving the user message:
+In `src/lib/agent/context.ts`, in `buildContext()` (or `assembleContext()` — check the function signature
+in the file), after extracting the latest user message, add:
 
 ```ts
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 
+// In buildContext() / assembleContext(), after reading the userMessage:
 const detectedConnectors = detectConnectorUrls(userMessage);
-if (detectedConnectors.length > 0) {
-  // Add to agent context as a hint:
-  // "User pasted a [github] URL: https://github.com/elena.
-  //  If relevant, suggest connecting it as a Source."
-}
+const magicPasteHint = detectedConnectors.length > 0
+  ? `\nDETECTED SOURCE URLS: ${detectedConnectors.map(d => `${d.connectorId} (${d.url})`).join(", ")}. If relevant, suggest the user connect it as a Source via the Sources panel.`
+  : "";
+// Append magicPasteHint to the system context string.
 ```
 
-This is passed as an additional context block in `buildContext()` — not a hard instruction, just a hint the agent can act on.
+Also in `src/app/api/chat/route.ts`, ensure the user message text is passed to `buildContext()` /
+`assembleContext()` before streaming — this is where the userMessage variable is in scope.
+Read `src/app/api/chat/route.ts` and `src/lib/agent/context.ts` to find the exact insertion point.
 
-**Step 5: Run tests**
+**Step 5: Add integration test**
+
+In `tests/evals/magic-paste.test.ts`, add a test that calls `detectConnectorUrls` with a GitHub URL
+and asserts `[{ connectorId: "github", url: "https://github.com/elena" }]` is returned.
+
+Also add a smoke test that the hint string appears in the assembled context when a GitHub URL is present.
+
+**Step 6: Run tests**
 
 ```bash
 npx vitest run tests/evals/magic-paste.test.ts
 ```
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
-git add src/lib/connectors/magic-paste.ts tests/evals/magic-paste.test.ts
+git add src/lib/connectors/magic-paste.ts tests/evals/magic-paste.test.ts \
+        src/lib/agent/context.ts src/app/api/chat/route.ts
 git commit -m "feat(connectors): magic paste URL detection for agent context"
 ```
 
