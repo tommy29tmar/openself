@@ -25,6 +25,8 @@ type PresencePanelProps = {
   onAvatarChange: () => void;
   language: string;
   inlineFullscreen?: boolean;
+  showMiniPreview?: boolean;
+  miniPreviewConfig?: PageConfig | null;
 };
 
 export function PresencePanel({
@@ -33,6 +35,8 @@ export function PresencePanel({
   onSurfaceChange, onVoiceChange, onLightChange, onComboSelect, onLayoutChange,
   onAvatarChange, language,
   inlineFullscreen = false,
+  showMiniPreview = false,
+  miniPreviewConfig,
 }: PresencePanelProps) {
   if (!open) return null;
 
@@ -54,9 +58,24 @@ export function PresencePanel({
     ? { ...config, surface, voice, light }
     : fallbackConfig;
 
+  const effectiveMiniConfig = miniPreviewConfig ?? previewConfig;
+
   if (inlineFullscreen) {
     return (
-      <div style={{ width: "100%", height: "100%", background: "#0e0e10", overflowY: "auto", padding: "24px 20px" }}>
+      <div style={{ width: "100%", padding: "24px 20px" }}>
+        {showMiniPreview && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h2 style={{ fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a96e" }}>
+              Presence
+            </h2>
+            <button type="button" aria-label="Close presence panel" onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
+          </div>
+        )}
+        {showMiniPreview && (
+          <div style={{ marginBottom: 24 }}>
+            <MiniPreview config={effectiveMiniConfig} height={180} />
+          </div>
+        )}
         <PresencePanelControls
           surfaces={surfaces} voices={voices}
           surface={surface} voice={voice} light={light}
@@ -65,6 +84,7 @@ export function PresencePanel({
           onComboSelect={onComboSelect}
           onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
           onClose={onClose}
+          showHeader={!showMiniPreview}
         />
       </div>
     );
@@ -77,31 +97,24 @@ export function PresencePanel({
         onClick={onClose}
         style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.4)" }}
       />
-      {/* Panel */}
+      {/* Panel — desktop: 320px single column, controls only */}
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 70,
-        width: 680, background: "#0e0e10",
+        width: 320, background: "#0e0e10",
         borderLeft: "1px solid rgba(255,255,255,0.08)",
-        display: "flex", overflow: "hidden",
+        overflowY: "auto",
+        padding: "24px 20px",
       }}>
-        {/* Left column: controls */}
-        <div style={{ width: 280, flexShrink: 0, overflowY: "auto", padding: "24px 20px" }}>
-          <PresencePanelControls
-            surfaces={surfaces} voices={voices}
-            surface={surface} voice={voice} light={light}
-            layoutTemplate={layoutTemplate}
-            onSurfaceChange={onSurfaceChange} onVoiceChange={onVoiceChange} onLightChange={onLightChange}
-            onComboSelect={onComboSelect}
-            onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
-            onClose={onClose}
-          />
-        </div>
-
-        {/* Right column: live preview */}
-        <div style={{ flex: 1, padding: "24px 20px", borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto" }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Live Preview</div>
-          <MiniPreview config={previewConfig} />
-        </div>
+        <PresencePanelControls
+          surfaces={surfaces} voices={voices}
+          surface={surface} voice={voice} light={light}
+          layoutTemplate={layoutTemplate}
+          onSurfaceChange={onSurfaceChange} onVoiceChange={onVoiceChange} onLightChange={onLightChange}
+          onComboSelect={onComboSelect}
+          onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
+          onClose={onClose}
+          showHeader
+        />
       </div>
     </>
   );
@@ -121,19 +134,30 @@ type PresencePanelControlsProps = {
   onLayoutChange: (l: LayoutTemplateId) => void;
   onAvatarChange: () => void;
   onClose: () => void;
+  showHeader?: boolean;
 };
 
 function PresencePanelControls({
   surfaces, voices, surface, voice, light, layoutTemplate,
   onSurfaceChange, onVoiceChange, onLightChange, onComboSelect, onLayoutChange, onAvatarChange, onClose,
+  showHeader = true,
 }: PresencePanelControlsProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a96e" }}>
-          Presence
-        </h2>
-        <button type="button" aria-label="Close presence panel" onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
+      {showHeader && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 style={{ fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a96e" }}>
+            Presence
+          </h2>
+          <button type="button" aria-label="Close presence panel" onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
+        </div>
+      )}
+
+      {/* Signature Combinations — first */}
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Signature Combinations</div>
+        <SignatureCombos activeSurface={surface} activeVoice={voice} activeLight={light}
+          onSelect={onComboSelect} />
       </div>
 
       {/* Surface */}
@@ -190,13 +214,6 @@ function PresencePanelControls({
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Signature Combinations */}
-      <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Signature Combinations</div>
-        <SignatureCombos activeSurface={surface} activeVoice={voice} activeLight={light}
-          onSelect={onComboSelect} />
       </div>
 
       {/* Layout */}

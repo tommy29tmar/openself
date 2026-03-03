@@ -19,12 +19,19 @@ export function MessageBubble({ role, content, isStreaming }: MessageBubbleProps
       className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
     >
       <div
-        className={cn(
-          "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-          isUser
-            ? "bg-primary text-primary-foreground rounded-br-md"
-            : "bg-muted text-foreground rounded-bl-md",
-        )}
+        className="max-w-[80%] px-4 py-2.5 text-sm leading-relaxed"
+        style={isUser ? {
+          background: "rgba(201,169,110,0.12)",
+          color: "#e8d5b0",
+          border: "1px solid rgba(201,169,110,0.2)",
+          borderRadius: 10,
+          borderBottomRightRadius: 3,
+        } : {
+          background: "rgba(255,255,255,0.06)",
+          color: "rgba(255,255,255,0.8)",
+          borderRadius: 10,
+          borderBottomLeftRadius: 3,
+        }}
       >
         {isUser ? content : (
           <div
