@@ -46,11 +46,10 @@ function PreviewIcon() {
     </svg>
   );
 }
-function StyleIcon() {
+function PublishIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+      <path d="M5 12h14M12 5l7 7-7 7" />
     </svg>
   );
 }
@@ -183,7 +182,7 @@ export function SplitView({
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
   const [presenceOpen, setPresenceOpen] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview" | "style">("chat");
+  const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview" | "publish">("chat");
 
   // Auto-open presence when returning from OAuth connector flow
   useEffect(() => {
@@ -201,6 +200,9 @@ export function SplitView({
   const [usernameInputOpen, setUsernameInputOpen] = useState(false);
   const [pendingUsername, setPendingUsername] = useState("");
 
+  // Mobile logout state
+  const [loggingOut, setLoggingOut] = useState(false);
+
   // Tracks the last user-initiated style edit
   const lastUserEdit = useRef(0);
 
@@ -213,6 +215,18 @@ export function SplitView({
   );
 
   const t = getUiL10n(language);
+
+  const authenticated = authState?.authenticated ?? false;
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/";
+    } catch {
+      setLoggingOut(false);
+    }
+  };
 
   const doPublish = async (username: string) => {
     setPublishing(true);
@@ -248,7 +262,10 @@ export function SplitView({
       setUsernameInputOpen(true);
       return;
     }
-    if (!username) return;
+    if (!username) {
+      setSignupOpen(true);
+      return;
+    }
     void doPublish(username);
   };
 
@@ -400,24 +417,8 @@ export function SplitView({
   const handlePresenceClose = useCallback(() => setPresenceOpen(false), []);
   const handleAvatarChange = useCallback(() => { void fetchPreview(); }, [fetchPreview]);
 
-  const presencePanel = (
-    <PresencePanel
-      open={presenceOpen}
-      onClose={handlePresenceClose}
-      config={config}
-      surface={surface}
-      voice={voice}
-      light={light}
-      layoutTemplate={layoutTemplate}
-      onSurfaceChange={handleSurfaceChange}
-      onVoiceChange={handleVoiceChange}
-      onLightChange={handleLightChange}
-      onComboSelect={handleComboSelect}
-      onLayoutChange={handleLayoutTemplateChange}
-      onAvatarChange={handleAvatarChange}
-      language={language}
-    />
-  );
+  // Derive hero name for pill and mobile header
+  const heroName = config?.sections?.find((s) => s.type === "hero")?.content?.name as string | undefined;
 
   const navBar = (
     <BuilderNavBar
@@ -428,6 +429,8 @@ export function SplitView({
       onPublish={handlePublish}
       onSignup={() => setSignupOpen(true)}
       onPresenceOpen={() => setPresenceOpen(true)}
+      pageName={heroName}
+      publishedUsername={authState?.publishedUsername ?? null}
     />
   );
 
@@ -444,6 +447,7 @@ export function SplitView({
         placeholder="username"
       />
       <button
+        type="button"
         onClick={() => {
           if (!pendingUsername) return;
           setUsernameInputOpen(false);
@@ -457,18 +461,18 @@ export function SplitView({
     </div>
   );
 
-  const previewPane = displayConfig ? (
-    <div className="relative h-full overflow-y-auto">
-      {navBar}
+  // Desktop/mobile shared page content (no overflow, no navbar)
+  const desktopPreviewContent = displayConfig ? (
+    <>
       {usernameInput}
       <ProposalBanner />
-      {/* Show PublishBar only when agent requested publish AND NavBar doesn't already show publish */}
       {publishStatus === "approval_pending" && !hasUnpublishedChanges && (
         <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
           <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
             Ready to publish
           </span>
           <button
+            type="button"
             onClick={handlePublish}
             disabled={publishing}
             className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
@@ -478,13 +482,147 @@ export function SplitView({
         </div>
       )}
       <PageRenderer config={displayConfig} previewMode={true} />
-      {presencePanel}
-    </div>
+    </>
   ) : (
-    <div className="relative h-full overflow-y-auto">
-      {navBar}
-      <EmptyPreview language={language} />
-      {presencePanel}
+    <EmptyPreview language={language} />
+  );
+
+  // Mobile preview: sticky header + page content
+  const mobilePreviewContent = (
+    <>
+      <div style={{
+        position: "sticky", top: 0, zIndex: 10,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "0 16px", height: 44,
+        background: "rgba(7,7,9,0.92)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        flexShrink: 0,
+      }}>
+        <span style={{ fontFamily: "monospace", fontSize: 11, color: "#c9a96e" }}>openself</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setPresenceOpen(true)}
+            style={{
+              background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)",
+              border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer",
+            }}
+          >
+            Presence
+          </button>
+          {authenticated && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                background: "none", color: "rgba(255,255,255,0.35)",
+                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 5,
+                padding: "4px 10px", fontSize: 11, cursor: "pointer",
+              }}
+            >
+              {loggingOut ? "…" : "Log out"}
+            </button>
+          )}
+        </div>
+      </div>
+      {desktopPreviewContent}
+    </>
+  );
+
+  // Mobile publish tab content
+  const mobilePublishContent = (
+    <div style={{ padding: "32px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+      {!displayConfig ? (
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, fontStyle: "italic" }}>
+          Keep chatting to build your page
+        </p>
+      ) : (
+        <>
+          {usernameInput}
+          {publishError && (
+            <p style={{ color: "#f87171", fontSize: 13 }}>{publishError}</p>
+          )}
+          {hasUnpublishedChanges && !publishing && (
+            <button
+              type="button"
+              onClick={handlePublish}
+              style={{
+                background: "#c9a96e", color: "#111", border: "none",
+                borderRadius: 8, padding: "14px 24px",
+                fontSize: 15, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Publish →
+            </button>
+          )}
+          {publishing && (
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Publishing…</p>
+          )}
+          {!hasUnpublishedChanges && !publishing && authState?.publishedUsername && (
+            <div>
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginBottom: 8 }}>Your page is live</p>
+              <a
+                href={`/${authState.publishedUsername}`}
+                style={{ color: "#c9a96e", fontFamily: "monospace", fontSize: 13 }}
+              >
+                openself.dev/{authState.publishedUsername}
+              </a>
+            </div>
+          )}
+          {!hasUnpublishedChanges && !publishing && !authState?.publishedUsername && (
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+              No changes to publish
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  // Presence panels: split desktop vs mobile
+  const desktopPresence = !isMobile && presenceOpen && (
+    <PresencePanel
+      open={presenceOpen}
+      onClose={handlePresenceClose}
+      config={config}
+      surface={surface}
+      voice={voice}
+      light={light}
+      layoutTemplate={layoutTemplate}
+      onSurfaceChange={handleSurfaceChange}
+      onVoiceChange={handleVoiceChange}
+      onLightChange={handleLightChange}
+      onComboSelect={handleComboSelect}
+      onLayoutChange={handleLayoutTemplateChange}
+      onAvatarChange={handleAvatarChange}
+      language={language}
+      inlineFullscreen={false}
+      showMiniPreview={false}
+    />
+  );
+
+  const mobilePresence = isMobile && presenceOpen && (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#0e0e10", overflowY: "auto" }}>
+      <PresencePanel
+        open={true}
+        onClose={handlePresenceClose}
+        config={config}
+        surface={surface}
+        voice={voice}
+        light={light}
+        layoutTemplate={layoutTemplate}
+        onSurfaceChange={handleSurfaceChange}
+        onVoiceChange={handleVoiceChange}
+        onLightChange={handleLightChange}
+        onComboSelect={handleComboSelect}
+        onLayoutChange={handleLayoutTemplateChange}
+        onAvatarChange={handleAvatarChange}
+        language={language}
+        inlineFullscreen={true}
+        showMiniPreview={true}
+        miniPreviewConfig={displayConfig}
+      />
     </div>
   );
 
@@ -499,39 +637,50 @@ export function SplitView({
           language={language}
         />
 
-        {/* Desktop: side-by-side */}
-        <div className="hidden h-screen md:flex">
-          <div className="w-[400px] shrink-0 overflow-hidden border-r">
-            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={!isMobile} />}
+        {/* Desktop: full-width navbar + side-by-side */}
+        <div className="hidden h-screen md:flex flex-col">
+          {navBar}
+          <div className="flex flex-1 min-h-0">
+            {/* Chat pane */}
+            <div style={{ width: 400, flexShrink: 0, background: "#0d0d0f", borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+              {chatDataReady && (
+                <ChatPanel
+                  language={language}
+                  authV2={authState?.authV2}
+                  authState={authState}
+                  onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }}
+                  initialBootstrap={bootstrapData}
+                  initialMessages={chatInitialMessages}
+                  disableInitialFetch={chatDataReady}
+                  isPrimaryVoiceConsumer={!isMobile}
+                />
+              )}
+            </div>
+            {/* Preview pane */}
+            <div style={{ flex: 1, background: "#1a1a1e", overflowY: "auto" }}>
+              {desktopPreviewContent}
+            </div>
           </div>
-          <div className="relative flex-1">{previewPane}</div>
+          {desktopPresence}
         </div>
 
         {/* Mobile: bottom tab bar */}
         <div className="flex h-dvh flex-col overflow-hidden md:hidden">
           {/* Content area */}
           <div className="flex-1 overflow-hidden relative">
-            {/* Chat — always mounted, hidden when not active */}
+            {/* Chat tab */}
             <div className={`absolute inset-0 flex flex-col ${activeMobileTab === "chat" ? "" : "hidden"}`}>
-              {/* Unpublished changes banner — above ChatPanel so it doesn't overlap content */}
-              {hasUnpublishedChanges && (
-                <div style={{
-                  flexShrink: 0,
-                  background: "#c9a96e", color: "#111",
-                  padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>Changes ready to publish</span>
-                  <button
-                    type="button"
-                    onClick={handlePublish}
-                    disabled={publishing}
-                    style={{
-                      background: "rgba(0,0,0,0.15)", border: "none", color: "#111",
-                      padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    }}
-                  >
-                    {publishing ? "Publishing\u2026" : "Publish \u2192"}
-                  </button>
+              {/* Mobile chat header */}
+              <div style={{
+                textAlign: "center", padding: "12px 0 8px",
+                fontSize: 12, fontFamily: "monospace", letterSpacing: "0.1em",
+                color: "rgba(255,255,255,0.5)", background: "#0d0d0f", flexShrink: 0,
+              }}>
+                {heroName ? `${heroName}'s page` : "My page"} · Draft
+              </div>
+              {!chatDataReady && (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
+                  Loading…
                 </div>
               )}
               {chatDataReady && (
@@ -550,34 +699,16 @@ export function SplitView({
               )}
             </div>
 
-            {/* Preview */}
+            {/* Preview tab */}
             <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "preview" ? "block" : "hidden"}`}>
-              {previewPane}
-              {voiceEnabled && <VoiceOverlay onOpenChat={() => setActiveMobileTab("chat")} />}
+              {mobilePreviewContent}
+              {voiceEnabled && <VoiceOverlay />}
             </div>
 
-            {/* Style (Presence panel as full-height sheet — inlineFullscreen on mobile) */}
-            {activeMobileTab === "style" && (
-              <div className="absolute inset-0 overflow-y-auto" style={{ background: "#0e0e10" }}>
-                <PresencePanel
-                  open={true}
-                  onClose={() => setActiveMobileTab("chat")}
-                  config={config}
-                  surface={surface}
-                  voice={voice}
-                  light={light}
-                  layoutTemplate={layoutTemplate}
-                  onSurfaceChange={handleSurfaceChange}
-                  onVoiceChange={handleVoiceChange}
-                  onLightChange={handleLightChange}
-                  onComboSelect={handleComboSelect}
-                  onLayoutChange={handleLayoutTemplateChange}
-                  onAvatarChange={handleAvatarChange}
-                  language={language}
-                  inlineFullscreen={true}
-                />
-              </div>
-            )}
+            {/* Publish tab */}
+            <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "publish" ? "block" : "hidden"}`} style={{ background: "#0d0d0f" }}>
+              {mobilePublishContent}
+            </div>
           </div>
 
           {/* Bottom tab bar — 56px */}
@@ -589,7 +720,7 @@ export function SplitView({
             {([
               { id: "chat", label: "Chat", icon: <ChatIcon /> },
               { id: "preview", label: "Preview", icon: <PreviewIcon /> },
-              { id: "style", label: "Style", icon: <StyleIcon /> },
+              { id: "publish", label: "Publish", icon: <PublishIcon /> },
             ] as const).map(tab => (
               <button
                 key={tab.id}
@@ -608,6 +739,8 @@ export function SplitView({
               </button>
             ))}
           </div>
+
+          {mobilePresence}
         </div>
       </>
     </VoiceProvider>

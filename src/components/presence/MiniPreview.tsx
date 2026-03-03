@@ -4,6 +4,7 @@ import type { PageConfig } from "@/lib/page-config/schema";
 
 type MiniPreviewProps = {
   config: PageConfig;
+  height?: number;
 };
 
 const MINI_CONFIG = {
@@ -21,7 +22,7 @@ const MINI_CONFIG = {
   layoutTemplate: "monolith" as const,
 } satisfies PageConfig;
 
-export function MiniPreview({ config }: MiniPreviewProps) {
+export function MiniPreview({ config, height = 320 }: MiniPreviewProps) {
   const previewConfig: PageConfig = {
     ...MINI_CONFIG,
     surface: config.surface,
@@ -29,7 +30,7 @@ export function MiniPreview({ config }: MiniPreviewProps) {
     light: config.light,
   };
   return (
-    <div style={{ height: 320, overflow: "hidden", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div style={{ height, overflow: "hidden", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }}>
       <div style={{ transform: "scale(0.5)", transformOrigin: "top left", width: "200%", height: "200%", pointerEvents: "none" }}>
         <OsPageWrapper config={previewConfig} previewMode>
           <div style={{ padding: "24px 32px" }}>

@@ -11,6 +11,7 @@ type BuilderNavBarProps = {
   onSignup: () => void;
   onPresenceOpen?: () => void;
   publishedUsername?: string | null;
+  pageName?: string;
 };
 
 export function BuilderNavBar({
@@ -22,6 +23,7 @@ export function BuilderNavBar({
   onSignup,
   onPresenceOpen,
   publishedUsername: publishedUsernameProp,
+  pageName,
 }: BuilderNavBarProps) {
   const authenticated = authState?.authenticated ?? false;
   const username = authState?.username ?? null;
@@ -60,20 +62,37 @@ export function BuilderNavBar({
         openself
       </a>
 
-      {/* Status pill */}
-      {(username || publishedUsername) && (
-        <a
-          href={publishedUsername ? `/${publishedUsername}` : undefined}
-          style={{
-            fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11,
-            padding: "3px 10px", borderRadius: 4,
-            background: "rgba(201,169,110,0.15)", color: "#c9a96e",
-            textDecoration: "none", flexShrink: 0,
-          }}
-        >
-          {publishedUsername ? `Published · ${publishedUsername}` : `Draft · ${username}`}
-        </a>
-      )}
+      {/* Status pill — always visible */}
+      {(() => {
+        let label: string;
+        let href: string | undefined;
+        if (publishedUsername && hasUnpublishedChanges) {
+          label = `Draft · ${username || pageName || publishedUsername}`;
+          href = `/${publishedUsername}`;
+        } else if (publishedUsername && !hasUnpublishedChanges) {
+          label = `Published · ${publishedUsername}`;
+          href = `/${publishedUsername}`;
+        } else if (!publishedUsername && username) {
+          label = `Draft · ${username}`;
+        } else if (!publishedUsername && !username && pageName) {
+          label = `Draft · ${pageName}`;
+        } else {
+          label = "Draft";
+        }
+        return (
+          <a
+            href={href}
+            style={{
+              fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11,
+              padding: "3px 10px", borderRadius: 4,
+              background: "rgba(201,169,110,0.15)", color: "#c9a96e",
+              textDecoration: "none", flexShrink: 0,
+            }}
+          >
+            {label}
+          </a>
+        );
+      })()}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />

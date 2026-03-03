@@ -66,7 +66,11 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
               const laneClass = LANE_CLASSES[lane];
 
               return (
-                <div key={section.id} className={`${laneClass} ${spacingClass}`}>
+                <div
+                  key={section.id}
+                  className={`${laneClass} ${spacingClass}`}
+                  style={section.type !== "footer" ? { borderBottom: "1px solid var(--page-border)" } : undefined}
+                >
                   {renderSection(section)}
                 </div>
               );

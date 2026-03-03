@@ -19,7 +19,7 @@ function getInitials(name: string): string {
 function HeroSocialLinks({ links }: { links: SocialLink[] }) {
   if (links.length === 0) return null;
   return (
-    <div className="mt-[var(--space-4)] flex flex-wrap justify-center gap-[var(--space-1)]">
+    <div className="mt-[var(--space-4)] flex flex-wrap gap-[var(--space-1)]">
       {links.map((link) => {
         const Icon = getSocialIcon(link.platform);
         return (
@@ -137,28 +137,35 @@ export function HeroSection({ content, variant = "large" }: HeroSectionProps) {
 
   // Default: "large" variant
   return (
-    <section className="px-[var(--space-6)] py-[var(--space-16)]">
-      <div className="mx-auto flex max-w-[var(--page-max-width)] flex-col items-center text-center">
-        <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-[var(--page-accent)]">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-[var(--text-2xl)] font-semibold text-[var(--page-accent-fg)]">
-              {initials}
-            </span>
-          )}
+    <section
+      className="px-[var(--space-6)] py-[var(--space-16)]"
+      style={{ minHeight: 480, display: "flex", alignItems: "flex-end" }}
+    >
+      <div className="mx-auto flex max-w-[var(--page-max-width)] flex-col w-full">
+        <div className="flex flex-row items-center gap-5">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--page-accent)]">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[var(--text-2xl)] font-semibold text-[var(--page-accent-fg)]">
+                {initials}
+              </span>
+            )}
+          </div>
+          <div>
+            <h1
+              className="text-[var(--text-4xl)] font-bold leading-tight tracking-tight"
+              style={{ fontFamily: "var(--page-font-heading)" }}
+            >
+              {name}
+            </h1>
+            {tagline && (
+              <p className="mt-[var(--space-3)] max-w-lg text-[var(--text-xl)] text-[var(--page-fg-secondary)]">
+                {tagline}
+              </p>
+            )}
+          </div>
         </div>
-        <h1
-          className="mt-[var(--space-6)] text-[var(--text-4xl)] font-bold leading-tight tracking-tight"
-          style={{ fontFamily: "var(--page-font-heading)" }}
-        >
-          {name}
-        </h1>
-        {tagline && (
-        <p className="mt-[var(--space-3)] max-w-lg text-[var(--text-xl)] text-[var(--page-fg-secondary)]">
-          {tagline}
-        </p>
-        )}
         <HeroSocialLinks links={socialLinks} />
       </div>
     </section>
