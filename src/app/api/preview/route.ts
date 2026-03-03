@@ -46,7 +46,9 @@ export async function GET(req: Request) {
 
   const draftMeta = draft
     ? {
-        theme: draft.config.theme,
+        surface: draft.config.surface,
+        voice: draft.config.voice,
+        light: draft.config.light,
         style: draft.config.style,
         layoutTemplate: draft.config.layoutTemplate,
         sections: draft.config.sections,

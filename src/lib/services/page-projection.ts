@@ -26,7 +26,9 @@ export function filterPublishableFacts(facts: FactRow[]): FactRow[] {
 }
 
 export type DraftMeta = {
-  theme: string;
+  surface: string;
+  voice: string;
+  light: string;
   style: PageConfig["style"];
   layoutTemplate?: LayoutTemplateId;
   sections: Section[];
@@ -69,11 +71,13 @@ export function projectCanonicalConfig(
     profileId,
   );
 
-  // 4. Preserve metadata from draft (theme, style, layout)
+  // 4. Preserve metadata from draft (surface, voice, light, style, layout)
   let config = draftMeta
     ? {
         ...composed,
-        theme: draftMeta.theme,
+        surface: draftMeta.surface,
+        voice: draftMeta.voice,
+        light: draftMeta.light,
         style: draftMeta.style,
         layoutTemplate: draftMeta.layoutTemplate ?? composed.layoutTemplate,
       }

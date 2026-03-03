@@ -19,7 +19,9 @@ import { FactConstraintError } from "@/lib/services/fact-constraints";
 import { logTrustAction } from "@/lib/services/trust-ledger-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
-import { type PageConfig, AVAILABLE_THEMES } from "@/lib/page-config/schema";
+import { type PageConfig } from "@/lib/page-config/schema";
+// TODO(Task 6): AVAILABLE_THEMES removed — set_theme/update_page_style will be replaced with surface/voice/light tools
+const AVAILABLE_THEMES: readonly string[] = [];
 import { logEvent } from "@/lib/services/event-service";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
@@ -200,7 +202,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       // Build DraftMeta for order/lock/style preservation
       const draftMeta: DraftMeta | undefined = currentDraft
         ? {
-            theme: currentDraft.config.theme,
+            surface: currentDraft.config.surface,
+            voice: currentDraft.config.voice,
+            light: currentDraft.config.light,
             style: currentDraft.config.style,
             layoutTemplate: currentDraft.config.layoutTemplate,
             sections: currentDraft.config.sections,
@@ -583,7 +587,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
             return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
           }
-          updated.theme = theme;
+          // TODO(Task 6): theme field removed from PageConfig — replace with surface/voice/light
         }
 
         if (style !== undefined) {
@@ -631,7 +635,8 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
         }
         const config = ensureDraft();
-        const updated: PageConfig = { ...config, theme };
+        // TODO(Task 6): theme field removed from PageConfig — replace with surface/voice/light
+        const updated: PageConfig = { ...config };
         upsertDraft(username, updated, sessionId);
         logEvent({
           eventType: "page_config_updated",
@@ -863,7 +868,13 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           effectiveOwnerKey,
         );
         let styled: PageConfig = currentDraft
-          ? { ...composed, theme: currentDraft.config.theme, style: currentDraft.config.style }
+          ? {
+              ...composed,
+              surface: currentDraft.config.surface,
+              voice: currentDraft.config.voice,
+              light: currentDraft.config.light,
+              style: currentDraft.config.style,
+            }
           : composed;
         // Preserve layoutTemplate and re-assign slots with locks (carry over existing slot assignments)
         if (existingTemplate && currentDraft) {
@@ -1552,7 +1563,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
         return {
           layout: {
             template: config.layoutTemplate ?? "monolith",
-            theme: config.theme ?? "minimal",
+            surface: config.surface,
+            voice: config.voice,
+            light: config.light,
             style: config.style ?? {},
           },
           sections,

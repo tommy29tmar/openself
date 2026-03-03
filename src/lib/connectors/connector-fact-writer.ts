@@ -69,7 +69,9 @@ export async function batchCreateFacts(
 
     const draftMeta: DraftMeta | undefined = currentDraft
       ? {
-          theme: currentDraft.config.theme,
+          surface: currentDraft.config.surface,
+          voice: currentDraft.config.voice,
+          light: currentDraft.config.light,
           style: currentDraft.config.style,
           layoutTemplate: currentDraft.config.layoutTemplate,
           sections: currentDraft.config.sections,
