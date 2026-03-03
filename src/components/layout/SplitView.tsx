@@ -6,7 +6,7 @@ import type { LanguageCode } from "@/lib/i18n/languages";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import type { AuthState } from "@/app/builder/page";
 import { ChatPanel } from "@/components/chat/ChatPanel";
-import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { PresencePanel } from "@/components/presence/PresencePanel";
 import { SignupModal } from "@/components/auth/SignupModal";
 import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
@@ -165,12 +165,12 @@ export function SplitView({
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplateId>(
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [presenceOpen, setPresenceOpen] = useState(false);
 
-  // Auto-open settings when returning from OAuth connector flow
+  // Auto-open presence when returning from OAuth connector flow
   useEffect(() => {
     if (openSettings) {
-      setSettingsOpen(true);
+      setPresenceOpen(true);
     }
   }, [openSettings]);
 
@@ -250,6 +250,14 @@ export function SplitView({
     setLight(l);
     lastUserEdit.current = Date.now();
     persistStyle({ light: l });
+  }, []);
+
+  const handleComboSelect = useCallback(async (s: string, v: string, l: string) => {
+    setSurface(s);
+    setVoice(v);
+    setLight(l as "day" | "night");
+    lastUserEdit.current = Date.now();
+    await persistStyle({ surface: s, voice: v, light: l });
   }, []);
 
   const handleLayoutTemplateChange = useCallback(async (t: LayoutTemplateId) => {
@@ -371,24 +379,22 @@ export function SplitView({
       }
     : null;
 
-  const settingsPanel = (
-    <SettingsPanel
-      open={settingsOpen}
-      onClose={() => setSettingsOpen(false)}
-      language={language}
-      onLanguageChange={(lang) => {
-        onLanguageChange?.(lang);
-        setSettingsOpen(false);
-      }}
-      theme={surface}
-      onThemeChange={handleSurfaceChange}
-      colorScheme={light === "night" ? "dark" : "light"}
-      onColorSchemeChange={(cs) => handleLightChange(cs === "dark" ? "night" : "day")}
-      fontFamily={voice}
-      onFontFamilyChange={(f) => handleVoiceChange(f as string)}
+  const presencePanel = (
+    <PresencePanel
+      open={presenceOpen}
+      onClose={() => setPresenceOpen(false)}
+      config={config}
+      surface={surface}
+      voice={voice}
+      light={light}
       layoutTemplate={layoutTemplate}
-      onLayoutTemplateChange={handleLayoutTemplateChange}
+      onSurfaceChange={handleSurfaceChange}
+      onVoiceChange={handleVoiceChange}
+      onLightChange={handleLightChange}
+      onComboSelect={handleComboSelect}
+      onLayoutChange={handleLayoutTemplateChange}
       onAvatarChange={() => { void fetchPreview(); }}
+      language={language}
     />
   );
 
@@ -400,7 +406,7 @@ export function SplitView({
       publishError={publishError}
       onPublish={handlePublish}
       onSignup={() => setSignupOpen(true)}
-      onPresenceOpen={() => setSettingsOpen(true)}
+      onPresenceOpen={() => setPresenceOpen(true)}
     />
   );
 
@@ -451,30 +457,13 @@ export function SplitView({
         </div>
       )}
       <PageRenderer config={displayConfig} previewMode={true} />
-      {settingsPanel}
+      {presencePanel}
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
       {navBar}
       <EmptyPreview language={language} />
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        language={language}
-        onLanguageChange={(lang) => {
-          onLanguageChange?.(lang);
-          setSettingsOpen(false);
-        }}
-        languageOnly
-        theme={surface}
-        onThemeChange={handleSurfaceChange}
-        colorScheme={light === "night" ? "dark" : "light"}
-        onColorSchemeChange={(cs) => handleLightChange(cs === "dark" ? "night" : "day")}
-        fontFamily={voice}
-        onFontFamilyChange={(f) => handleVoiceChange(f as string)}
-        layoutTemplate={layoutTemplate}
-        onLayoutTemplateChange={handleLayoutTemplateChange}
-      />
+      {presencePanel}
     </div>
   );
 
@@ -492,7 +481,7 @@ export function SplitView({
         {/* Desktop: side-by-side */}
         <div className="hidden h-screen md:flex">
           <div className="w-[400px] shrink-0 overflow-hidden border-r">
-            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={!isMobile} />}
+            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={!isMobile} />}
           </div>
           <div className="relative flex-1">{previewPane}</div>
         </div>
@@ -512,7 +501,7 @@ export function SplitView({
             forceMount
             className="flex-1 overflow-hidden data-[state=inactive]:hidden"
           >
-            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={isMobile} />}
+            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={isMobile} />}
           </TabsContent>
           <TabsContent
             value="preview"
