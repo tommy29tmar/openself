@@ -456,7 +456,98 @@ scp root@89.167.111.236:/data/openself/db/openself.db ./openself-backup.db
 
 ---
 
-## 6. Architecture Diagram
+## 6. Voice / STT Service
+
+OpenSelf supports voice input via a self-hosted faster-whisper container. The STT
+(Speech-to-Text) service runs as a separate Coolify application on the same Docker
+network, reachable internally by the web app.
+
+### 6.1 Coolify app details
+
+| Key | Value |
+|---|---|
+| App UUID | `cwk80s40cgks4kkog04swgkc` |
+| Source repo | `https://github.com/tommy29tmar/openself` (branch: main) |
+| Base directory | `/docker/stt` |
+| Dockerfile | `/Dockerfile` (relative to base directory) |
+| Port | `8080` (internal only — no public domain needed) |
+
+### 6.2 Environment variables (STT service)
+
+| Variable | Value | Description |
+|---|---|---|
+| `WHISPER_MODEL` | `tiny` | Model size (tiny/base/small/medium/large) |
+| `WHISPER_COMPUTE_TYPE` | `int8` | Quantization for CPU inference |
+| `WHISPER_DEVICE` | `cpu` | Compute device (cpu/cuda) |
+| `MAX_AUDIO_DURATION` | `60` | Max audio length in seconds |
+| `MODEL_DIR` | `/models/whisper` | Persistent model cache directory |
+
+### 6.3 Environment variables (web app — voice)
+
+These must be added to the **web app** (not the STT service):
+
+| Variable | Value | Description |
+|---|---|---|
+| `NEXT_PUBLIC_VOICE_ENABLED` | `true` | Master switch for voice UI (build-time) |
+| `NEXT_PUBLIC_VOICE_STT_SERVER_FALLBACK_ENABLED` | `true` | Enable server STT fallback path (build-time) |
+| `VOICE_STT_SERVER_FALLBACK_ENABLED` | `true` | Server-side gate for `/api/transcribe` |
+| `STT_SERVICE_URL` | `http://openself-stt:8080` | Internal URL to STT container |
+
+> **Important:** `NEXT_PUBLIC_*` vars are baked at build time — changing them requires a
+> rebuild (redeploy), not just a restart.
+
+### 6.4 Persistent storage (whisper models)
+
+The whisper model is downloaded on first request and cached. To persist across deploys:
+
+1. Create the host directory:
+   ```bash
+   ssh root@89.167.111.236
+   mkdir -p /data/openself/models
+   chmod 777 /data/openself/models
+   ```
+
+2. In Coolify, set **Custom Docker Run Options** for the STT app:
+   ```
+   -v /data/openself/models:/models/whisper --network-alias=openself-stt
+   ```
+
+### 6.5 Network alias (post-deploy step)
+
+Coolify gives containers names like `{uuid}-{timestamp}` that change on every deploy.
+To maintain a stable DNS name (`openself-stt`) on the `coolify` Docker network, run
+the alias script after each STT redeploy:
+
+```bash
+ssh root@89.167.111.236 /data/openself/fix-stt-alias.sh
+```
+
+The script disconnects/reconnects the STT container to the `coolify` network with
+the `openself-stt` alias. This is needed because Coolify does not natively support
+persistent network aliases for standalone applications.
+
+### 6.6 Verification
+
+```bash
+# Health check (from local machine)
+curl https://openself.dev/api/transcribe/health
+# Expected: {"available":true}
+
+# Direct STT health (from server)
+ssh root@89.167.111.236 "docker exec <web-container> wget -qO- http://openself-stt:8080/health"
+# Expected: {"status":"ok","model":"tiny"}
+```
+
+### 6.7 How voice works
+
+- **Primary path:** Browser Web Speech API (Chrome/Safari) — no server needed
+- **Fallback path:** MediaRecorder → POST `/api/transcribe` → proxy to STT container
+- **TTS:** Browser SpeechSynthesis API (no server needed)
+- **Feature flags:** All gated via `NEXT_PUBLIC_VOICE_ENABLED`
+
+---
+
+## 7. Architecture Diagram
 
 ```
 User browser
@@ -471,12 +562,22 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 │   ├── SSL certificates (Let's Encrypt, auto-renewed)
 │   └── Management UI (deploys, logs, env vars)
 │
-└── OpenSelf container (port 3000)
-    ├── Next.js standalone server (server.js)
-    ├── SQLite database at /app/db/openself.db
-    │   └── Volume-mounted to /data/openself/db/ on host (persists across deploys)
-    ├── Migrations auto-run on startup from /app/db/migrations/
-    └── LLM API key loaded from environment variables (supports Anthropic, OpenAI, Google, Ollama)
+├── OpenSelf web container (port 3000)
+│   ├── Next.js standalone server (server.js)
+│   ├── SQLite database at /app/db/openself.db
+│   │   └── Volume-mounted to /data/openself/db/ on host
+│   ├── /api/transcribe → proxies to STT container
+│   └── LLM API key loaded from environment variables
+│
+├── OpenSelf worker container (no HTTP port)
+│   ├── Background job processor (heartbeat, summaries)
+│   └── Shares SQLite volume with web container
+│
+└── STT container "openself-stt" (port 8080, internal only)
+    ├── Python FastAPI + faster-whisper (tiny model, int8)
+    ├── /health → health check
+    ├── /transcribe → audio file → text
+    └── Volume-mounted to /data/openself/models/ on host (model cache)
 ```
 
 ### Docker build stages (what happens during deploy)
@@ -487,7 +588,7 @@ Hetzner CX23 server (Helsinki, €3.65/mo)
 
 ---
 
-## 7. Worker Process
+## 8. Worker Process
 
 OpenSelf includes a background worker process for async jobs (heartbeat, summary generation, etc.). In production, it runs as a separate service alongside the web process.
 
@@ -561,7 +662,7 @@ npm run worker:dev
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Problem | Solution |
 |---|---|
@@ -579,16 +680,20 @@ npm run worker:dev
 | OAuth login not working | Verify that both `*_CLIENT_ID` and `*_CLIENT_SECRET` are set for the provider. Check that `NEXT_PUBLIC_BASE_URL` matches your domain exactly (e.g., `https://openself.dev`). Verify the callback URL in the provider's console matches `https://openself.dev/api/auth/{provider}/callback`. |
 | "OAuth sign-in failed" on login page | Check Coolify → Logs for `[google-oauth]` or `[github-oauth]` errors. Common causes: expired client secret, wrong callback URL, missing email permission scope. |
 | Worker not processing jobs | Check `DB_BOOTSTRAP_MODE=follower` is set. Check logs for "Schema not ready" errors. Verify the web process has `DB_BOOTSTRAP_MODE=leader` and has started successfully. |
+| Voice/STT not working | 1. Check `curl https://openself.dev/api/transcribe/health` returns `{"available":true}`. 2. If false, SSH in and run `/data/openself/fix-stt-alias.sh` (re-adds network alias after STT redeploy). 3. Check STT container is running: `docker ps | grep cwk80`. 4. Check web → STT connectivity: `docker exec <web-container> wget -qO- http://openself-stt:8080/health`. |
 
 ---
 
-## 9. Key Files in the Repository
+## 10. Key Files in the Repository
 
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Multi-stage production build (3 stages: deps → build → runtime) |
 | `.dockerignore` | Excludes node_modules, .next, .env, tests, docs from Docker build context |
 | `docker-compose.yml` | For local testing with `docker compose up` (maps ./data to /app/db) |
+| `docker-compose.dev.yml` | Local dev STT service (`docker compose -f docker-compose.dev.yml up`) |
+| `docker/stt/Dockerfile` | Faster-whisper STT service (Python 3.11, FastAPI) |
+| `docker/stt/server.py` | STT server with `/health` and `/transcribe` endpoints |
 | `next.config.ts` | `output: "standalone"` enables minimal Docker-optimized server. `optimizePackageImports: ["radix-ui"]` fixes SSR prerendering errors caused by radix-ui barrel imports. |
 | `db/migrations/*.sql` | SQL migration files, auto-applied when the app starts |
 | `src/lib/db/index.ts` | Database initialization + auto-migration on import |
@@ -596,7 +701,7 @@ npm run worker:dev
 
 ---
 
-## 10. Cost Summary
+## 11. Cost Summary
 
 | Item | Cost | Notes |
 |---|---|---|

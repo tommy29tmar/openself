@@ -10,6 +10,7 @@ type BuilderNavBarProps = {
   publishError: string | null;
   onPublish: () => void;
   onSignup: () => void;
+  onSettingsOpen?: () => void;
 };
 
 export function BuilderNavBar({
@@ -19,6 +20,7 @@ export function BuilderNavBar({
   publishError,
   onPublish,
   onSignup,
+  onSettingsOpen,
 }: BuilderNavBarProps) {
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -97,6 +99,33 @@ export function BuilderNavBar({
             {loggingOut ? "..." : "Log out"}
           </button>
         </div>
+      )}
+
+      {/* Settings — always last */}
+      {onSettingsOpen && (
+        <button
+          onClick={onSettingsOpen}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label="Customize"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <line x1="2" y1="3.5" x2="14" y2="3.5" />
+            <line x1="2" y1="8" x2="14" y2="8" />
+            <line x1="2" y1="12.5" x2="14" y2="12.5" />
+            <circle cx="5" cy="3.5" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="11" cy="8" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="8" cy="12.5" r="1.5" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
       )}
     </div>
   );

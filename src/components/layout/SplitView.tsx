@@ -94,31 +94,7 @@ async function persistStyle(patch: {
   }
 }
 
-function GearButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="absolute bottom-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-background/80 shadow-sm backdrop-blur-sm transition-colors hover:bg-accent"
-      aria-label="Open settings"
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        className="text-muted-foreground"
-      >
-        <path
-          d="M6.5 1.5h3l.4 1.8.7.3 1.6-.9 2.1 2.1-.9 1.6.3.7 1.8.4v3l-1.8.4-.3.7.9 1.6-2.1 2.1-1.6-.9-.7.3-.4 1.8h-3l-.4-1.8-.7-.3-1.6.9-2.1-2.1.9-1.6-.3-.7L.5 9.5v-3l1.8-.4.3-.7-.9-1.6 2.1-2.1 1.6.9.7-.3.4-1.8Z"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-        />
-        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
-    </button>
-  );
-}
+
 
 export function SplitView({
   language,
@@ -426,6 +402,7 @@ export function SplitView({
       publishError={publishError}
       onPublish={handlePublish}
       onSignup={() => setSignupOpen(true)}
+      onSettingsOpen={() => setSettingsOpen(true)}
     />
   );
 
@@ -476,14 +453,12 @@ export function SplitView({
         </div>
       )}
       <PageRenderer config={displayConfig} previewMode={true} />
-      <GearButton onClick={() => setSettingsOpen(true)} />
       {settingsPanel}
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
       {navBar}
       <EmptyPreview language={language} />
-      <GearButton onClick={() => setSettingsOpen(true)} />
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -525,7 +500,7 @@ export function SplitView({
         </div>
 
         {/* Mobile: tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-screen flex-col md:hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-dvh flex-col gap-0 overflow-hidden md:hidden">
           <TabsList className="sticky top-0 z-40 w-full rounded-none">
             <TabsTrigger value="chat" className="flex-1">
               Chat
