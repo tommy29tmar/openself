@@ -20,8 +20,7 @@ import { logTrustAction } from "@/lib/services/trust-ledger-service";
 import { getDraft, upsertDraft, requestPublish, computeConfigHash } from "@/lib/services/page-service";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig } from "@/lib/page-config/schema";
-// TODO(Task 6): AVAILABLE_THEMES removed — set_theme/update_page_style will be replaced with surface/voice/light tools
-const AVAILABLE_THEMES: readonly string[] = [];
+import { listSurfaces, listVoices } from "@/lib/presence";
 import { logEvent } from "@/lib/services/event-service";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
@@ -570,39 +569,33 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
   }),
 
   update_page_style: tool({
-    description:
-      "Update the page style metadata (theme, colors, font, layout). Does NOT modify section content — use generate_page for that. Pages are composed from facts, not from direct config edits.",
+    description: "Update the page visual presence (surface, voice, light) or layout template.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
-      theme: z.string().optional().describe(`Theme name: ${AVAILABLE_THEMES.join(" or ")}`),
-      style: z.record(z.unknown()).optional().describe("Style object with colorScheme, primaryColor, fontFamily, layout"),
-      layoutTemplate: z.string().optional().describe("Layout template: monolith, cinematic, curator, or architect"),
+      surface: z.string().optional().describe(
+        `Surface controls colors and texture. Valid values: ${listSurfaces().map(s => s.id).join(", ")}`
+      ),
+      voice: z.string().optional().describe(
+        `Voice controls typography. Valid values: ${listVoices().map(v => v.id).join(", ")}`
+      ),
+      light: z.enum(["day", "night"]).optional().describe("Light mode. Works per surface."),
+      layoutTemplate: z.string().optional().describe("Layout template: monolith, curator, architect, cinematic"),
     }),
-    execute: async ({ username, theme, style, layoutTemplate }) => {
+    execute: async ({ username, surface, voice, light, layoutTemplate }) => {
       try {
-        const config = ensureDraft();
-        const updated: PageConfig = { ...config };
-
-        if (theme !== undefined) {
-          if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
-            return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
-          }
-          // TODO(Task 6): theme field removed from PageConfig — replace with surface/voice/light
+        const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/draft/style`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ surface, voice, light, layoutTemplate }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          return { success: false, error: body.error ?? `HTTP ${res.status}` };
         }
-
-        if (style !== undefined) {
-          updated.style = { ...config.style, ...style } as PageConfig["style"];
-        }
-
-        if (layoutTemplate !== undefined) {
-          updated.layoutTemplate = layoutTemplate as PageConfig["layoutTemplate"];
-        }
-
-        upsertDraft(username, updated, sessionId);
         logEvent({
           eventType: "page_config_updated",
           actor: "assistant",
-          payload: { username, change: "style", theme, layoutTemplate },
+          payload: { username, change: "presence", surface, voice, light, layoutTemplate },
         });
         return { success: true };
       } catch (error) {
@@ -614,41 +607,6 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
             error: String(error),
             username,
           },
-        });
-        return { success: false, error: String(error) };
-      }
-    },
-  }),
-
-  set_theme: tool({
-    description:
-      `Change the page theme. Available themes: ${AVAILABLE_THEMES.join(", ")}.`,
-    parameters: z.object({
-      username: z.string().describe("The username for the page"),
-      theme: z
-        .string()
-        .describe(`Theme name: ${AVAILABLE_THEMES.join(" or ")}`),
-    }),
-    execute: async ({ username, theme }) => {
-      try {
-        if (!(AVAILABLE_THEMES as readonly string[]).includes(theme)) {
-          return { success: false, error: `Unknown theme. Available: ${AVAILABLE_THEMES.join(", ")}` };
-        }
-        const config = ensureDraft();
-        // TODO(Task 6): theme field removed from PageConfig — replace with surface/voice/light
-        const updated: PageConfig = { ...config };
-        upsertDraft(username, updated, sessionId);
-        logEvent({
-          eventType: "page_config_updated",
-          actor: "assistant",
-          payload: { username, change: "theme", theme },
-        });
-        return { success: true, theme };
-      } catch (error) {
-        logEvent({
-          eventType: "tool_call_error",
-          actor: "assistant",
-          payload: { requestId, tool: "set_theme", error: String(error), username, theme },
         });
         return { success: false, error: String(error) };
       }
@@ -1600,7 +1558,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       case "search_facts": return `searched "${args.query}" (${r?.count ?? 0} results)`;
       case "batch_facts": return `batch ${(args.operations as unknown[])?.length ?? 0} ops`;
       case "generate_page": return "composed page";
-      case "set_theme": return `theme=${args.theme}`;
+      case "update_page_style": return `presence surface=${args.surface ?? "-"} voice=${args.voice ?? "-"} light=${args.light ?? "-"}`;
       case "set_layout": return `layout=${args.layout}`;
       case "reorder_sections": return "reordered sections";
       case "move_section": return `moved ${args.sectionId} → ${args.targetSlot}`;
