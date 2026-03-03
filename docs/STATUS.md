@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-03-03
+Last updated: 2026-03-04
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -9,11 +9,15 @@ OpenSelf has a working MVP with a hardened core flow:
 - Full onboarding loop: chat → fact extraction → page generation → live preview → publish
 - Two-row page model: draft and published coexist, editing never breaks the live page
 - Server-side publish gate: agent proposes, user confirms via explicit action
-- Centralized theme validation: 3 themes (minimal, warm, editorial-360), single source of truth
+- Presence System: 3-axis visual identity (surface × voice × light) with 9 signature combos, replaces legacy theme/colorScheme/fontFamily
 - Simplified preview state machine: idle + optimistic_ready
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
 - Post-import agent reaction: after LinkedIn import, agent auto-reviews data and asks targeted gap-filling questions
-- 2110 automated tests passing (174 test files)
+- Design DNA Full Redesign: Presence System (surface × voice × light) sostituisce theme/colorScheme/fontFamily. PresencePanel (680px drawer desktop + inline mobile Style tab), SourcesPanel/ConnectorCard generic registry, Mobile Bottom Tab Bar (3 tab), Magic Paste URL detection. Legacy SettingsPanel/ConnectorSection/EditorialLayout rimossi. 2196 test (189 file)
+- Experience facts without dates: agent now creates experience facts immediately even when the user provides no dates (start/end = null). In the very next turn, the agent asks for dates. Previously the agent silently dropped company names due to a date-gate in SAFETY_POLICY.
+- STT language hint end-to-end: the UI language selection now flows through the entire server fallback pipeline — `useSttProvider` FormData → Next.js proxy → Python Whisper server — so proper nouns (e.g. "Cassa Depositi e Prestiti") are transcribed using the correct Whisper language model instead of auto-detection.
+- Multi-provider tier routing: each model tier (`fast/standard/reasoning`) can use a different provider via `provider:model-id` env var format. Production setup: gemini-2.0-flash (fast) / claude-sonnet-4-6 (standard) / gemini-2.5-pro (reasoning). 2209 tests (189 files).
+- 2200 automated tests passing (189 test files)
 - 3-tier memory (summaries + meta-memory), soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Layout template engine: 4 templates (The Monolith, Cinematic, The Curator, The Architect), slot-based section assignment, widget registry, lock system, validation gates
 - Extended sections: 18 section types (experience, education, languages, activities + all stub types implemented), feature-flagged via `EXTENDED_SECTIONS` env var
@@ -54,7 +58,7 @@ OpenSelf has a working MVP with a hardened core flow:
 - UAT Round 6 (12 findings): Architect layout 400 fix (draftSlots carry-over in 3 call sites), layout name cleanup (user-facing names: The Monolith/Cinematic/The Curator/The Architect, case-insensitive resolveLayoutAlias, legacy alias compat), avatar visibility fix (onAvatarChange callback wiring + profileId in 4 compose paths), agent prompt improvements (contradiction handling, unsupported features, response variety, registration CTA). 14 new tests (2077 total, 168 files)
 - Post-import agent reaction: After LinkedIn import, agent auto-reacts with data review + targeted gap-filling questions (interests, description, social). Deterministic gap analyzer, atomic CAS import event flag (pending→processing→consumed), `has_recent_import` situation in Journey Intelligence, `recentImportDirective` policy with prompt hygiene (sanitize + delimiters), DOM event bridge for auto-trigger message (localized, 8 langs), error recovery (revert on failure). 33 new tests (2110 total, 174 files)
 
-Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete. Sprint 5 — Conversation Polish + Eval Matrix complete. UAT Round 4 (21 findings) complete. UAT Round 5 (23 findings) complete. Connector MVP (GitHub + LinkedIn ZIP) complete. Phase 1d Closing (connector UI, avatar, public page translation) complete. Architect layout refactoring (affinity-based slot ranking, compact widgets) complete. UAT Round 6 (12 findings) complete. Post-import agent reaction complete. **Phase 1 is fully complete.**
+Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a (Memory, Soul & Heartbeat) complete. Layout Template Engine (anticipated from Phase 1b) complete. Phase 1b (Extended Sections) complete. Signup-before-publish flow implemented. Quality, Privacy, Themes & Chat Context hardening complete. UAT hardening (10 findings) complete. Phase 1c (Hybrid Page Compiler) complete. Layout Redesign complete. Vertical Magazine Redesign complete. UAT Round 3 hardening (8 findings) complete. Sprint 2 — Onboarding Rewrite complete. Sprint 3 — Returning User Policies complete. Sprint 4 — Reliable Execution complete. Sprint 5 — Conversation Polish + Eval Matrix complete. UAT Round 4 (21 findings) complete. UAT Round 5 (23 findings) complete. Connector MVP (GitHub + LinkedIn ZIP) complete. Phase 1d Closing (connector UI, avatar, public page translation) complete. Architect layout refactoring (affinity-based slot ranking, compact widgets) complete. UAT Round 6 (12 findings) complete. Post-import agent reaction complete. Design DNA Full Redesign (Presence System, PresencePanel, Mobile Bottom Tab Bar, Magic Paste, legacy cleanup) complete. Experience facts without dates + STT language hint end-to-end complete. **Phase 1 is fully complete.**
 
 ## 2) Implemented Today
 
@@ -70,7 +74,8 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Signup-before-publish | Done | Anonymous users see signup modal; authenticated users publish directly with redirect |
 | Builder banner | Done | Authenticated builder: "Live page" / "Share" / "Log out". Fallback to simple auth indicator when no published page |
 | Visitor banner | Done | Published pages show "OpenSelf" + "Log in" for non-owners (logged out and visitors) |
-| Mobile sticky tabs | Done | Chat/Preview tab bar stays fixed at top on mobile scroll |
+| Mobile bottom tab bar | Done | 3-tab bottom nav (Chat / Preview / Style) replaces top tabs. Style tab opens PresencePanel with `inlineFullscreen`. |
+| Presence panel | Done | 680px right drawer (desktop) with Surface/Voice/Light pickers, SignatureCombos, MiniPreview, Layout selector, AvatarSection, SourcesPanel. Inline for mobile Style tab. |
 
 ### Chat and Agent
 
@@ -117,7 +122,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Conformity checks | Done | `analyzeConformity()` + `generateRewrite()` two-phase LLM. Runs in deep heartbeat. Max 3 issues per check. Creates proposals for user review. |
 | Proposal review system | Done | `createProposal` / `acceptProposal` / `rejectProposal` / `markStaleProposals`. API: `GET /api/proposals`, `POST accept/reject/accept-all`. ProposalBanner UI in builder. |
 | Preview API (SSE + fallback polling) | Done | SSE via /api/preview/stream, fallback after 5 errors. Dual-hash: `projectCanonicalConfig()` for display (all sections), `publishableFromCanonical()` for hash guard. Never serves raw `draft.config` |
-| Theme switch in preview | Done | `minimal`, `warm`, and `editorial-360` + light/dark, CSS custom property tokens (`--theme-*`), centralized validation |
+| Presence System | Done | 3-axis visual identity: `surface` (canvas/clay/archive) × `voice` (signal/narrative/terminal) × `light` (day/night). 9 signature combos. `src/lib/presence/` registry. CSS custom properties `--surface-*`, `--voice-*`. `OsPageWrapper` applies classes to `<body>`. Migration 0025 adds columns to `page` table. |
 | Shared canonical projection | Done | Three-layer projection: `projectCanonicalConfig()` (all sections), `publishableFromCanonical()` (completeness filter), `projectPublishableConfig()` (wrapper). `filterPublishableFacts()` shared privacy filter. |
 | Publish pipeline safety | Done | Hash guard (expectedHash from frontend), promote-all (proposed→public atomically), username mismatch guard (publish mode only) |
 | Section completeness filter | Done | `filterCompleteSections()` in renderer for published pages. Hero/footer always pass. |
@@ -144,7 +149,7 @@ Phase 0.2.1 (Hardening) is complete. Phase 0 Gate (dogfooding) passed. Phase 1a 
 | Capability | Status | Notes |
 |---|---|---|
 | Media retrieval route | Done | `/api/media/[id]` returns stored blobs |
-| Avatar upload (full pipeline) | Done | POST/DELETE `/api/media/avatar`, magic bytes validation, EXIF stripping, composer wiring, AvatarSection UI in SettingsPanel |
+| Avatar upload (full pipeline) | Done | POST/DELETE `/api/media/avatar`, magic bytes validation, EXIF stripping, composer wiring, AvatarSection UI in PresencePanel |
 
 ## 3) What Is Not Done Yet
 
@@ -459,7 +464,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 2110 passed / 2110 total (Vitest, 174 test files)
+- Automated tests: 2196 passed / 2196 total (Vitest, 189 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)

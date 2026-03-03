@@ -547,8 +547,8 @@ Knowledge Base management:
   set_fact_visibility(factId, visibility)             # Change fact visibility (proposed/private only)
 
 Page management:
-  update_page_style(username, theme?, style?, layoutTemplate?)  # Modify page metadata (not section content)
-  set_theme(username, theme)                          # Change visual theme
+  update_page_style(username, surface?, voice?, light?, layoutTemplate?)  # Modify page presence/layout metadata
+  set_theme(username, surface?, voice?, light?)       # Change presence (surface/voice/light axes)
   set_layout(username, layoutTemplate)                # Change layout template
   reorder_sections(username, sectionOrder)            # Rearrange page sections
   generate_page(username, language?)                  # Full page synthesis from facts
@@ -1067,8 +1067,22 @@ listens, reasons, and speaks.
 
 **Speech-to-Text (input):**
 - Browser: Web Speech API (real-time, no server round-trip)
-- Server fallback: Whisper (OpenAI open-source model). Supports many languages,
-  runs locally via Whisper.cpp or via API. Critical for the language-agnostic promise.
+- Server fallback: Whisper (open-source model via `faster-whisper`). Used on iOS
+  Safari and other browsers where Web Speech API is unreliable. Critical for the
+  language-agnostic promise.
+
+**Language hint pipeline (server fallback):**
+The UI language selection flows end-to-end to the Whisper model to ensure accurate
+transcription of proper nouns in the correct language model:
+1. `useSttProvider.ts` — appends `language` (ISO 639-1, e.g. `"it"`) to the `FormData`
+   POSTed to `/api/transcribe`. `language` is also in the `useCallback` dependency
+   array to prevent stale closures on language change.
+2. `src/app/api/transcribe/route.ts` — extracts `language` from the incoming form
+   and forwards it to the upstream Whisper server.
+3. `docker/stt/server.py` — accepts `language` as an optional `Form` field, validates
+   it against a 92-entry ISO 639-1 allowlist, and passes it to
+   `model.transcribe(language=...)`, skipping auto-detection when a valid hint is
+   provided.
 
 **Text-to-Speech (output):**
 - Open-source engines: eSpeak NG (lightweight, many languages, predefined voices),
@@ -1453,9 +1467,6 @@ type ComponentType =
   | "experience" | "education" | "languages";  // Phase 1b
 
 type StyleConfig = {
-  colorScheme: "light" | "dark";
-  primaryColor: string;
-  fontFamily: string;
   layout: "centered" | "split" | "stack";   // legacy — canonicalized to "centered" when layoutTemplate present
 };
 
@@ -1492,8 +1503,11 @@ type PageConfig = {
   version: number;
   username: string;
   sourceLanguage: string;     // ISO 639-1 code (e.g., "it", "en", "de") — set from onboarding
-  theme: string;
-  layoutTemplate?: LayoutTemplateId;   // top-level, not in style — "monolith" | "cinematic" | "curator" | "architect"
+  theme: string;              // legacy — kept for backward compat during transition
+  surface: "canvas" | "clay" | "archive";   // Presence axis 1: visual canvas character
+  voice: "signal" | "narrative" | "terminal"; // Presence axis 2: typographic personality
+  light: "day" | "night";                    // Presence axis 3: light vs dark mode
+  layoutTemplate?: LayoutTemplateId;   // top-level — "monolith" | "cinematic" | "curator" | "architect"
   style: StyleConfig;
   sections: Section[];
 };
@@ -1519,10 +1533,10 @@ Runtime rules:
   "version": 1,
   "username": "tommaso",
   "theme": "minimal",
+  "surface": "canvas",
+  "voice": "signal",
+  "light": "day",
   "style": {
-    "colorScheme": "dark",
-    "primaryColor": "#6366f1",
-    "fontFamily": "inter",
     "layout": "centered"
   },
   "sections": [
@@ -1905,6 +1919,24 @@ profile at a glance, OpenSelf pages should be instantly recognizable.
 - Density (spacious vs compact)
 - Visual embellishments (borders, shadows, gradients)
 
+### 6.5.0 Presence System (Implemented)
+
+OpenSelf uses a **3-axis Presence System** to define visual identity. The three axes are independent and can be combined freely, but 9 curated **Signature Combos** provide opinionated starting points:
+
+| Axis | Field | Values |
+|------|-------|--------|
+| Surface | `surface` | `canvas` (white/clean), `clay` (warm parchment), `archive` (dark/moody) |
+| Voice | `voice` | `signal` (geometric sans), `narrative` (editorial serif), `terminal` (monospace) |
+| Light | `light` | `day` (light backgrounds), `night` (dark backgrounds) |
+
+**CSS application:** `OsPageWrapper` applies classes `.surface-{value}`, `.voice-{value}`, `.light-{value}` to `<body>`. CSS custom properties (`--page-bg`, `--page-fg`, `--page-accent`, `--h-font`, `--b-font`) are keyed by these classes in `globals.css`.
+
+**Presence registry:** `src/lib/presence/registry.ts` defines all valid values and their CSS mappings. `src/lib/presence/combos.ts` defines the 9 curated combinations.
+
+**DB:** Migration `0025_presence_system.sql` — `surface`, `voice`, `light` columns on the `page` table.
+
+**Prompt integration:** `src/lib/presence/prompt-builder.ts` injects presence context into agent system prompt.
+
 **Built-in themes (implemented):**
 
 | Theme | Description | Status |
@@ -1913,15 +1945,12 @@ profile at a glance, OpenSelf pages should be instantly recognizable.
 | `warm` | Soft colors, rounded elements, friendly feel | Implemented |
 | `editorial-360` | Luxury digital magazine aesthetic (Stripe/Linear-inspired). Unified `.section-label` headers with accent bar, scroll reveal animations, variable vertical rhythm (hero 80px, narrative 48px, dense 32px), dot separators, hero stagger animations, hover-underline-grow links. Heading font: `var(--font-sans), system-ui` | Implemented |
 
-Each theme is powered by CSS custom properties (`--theme-*` tokens) defined in
-`src/app/globals.css`. Theme tokens control colors, typography, spacing, and
-decorative elements. The `ThemeProvider` in `PageRenderer.tsx` applies the correct
-token set based on `config.theme`. All three themes support light/dark color schemes.
+The legacy theme system (minimal/warm/editorial-360) is preserved for backward compatibility during the transition period. Long-term, `surface × voice × light` fully replaces it. `OsPageWrapper` is the new composition root — it applies presence classes to `<body>` and wraps both builder preview and public page renderer.
 
-**Shared CSS utility classes** (defined in `globals.css`, used by all themes):
+**Shared CSS utility classes** (defined in `globals.css`, used across all surfaces):
 - `.section-label` — Unified section header (11px uppercase, `letter-spacing: 0.2em`, accent bar via `::before`)
 - `.entry-dot-separator` — Middle-dot separator between list entries
-- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver. `EditorialLayout` uses `findScrollParent()` to detect the nearest scrollable ancestor as `root`. **Builder preview bypass**: when `previewMode` is true, the observer is skipped entirely and `.preview-mode .theme-reveal` CSS forces `opacity: 1` — sections must be immediately visible for content review. Published pages retain the full scroll-reveal animation
+- `.theme-reveal` / `.theme-reveal.revealed` — Scroll-triggered reveal animations via IntersectionObserver. **Builder preview bypass**: when `previewMode` is true, the observer is skipped entirely and `.preview-mode .theme-reveal` CSS forces `opacity: 1`. Published pages retain the full animation.
 - `.hover-underline-grow` — Left-to-right underline animation on hover (`scaleX(0)` → `scaleX(1)`)
 - `prefers-reduced-motion` overrides disable all animations for accessibility
 
@@ -1933,8 +1962,7 @@ token set based on `config.theme`. All three themes support light/dark color sch
 | `elegant` | Serif fonts, refined spacing, understated |
 | `hacker` | Monospace, dark background, terminal aesthetic |
 
-Users can request theme changes in conversation via the `set_theme` tool.
-Source of truth for valid themes: `AVAILABLE_THEMES` in `src/lib/page-config/schema.ts`.
+Users can request presence changes in conversation via `set_theme` (surface/voice/light) or `update_page_style`. Source of truth for valid presence values: `src/lib/presence/registry.ts`. Legacy `AVAILABLE_THEMES` in `src/lib/page-config/schema.ts` preserved for backward compat.
 
 ### 6.5.1 Non-Negotiable Brand Guardrails
 
@@ -3432,7 +3460,7 @@ OLLAMA_MODEL=llama3.3
 
 # Option D: Google
 AI_PROVIDER=google
-GOOGLE_API_KEY=...
+GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 
 # Cost guardrails (recommended)
 LLM_DAILY_TOKEN_LIMIT=500000
@@ -3444,6 +3472,21 @@ HEARTBEAT_MAX_LLM_CALLS=3
 LLM_HARD_STOP=true
 
 # Used to seed llm_limits on first boot; after seeding, DB values are authoritative
+```
+
+**Multi-provider tier routing (recommended for production):**
+
+Each tier can use a different provider via `provider:model-id` format. Unknown prefixes (e.g. `llama3.2:latest`) are treated as plain model IDs for backward compat.
+
+```env
+# Recommended setup — Anthropic for chat, Google for background tasks
+AI_PROVIDER=anthropic                                  # fallback
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_GENERATIVE_AI_API_KEY=AIza...
+
+AI_MODEL_FAST=google:gemini-2.0-flash          # $0.075/M — translation, schema, coherence
+AI_MODEL_STANDARD=anthropic:claude-sonnet-4-6  # $3/M    — chat (user-facing), summaries
+AI_MODEL_REASONING=google:gemini-2.5-pro       # $1.25/M — conformity analysis (background)
 ```
 
 ### 11.2 One-Click Deploy
@@ -4070,9 +4113,7 @@ agent operations require the same model capability.
 | Identity coaching / gap analysis | Capable (Opus, GPT-4) | Strategic suggestions, career navigation |
 | Discovery Scout scoring | Medium | Matching opportunities to profile |
 
-**Implementation:** The `getModel()` provider function accepts a `tier` parameter
-(`"cheap" | "medium" | "capable"`) and routes to the appropriate model based on
-`AI_PROVIDER`. Tier mapping is configurable per provider in environment variables.
+**Implementation:** `getModelForTier(tier)` in `src/lib/ai/provider.ts` accepts `"fast" | "standard" | "reasoning"` (legacy aliases: `cheap→fast`, `medium→standard`, `capable→reasoning`). Parses optional `provider:model-id` prefix in `AI_MODEL_FAST/STANDARD/REASONING` env vars — recognized prefixes are `google|openai|anthropic|ollama`. If a known prefix is found, that provider's SDK is instantiated regardless of `AI_PROVIDER`. Unknown prefixes (e.g. `llama3.2:latest`) fall through as plain model IDs. `getProviderForTier(tier)` returns the effective provider for usage recording.
 
 **Trade-off:** More complex provider layer. But the cost savings compound: a
 system that runs 80% of operations on a cheap model costs 5-10x less than one
