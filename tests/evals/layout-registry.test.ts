@@ -157,6 +157,15 @@ describe("Phase 1b: new types accepted in layout slots", () => {
   });
 });
 
+describe("BUG-3: architect capacity", () => {
+  it("architect full-row slot accepts 4+ sections for real-world pages", () => {
+    const template = getLayoutTemplate("architect");
+    const fullRow = template.slots.find((s) => s.id === "full-row");
+    expect(fullRow).toBeDefined();
+    expect(fullRow!.maxSections).toBeGreaterThanOrEqual(4);
+  });
+});
+
 describe("getAllTemplates", () => {
   it("returns all registered templates", () => {
     const all = getAllTemplates();

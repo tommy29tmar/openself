@@ -52,6 +52,20 @@ export function assignSlotsFromFacts(
     slotDefs.set(slot.id, slot);
   }
 
+  // Pre-compute widget map for compatibility checks
+  const widgetMap = buildWidgetMap();
+
+  // Helper: replace widgetId if it doesn't fit the target slot size
+  function ensureCompatibleWidget(section: Section, slotDef: FullSlotDefinition): void {
+    if (section.widgetId) {
+      const existing = widgetMap[section.widgetId];
+      if (!existing || !existing.fitsIn.includes(slotDef.size)) {
+        const compatible = getBestWidget(section.type as ComponentType, slotDef.size);
+        if (compatible) section.widgetId = compatible.id;
+      }
+    }
+  }
+
   const usedCapacity = new Map<string, number>();
 
   function consumeSlot(slotId: string): boolean {
@@ -86,7 +100,8 @@ export function assignSlotsFromFacts(
       const slotDef = slotDefs.get(draftSlot);
       if (slotDef) {
         const widget = getBestWidget(section.type as ComponentType, slotDef.size);
-        if (widget && !s.widgetId) s.widgetId = widget.id;
+        if (!s.widgetId && widget) s.widgetId = widget.id;
+        else ensureCompatibleWidget(s, slotDef);
       }
       consumeSlot(draftSlot);
       result.push(s);
@@ -174,7 +189,11 @@ export function assignSlotsFromFacts(
       const widget = getBestWidget(sectionType, slot.size);
       if (widget) {
         const s = { ...section, slot: slot.id };
-        if (!s.widgetId) s.widgetId = widget.id;
+        if (!s.widgetId) {
+          s.widgetId = widget.id;
+        } else {
+          ensureCompatibleWidget(s, slot);
+        }
         consumeSlot(slot.id);
         result.push(s);
         placed = true;
@@ -184,7 +203,7 @@ export function assignSlotsFromFacts(
 
     // No compatible slot found — section is unplaceable
     if (!placed) {
-      result.push({ ...section });
+      result.push({ ...section, slot: undefined, widgetId: undefined });
       unplaceableIssues.push({
         slotId: "",
         issue: "unplaceable_section" as LayoutIssueType,
@@ -201,7 +220,6 @@ export function assignSlotsFromFacts(
   }
 
   // Validate the result
-  const widgetMap = buildWidgetMap();
   const assignments = result
     .filter((s) => s.slot && s.widgetId)
     .map((s) => ({

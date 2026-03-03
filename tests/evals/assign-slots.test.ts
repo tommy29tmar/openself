@@ -207,6 +207,40 @@ describe("assignSlotsFromFacts", () => {
     });
   });
 
+  describe("BUG-3: widget carry-over on layout switch", () => {
+    it("replaces incompatible widgetId when assigning section to new slot size", () => {
+      const template = getLayoutTemplate("architect");
+      const sections = [
+        makeSection({ id: "s-hero", type: "hero" }),
+        makeSection({ id: "s-bio", type: "bio", widgetId: "bio-full" }), // bio-full doesn't exist → must be replaced
+        makeSection({ id: "s-skills", type: "skills", content: { groups: [{ label: "A", skills: ["x"] }] }, widgetId: "skills-chips" }), // fits "wide"/"half"/"third"
+        makeSection({ id: "s-footer", type: "footer" }),
+      ];
+      const { sections: result, issues } = assignSlotsFromFacts(template, sections as Section[]);
+      const errors = issues.filter(i => i.severity === "error");
+      expect(errors.filter(i => i.issue === "incompatible_widget")).toHaveLength(0);
+      const bio = result.find(s => s.id === "s-bio");
+      expect(bio?.widgetId).toBeDefined();
+      expect(bio?.widgetId).not.toBe("bio-full");
+    });
+
+    it("unplaceable sections have slot/widgetId cleared — no error-severity issues", () => {
+      const template = getLayoutTemplate("architect");
+      const sections = Array.from({ length: 15 }, (_, i) =>
+        makeSection({
+          id: `s-${i}`, type: "skills", slot: "main", widgetId: "skills-list",
+          content: { groups: [{ label: "A", skills: ["a"] }] },
+        }),
+      );
+      sections.unshift(makeSection({ id: "hero", type: "hero" }));
+      sections.push(makeSection({ id: "footer", type: "footer" }));
+
+      const { issues } = assignSlotsFromFacts(template, sections as Section[]);
+      const errors = issues.filter(i => i.severity === "error");
+      expect(errors).toHaveLength(0);
+    });
+  });
+
   it("post-assign invariant: all core sections have slot + widgetId", () => {
     const sections = [
       makeSection({ id: "h1", type: "hero" }),

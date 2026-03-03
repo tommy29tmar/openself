@@ -208,7 +208,7 @@ const LAYOUT_REGISTRY: Record<LayoutTemplateId, LayoutTemplateDefinition> = {
         id: "full-row",
         size: "wide",
         required: false,
-        maxSections: 2,
+        maxSections: 4,
         accepts: [
           "projects",
           "timeline",
