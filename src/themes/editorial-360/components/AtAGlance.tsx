@@ -38,7 +38,7 @@ export function AtAGlance({ content }: SectionProps<AtAGlanceContent>) {
                     {stats.map((stat, i) => (
                         <div key={i} className="text-center md:text-left">
                             <p className="text-2xl font-bold text-[var(--page-fg)]">{stat.value}</p>
-                            <p className="text-xs uppercase tracking-widest text-[var(--page-fg-secondary)]">
+                            <p className="text-xs uppercase tracking-wide text-[var(--page-fg-secondary)] leading-tight break-words">
                                 {stat.unit ?? stat.label}
                             </p>
                         </div>

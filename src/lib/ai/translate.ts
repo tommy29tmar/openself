@@ -82,6 +82,11 @@ function mergeSections(
  * - Uses a hash-based translation cache to avoid repeated LLM calls.
  * - On any error (LLM failure, JSON parse error) returns the original config
  *   unchanged — graceful degradation over hard failure.
+ *
+ * CONTRACT: on success, always returns a NEW object (via mergeSections).
+ * On failure/fallback, returns the exact same `config` reference passed in.
+ * Callers may rely on reference identity (`result !== config`) to detect
+ * whether translation actually succeeded.
  */
 export async function translatePageContent(
   config: PageConfig,

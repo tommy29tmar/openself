@@ -84,12 +84,17 @@ export default async function UsernamePage({ params, searchParams }: Props) {
     sourceLanguage,
   );
 
+  // Only show banner when translation actually succeeded (fallback returns the same object reference)
+  const translationSucceeded = translatedConfig !== config;
+
   return (
     <>
-      <TranslationBanner
-        sourceLanguage={sourceLanguage}
-        username={username}
-      />
+      {translationSucceeded && (
+        <TranslationBanner
+          sourceLanguage={sourceLanguage}
+          username={username}
+        />
+      )}
       <PageRenderer config={translatedConfig} isOwner={isOwner} />
     </>
   );

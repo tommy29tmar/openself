@@ -40,9 +40,9 @@ describe("F24: stripFreelanceFromRole", () => {
   });
 });
 
-// --- F3 + F16: Italian passionateAbout ---
+// --- F3 + F16: Italian passionateAbout (gender-neutral form) ---
 describe("F3 + F16: Italian passionateAbout", () => {
-  it("uses 'Appassionato di' not 'Mi occupo di'", async () => {
+  it("uses gender-neutral 'Entusiasta di' not masculine 'Appassionato di' or 'Mi occupo di'", async () => {
     const mod = await import("@/lib/services/page-composer");
     const facts = [
       { id: "1", category: "identity", key: "name", value: { full: "Marco" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
@@ -51,8 +51,52 @@ describe("F3 + F16: Italian passionateAbout", () => {
     const config = mod.composeOptimisticPage(facts as any, "draft", "it");
     const bio = config.sections.find((s) => s.type === "bio");
     const text = (bio?.content as any)?.text ?? "";
-    expect(text).toContain("Appassionato di");
+    expect(text).toContain("Entusiasta di");
     expect(text).not.toContain("Mi occupo di");
+    expect(text).not.toContain("Appassionato di");
+  });
+});
+
+// --- Gender-neutral passionateAbout: PT, FR, ES ---
+describe("Gender-neutral passionateAbout in PT/FR/ES", () => {
+  const interestFact = (id: string) => ({ id, category: "interest", key: "musica", value: { name: "musica" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null });
+  const nameFact = (id: string, lang: string) => ({ id, category: "identity", key: "name", value: { full: lang === "pt" ? "Beatriz" : lang === "fr" ? "Sophie" : "María" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null });
+
+  it("PT: uses 'Com paixão por' not 'Apaixonado'", async () => {
+    const { composeOptimisticPage } = await import("@/lib/services/page-composer");
+    const config = composeOptimisticPage([nameFact("1", "pt"), interestFact("2")] as any, "draft", "pt");
+    const bio = config.sections.find((s) => s.type === "bio");
+    const text = (bio?.content as any)?.text ?? "";
+    expect(text).toContain("Com paixão por");
+    expect(text).not.toContain("Apaixonado");
+  });
+
+  it("PT: interestsInto is 'Com paixão por'", async () => {
+    const { composeOptimisticPage } = await import("@/lib/services/page-composer");
+    const config = composeOptimisticPage([interestFact("1")] as any, "draft", "pt");
+    const aag = config.sections.find((s) => s.type === "at-a-glance");
+    if (aag) {
+      const interestsInto = (aag.content as any)?.interestsInto ?? "";
+      expect(interestsInto).toBe("Com paixão por");
+    }
+  });
+
+  it("FR: uses 'Passionné(e) par' not 'Passionné par'", async () => {
+    const { composeOptimisticPage } = await import("@/lib/services/page-composer");
+    const config = composeOptimisticPage([nameFact("1", "fr"), interestFact("2")] as any, "draft", "fr");
+    const bio = config.sections.find((s) => s.type === "bio");
+    const text = (bio?.content as any)?.text ?? "";
+    expect(text).toContain("Passionné(e) par");
+    expect(text).not.toMatch(/Passionné par [^(]/);
+  });
+
+  it("ES: uses 'Entusiasta de' not 'Apasionado'", async () => {
+    const { composeOptimisticPage } = await import("@/lib/services/page-composer");
+    const config = composeOptimisticPage([nameFact("1", "es"), interestFact("2")] as any, "draft", "es");
+    const bio = config.sections.find((s) => s.type === "bio");
+    const text = (bio?.content as any)?.text ?? "";
+    expect(text).toContain("Entusiasta de");
+    expect(text).not.toContain("Apasionado");
   });
 });
 
