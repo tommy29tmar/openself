@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
     // Re-build FormData for upstream
     const upstreamForm = new FormData();
     upstreamForm.append("file", file, "audio.webm");
+    const language = formData.get("language");
+    if (typeof language === "string" && language.trim()) {
+      upstreamForm.append("language", language.trim());
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000); // 30s timeout
