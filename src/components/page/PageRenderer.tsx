@@ -8,6 +8,7 @@ import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { getLayoutComponent } from "@/components/layout-templates";
 import { OwnerBanner } from "@/components/page/OwnerBanner";
 import { VisitorBanner } from "@/components/page/VisitorBanner";
+import { StickyNav, shouldShowStickyNav } from "@/components/page/StickyNav";
 import { filterCompleteSections } from "@/lib/page-config/section-completeness";
 import { OsPageWrapper } from "@/components/page/OsPageWrapper";
 import { SECTION_COMPONENTS } from "@/components/sections";
@@ -51,7 +52,13 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
       {!isOwner && !previewMode && <VisitorBanner />}
-      {/* StickyNav placeholder — added in Task 12 */}
+      {!previewMode && shouldShowStickyNav(sections) && (
+        <StickyNav
+          sections={sections}
+          name={(config.sections.find(s => s.type === "hero")?.content?.name as string | undefined) ?? config.username}
+          avatarUrl={config.sections.find(s => s.type === "hero")?.content?.avatarUrl as string | undefined}
+        />
+      )}
       <OsPageWrapper config={config} previewMode={previewMode}>
         <LayoutComponent slots={slots} renderSection={renderSection} />
       </OsPageWrapper>
