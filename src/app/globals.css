@@ -516,3 +516,17 @@
     transition: none;
   }
 }
+
+/* ─── Voice font assignments — full token system in Task 8 ─── */
+.os-page {
+  --h-font: var(--font-plus-jakarta-sans), sans-serif;
+  --b-font: var(--font-figtree), sans-serif;
+}
+.os-page.voice-narrative {
+  --h-font: var(--font-cormorant), serif;
+  --b-font: var(--font-lato), sans-serif;
+}
+.os-page.voice-terminal {
+  --h-font: var(--font-jetbrains), monospace;
+  --b-font: var(--font-jetbrains), monospace;
+}
