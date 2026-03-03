@@ -439,6 +439,32 @@ describe("fact-validation", () => {
     });
   });
 
+  describe("BUG-4: email validation for contact facts", () => {
+    it("rejects malformed email like 'boh@' for contact with type=email", () => {
+      expect(() =>
+        validateFactValue("contact", "email-1", { type: "email", value: "boh@" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects email without domain for contact with type=email", () => {
+      expect(() =>
+        validateFactValue("contact", "email-1", { type: "email", value: "user@" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("accepts valid email for contact with type=email", () => {
+      expect(() =>
+        validateFactValue("contact", "email-1", { type: "email", value: "marco@design.it" }),
+      ).not.toThrow();
+    });
+
+    it("does not validate email format for contact with type=phone", () => {
+      expect(() =>
+        validateFactValue("contact", "phone-1", { type: "phone", value: "+39123456789" }),
+      ).not.toThrow();
+    });
+  });
+
   describe("FactValidationError properties", () => {
     it("has correct code, category, and key", () => {
       try {
