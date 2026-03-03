@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { CSSProperties } from "react";
 import type { ConnectorUIDefinition, ConnectorStatusRow } from "@/lib/connectors/types";
 
@@ -11,7 +11,21 @@ type ConnectorCardProps = {
 
 export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardProps) {
   const [loading, setLoading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
+    };
+  }, []);
+
+  const showMessage = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
+    messageTimerRef.current = setTimeout(() => setMessage(null), type === "error" ? 4000 : 3000);
+  };
 
   const isConnected = status?.status === "connected";
   const hasError = status?.status === "error";
@@ -26,24 +40,34 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
     try {
       const res = await fetch(definition.syncUrl, { method: "POST" });
       const data = await res.json();
-      setMessage({
-        text: data.success ? "Synced" : (data.error ?? "Sync failed"),
-        type: data.success ? "success" : "error",
-      });
+      showMessage(
+        data.success ? "Synced" : (data.error ?? "Sync failed"),
+        data.success ? "success" : "error",
+      );
       if (data.success) onRefresh();
     } catch {
-      setMessage({ text: "Network error", type: "error" });
+      showMessage("Network error", "error");
     } finally {
       setLoading(false);
-      setTimeout(() => setMessage(null), 3000);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!status?.id) return;
-    const url = definition.disconnectUrl.replace("{id}", String(status.id));
-    const res = await fetch(url, { method: "POST" });
-    if (res.ok) onRefresh();
+    if (!status?.id || disconnecting) return;
+    setDisconnecting(true);
+    try {
+      const url = definition.disconnectUrl.replace("{id}", String(status.id));
+      const res = await fetch(url, { method: "POST" });
+      if (res.ok) {
+        onRefresh();
+      } else {
+        showMessage("Disconnect failed", "error");
+      }
+    } catch {
+      showMessage("Network error", "error");
+    } finally {
+      setDisconnecting(false);
+    }
   };
 
   const handleImport = async () => {
@@ -60,12 +84,12 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
       try {
         const res = await fetch(definition.importUrl!, { method: "POST", body: form });
         const data = await res.json();
-        setMessage({
-          text: data.success
+        showMessage(
+          data.success
             ? `${data.report?.factsWritten ?? 0} facts imported`
             : (data.error ?? "Import failed"),
-          type: data.success ? "success" : "error",
-        });
+          data.success ? "success" : "error",
+        );
         if (data.success) {
           window.dispatchEvent(
             new CustomEvent("openself:import-complete", {
@@ -75,10 +99,9 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
           onRefresh();
         }
       } catch {
-        setMessage({ text: "Upload failed", type: "error" });
+        showMessage("Upload failed", "error");
       } finally {
         setLoading(false);
-        setTimeout(() => setMessage(null), 4000);
       }
     };
     input.click();
@@ -142,7 +165,7 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
           {definition.syncUrl && (
             <button
               onClick={handleSync}
-              disabled={loading}
+              disabled={loading || disconnecting}
               style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
             >
               {loading ? "Syncing\u2026" : "Sync Now"}
@@ -150,9 +173,10 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
           )}
           <button
             onClick={handleDisconnect}
+            disabled={disconnecting || loading}
             style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
           >
-            Disconnect
+            {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
           </button>
         </div>
       )}
@@ -172,9 +196,10 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
             </button>
             <button
               onClick={handleDisconnect}
+              disabled={disconnecting}
               style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
             >
-              Disconnect
+              {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
             </button>
           </div>
         </div>
