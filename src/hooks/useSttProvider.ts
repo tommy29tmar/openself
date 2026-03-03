@@ -150,6 +150,7 @@ export function useSttProvider({
         // POST to server
         const formData = new FormData();
         formData.append("file", blob, "audio.webm");
+        if (language) formData.append("language", language);
 
         abortRef.current = new AbortController();
         try {
@@ -206,7 +207,7 @@ export function useSttProvider({
       }
       return false;
     }
-  }, [onResult, onFinalResult]);
+  }, [onResult, onFinalResult, language]);
 
   const start = useCallback(() => {
     if (state !== VoiceSttState.IDLE) return;
