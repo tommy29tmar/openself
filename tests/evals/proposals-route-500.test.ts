@@ -56,4 +56,14 @@ describe("GET /api/proposals", () => {
     const data = await res.json();
     expect(data.proposals).toEqual([]);
   });
+
+  it("returns 200 with empty proposals when getPendingProposals throws", async () => {
+    mockGetAuthContext.mockReturnValue({ sessionId: "s1", profileId: "p1", userId: null, username: null });
+    mockMarkStaleProposals.mockImplementation(() => {});
+    mockGetPendingProposals.mockImplementation(() => { throw new Error("table not found"); });
+    const res = await GET(makeRequest());
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.proposals).toEqual([]);
+  });
 });

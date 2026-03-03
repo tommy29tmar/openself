@@ -24,6 +24,11 @@ export async function GET(req: Request) {
     console.warn("[proposals] markStaleProposals failed (best-effort):", err);
   }
 
-  const proposals = getPendingProposals(auth.profileId);
+  let proposals: ReturnType<typeof getPendingProposals> = [];
+  try {
+    proposals = getPendingProposals(auth.profileId);
+  } catch (err) {
+    console.warn("[proposals] getPendingProposals failed:", err);
+  }
   return NextResponse.json({ proposals });
 }
