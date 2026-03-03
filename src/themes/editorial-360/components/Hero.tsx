@@ -97,13 +97,8 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                             </p>
                         </div>
                         <div className="md:col-span-4 flex justify-start md:justify-end">
-                            <div className="w-48 h-48 md:w-64 md:h-64 rounded-2xl overflow-hidden flex items-center justify-center shadow-lg rotate-3 hover:rotate-0 transition-transform duration-500"
-                                style={avatarUrl ? {} : avatarStyle}>
-                                {avatarUrl ? (
-                                    <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-6xl font-medium" style={{ fontFamily: "var(--h-font)" }}>{initials}</span>
-                                )}
+                            <div className="rounded-2xl shadow-lg rotate-3 hover:rotate-0 transition-transform duration-500">
+                                {renderAvatar("w-48 h-48 md:w-64 md:h-64 !rounded-2xl", "text-6xl")}
                             </div>
                         </div>
                     </div>
