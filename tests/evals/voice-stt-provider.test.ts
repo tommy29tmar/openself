@@ -47,7 +47,7 @@ describe("STT server fallback language hint", () => {
     // Must append language to the FormData before POSTing
     const serverFallbackBlock = src.slice(
       src.indexOf("startServerFallback"),
-      src.indexOf("}, [onResult, onFinalResult])")
+      src.indexOf("}, [onResult, onFinalResult, language])")
     );
     expect(serverFallbackBlock).toContain('formData.append("language"');
 
