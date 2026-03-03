@@ -400,7 +400,7 @@ export function SplitView({
       publishError={publishError}
       onPublish={handlePublish}
       onSignup={() => setSignupOpen(true)}
-      onSettingsOpen={() => setSettingsOpen(true)}
+      onPresenceOpen={() => setSettingsOpen(true)}
     />
   );
 

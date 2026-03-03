@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import type { AuthState } from "@/app/builder/page";
 
@@ -10,7 +9,8 @@ type BuilderNavBarProps = {
   publishError: string | null;
   onPublish: () => void;
   onSignup: () => void;
-  onSettingsOpen?: () => void;
+  onPresenceOpen?: () => void;
+  publishedUsername?: string | null;
 };
 
 export function BuilderNavBar({
@@ -20,13 +20,13 @@ export function BuilderNavBar({
   publishError,
   onPublish,
   onSignup,
-  onSettingsOpen,
+  onPresenceOpen,
+  publishedUsername: publishedUsernameProp,
 }: BuilderNavBarProps) {
-  const [loggingOut, setLoggingOut] = useState(false);
-
   const authenticated = authState?.authenticated ?? false;
   const username = authState?.username ?? null;
-  const publishedUsername = authState?.publishedUsername ?? null;
+  const publishedUsername = publishedUsernameProp ?? authState?.publishedUsername ?? null;
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -39,93 +39,108 @@ export function BuilderNavBar({
   };
 
   return (
-    <div className="sticky top-0 z-50 flex min-h-12 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      {/* Brand */}
-      <a href="/" className="text-sm font-semibold tracking-tight">
-        OpenSelf
+    <div
+      style={{
+        position: "sticky", top: 0, zIndex: 50,
+        height: 48, display: "flex", alignItems: "center", gap: 16,
+        padding: "0 20px",
+        background: "rgba(7,7,9,0.92)", backdropFilter: "blur(12px)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      {/* Logo */}
+      <a
+        href="/"
+        style={{
+          fontFamily: "var(--font-jetbrains, monospace)", fontSize: 13,
+          fontWeight: 500, color: "#e8e4de", letterSpacing: "0.02em",
+          textDecoration: "none", flexShrink: 0,
+        }}
+      >
+        openself
       </a>
 
-      {/* Live page link */}
-      {publishedUsername && (
+      {/* Status pill */}
+      {(username || publishedUsername) && (
         <a
-          href={`/${publishedUsername}`}
-          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+          href={publishedUsername ? `/${publishedUsername}` : undefined}
+          style={{
+            fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11,
+            padding: "3px 10px", borderRadius: 4,
+            background: "rgba(201,169,110,0.15)", color: "#c9a96e",
+            textDecoration: "none", flexShrink: 0,
+          }}
         >
-          Live page
+          {publishedUsername ? `Published · ${publishedUsername}` : `Draft · ${username}`}
         </a>
       )}
 
       {/* Spacer */}
-      <div className="flex-1" />
+      <div style={{ flex: 1 }} />
 
       {/* Publish error */}
       {publishError && (
-        <span className="text-xs text-red-600 dark:text-red-400">{publishError}</span>
+        <span style={{ fontSize: 12, color: "#f87171" }}>{publishError}</span>
       )}
 
-      {/* Publish / Sign up button */}
-      {hasUnpublishedChanges && !publishing && authenticated && (
+      {/* Presence button */}
+      {onPresenceOpen && (
         <button
-          onClick={onPublish}
-          className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
+          onClick={onPresenceOpen}
+          style={{
+            fontFamily: "var(--font-figtree, sans-serif)", fontSize: 12,
+            fontWeight: 500, padding: "6px 14px", borderRadius: 6,
+            background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)",
+            border: "none", cursor: "pointer",
+          }}
         >
-          {username ? `Publish as ${username}` : "Publish"}
+          Presence
         </button>
       )}
 
+      {/* Logout */}
+      {authenticated && (
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          style={{
+            fontFamily: "var(--font-figtree, sans-serif)", fontSize: 11,
+            padding: "4px 10px", borderRadius: 5, cursor: "pointer",
+            background: "none", color: "rgba(255,255,255,0.35)",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          {loggingOut ? "…" : "Log out"}
+        </button>
+      )}
+
+      {/* Publish button */}
+      {hasUnpublishedChanges && !publishing && authenticated && (
+        <button
+          onClick={onPublish}
+          style={{
+            fontFamily: "var(--font-figtree, sans-serif)", fontSize: 12,
+            fontWeight: 500, padding: "6px 16px", borderRadius: 6,
+            background: "#c9a96e", color: "#111", border: "none", cursor: "pointer",
+          }}
+        >
+          Publish →
+        </button>
+      )}
       {hasUnpublishedChanges && !publishing && !authenticated && (
         <button
           onClick={onSignup}
-          className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
+          style={{
+            fontFamily: "var(--font-figtree, sans-serif)", fontSize: 12,
+            fontWeight: 500, padding: "6px 16px", borderRadius: 6,
+            background: "#c9a96e", color: "#111", border: "none", cursor: "pointer",
+          }}
         >
           Sign up to publish
         </button>
       )}
-
       {publishing && (
-        <span className="text-sm text-muted-foreground">Publishing...</span>
-      )}
-
-      {/* User info + logout */}
-      {authenticated && username && (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-medium">{username}</span>
-          <span className="text-muted-foreground">&middot;</span>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-          >
-            {loggingOut ? "..." : "Log out"}
-          </button>
-        </div>
-      )}
-
-      {/* Settings — always last */}
-      {onSettingsOpen && (
-        <button
-          onClick={onSettingsOpen}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Customize"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <line x1="2" y1="3.5" x2="14" y2="3.5" />
-            <line x1="2" y1="8" x2="14" y2="8" />
-            <line x1="2" y1="12.5" x2="14" y2="12.5" />
-            <circle cx="5" cy="3.5" r="1.5" fill="currentColor" stroke="none" />
-            <circle cx="11" cy="8" r="1.5" fill="currentColor" stroke="none" />
-            <circle cx="8" cy="12.5" r="1.5" fill="currentColor" stroke="none" />
-          </svg>
-        </button>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Publishing…</span>
       )}
     </div>
   );
