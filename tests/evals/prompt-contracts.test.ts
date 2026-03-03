@@ -38,4 +38,12 @@ describe("prompt contracts", () => {
     expect(outputContract).toMatch(/pageVisible.*false/i);
     expect(outputContract).toMatch(/recomposeOk.*false/i);
   });
+
+  it("experience facts must be created immediately even without dates", () => {
+    // The old rule that prevented creating experience facts without dates must be gone
+    expect(src).not.toMatch(/only create experience facts with dates/i);
+    // The new rule must say facts are created with null start/end
+    expect(src).toMatch(/experience.*without dates|without dates.*experience/i);
+    expect(src).toMatch(/start.*null|null.*start/i);
+  });
 });
