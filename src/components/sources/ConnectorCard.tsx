@@ -66,10 +66,10 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
             : (data.error ?? "Import failed"),
           type: data.success ? "success" : "error",
         });
-        if (data.success && data.report?.factsWritten > 0) {
+        if (data.success) {
           window.dispatchEvent(
             new CustomEvent("openself:import-complete", {
-              detail: { factsWritten: data.report.factsWritten },
+              detail: { factsWritten: data.report?.factsWritten ?? 0 },
             }),
           );
           onRefresh();
