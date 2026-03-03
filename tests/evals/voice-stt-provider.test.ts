@@ -18,3 +18,23 @@ describe("STT provider types", () => {
     expect(VoiceSttState.PERMISSION_DENIED).toBe("permission_denied");
   });
 });
+
+describe("STT state reset for auto-listen loop", () => {
+  it("Web Speech: recognition.onend resets state to IDLE when in LISTENING", async () => {
+    const { VoiceSttState } = await import("@/hooks/useSttProvider");
+    expect(VoiceSttState.IDLE).toBe("idle");
+    expect(VoiceSttState.LISTENING).toBe("listening");
+    const fs = await import("fs");
+    const src = fs.readFileSync("src/hooks/useSttProvider.ts", "utf-8");
+    expect(src).not.toMatch(/recognition\.onend\s*=\s*\(\)\s*=>\s*\{\s*\}/);
+  });
+
+  it("Server fallback: state resets to IDLE after successful onFinalResult", async () => {
+    const fs = await import("fs");
+    const src = fs.readFileSync("src/hooks/useSttProvider.ts", "utf-8");
+    const onstopBlock = src.slice(src.indexOf("recorder.onstop"), src.indexOf("recorder.start"));
+    expect(onstopBlock).toContain("onFinalResult(data.text.trim())");
+    const afterFinalResult = onstopBlock.slice(onstopBlock.lastIndexOf("onFinalResult"));
+    expect(afterFinalResult).toMatch(/setState\(VoiceSttState\.IDLE\)/);
+  });
+});

@@ -86,7 +86,18 @@ export function useSttProvider({
       }
     };
 
-    recognition.onend = () => {};
+    recognition.onend = () => {
+      // Gate by instance identity to prevent a late onend from a stale recognizer
+      // from clobbering a newer active session (Codex review #1-r5: race condition fix)
+      if (recognitionRef.current !== recognition) return;
+      // Natural end of recognition session (continuous=false).
+      // Reset to IDLE so startStt() can restart (guard: state !== IDLE → skip).
+      // Preserve ERROR / PERMISSION_DENIED if set by onerror.
+      setState((prev) =>
+        prev === VoiceSttState.LISTENING ? VoiceSttState.IDLE : prev,
+      );
+      recognitionRef.current = null;
+    };
 
     recognitionRef.current = recognition;
     try {
@@ -162,6 +173,7 @@ export function useSttProvider({
           if (data.text?.trim()) {
             onResult({ text: data.text.trim(), isFinal: true });
             onFinalResult(data.text.trim());
+            setState(VoiceSttState.IDLE); // Reset so startStt() can restart
           } else {
             setState(VoiceSttState.IDLE);
           }
