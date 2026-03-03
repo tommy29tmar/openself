@@ -15,6 +15,8 @@ export function SignatureCombos({ onSelect, activeSurface, activeVoice, activeLi
         return (
           <button
             key={combo.name}
+            type="button"
+            aria-pressed={isActive}
             onClick={() => onSelect(combo.surface, combo.voice, combo.light)}
             style={{
               textAlign: "left", padding: "10px 14px", borderRadius: 8,

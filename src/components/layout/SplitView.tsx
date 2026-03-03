@@ -379,10 +379,13 @@ export function SplitView({
       }
     : null;
 
+  const handlePresenceClose = useCallback(() => setPresenceOpen(false), []);
+  const handleAvatarChange = useCallback(() => { void fetchPreview(); }, [fetchPreview]);
+
   const presencePanel = (
     <PresencePanel
       open={presenceOpen}
-      onClose={() => setPresenceOpen(false)}
+      onClose={handlePresenceClose}
       config={config}
       surface={surface}
       voice={voice}
@@ -393,7 +396,7 @@ export function SplitView({
       onLightChange={handleLightChange}
       onComboSelect={handleComboSelect}
       onLayoutChange={handleLayoutTemplateChange}
-      onAvatarChange={() => { void fetchPreview(); }}
+      onAvatarChange={handleAvatarChange}
       language={language}
     />
   );

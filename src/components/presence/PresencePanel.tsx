@@ -133,14 +133,14 @@ function PresencePanelControls({
         <h2 style={{ fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a96e" }}>
           Presence
         </h2>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
+        <button type="button" aria-label="Close presence panel" onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18 }}>×</button>
       </div>
 
       {/* Surface */}
       <div>
         <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Surface</div>
         {surfaces.map(s => (
-          <button key={s.id} onClick={() => onSurfaceChange(s.id)}
+          <button key={s.id} type="button" aria-pressed={surface === s.id} onClick={() => onSurfaceChange(s.id)}
             style={{
               width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
               border: `1px solid ${surface === s.id ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
@@ -158,7 +158,7 @@ function PresencePanelControls({
       <div>
         <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Voice</div>
         {voices.map(v => (
-          <button key={v.id} onClick={() => onVoiceChange(v.id)}
+          <button key={v.id} type="button" aria-pressed={voice === v.id} onClick={() => onVoiceChange(v.id)}
             style={{
               width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
               border: `1px solid ${voice === v.id ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,
@@ -177,7 +177,7 @@ function PresencePanelControls({
         <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Light</div>
         <div style={{ display: "flex", gap: 8 }}>
           {(["day", "night"] as const).map(l => (
-            <button key={l} onClick={() => onLightChange(l)}
+            <button key={l} type="button" aria-pressed={light === l} onClick={() => onLightChange(l)}
               style={{
                 flex: 1, padding: "8px", borderRadius: 8, textTransform: "capitalize",
                 fontSize: 12, fontWeight: 500, cursor: "pointer",
@@ -205,7 +205,7 @@ function PresencePanelControls({
         {LAYOUT_TEMPLATES.map(t => {
           const tmpl = getLayoutTemplate(t);
           return (
-            <button key={t} onClick={() => onLayoutChange(t)}
+            <button key={t} type="button" aria-pressed={layoutTemplate === t} onClick={() => onLayoutChange(t)}
               style={{
                 width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, marginBottom: 6,
                 border: `1px solid ${layoutTemplate === t ? "rgba(201,169,110,0.5)" : "rgba(255,255,255,0.08)"}`,

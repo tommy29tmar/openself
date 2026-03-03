@@ -41,7 +41,7 @@ export function MiniPreview({ config }: MiniPreviewProps) {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <span style={{ width: 3, height: 16, background: "var(--page-accent)", borderRadius: 2, display: "inline-block" }} />
-              <span style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--page-fg)", opacity: "var(--section-label-opacity)" as unknown as number }}>About</span>
+              <span style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--page-fg)", opacity: 0.5 }}>About</span>
             </div>
             <p style={{ fontFamily: "var(--b-font)", fontSize: 14, lineHeight: 1.8, color: "var(--page-fg)", maxWidth: "58ch" }}>
               I design products at the intersection of system thinking and human warmth.
