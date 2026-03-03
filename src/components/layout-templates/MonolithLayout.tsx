@@ -1,6 +1,7 @@
 import React from "react";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import type { LayoutComponentProps } from "./types";
+import type { Section } from "@/lib/page-config/schema";
 
 const BLEED_SECTIONS = new Set(["projects", "reading", "music"]);
 const DENSE_SECTIONS = new Set(["stats", "skills", "interests", "languages", "activities", "social", "contact"]);
@@ -32,7 +33,7 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
   const sortedSlots = [...template.slots].sort((a, b) => a.order - b.order);
 
   // Flatten all sections in slot order to detect last-before-footer
-  const allSections: { section: any; slotId: string }[] = [];
+  const allSections: { section: Section; slotId: string }[] = [];
   for (const slot of sortedSlots) {
     const sections = slots[slot.id];
     if (!sections?.length) continue;

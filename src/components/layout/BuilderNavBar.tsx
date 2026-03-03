@@ -86,6 +86,7 @@ export function BuilderNavBar({
       {/* Presence button */}
       {onPresenceOpen && (
         <button
+          type="button"
           onClick={onPresenceOpen}
           style={{
             fontFamily: "var(--font-figtree, sans-serif)", fontSize: 12,
@@ -101,6 +102,7 @@ export function BuilderNavBar({
       {/* Logout */}
       {authenticated && (
         <button
+          type="button"
           onClick={handleLogout}
           disabled={loggingOut}
           style={{
@@ -117,6 +119,7 @@ export function BuilderNavBar({
       {/* Publish button */}
       {hasUnpublishedChanges && !publishing && authenticated && (
         <button
+          type="button"
           onClick={onPublish}
           style={{
             fontFamily: "var(--font-figtree, sans-serif)", fontSize: 12,
@@ -129,6 +132,7 @@ export function BuilderNavBar({
       )}
       {hasUnpublishedChanges && !publishing && !authenticated && (
         <button
+          type="button"
           onClick={onSignup}
           style={{
             fontFamily: "var(--font-figtree, sans-serif)", fontSize: 12,

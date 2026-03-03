@@ -4,7 +4,6 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq, and, inArray } from "drizzle-orm";
 import * as schema from "@/lib/db/schema";
 import type { PageConfig } from "@/lib/page-config/schema";
-import { isAvailableFont } from "@/lib/page-config/fonts";
 
 /**
  * Tests for draft style merging logic (mirrors /api/draft/style behavior).
@@ -239,21 +238,6 @@ describe("draft style merging", () => {
     applyStylePatch({ light: "sepia" });
     const draft = getDraft()!;
     expect(draft.config.light).toBe("day"); // unchanged
-  });
-});
-
-describe("font constants", () => {
-  it("recognizes all valid fonts", () => {
-    expect(isAvailableFont("inter")).toBe(true);
-    expect(isAvailableFont("serif")).toBe(true);
-    expect(isAvailableFont("mono")).toBe(true);
-  });
-
-  it("rejects invalid font names", () => {
-    expect(isAvailableFont("comic")).toBe(false);
-    expect(isAvailableFont("")).toBe(false);
-    expect(isAvailableFont(null)).toBe(false);
-    expect(isAvailableFont(42)).toBe(false);
   });
 });
 

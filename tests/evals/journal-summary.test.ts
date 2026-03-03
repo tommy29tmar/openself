@@ -106,7 +106,7 @@ describe("buildJournalDigest", () => {
       { toolName: "update_fact", timestamp: "t2", durationMs: 10, success: true },
       { toolName: "delete_fact", timestamp: "t3", durationMs: 10, success: true },
       { toolName: "generate_page", timestamp: "t4", durationMs: 100, success: true },
-      { toolName: "set_theme", timestamp: "t5", durationMs: 50, success: true },
+      { toolName: "update_page_style", timestamp: "t5", durationMs: 50, success: true },
     ];
 
     const digest = buildJournalDigest(journal);
