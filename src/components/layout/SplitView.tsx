@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
 import type { LanguageCode } from "@/lib/i18n/languages";
-import type { AvailableFont } from "@/lib/page-config/fonts";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import type { AuthState } from "@/app/builder/page";
 import { ChatPanel } from "@/components/chat/ChatPanel";
@@ -69,7 +68,9 @@ function deriveUsernameFromConfig(config: PageConfig | null): string {
 }
 
 async function persistStyle(patch: {
-  theme?: string;
+  surface?: string;
+  voice?: string;
+  light?: string;
   style?: Partial<StyleConfig>;
   layoutTemplate?: string;
 }): Promise<boolean> {
@@ -158,13 +159,9 @@ export function SplitView({
   const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
   const [publishUsername, setPublishUsername] = useState<string>("");
-  const [theme, setTheme] = useState(config?.theme ?? "minimal");
-  const [colorScheme, setColorScheme] = useState<StyleConfig["colorScheme"]>(
-    config?.style?.colorScheme ?? "light",
-  );
-  const [fontFamily, setFontFamily] = useState<string>(
-    config?.style?.fontFamily ?? "inter",
-  );
+  const [surface, setSurface] = useState(config?.surface ?? "canvas");
+  const [voice, setVoice] = useState(config?.voice ?? "signal");
+  const [light, setLight] = useState<"day" | "night">((config?.light as "day" | "night") ?? "day");
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplateId>(
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
@@ -237,22 +234,22 @@ export function SplitView({
     void doPublish(username);
   };
 
-  const handleThemeChange = useCallback((t: string) => {
-    setTheme(t);
+  const handleSurfaceChange = useCallback((s: string) => {
+    setSurface(s);
     lastUserEdit.current = Date.now();
-    persistStyle({ theme: t });
+    persistStyle({ surface: s });
   }, []);
 
-  const handleColorSchemeChange = useCallback((cs: "light" | "dark") => {
-    setColorScheme(cs);
+  const handleVoiceChange = useCallback((v: string) => {
+    setVoice(v);
     lastUserEdit.current = Date.now();
-    persistStyle({ style: { colorScheme: cs } });
+    persistStyle({ voice: v });
   }, []);
 
-  const handleFontFamilyChange = useCallback((f: AvailableFont) => {
-    setFontFamily(f);
+  const handleLightChange = useCallback((l: "day" | "night") => {
+    setLight(l);
     lastUserEdit.current = Date.now();
-    persistStyle({ style: { fontFamily: f } });
+    persistStyle({ light: l });
   }, []);
 
   const handleLayoutTemplateChange = useCallback(async (t: LayoutTemplateId) => {
@@ -288,9 +285,9 @@ export function SplitView({
 
         const userEditAge = Date.now() - lastUserEdit.current;
         if (userEditAge > POLL_INTERVAL) {
-          if (data.config.theme) setTheme(data.config.theme);
-          if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
-          if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+          if (data.config.surface) setSurface(data.config.surface);
+          if (data.config.voice) setVoice(data.config.voice);
+          if (data.config.light) setLight(data.config.light as "day" | "night");
           if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
         }
       }
@@ -323,9 +320,9 @@ export function SplitView({
             setConfig(data.config);
             const userEditAge = Date.now() - lastUserEdit.current;
             if (userEditAge > POLL_INTERVAL) {
-              if (data.config.theme) setTheme(data.config.theme);
-              if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
-              if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+              if (data.config.surface) setSurface(data.config.surface);
+              if (data.config.voice) setVoice(data.config.voice);
+              if (data.config.light) setLight(data.config.light as "day" | "night");
               if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
             }
           }
@@ -367,9 +364,10 @@ export function SplitView({
   const displayConfig: PageConfig | null = config
     ? {
         ...config,
-        theme,
+        surface,
+        voice,
+        light,
         layoutTemplate,
-        style: { ...config.style, colorScheme, fontFamily },
       }
     : null;
 
@@ -382,12 +380,12 @@ export function SplitView({
         onLanguageChange?.(lang);
         setSettingsOpen(false);
       }}
-      theme={theme}
-      onThemeChange={handleThemeChange}
-      colorScheme={colorScheme}
-      onColorSchemeChange={handleColorSchemeChange}
-      fontFamily={fontFamily}
-      onFontFamilyChange={handleFontFamilyChange}
+      theme={surface}
+      onThemeChange={handleSurfaceChange}
+      colorScheme={light === "night" ? "dark" : "light"}
+      onColorSchemeChange={(cs) => handleLightChange(cs === "dark" ? "night" : "day")}
+      fontFamily={voice}
+      onFontFamilyChange={(f) => handleVoiceChange(f as string)}
       layoutTemplate={layoutTemplate}
       onLayoutTemplateChange={handleLayoutTemplateChange}
       onAvatarChange={() => { void fetchPreview(); }}
@@ -468,12 +466,12 @@ export function SplitView({
           setSettingsOpen(false);
         }}
         languageOnly
-        theme={theme}
-        onThemeChange={handleThemeChange}
-        colorScheme={colorScheme}
-        onColorSchemeChange={handleColorSchemeChange}
-        fontFamily={fontFamily}
-        onFontFamilyChange={handleFontFamilyChange}
+        theme={surface}
+        onThemeChange={handleSurfaceChange}
+        colorScheme={light === "night" ? "dark" : "light"}
+        onColorSchemeChange={(cs) => handleLightChange(cs === "dark" ? "night" : "day")}
+        fontFamily={voice}
+        onFontFamilyChange={(f) => handleVoiceChange(f as string)}
         layoutTemplate={layoutTemplate}
         onLayoutTemplateChange={handleLayoutTemplateChange}
       />

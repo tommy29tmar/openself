@@ -18,8 +18,8 @@ export type PageRendererProps = {
 };
 
 export function PageRenderer({ config, previewMode = false, isOwner = false }: PageRendererProps) {
-  // 1. Resolve active theme
-  const activeTheme = getTheme(config.theme || "editorial-360");
+  // 1. Resolve active theme (always editorial-360 now; legacy theme IDs are mapped in getTheme)
+  const activeTheme = getTheme("editorial-360");
   const ThemeLayout = activeTheme.Layout;
 
   // 2. Resolve layout template
@@ -40,7 +40,7 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
       if (previewMode) {
         return (
           <div key={section.id} className="p-4 border border-dashed border-red-500 text-red-500 text-sm mb-4">
-            Unsupported section type in theme &apos;{activeTheme.name}&apos;: {section.type}
+            Unsupported section type: {section.type}
           </div>
         );
       }
@@ -59,14 +59,15 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     );
   };
 
-  const themeName = config.theme || "editorial-360";
-  const colorScheme = config.style?.colorScheme ?? "light";
-
   return (
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
       {!isOwner && !previewMode && <VisitorBanner />}
-      <div data-theme={themeName} data-color-scheme={colorScheme}>
+      <div
+        data-surface={config.surface ?? "canvas"}
+        data-voice={config.voice ?? "signal"}
+        data-light={config.light ?? "day"}
+      >
         <ThemeLayout config={config} previewMode={previewMode}>
           <LayoutComponent slots={slots} renderSection={renderSection} />
         </ThemeLayout>

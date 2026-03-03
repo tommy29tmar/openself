@@ -3,11 +3,11 @@ import type { PageConfig } from "@/lib/page-config/schema";
 export const mockPageConfig: PageConfig = {
   version: 1,
   username: "tommaso",
-  theme: "minimal",
+  surface: "canvas",
+  voice: "signal",
+  light: "day",
   style: {
-    colorScheme: "light",
     primaryColor: "#6366f1",
-    fontFamily: "inter",
     layout: "centered",
   },
   sections: [

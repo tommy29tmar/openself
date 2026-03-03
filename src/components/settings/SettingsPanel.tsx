@@ -8,7 +8,10 @@ import {
   FONT_LABELS,
   type AvailableFont,
 } from "@/lib/page-config/fonts";
-import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
+// TODO(Task 17): SettingsPanel will be removed in the Clean Cut task.
+// AVAILABLE_THEMES was removed from schema.ts in the Design DNA migration; stub here
+// so TypeScript does not error until this file is deleted.
+const AVAILABLE_THEMES = ["canvas/signal/day", "canvas/terminal/night", "clay/narrative/day"] as const;
 import { cn } from "@/lib/utils";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
