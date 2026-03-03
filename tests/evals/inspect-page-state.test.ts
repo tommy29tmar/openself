@@ -133,7 +133,6 @@ vi.mock("@/lib/services/section-personalizer", () => ({
 }));
 
 vi.mock("@/lib/page-config/schema", () => ({
-  AVAILABLE_THEMES: ["minimal", "warm", "editorial-360"],
   validatePageConfig: vi.fn(),
 }));
 
@@ -164,9 +163,11 @@ function makeDraft(overrides?: any) {
     config: {
       version: 1,
       username: "testuser",
-      theme: "minimal",
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
       layoutTemplate: "monolith",
-      style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "centered" },
+      style: { primaryColor: "#000", layout: "centered" },
       sections: [
         { id: "hero-1", type: "hero", content: { name: "Test" } },
         { id: "bio-1", type: "bio", content: { text: "Hello" } },
@@ -227,7 +228,9 @@ describe("inspect_page_state tool", () => {
 
     expect(result.layout).toBeDefined();
     expect(result.layout.template).toBe("monolith");
-    expect(result.layout.theme).toBe("minimal");
+    expect(result.layout.surface).toBe("canvas");
+    expect(result.layout.voice).toBe("signal");
+    expect(result.layout.light).toBe("day");
   });
 
   it("returns per-section details with slot assignment", async () => {

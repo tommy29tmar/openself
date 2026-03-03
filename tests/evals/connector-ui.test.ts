@@ -17,7 +17,7 @@ describe("ConnectorSection", () => {
       });
 
       const { getConnectorStatuses } = await import(
-        "@/components/settings/ConnectorSection"
+        "@/components/sources/SourcesPanel"
       );
       const result = await getConnectorStatuses();
 
@@ -29,7 +29,7 @@ describe("ConnectorSection", () => {
       mockFetch.mockRejectedValueOnce(new Error("network"));
 
       const { getConnectorStatuses } = await import(
-        "@/components/settings/ConnectorSection"
+        "@/components/sources/SourcesPanel"
       );
       const result = await getConnectorStatuses();
 
@@ -40,7 +40,7 @@ describe("ConnectorSection", () => {
   describe("card state derivation", () => {
     it("derives 'not_connected' for missing github connector", async () => {
       const { deriveCardState } = await import(
-        "@/components/settings/ConnectorSection"
+        "@/components/sources/SourcesPanel"
       );
       const state = deriveCardState("github", []);
       expect(state.connectionState).toBe("not_connected");
@@ -48,7 +48,7 @@ describe("ConnectorSection", () => {
 
     it("derives 'connected' for active github connector", async () => {
       const { deriveCardState } = await import(
-        "@/components/settings/ConnectorSection"
+        "@/components/sources/SourcesPanel"
       );
       const state = deriveCardState("github", [
         {
@@ -68,7 +68,7 @@ describe("ConnectorSection", () => {
 
     it("derives 'error' for connector with error status", async () => {
       const { deriveCardState } = await import(
-        "@/components/settings/ConnectorSection"
+        "@/components/sources/SourcesPanel"
       );
       const state = deriveCardState("github", [
         {
@@ -88,7 +88,7 @@ describe("ConnectorSection", () => {
 
     it("derives 'not_connected' for disconnected connector", async () => {
       const { deriveCardState } = await import(
-        "@/components/settings/ConnectorSection"
+        "@/components/sources/SourcesPanel"
       );
       const state = deriveCardState("github", [
         {

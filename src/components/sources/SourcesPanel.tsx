@@ -15,6 +15,37 @@ async function fetchStatuses(): Promise<ConnectorStatusRow[]> {
   }
 }
 
+/** Pure utility exported for testing: fetch connector statuses from the API. */
+export async function getConnectorStatuses(): Promise<ConnectorStatusRow[]> {
+  return fetchStatuses();
+}
+
+export type CardState = {
+  connectionState: "connected" | "error" | "not_connected";
+  lastSync: string | null;
+  lastError: string | null;
+};
+
+/** Pure utility exported for testing: derive card state from connector type + status list. */
+export function deriveCardState(
+  connectorType: string,
+  statuses: ConnectorStatusRow[],
+): CardState {
+  const row = statuses.find(
+    (s) => s.connectorType === connectorType && s.status !== "disconnected",
+  );
+  if (!row) {
+    return { connectionState: "not_connected", lastSync: null, lastError: null };
+  }
+  if (row.status === "connected") {
+    return { connectionState: "connected", lastSync: row.lastSync, lastError: null };
+  }
+  if (row.status === "error") {
+    return { connectionState: "error", lastSync: row.lastSync, lastError: row.lastError };
+  }
+  return { connectionState: "not_connected", lastSync: null, lastError: null };
+}
+
 export function SourcesPanel() {
   const [statuses, setStatuses] = useState<ConnectorStatusRow[]>([]);
   const definitions = listConnectorUIs();

@@ -295,11 +295,11 @@ vi.mock("@/lib/services/page-composer", () => ({
     (facts: FactRow[], username: string, _lang: string) => ({
       version: 1,
       username,
-      theme: "minimal",
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
       style: {
-        colorScheme: "light",
         primaryColor: "#000",
-        fontFamily: "sans",
         layout: "centered",
       },
       sections: facts.map((f, i) => ({
@@ -331,20 +331,21 @@ describe("projectPublishableConfig", () => {
     expect(config.sections).toHaveLength(1);
   });
 
-  it("preserves theme from draftMeta", () => {
+  it("preserves surface/voice/light from draftMeta", () => {
     const facts = [makeFact({ category: "skill", key: "js", visibility: "public" })];
     const config = projectPublishableConfig(facts, "alice", "en", {
-      theme: "warm",
+      surface: "clay",
+      voice: "narrative",
+      light: "night",
       style: {
-        colorScheme: "dark",
         primaryColor: "#f00",
-        fontFamily: "serif",
         layout: "centered",
       },
       sections: [],
     });
-    expect(config.theme).toBe("warm");
-    expect(config.style.colorScheme).toBe("dark");
+    expect(config.surface).toBe("clay");
+    expect(config.voice).toBe("narrative");
+    expect(config.light).toBe("night");
   });
 
   it("preserves section order from draftMeta", () => {
@@ -355,11 +356,11 @@ describe("projectPublishableConfig", () => {
     // Compose will produce sections s-0, s-1
     // Draft has them in reverse order
     const config = projectPublishableConfig(facts, "alice", "en", {
-      theme: "minimal",
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
       style: {
-        colorScheme: "light",
         primaryColor: "#000",
-        fontFamily: "sans",
         layout: "centered",
       },
       sections: [
@@ -379,11 +380,11 @@ describe("projectPublishableConfig", () => {
       lockedAt: "2026-01-01",
     };
     const config = projectPublishableConfig(facts, "alice", "en", {
-      theme: "minimal",
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
       style: {
-        colorScheme: "light",
         primaryColor: "#000",
-        fontFamily: "sans",
         layout: "centered",
       },
       sections: [{ ...makeSection("skills", { groups: [] }, "s-0"), lock }],

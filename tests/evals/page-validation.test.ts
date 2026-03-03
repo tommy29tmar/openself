@@ -13,11 +13,11 @@ function makeValidConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -50,9 +50,7 @@ describe("validatePageConfig", () => {
       for (const layout of ["centered", "split", "stack"] as const) {
         const config = makeValidConfig({
           style: {
-            colorScheme: "light",
             primaryColor: "#000",
-            fontFamily: "inter",
             layout,
           },
         });
@@ -94,11 +92,11 @@ describe("validatePageConfig", () => {
       expect(result.errors.some((e) => e.includes("username"))).toBe(true);
     });
 
-    it("fails when theme is missing", () => {
-      const config = makeValidConfig({ theme: "" });
+    it("fails when surface is missing", () => {
+      const config = makeValidConfig({ surface: "" });
       const result = validatePageConfig(config);
       expect(result.ok).toBe(false);
-      expect(result.errors.some((e) => e.includes("theme"))).toBe(true);
+      expect(result.errors.some((e) => e.includes("surface"))).toBe(true);
     });
 
     it("fails when style is missing", () => {
@@ -355,13 +353,14 @@ describe("validatePageConfig", () => {
       expect(result.ok).toBe(true);
     });
 
-    it("output always has version, username, theme, style, and sections", () => {
+    it("output always has version, username, surface, style, and sections", () => {
       const page = composeOptimisticPage([], "testuser");
       expect(page.version).toBe(1);
       expect(page.username).toBe("testuser");
-      expect(page.theme).toBeTruthy();
+      expect(page.surface).toBeTruthy();
+      expect(page.voice).toBeTruthy();
+      expect(page.light).toBeTruthy();
       expect(page.style).toBeDefined();
-      expect(page.style.colorScheme).toMatch(/^(light|dark)$/);
       expect(Array.isArray(page.sections)).toBe(true);
     });
   });

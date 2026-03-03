@@ -3,8 +3,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq, and, inArray } from "drizzle-orm";
 import * as schema from "@/lib/db/schema";
-import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
-import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
+import type { PageConfig } from "@/lib/page-config/schema";
 import { isAvailableFont } from "@/lib/page-config/fonts";
 
 /**
@@ -55,11 +54,11 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -102,40 +101,46 @@ function upsertDraft(username: string, config: PageConfig, sessionId: string = S
 }
 
 /**
- * Mirrors the merge logic from /api/draft/style route handler.
+ * Mirrors the merge logic from /api/draft/style route handler (Presence System).
  */
 function applyStylePatch(
-  body: { theme?: unknown; style?: Record<string, unknown> },
+  body: { surface?: unknown; voice?: unknown; light?: unknown; style?: Record<string, unknown> },
 ): { success: boolean; error?: string } {
   const draft = getDraft();
   if (!draft) return { success: false, error: "No draft exists" };
 
   const config = { ...draft.config };
 
-  if (
-    typeof body.theme === "string" &&
-    (AVAILABLE_THEMES as readonly string[]).includes(body.theme)
-  ) {
-    config.theme = body.theme;
+  if (typeof body.surface === "string") {
+    const VALID_SURFACES = ["canvas", "clay", "archive"];
+    if (VALID_SURFACES.includes(body.surface)) {
+      config.surface = body.surface;
+    }
+  }
+
+  if (typeof body.voice === "string") {
+    const VALID_VOICES = ["signal", "narrative", "terminal"];
+    if (VALID_VOICES.includes(body.voice)) {
+      config.voice = body.voice;
+    }
+  }
+
+  if (typeof body.light === "string") {
+    const VALID_LIGHTS = ["day", "night"];
+    if (VALID_LIGHTS.includes(body.light)) {
+      config.light = body.light;
+    }
   }
 
   if (body.style && typeof body.style === "object") {
-    const style: StyleConfig = { ...config.style };
-
-    if (body.style.colorScheme === "light" || body.style.colorScheme === "dark") {
-      style.colorScheme = body.style.colorScheme;
-    }
-
-    if (isAvailableFont(body.style.fontFamily)) {
-      style.fontFamily = body.style.fontFamily as string;
-    }
+    const style = { ...config.style };
 
     if (
       body.style.layout === "centered" ||
       body.style.layout === "split" ||
       body.style.layout === "stack"
     ) {
-      style.layout = body.style.layout;
+      style.layout = body.style.layout as "centered" | "split" | "stack";
     }
 
     config.style = style;
@@ -159,30 +164,30 @@ afterAll(() => {
 
 describe("draft style merging", () => {
   it("returns error when no draft exists", () => {
-    const result = applyStylePatch({ theme: "warm" });
+    const result = applyStylePatch({ surface: "clay" });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/no draft/i);
   });
 
-  it("merges theme into existing draft", () => {
+  it("merges surface into existing draft", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ theme: "warm" });
+    applyStylePatch({ surface: "clay" });
     const draft = getDraft()!;
-    expect(draft.config.theme).toBe("warm");
+    expect(draft.config.surface).toBe("clay");
   });
 
-  it("merges colorScheme into existing draft", () => {
+  it("merges voice into existing draft", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ style: { colorScheme: "dark" } });
+    applyStylePatch({ voice: "narrative" });
     const draft = getDraft()!;
-    expect(draft.config.style.colorScheme).toBe("dark");
+    expect(draft.config.voice).toBe("narrative");
   });
 
-  it("merges fontFamily into existing draft", () => {
+  it("merges light into existing draft", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ style: { fontFamily: "serif" } });
+    applyStylePatch({ light: "night" });
     const draft = getDraft()!;
-    expect(draft.config.style.fontFamily).toBe("serif");
+    expect(draft.config.light).toBe("night");
   });
 
   it("merges layout into existing draft", () => {
@@ -192,48 +197,48 @@ describe("draft style merging", () => {
     expect(draft.config.style.layout).toBe("split");
   });
 
-  it("preserves other fields when changing one style field", () => {
+  it("preserves other fields when changing one field", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ style: { fontFamily: "mono" } });
+    applyStylePatch({ voice: "terminal" });
     const draft = getDraft()!;
-    // fontFamily changed
-    expect(draft.config.style.fontFamily).toBe("mono");
+    // voice changed
+    expect(draft.config.voice).toBe("terminal");
     // everything else preserved
-    expect(draft.config.style.colorScheme).toBe("light");
+    expect(draft.config.surface).toBe("canvas");
+    expect(draft.config.light).toBe("day");
     expect(draft.config.style.primaryColor).toBe("#6366f1");
     expect(draft.config.style.layout).toBe("centered");
-    expect(draft.config.theme).toBe("minimal");
     expect(draft.config.sections).toHaveLength(2);
   });
 
-  it("applies theme and style together", () => {
+  it("applies surface, voice, and light together", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ theme: "warm", style: { colorScheme: "dark", fontFamily: "serif" } });
+    applyStylePatch({ surface: "clay", voice: "narrative", light: "night" });
     const draft = getDraft()!;
-    expect(draft.config.theme).toBe("warm");
-    expect(draft.config.style.colorScheme).toBe("dark");
-    expect(draft.config.style.fontFamily).toBe("serif");
+    expect(draft.config.surface).toBe("clay");
+    expect(draft.config.voice).toBe("narrative");
+    expect(draft.config.light).toBe("night");
   });
 
-  it("ignores invalid theme values", () => {
+  it("ignores invalid surface values", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ theme: "neon" });
+    applyStylePatch({ surface: "neon" });
     const draft = getDraft()!;
-    expect(draft.config.theme).toBe("minimal"); // unchanged
+    expect(draft.config.surface).toBe("canvas"); // unchanged
   });
 
-  it("ignores invalid fontFamily values", () => {
+  it("ignores invalid voice values", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ style: { fontFamily: "comic-sans" } });
+    applyStylePatch({ voice: "gothic" });
     const draft = getDraft()!;
-    expect(draft.config.style.fontFamily).toBe("inter"); // unchanged
+    expect(draft.config.voice).toBe("signal"); // unchanged
   });
 
-  it("ignores invalid colorScheme values", () => {
+  it("ignores invalid light values", () => {
     upsertDraft("alice", makeConfig());
-    applyStylePatch({ style: { colorScheme: "sepia" } });
+    applyStylePatch({ light: "sepia" });
     const draft = getDraft()!;
-    expect(draft.config.style.colorScheme).toBe("light"); // unchanged
+    expect(draft.config.light).toBe("day"); // unchanged
   });
 });
 
@@ -320,50 +325,45 @@ describe("POST /api/draft/style (route handler)", () => {
   });
 
   it("returns 404 when no draft exists", async () => {
-    const res = await POST(makeRequest({ theme: "warm" }));
+    const res = await POST(makeRequest({ surface: "clay" }));
     expect(res.status).toBe(404);
     const data = await res.json();
     expect(data.success).toBe(false);
     expect(data.error).toMatch(/no draft/i);
   });
 
-  it("merges theme and returns 200", async () => {
+  it("merges surface and returns 200", async () => {
     mockDraft = { config: makeConfig(), username: "alice", status: "draft", configHash: null, updatedAt: null };
-    const res = await POST(makeRequest({ theme: "warm" }));
+    const res = await POST(makeRequest({ surface: "clay" }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);
-    expect(lastUpserted!.config.theme).toBe("warm");
+    expect(lastUpserted!.config.surface).toBe("clay");
   });
 
-  it("merges style fields and preserves the rest", async () => {
+  it("merges voice and preserves other presence fields", async () => {
     mockDraft = { config: makeConfig(), username: "alice", status: "draft", configHash: null, updatedAt: null };
     const res = await POST(
-      makeRequest({ style: { colorScheme: "dark", fontFamily: "mono" } }),
+      makeRequest({ voice: "narrative" }),
     );
     expect(res.status).toBe(200);
-    expect(lastUpserted!.config.style.colorScheme).toBe("dark");
-    expect(lastUpserted!.config.style.fontFamily).toBe("mono");
+    expect(lastUpserted!.config.voice).toBe("narrative");
     // Preserved
-    expect(lastUpserted!.config.style.primaryColor).toBe("#6366f1");
-    expect(lastUpserted!.config.style.layout).toBe("centered");
-    expect(lastUpserted!.config.theme).toBe("minimal");
+    expect(lastUpserted!.config.surface).toBe("canvas");
+    expect(lastUpserted!.config.light).toBe("day");
   });
 
   it("ignores invalid values without error", async () => {
     mockDraft = { config: makeConfig(), username: "alice", status: "draft", configHash: null, updatedAt: null };
     const res = await POST(
-      makeRequest({ theme: "neon", style: { fontFamily: "comic" } }),
+      makeRequest({ surface: "neon", voice: "gothic" }),
     );
-    expect(res.status).toBe(200);
-    // Nothing changed
-    expect(lastUpserted!.config.theme).toBe("minimal");
-    expect(lastUpserted!.config.style.fontFamily).toBe("inter");
+    expect(res.status).toBe(400); // invalid surface returns 400
   });
 
   it("preserves username from draft", async () => {
     mockDraft = { config: makeConfig(), username: "bob", status: "draft", configHash: null, updatedAt: null };
-    await POST(makeRequest({ theme: "warm" }));
+    await POST(makeRequest({ surface: "clay" }));
     expect(lastUpserted!.username).toBe("bob");
   });
 });

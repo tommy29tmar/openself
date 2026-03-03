@@ -78,7 +78,7 @@ describe("undoAwarenessPolicy", () => {
 
   describe("reversal scope", () => {
     const reversalTargets = [
-      { action: "Theme change", tool: "set_theme" },
+      { action: "Presence change", tool: "update_page_style" },
       { action: "Layout change", tool: "set_layout" },
       { action: "Section reorder", tool: "reorder_sections" },
       { action: "Fact deletion", tool: "create_fact" },
