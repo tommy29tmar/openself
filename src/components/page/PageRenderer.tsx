@@ -2,7 +2,6 @@
 
 import React from "react";
 import type { PageConfig, Section } from "@/lib/page-config/schema";
-import { getTheme } from "@/themes";
 import { resolveLayoutTemplate } from "@/lib/layout/registry";
 import { resolveVariant } from "@/lib/layout/widgets";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
@@ -10,6 +9,8 @@ import { getLayoutComponent } from "@/components/layout-templates";
 import { OwnerBanner } from "@/components/page/OwnerBanner";
 import { VisitorBanner } from "@/components/page/VisitorBanner";
 import { filterCompleteSections } from "@/lib/page-config/section-completeness";
+import { OsPageWrapper } from "@/components/page/OsPageWrapper";
+import { SECTION_COMPONENTS } from "@/components/sections";
 
 export type PageRendererProps = {
   config: PageConfig;
@@ -18,23 +19,13 @@ export type PageRendererProps = {
 };
 
 export function PageRenderer({ config, previewMode = false, isOwner = false }: PageRendererProps) {
-  // 1. Resolve active theme (always editorial-360 now; legacy theme IDs are mapped in getTheme)
-  const activeTheme = getTheme("editorial-360");
-  const ThemeLayout = activeTheme.Layout;
-
-  // 2. Resolve layout template
   const template = resolveLayoutTemplate(config);
   const LayoutComponent = getLayoutComponent(template.id);
-
-  // 2b. Safety net: filter incomplete sections in non-preview mode (published pages)
   const sections = previewMode ? config.sections : filterCompleteSections(config.sections);
-
-  // 3. Group sections by slot
   const slots = groupSectionsBySlot(sections, template);
 
-  // 4. Render section with variant resolution and data-section wrapper
   const renderSection = (section: Section) => {
-    const SectionComponent = activeTheme.components[section.type];
+    const SectionComponent = SECTION_COMPONENTS[section.type];
 
     if (!SectionComponent) {
       if (previewMode) {
@@ -50,11 +41,8 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     const variant = resolveVariant(section);
 
     return (
-      <div key={section.id} data-section={section.type}>
-        <SectionComponent
-          content={section.content}
-          variant={variant}
-        />
+      <div key={section.id} id={`section-${section.id}`} data-section={section.type}>
+        <SectionComponent content={section.content} variant={variant} />
       </div>
     );
   };
@@ -63,15 +51,10 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
       {!isOwner && !previewMode && <VisitorBanner />}
-      <div
-        data-surface={config.surface ?? "canvas"}
-        data-voice={config.voice ?? "signal"}
-        data-light={config.light ?? "day"}
-      >
-        <ThemeLayout config={config} previewMode={previewMode}>
-          <LayoutComponent slots={slots} renderSection={renderSection} />
-        </ThemeLayout>
-      </div>
+      {/* StickyNav placeholder — added in Task 12 */}
+      <OsPageWrapper config={config} previewMode={previewMode}>
+        <LayoutComponent slots={slots} renderSection={renderSection} />
+      </OsPageWrapper>
     </>
   );
 }
