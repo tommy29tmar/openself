@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDraft, upsertDraft } from "@/lib/services/page-service";
+import { getDraft, upsertDraft, getPublishedPage, getPublishedUsername } from "@/lib/services/page-service";
 import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
 import { isAvailableFont } from "@/lib/page-config/fonts";
 import type { PageConfig } from "@/lib/page-config/schema";
@@ -42,7 +42,17 @@ export async function POST(req: Request) {
       const { factLanguage, language } = getPreferences(primaryKey);
       const factLang = factLanguage ?? language ?? "en";
       const authProfileId = scope?.cognitiveOwnerKey ?? authCtx?.profileId ?? primaryKey;
-      const composed = projectCanonicalConfig(facts, draftUsername, factLang, undefined, authProfileId);
+      // Carry forward theme/style from published page if it exists
+      // NOTE: readKeys is already declared earlier in this block — reuse it
+      const pubUsername = getPublishedUsername(readKeys);
+      const published = pubUsername ? getPublishedPage(pubUsername) : null;
+      const draftMeta = published ? {
+        theme: published.theme,
+        style: published.style,
+        layoutTemplate: published.layoutTemplate,
+        sections: published.sections,
+      } : undefined;
+      const composed = projectCanonicalConfig(facts, draftUsername, factLang, draftMeta, authProfileId);
       upsertDraft(draftUsername, composed, primaryKey);
       draft = getDraft(primaryKey);
       if (!draft) {

@@ -394,6 +394,7 @@ vi.mock("@/lib/services/page-service", () => ({
   },
   hasAnyPage: (key?: string) => key === SESSION_ANCHOR && mockDraft !== null,
   computeConfigHash: () => "test-hash-abc",
+  getPublishedPage: vi.fn(() => null),
   getPublishedUsername: () => null,
   getPublishedConfigHash: () => null,
 }));

@@ -266,6 +266,7 @@ vi.mock("@/lib/services/page-service", () => ({
     mockDraft = { config, username, status: "draft", configHash: null, updatedAt: null };
   },
   getPublishedPage: () => null,
+  getPublishedUsername: vi.fn(() => null),
   hasAnyPage: () => mockDraft !== null,
   requestPublish: () => {},
   confirmPublish: () => {},
