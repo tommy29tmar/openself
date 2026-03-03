@@ -37,4 +37,22 @@ describe("/api/transcribe route contracts", () => {
     const { MAX_CONTENT_LENGTH } = await import("@/lib/middleware/transcribe-rate-limit");
     expect(MAX_CONTENT_LENGTH).toBe(5242880);
   });
+
+  it("language field is extracted from incoming form and forwarded to upstream", async () => {
+    const fs = await import("fs");
+    const src = fs.readFileSync("src/app/api/transcribe/route.ts", "utf-8");
+    expect(src).toContain('formData.get("language")');
+    expect(src).toContain('upstreamForm.append("language"');
+  });
+});
+
+describe("Python STT server", () => {
+  it("accepts language form field and passes it to model.transcribe", async () => {
+    const fs = await import("fs");
+    const py = fs.readFileSync("docker/stt/server.py", "utf-8");
+    // Endpoint must accept a language Form parameter
+    expect(py).toMatch(/language.*Form|Form.*language/);
+    // model.transcribe must be called with language keyword argument
+    expect(py).toContain("language=");
+  });
 });

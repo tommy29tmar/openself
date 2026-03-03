@@ -41,7 +41,8 @@ const SAFETY_POLICY = `Privacy and safety rules (non-negotiable):
 - NEVER create facts for categories the user has NOT explicitly mentioned in this conversation. If the user has not discussed books, music, or hobbies, do NOT create reading, music, or interest facts.
 - NEVER invent optional fields (rating, description, note, frequency). If the user did not specify a rating or description, leave those fields empty — do NOT guess or assume defaults.
 - When in doubt about whether the user mentioned something, ASK rather than create a fact from assumption.
-- NEVER fabricate precise dates from approximate durations. If the user says "8 years of experience", store the duration as a stat fact (e.g., {label: "Years Experience", value: "8+"}). Do NOT invent start/end dates like "2015-01 – 2023-01". Only create experience facts with dates when the user provides actual dates. If dates are needed for display, ask the user.`;
+- NEVER fabricate precise dates from approximate durations. If the user says "8 years of experience", store the duration as a stat fact (e.g., {label: "Years Experience", value: "8+"}). Do NOT invent start/end dates like "2015-01 – 2023-01".
+- Always create experience facts immediately, even without dates — use start: null, end: null. NEVER skip or defer saving an experience fact just because the user did not provide dates. At the earliest natural opportunity, ask whether they remember the start (and end) date for that experience.`;
 
 const TOOL_POLICY = `Tool usage rules:
 - Use create_fact when the user shares new information about themselves
@@ -92,7 +93,7 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 | Category | Key format | Value shape |
 |----------|-----------|-------------|
 | identity | name, location, tagline | {full: "..."} or {city: "...", country: "..."} or {text: "..."} | CRITICAL: identity/name.full = ONLY the person's name (e.g. "Marco Rossi"). Max 5 words. Never store a bio sentence in a name field. |
-| experience | company-kebab | {role: "...", company: "...", start: "2020-03", end: "2023-06"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | type: "employment" (default if omitted), "freelance", or "client". Use "client" for project clients (e.g. Barilla branding). Clients appear in Projects section. Use real dates like "2020-03", never placeholders like "YYYY-MM". |
+| experience | company-kebab | {role: "...", company: "...", start: "2020-03"|null, end: "2023-06"|null, status: "current"|"past", type?: "employment"|"freelance"|"client"} | Create experience facts even without dates — start/end can be null and added later. status is mandatory ("current" if still there, "past" otherwise). type: "employment" (default), "freelance", or "client". Real dates like "2020-03", never placeholders. |
 | education | institution-kebab | {institution: "...", degree?: "...", field?: "...", period?: "2016-2020"} | Create education facts even without dates — period can be added later. Use real years, never "YYYY-YYYY". |
 | project | project-kebab | {name: "...", description: "...", url?: "...", status: "active"|"completed", role?: "..."} |
 | skill | skill-kebab | {name: "...", level?: "beginner"|"intermediate"|"advanced"|"expert"} |
@@ -162,7 +163,7 @@ UNSUPPORTED FEATURES (explain clearly, never ask for assets):
 - Custom CSS/HTML injection
 
 Value object schemas (must pass the FULL object, not partial):
-- experience: { role, company, period?, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
+- experience: { role, company, start?: string|null, end?: string|null, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
 - education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders like "YYYY-YYYY"
 - identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }  — CRITICAL: full = ONLY the person's name (max 5 words)
 - project: { name, description?, url?, status?: "active"|"completed" }

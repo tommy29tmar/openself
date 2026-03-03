@@ -38,3 +38,20 @@ describe("STT state reset for auto-listen loop", () => {
     expect(afterFinalResult).toMatch(/setState\(VoiceSttState\.IDLE\)/);
   });
 });
+
+describe("STT server fallback language hint", () => {
+  it("server fallback appends language to FormData and language is in dependency array", async () => {
+    const fs = await import("fs");
+    const src = fs.readFileSync("src/hooks/useSttProvider.ts", "utf-8");
+
+    // Must append language to the FormData before POSTing
+    const serverFallbackBlock = src.slice(
+      src.indexOf("startServerFallback"),
+      src.indexOf("}, [onResult, onFinalResult, language])")
+    );
+    expect(serverFallbackBlock).toContain('formData.append("language"');
+
+    // language must be in the dependency array to prevent stale closures
+    expect(src).toMatch(/\[onResult,\s*onFinalResult,\s*language\]/);
+  });
+});

@@ -7,7 +7,8 @@ from pathlib import Path
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException
+from typing import Optional
 from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
@@ -55,13 +56,25 @@ def get_model():
     return _model
 
 
+# ISO 639-1 codes accepted by faster-whisper
+_ALLOWED_LANGUAGES = {
+    "af","ar","az","be","bg","bn","bo","br","bs","ca","cs","cy","da","de",
+    "el","en","es","et","eu","fa","fi","fo","fr","gl","gu","ha","hi","hr",
+    "ht","hu","hy","id","is","it","ja","jw","ka","kk","km","kn","ko","la",
+    "lb","ln","lo","lt","lv","mg","mi","mk","ml","mn","mr","ms","mt","my",
+    "ne","nl","nn","no","oc","pa","pl","ps","pt","ro","ru","sa","sd","si",
+    "sk","sl","sn","so","sq","sr","su","sv","sw","ta","te","tg","th","tk",
+    "tl","tr","tt","uk","ur","uz","vi","yi","yo","zh",
+}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": WHISPER_MODEL}
 
 
 @app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
+async def transcribe(file: UploadFile = File(...), language: Optional[str] = Form(None)):
     # Size check
     content = await file.read()
     if len(content) > MAX_AUDIO_BYTES:
@@ -74,12 +87,20 @@ async def transcribe(file: UploadFile = File(...)):
         tmp.flush()
 
         model = get_model()
+
+        # Validate language hint against allowlist
+        lang_hint = language.strip().lower() if language else None
+        if lang_hint and lang_hint not in _ALLOWED_LANGUAGES:
+            logger.warning(f"Unknown language hint '{lang_hint}', ignoring")
+            lang_hint = None
+
         segments, info = model.transcribe(
             tmp.name,
             beam_size=1,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 700},
             condition_on_previous_text=False,
+            language=lang_hint,
         )
 
         # Check duration
