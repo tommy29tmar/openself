@@ -465,6 +465,26 @@ describe("fact-validation", () => {
     });
   });
 
+  describe("BUG-5: placeholder rejection for identity facts", () => {
+    it("rejects N/A as identity name", () => {
+      expect(() =>
+        validateFactValue("identity", "name", { full: "N/A" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects 'unknown' as identity name", () => {
+      expect(() =>
+        validateFactValue("identity", "name", { full: "unknown" }),
+      ).toThrow(FactValidationError);
+    });
+
+    it("rejects '???' as project name", () => {
+      expect(() =>
+        validateFactValue("project", "proj-1", { name: "???" }),
+      ).toThrow(FactValidationError);
+    });
+  });
+
   describe("FactValidationError properties", () => {
     it("has correct code, category, and key", () => {
       try {
