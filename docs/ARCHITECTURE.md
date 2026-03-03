@@ -245,9 +245,9 @@ The onboarding builder chat has two state layers:
 
 To avoid chat resets and keep behavior consistent across devices:
 
-- On mobile, switching tabs (`Chat ↔ Preview`) must **not** unmount `ChatPanel`.
-- Mobile tab panes use Radix `TabsContent` with `forceMount`, and inactive panes are
-  hidden with `data-[state=inactive]:hidden` (not removed from the tree).
+- On mobile, switching tabs (`Chat / Preview / Publish`) must **not** unmount `ChatPanel`.
+- Mobile tab panes use `absolute inset-0` + `hidden` toggling (not Radix Tabs) so all
+  panes remain mounted and inactive panes are hidden with `className="hidden"`.
 - On component mount (including full page refresh), `ChatPanel` hydrates history from
   `GET /api/messages` before initializing `useChat`.
 - The localized welcome message is a fallback for empty history, and must not be
