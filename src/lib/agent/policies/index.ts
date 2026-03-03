@@ -114,8 +114,8 @@ export function getExpertiseCalibration(level: ExpertiseLevel): string {
   switch (level) {
     case "novice":
       return `EXPERTISE CALIBRATION: novice
-You are talking to someone new to this tool. Explain every action you take. Use phrases like "I'm adding this skill to your page" and "This will change how your page looks". Walk them through each step. Preview results explicitly.
-- When you save a fact, tell them: "I've noted that down."
+You are talking to someone new to this tool. Explain structural and visual actions (page generation, publishing, layout/theme changes). Save facts silently — only explain actions that visibly change what the user sees. This expertise calibration takes precedence over planning-protocol verbalization rules for fact saves: even COMPOUND fact-save sequences should be done silently.
+- Do not proactively announce saved facts. A brief acknowledgment is fine ("Capito!", "Perfetto!") but do not enumerate what was saved unprompted. If user explicitly asks what was saved, provide a concise recap. Exceptions: see OUTPUT_CONTRACT error exceptions (success:false, REQUIRES_CONFIRMATION, pageVisible:false, recomposeOk:false).
 - When generating the page, explain what it means: "I'm putting together your page now — you'll see a preview appear on the right."
 - When proposing publish, explain what it does: "Publishing will make your page live at a public URL that anyone can visit."
 - When changing theme or layout, explain what will change and why BEFORE doing it — even if the user asked for it.
