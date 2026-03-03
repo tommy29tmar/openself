@@ -16,11 +16,13 @@ const before = (db.prepare("SELECT COUNT(*) as n FROM page").get() as { n: numbe
 console.log(`Deleting ${before} page rows...`);
 
 db.exec(`
+  BEGIN;
   DELETE FROM page;
   DELETE FROM section_copy_cache;
   DELETE FROM section_copy_state;
   DELETE FROM section_copy_proposals;
   DELETE FROM translation_cache;
+  COMMIT;
 `);
 
 const after = (db.prepare("SELECT COUNT(*) as n FROM page").get() as { n: number }).n;
