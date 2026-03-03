@@ -512,23 +512,11 @@ export function SplitView({
           {/* Content area */}
           <div className="flex-1 overflow-hidden relative">
             {/* Chat — always mounted, hidden when not active */}
-            <div className={`absolute inset-0 ${activeMobileTab === "chat" ? "block" : "hidden"}`}>
-              {chatDataReady && (
-                <ChatPanel
-                  language={language}
-                  authV2={authState?.authV2}
-                  authState={authState}
-                  onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }}
-                  initialBootstrap={bootstrapData}
-                  initialMessages={chatInitialMessages}
-                  disableInitialFetch={chatDataReady}
-                  isPrimaryVoiceConsumer={isMobile}
-                />
-              )}
-              {/* Unpublished changes banner — inside chat tab */}
+            <div className={`absolute inset-0 flex flex-col ${activeMobileTab === "chat" ? "" : "hidden"}`}>
+              {/* Unpublished changes banner — above ChatPanel so it doesn't overlap content */}
               {hasUnpublishedChanges && (
                 <div style={{
-                  position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
+                  flexShrink: 0,
                   background: "#c9a96e", color: "#111",
                   padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
                 }}>
@@ -544,6 +532,20 @@ export function SplitView({
                   >
                     {publishing ? "Publishing\u2026" : "Publish \u2192"}
                   </button>
+                </div>
+              )}
+              {chatDataReady && (
+                <div className="flex-1 overflow-hidden">
+                  <ChatPanel
+                    language={language}
+                    authV2={authState?.authV2}
+                    authState={authState}
+                    onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }}
+                    initialBootstrap={bootstrapData}
+                    initialMessages={chatInitialMessages}
+                    disableInitialFetch={chatDataReady}
+                    isPrimaryVoiceConsumer={isMobile}
+                  />
                 </div>
               )}
             </div>
