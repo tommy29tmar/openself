@@ -105,6 +105,16 @@ export function getTodayUsage(): TodayUsage {
   };
 }
 
+function parseEnvInt(key: string): number | undefined {
+  const raw = process.env[key];
+  return raw && /^\d+$/.test(raw) ? parseInt(raw, 10) : undefined;
+}
+
+function parseEnvFloat(key: string): number | undefined {
+  const raw = process.env[key];
+  return raw && /^\d+(\.\d+)?$/.test(raw) ? parseFloat(raw) : undefined;
+}
+
 function getLimits() {
   const row = db
     .select()
@@ -112,14 +122,15 @@ function getLimits() {
     .where(eq(llmLimits.id, "main"))
     .get();
 
-  const envRaw = process.env.LLM_DAILY_TOKEN_LIMIT;
-  const envLimit = envRaw && /^\d+$/.test(envRaw) ? parseInt(envRaw, 10) : undefined;
+  const envTokenLimit = parseEnvInt("LLM_DAILY_TOKEN_LIMIT");
+  const envCostWarning = parseEnvFloat("LLM_DAILY_COST_WARNING_USD");
+  const envCostHardLimit = parseEnvFloat("LLM_DAILY_COST_HARD_LIMIT_USD");
 
-  // Return defaults if no row exists
+  // Env vars take precedence over DB, DB is fallback for runtime overrides
   return {
-    dailyTokenLimit: row?.dailyTokenLimit ?? envLimit ?? 500_000,
-    dailyCostWarningUsd: row?.dailyCostWarningUsd ?? 1.0,
-    dailyCostHardLimitUsd: row?.dailyCostHardLimitUsd ?? 2.0,
+    dailyTokenLimit: envTokenLimit ?? row?.dailyTokenLimit ?? 500_000,
+    dailyCostWarningUsd: envCostWarning ?? row?.dailyCostWarningUsd ?? 1.0,
+    dailyCostHardLimitUsd: envCostHardLimit ?? row?.dailyCostHardLimitUsd ?? 2.0,
     hardStop: row?.hardStop ?? true,
   };
 }
