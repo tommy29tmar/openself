@@ -36,3 +36,25 @@ export type ImportReport = {
   factsSkipped: number;
   errors: Array<{ file?: string; key?: string; reason: string }>;
 };
+
+export type ConnectorStatusRow = {
+  id: string;
+  connectorType: string;
+  status: string;
+  enabled: boolean;
+  lastSync: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectorUIDefinition = {
+  id: string;
+  displayName: string;
+  description: string;
+  authType: "oauth" | "zip_upload";
+  connectUrl?: string;
+  importUrl?: string;
+  syncUrl?: string;
+  disconnectUrl: string;
+};
