@@ -2,24 +2,30 @@ import React from "react";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import type { LayoutComponentProps } from "./types";
 
-/** Section types that get compact (32px) gap after them */
-const DENSE_SECTIONS = new Set([
-  "stats", "skills", "interests", "languages", "activities", "social",
-]);
+const BLEED_SECTIONS = new Set(["projects", "reading", "music"]);
+const DENSE_SECTIONS = new Set(["stats", "skills", "interests", "languages", "activities", "social", "contact"]);
+const HERO_SECTIONS = new Set(["hero", "footer"]);
 
-/** Section types that get medium (48px) gap after them */
-const NARRATIVE_SECTIONS = new Set([
-  "bio", "experience", "education", "projects", "achievements",
-  "reading", "music", "contact", "custom", "timeline",
-]);
+export type Lane = "hero" | "reading" | "bleed";
 
-function getSpacingClass(sectionType: string, isLastBeforeFooter: boolean): string {
-  if (sectionType === "hero") return "mb-20"; // 80px after hero
-  if (isLastBeforeFooter) return "mb-20";     // 80px before footer
-  if (DENSE_SECTIONS.has(sectionType)) return "mb-8";  // 32px
-  if (NARRATIVE_SECTIONS.has(sectionType)) return "mb-12"; // 48px
-  return "mb-12"; // default
+export function getLane(sectionType: string): Lane {
+  if (HERO_SECTIONS.has(sectionType)) return "hero";
+  if (BLEED_SECTIONS.has(sectionType)) return "bleed";
+  return "reading";
 }
+
+export function getSpacingClass(sectionType: string, isLastBeforeFooter: boolean): string {
+  if (sectionType === "hero") return "mb-20";
+  if (isLastBeforeFooter) return "mb-20";
+  if (DENSE_SECTIONS.has(sectionType)) return "mb-8";
+  return "mb-12";
+}
+
+const LANE_CLASSES: Record<Lane, string> = {
+  hero: "w-full",
+  reading: "w-full max-w-[var(--reading-max,660px)] mx-auto px-6 md:px-12",
+  bleed: "w-full max-w-[calc(var(--reading-max,660px)*1.35)] mx-auto px-6 md:px-12",
+};
 
 export function MonolithLayout({ slots, renderSection, className }: LayoutComponentProps) {
   const template = getLayoutTemplate("monolith");
@@ -43,21 +49,23 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
   let globalIdx = 0;
 
   return (
-    <div className={`layout-monolith max-w-5xl mx-auto flex flex-col ${className ?? ""}`}>
+    <div className={`layout-monolith flex flex-col ${className ?? ""}`}>
       {sortedSlots.map((slot) => {
         const sections = slots[slot.id];
         if (!sections?.length) return null;
         return (
-          <div key={slot.id} className="slot-wide">
+          <div key={slot.id} className="w-full">
             {sections.map((section) => {
               const currentIdx = globalIdx++;
               const isLastBeforeFooter = currentIdx === lastNonFooterIdx;
               const spacingClass = section.type === "footer"
                 ? ""
                 : getSpacingClass(section.type, isLastBeforeFooter);
+              const lane = getLane(section.type);
+              const laneClass = LANE_CLASSES[lane];
 
               return (
-                <div key={section.id} className={spacingClass}>
+                <div key={section.id} className={`${laneClass} ${spacingClass}`}>
                   {renderSection(section)}
                 </div>
               );
