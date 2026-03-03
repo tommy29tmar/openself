@@ -48,23 +48,24 @@ export function ChatInput({
             outline: "none",
           }}
         />
-        {micButton}
-        <button
-          type="submit"
-          disabled={!value.trim() || isLoading}
-          style={{
-            background: "rgba(255,255,255,0.1)",
-            color: "rgba(255,255,255,0.7)",
-            borderRadius: 6,
-            border: "none",
-            padding: "8px 14px",
-            fontSize: 13,
-            cursor: !value.trim() || isLoading ? "not-allowed" : "pointer",
-            opacity: !value.trim() || isLoading ? 0.5 : 1,
-          }}
-        >
-          Send
-        </button>
+        {micButton ?? (
+          <button
+            type="submit"
+            disabled={!value.trim() || isLoading}
+            style={{
+              background: "rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.7)",
+              borderRadius: 6,
+              border: "none",
+              padding: "8px 14px",
+              fontSize: 13,
+              cursor: !value.trim() || isLoading ? "not-allowed" : "pointer",
+              opacity: !value.trim() || isLoading ? 0.5 : 1,
+            }}
+          >
+            Send
+          </button>
+        )}
       </form>
     </div>
   );
