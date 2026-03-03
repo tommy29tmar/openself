@@ -4,7 +4,7 @@ import { db, sqlite } from "@/lib/db";
 import { messages, conversationSummaries } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { generateText } from "ai";
-import { getModelForTier, getModelIdForTier, getProviderName } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
 import { recordUsage, checkBudget } from "@/lib/services/usage-service";
 import { enqueueJob } from "@/lib/worker/index";
 import { getSessionMeta, type JournalEntry } from "@/lib/services/session-metadata";
@@ -238,7 +238,7 @@ Keep the summary concise (under 500 words). Write in third person.`;
 
     // Record usage regardless of CAS outcome (LLM was already called)
     if (tokensIn > 0 || tokensOut > 0) {
-      recordUsage(getProviderName(), modelId, tokensIn, tokensOut);
+      recordUsage(getProviderForTier("standard"), modelId, tokensIn, tokensOut);
     }
 
     return success;

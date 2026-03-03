@@ -1,5 +1,5 @@
 import { streamText, generateText, type CoreMessage } from "ai";
-import { getModelForTier, getModelIdForTier, getProviderName } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
 import { assembleContext } from "@/lib/agent/context";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { createAgentTools } from "@/lib/agent/tools";
@@ -296,7 +296,7 @@ export async function POST(req: Request) {
       .run();
   }
 
-  const provider = getProviderName();
+  const provider = getProviderForTier("standard");
   const modelId = getModelIdForTier("standard");
   const MAX_STEPS = 12; // batch_facts reduces per-turn tool calls; 12 gives headroom for complex turns
 

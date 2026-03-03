@@ -26,6 +26,7 @@ vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => ({})),
   getModelForTier: vi.fn(() => ({})),
   getProviderName: vi.fn(() => "mock"),
+  getProviderForTier: vi.fn(() => "mock-provider"),
   getModelId: vi.fn(() => "mock-model"),
   getModelIdForTier: vi.fn(() => "mock-model"),
 }));

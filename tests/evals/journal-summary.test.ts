@@ -21,6 +21,7 @@ vi.mock("@/lib/ai/provider", () => ({
   getModelForTier: vi.fn(() => "mock-model"),
   getModelIdForTier: vi.fn(() => "mock-id"),
   getProviderName: vi.fn(() => "mock-provider"),
+  getProviderForTier: vi.fn(() => "mock-provider"),
 }));
 
 const mockCheckBudget = vi.fn(() => ({ allowed: true }));
