@@ -27,13 +27,51 @@ describe("turnManagementRules", () => {
     });
   });
 
-  describe("R1 — No consecutive same-area questions", () => {
-    it("forbids consecutive questions on the same area", () => {
-      expect(rules).toMatch(/never.*2.*consecutive.*same|no\s*consecutive.*same/i);
+  describe("R1 — Topic clusters with natural bridges", () => {
+    it("targets ~2 exchanges per cluster in exploration mode", () => {
+      expect(rules).toMatch(/~2\s*exchange|target.*2\s*exchange/i);
     });
 
-    it("mentions breadth as the goal", () => {
-      expect(rules).toMatch(/breadth/i);
+    it("allows flexible cluster end (short answer) or extension (still developing)", () => {
+      expect(rules).toMatch(/end\s*earlier|extend.*3|still\s*developing/i);
+    });
+
+    it("handles user-volunteered third area briefly (1 exchange, not a full cluster)", () => {
+      expect(rules).toMatch(/user.*volunteers.*new.*area|brief.*1\s*exchange|handle.*briefly/i);
+    });
+
+    it("requires a bridge sentence when transitioning", () => {
+      expect(rules).toMatch(/bridge\s*sentence/i);
+    });
+
+    it("explicitly forbids cold topic switches", () => {
+      expect(rules).toMatch(/cold.{0,20}switch|never.*cold.{0,20}topic/i);
+    });
+
+    it("targets 2 primary clusters with R2 hard cap at 6 exchanges", () => {
+      expect(rules).toMatch(/2.*cluster|cluster.*2/i);
+      expect(rules).toMatch(/6\s*exchange|R2/i);
+    });
+
+    it("scopes cluster approach to exploration, excludes edit sessions", () => {
+      expect(rules).toMatch(/exploring|onboarding|exploration/i);
+      expect(rules).toMatch(/editing|edit.*session|returning\s*user/i);
+    });
+
+    it("hard cap at 6 exchanges with immediate action", () => {
+      expect(rules).toMatch(/6\s*exchange.*R2|R2.*6\s*exchange/i);
+    });
+  });
+
+  describe("R2 — gate exception", () => {
+    it("R2 generate_page includes one-question gate exception for missing name/role", () => {
+      expect(rules).toMatch(/exception.*name.*role.*missing|ONE.*direct.*question.*collect|missing.*ask.*ONE|ask.*ONE.*direct.*question/i);
+    });
+  });
+
+  describe("R4 — low-signal gate reference", () => {
+    it("R4 low-signal fallback includes Phase C gate before generation", () => {
+      expect(rules).toMatch(/Phase\s*C\s*gate|missing.*name.*role.*gate|ask.*one.*direct.*question.*generate/i);
     });
   });
 

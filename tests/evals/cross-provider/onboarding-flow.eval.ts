@@ -68,23 +68,33 @@ describe.each(providers)("onboarding-flow [%s]", (provider: TestProvider) => {
     expect(text.length).toBeLessThan(2000);
   });
 
-  it("asks about different topics across turns (breadth-first)", async () => {
+  it("bridges to a different topic after completing a work cluster (max 3 exchanges)", async () => {
     const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
       system: systemPrompt,
       messages: [
         { role: "user", content: "Hi! I'm Marco, I'm a software engineer based in Rome." },
-        { role: "assistant", content: "Hey Marco! Nice to meet you. Software engineering in Rome — that's a great combo. What are you working on these days?" },
+        { role: "assistant", content: "Hey Marco! Software engineering in Rome — great combo. What are you working on these days?" },
         { role: "user", content: "I work at Stripe on the payments API. Been there for 3 years." },
+        { role: "assistant", content: "Nice! What's the most interesting challenge you've tackled there?" },
+        { role: "user", content: "Mainly reliability across different payment providers in different countries." },
+        { role: "assistant", content: "That sounds complex! How did you handle the fallback logic?" },
+        { role: "user", content: "We built a retry system and a per-provider fallback chain." },
       ],
     });
 
-    const differentAreas = ["hobby", "interest", "fun", "free time", "project", "side", "outside work", "passion", "skill", "proud"];
-    assertContainsAtLeast(text, differentAreas, 1, "Should explore a different topic area");
+    // After 3 work exchanges (max cluster depth), agent must bridge to a second cluster
+    // Accepts either: outside-work/personal cluster OR background/education cluster
+    // Avoid ambiguous terms (project, skill, passion, enjoy, fun, activity)
+    const offTopicMarkers = [
+      "hobby", "hobbies", "free time", "outside work", "outside of work", "sport", "leisure", "personal life",
+      "education", "study", "studied", "background", "how did you get into", "career path", "university", "school", "degree",
+    ];
+    assertContainsAtLeast(text, offTopicMarkers, 1, "Should bridge to second cluster (outside-work or background/education) after work cluster");
   });
 
-  it("proposes page generation after sufficient signal (5 turns)", async () => {
+  it("proposes page generation after completing 2 clusters", async () => {
     const systemPrompt = buildOnboardingPrompt("en");
     const { text } = await generateText({
       model: getModel(),
