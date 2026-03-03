@@ -14,6 +14,7 @@ import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import type { PromptMode } from "./promptAssembler";
+import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 
 /**
  * Rough token estimation: ~4 chars per token.
@@ -376,6 +377,16 @@ The user is running out of messages. In your NEXT reply:
 2. Mention that messages are limited and they can register to continue.
 3. Keep the suggestion casual — weave it into the conversation naturally.
 Do NOT interrupt an active topic abruptly. Weave it into the conversation.`);
+  }
+
+  // --- Magic paste: detect connector URLs from the latest user message ---
+  const latestUserMessage = [...clientMessages].reverse().find(m => m.role === "user")?.content ?? "";
+  const detectedConnectors = detectConnectorUrls(latestUserMessage);
+  const magicPasteHint = detectedConnectors.length > 0
+    ? `\nDETECTED SOURCE URLS: ${detectedConnectors.map(d => `${d.connectorId} (${d.url})`).join(", ")}. If relevant, suggest the user connect it as a Source via the Sources panel.`
+    : "";
+  if (magicPasteHint) {
+    contextParts.push(`\n\n---\n\n${magicPasteHint}`);
   }
 
   let systemPrompt = contextParts.join("");
