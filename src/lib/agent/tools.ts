@@ -118,7 +118,7 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       createdAt: new Date().toISOString(),
     });
     mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-    return { requiresConfirmation: true, message: `Changing identity/${key} requires explicit user confirmation. Ask the user to confirm in their next message.` };
+    return { requiresConfirmation: true, message: `Changing identity/${key} requires confirmation. Explain to the user what will change (old → new value) and ask them to confirm. The pending confirmation is stored — when they confirm in their next message, retry the same tool call with the same target and value.` };
   }
 
   /**
@@ -126,13 +126,22 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
    */
   function deleteGate(factId: string): { requiresConfirmation: true; message: string } | null {
     if (_deleteBlockedThisTurn) {
+      const existingPending = pendings.find(p => p.type === "bulk_delete");
+      if (existingPending?.factIds && !existingPending.factIds.includes(factId)) {
+        existingPending.factIds.push(factId);
+        mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+      }
       return { requiresConfirmation: true, message: "Further deletions blocked this turn — wait for user confirmation in a new message." };
     }
 
-    // Check pending (confirmed delete from previous turn)
+    // Check pending (confirmed delete from previous turn) — consume per-factId
     const matchIdx = pendings.findIndex(p => p.type === "bulk_delete" && p.factIds?.includes(factId));
     if (matchIdx >= 0) {
-      pendings.splice(matchIdx, 1);
+      const pending = pendings[matchIdx];
+      pending.factIds = pending.factIds!.filter((id: string) => id !== factId);
+      if (pending.factIds!.length === 0) {
+        pendings.splice(matchIdx, 1);
+      }
       mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
       _deletionCountThisTurn++; // count it, so 2nd+ delete in same turn still blocks
       return null; // allowed

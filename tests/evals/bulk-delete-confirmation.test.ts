@@ -80,6 +80,7 @@ describe("bulk delete confirmation gate (Bug #6)", () => {
     mockGetFactLanguage.mockReturnValue("en");
     mockGetDraft.mockReturnValue(null);
     mockGetActiveFacts.mockReturnValue([]);
+    mockGetSessionMeta.mockReturnValue({});
   });
 
   it("allows first delete_fact without confirmation", async () => {
@@ -161,7 +162,7 @@ describe("bulk delete confirmation gate (Bug #6)", () => {
     expect(r2.success).toBe(true);
   });
 
-  it("confirmed delete increments count, so 3rd unconfirmed is blocked", async () => {
+  it("confirmed delete increments count — next unconfirmed is blocked", async () => {
     mockGetSessionMeta.mockReturnValue({
       pendingConfirmations: [{
         id: "p1",
@@ -173,12 +174,53 @@ describe("bulk delete confirmation gate (Bug #6)", () => {
     mockDeleteFact.mockReturnValue(true);
 
     const { tools } = createAgentTools("en", "s1");
-    // f1: confirmed → ok (count goes to 1)
+    // f1: confirmed → ok (count goes to 1, but pending check runs first)
     const r1 = await tools.delete_fact.execute({ factId: "f1" }, toolCtx);
     expect(r1.success).toBe(true);
-    // f2: unconfirmed, count=1 → blocked (2nd+ delete)
+    // f2: unconfirmed, count=1 → blocked (2nd+ delete, pending check finds no match)
     const r2 = await tools.delete_fact.execute({ factId: "f2" }, toolCtx) as any;
     expect(r2.success).toBe(false);
     expect(r2.code).toBe("REQUIRES_CONFIRMATION");
+  });
+
+  it("blocked deletes accumulate all factIds in pending for confirmation", async () => {
+    mockDeleteFact.mockReturnValue(true);
+    const { tools } = createAgentTools("en", "s1");
+
+    // First delete: allowed (count 0 → 1)
+    await tools.delete_fact.execute({ factId: "f1" }, toolCtx);
+    // Second delete: blocked, creates pending with ["f2"]
+    const r2 = await tools.delete_fact.execute({ factId: "f2" }, toolCtx) as any;
+    expect(r2.code).toBe("REQUIRES_CONFIRMATION");
+    // Third delete: blocked, should accumulate "f3" into same pending
+    const r3 = await tools.delete_fact.execute({ factId: "f3" }, toolCtx) as any;
+    expect(r3.code).toBe("REQUIRES_CONFIRMATION");
+
+    // Verify all blocked factIds are in the pending
+    const lastMetaCall = mockMergeSessionMeta.mock.calls.at(-1);
+    const pendingConfs = lastMetaCall?.[1]?.pendingConfirmations;
+    const bulkPending = pendingConfs?.find((p: any) => p.type === "bulk_delete");
+    expect(bulkPending?.factIds).toContain("f2");
+    expect(bulkPending?.factIds).toContain("f3");
+  });
+
+  it("confirmed multi-delete: all factIds in pending are allowed sequentially", async () => {
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "pending-1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2", "f3"],
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    mockDeleteFact.mockReturnValue(true);
+
+    const { tools } = createAgentTools("en", "s1");
+    const r1 = await tools.delete_fact.execute({ factId: "f1" }, toolCtx);
+    expect(r1.success).toBe(true);
+    const r2 = await tools.delete_fact.execute({ factId: "f2" }, toolCtx);
+    expect(r2.success).toBe(true);
+    const r3 = await tools.delete_fact.execute({ factId: "f3" }, toolCtx);
+    expect(r3.success).toBe(true);
   });
 });
