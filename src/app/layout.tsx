@@ -1,10 +1,54 @@
 import type { Metadata } from "next";
-import { Inter, Source_Serif_4, JetBrains_Mono } from "next/font/google";
+import {
+  Plus_Jakarta_Sans,
+  Figtree,
+  Cormorant_Garamond,
+  Lato,
+  JetBrains_Mono,
+} from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const sourceSerif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif" });
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
+// Signal voice — plus jakarta sans (heading) + figtree (body)
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-plus-jakarta-sans",
+  display: "swap",
+});
+
+const figtree = Figtree({
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  style: ["normal", "italic"],
+  variable: "--font-figtree",
+  display: "swap",
+});
+
+// Narrative voice — cormorant garamond (heading) + lato (body)
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["300", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
+const lato = Lato({
+  subsets: ["latin"],
+  weight: ["300", "400"],
+  style: ["normal", "italic"],
+  variable: "--font-lato",
+  display: "swap",
+});
+
+// Terminal voice — jetbrains mono (heading + body)
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "OpenSelf",
@@ -17,8 +61,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable}`}>
-      <body className={inter.className}>{children}</body>
+    <html
+      lang="en"
+      className={`${plusJakarta.variable} ${figtree.variable} ${cormorant.variable} ${lato.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className={plusJakarta.className}>{children}</body>
     </html>
   );
 }

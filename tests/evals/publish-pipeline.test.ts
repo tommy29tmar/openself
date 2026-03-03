@@ -34,8 +34,10 @@ vi.mock("@/lib/services/page-composer", () => ({
   composeOptimisticPage: vi.fn(() => ({
     version: 1,
     username: "testuser",
-    theme: "minimal",
-    style: { colorScheme: "light", primaryColor: "#6366f1", fontFamily: "inter", layout: "centered" },
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
+    style: { primaryColor: "#6366f1", layout: "centered" },
     sections: [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test", tagline: "Hello" } },
       { id: "bio-1", type: "bio", variant: "full", content: { text: "Bio text." } },
@@ -107,8 +109,10 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
-    style: { colorScheme: "light", primaryColor: "#6366f1", fontFamily: "inter", layout: "centered" },
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
+    style: { primaryColor: "#6366f1", layout: "centered" },
     sections: [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Test", tagline: "Hello" } },
       { id: "footer-1", type: "footer", content: {} },
@@ -239,11 +243,11 @@ describe("prepareAndPublish", () => {
     expect(upsertDraft).toHaveBeenCalled();
   });
 
-  it("preserves theme/style from existing draft metadata", async () => {
+  it("preserves surface/voice/light from existing draft metadata", async () => {
     const facts = [makeFact({ category: "identity", key: "name" })];
     mockGetActiveFacts.mockReturnValue(facts);
     vi.mocked(getDraft).mockReturnValue({
-      config: makeConfig({ theme: "warm", style: { colorScheme: "dark", primaryColor: "#ff0000", fontFamily: "serif", layout: "centered" } }),
+      config: makeConfig({ surface: "clay", voice: "narrative", light: "night", style: { primaryColor: "#ff0000", layout: "centered" } }),
       username: "testuser",
       status: "draft",
       configHash: "hash-old",
@@ -252,11 +256,12 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "register" });
 
-    // translatePageContent should receive config with warm theme and dark colorScheme
+    // translatePageContent should receive config with clay surface, narrative voice, night light
     const { translatePageContent } = await import("@/lib/ai/translate");
     const translatedConfig = vi.mocked(translatePageContent).mock.calls[0][0] as PageConfig;
-    expect(translatedConfig.theme).toBe("warm");
-    expect(translatedConfig.style.colorScheme).toBe("dark");
+    expect(translatedConfig.surface).toBe("clay");
+    expect(translatedConfig.voice).toBe("narrative");
+    expect(translatedConfig.light).toBe("night");
     expect(translatedConfig.style.primaryColor).toBe("#ff0000");
   });
 

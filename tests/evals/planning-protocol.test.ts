@@ -104,6 +104,18 @@ describe("planningProtocol", () => {
   it("mentions blocked tool response handling", () => {
     expect(text).toContain("blocked");
   });
+
+  it("exempts SIMPLE fact saves from novice verbalization", () => {
+    expect(text).toMatch(/SIMPLE.*fact.*save.*silent|novice.*fact.*save.*no\s*verbalization|SIMPLE.*fact.*save.*move\s*forward/i);
+  });
+
+  it("SIMPLE fact save silence preserves all 4 OUTPUT_CONTRACT error exceptions", () => {
+    // One assertion per exception — no OR to mask missing exceptions
+    expect(text).toMatch(/success.*false/i);
+    expect(text).toMatch(/REQUIRES_CONFIRMATION/);
+    expect(text).toMatch(/pageVisible.*false/i);
+    expect(text).toMatch(/recomposeOk.*false/i);
+  });
 });
 
 describe("buildSystemPrompt — planning protocol integration", () => {

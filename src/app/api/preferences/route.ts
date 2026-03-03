@@ -80,7 +80,9 @@ export async function POST(req: Request) {
         const nextConfig = currentDraft
           ? {
               ...regeneratedConfig,
-              theme: currentDraft.config.theme,
+              surface: currentDraft.config.surface,
+              voice: currentDraft.config.voice,
+              light: currentDraft.config.light,
               style: currentDraft.config.style,
             }
           : regeneratedConfig;

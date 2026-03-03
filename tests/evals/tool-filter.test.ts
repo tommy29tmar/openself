@@ -10,7 +10,7 @@ import { filterToolsByJourneyState, TOOL_SETS } from "@/lib/agent/tool-filter";
 const ALL_TOOL_NAMES = [
   "create_fact", "update_fact", "delete_fact", "search_facts",
   "set_fact_visibility", "save_memory", "resolve_conflict",
-  "generate_page", "update_page_style", "set_theme", "set_layout",
+  "generate_page", "update_page_style", "set_layout",
   "reorder_sections", "propose_lock", "request_publish", "propose_soul_change",
   "batch_facts", "archive_fact", "unarchive_fact", "reorder_items",
   "move_section", "publish_preflight", "inspect_page_state",
@@ -29,7 +29,6 @@ describe("tool filtering by journey state", () => {
     expect(names).toContain("batch_facts");
     expect(names).toContain("generate_page");
     expect(names).toContain("save_memory");
-    expect(names).toContain("set_theme");
     expect(names).toContain("set_layout");
     expect(names).toContain("update_page_style");
     expect(names).not.toContain("request_publish");

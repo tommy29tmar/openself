@@ -2,42 +2,46 @@ import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 
-// ── 1. CSS token tests ──────────────────────────────────────────────
+// ── 1. globals.css Presence System tests ────────────────────────────
 
 const globalsPath = path.resolve(__dirname, "../../src/app/globals.css");
 const globalsCss = fs.readFileSync(globalsPath, "utf-8");
 
-describe("Theme CSS tokens in globals.css", () => {
-  const themes = ["minimal", "warm", "editorial-360"] as const;
-  const colorSchemes = ["light", "dark"] as const;
+describe("Presence system CSS in globals.css", () => {
+  // Core selectors that must exist
+  const requiredSelectors = [
+    ".os-page",
+    ".os-page.surface-clay",
+    ".os-page.surface-archive",
+    ".os-page.light-night",
+    ".os-page.voice-narrative",
+    ".os-page.voice-terminal",
+  ];
 
-  for (const theme of themes) {
-    for (const scheme of colorSchemes) {
-      const selector = `[data-theme="${theme}"][data-color-scheme="${scheme}"]`;
-
-      it(`defines ${selector} selector`, () => {
-        expect(globalsCss).toContain(selector);
-      });
-    }
+  for (const selector of requiredSelectors) {
+    it(`defines selector: ${selector}`, () => {
+      expect(globalsCss).toContain(selector);
+    });
   }
 
+  // Required CSS custom properties on .os-page base
   const requiredTokens = [
     "--page-bg",
     "--page-fg",
     "--page-fg-secondary",
-    "--page-muted",
-    "--page-border",
     "--page-accent",
     "--page-accent-fg",
+    "--page-border",
+    "--page-muted",
     "--page-card-bg",
     "--page-card-border",
     "--page-card-hover",
+    "--page-font-heading",
+    "--page-font-body",
     "--page-badge-bg",
     "--page-badge-fg",
     "--page-badge-border",
     "--page-footer-fg",
-    "--page-font-heading",
-    "--page-font-body",
     "--page-radius-base",
     "--page-shadow",
     "--page-shadow-lg",
@@ -45,99 +49,173 @@ describe("Theme CSS tokens in globals.css", () => {
 
   // Extract the block for a given selector
   function extractBlock(css: string, selector: string): string {
-    const escaped = selector.replace(/[[\]".-]/g, "\\$&");
-    const re = new RegExp(escaped + "\\s*\\{([^}]+)\\}", "g");
+    // Escape special characters for the literal selector in regex
+    const escaped = selector.replace(/[[\].]/g, "\\$&");
+    const re = new RegExp(escaped + "\\s*\\{([^}]+)\\}");
     const match = re.exec(css);
     return match ? match[1] : "";
   }
 
-  for (const theme of themes) {
-    describe(`[data-theme="${theme}"] light`, () => {
-      const block = extractBlock(globalsCss, `[data-theme="${theme}"][data-color-scheme="light"]`);
+  const baseBlock = extractBlock(globalsCss, ".os-page");
 
-      for (const token of requiredTokens) {
-        it(`declares ${token}`, () => {
-          expect(block).toContain(token);
-        });
-      }
+  for (const token of requiredTokens) {
+    it(`.os-page declares ${token}`, () => {
+      expect(baseBlock).toContain(token);
     });
   }
 
-  it("all 3 themes have --page-bg values in light mode", () => {
-    const bgValues = themes.map((theme) => {
-      const block = extractBlock(globalsCss, `[data-theme="${theme}"][data-color-scheme="light"]`);
-      const match = block.match(/--page-bg:\s*([^;]+)/);
-      return match ? match[1].trim() : null;
-    });
-
-    // All values found
-    expect(bgValues.every(Boolean)).toBe(true);
-
-    // At least 2 distinct values (themes may intentionally share a background)
-    const unique = new Set(bgValues);
-    expect(unique.size).toBeGreaterThanOrEqual(2);
+  it(".os-page base has --page-bg value", () => {
+    const match = baseBlock.match(/--page-bg:\s*([^;]+)/);
+    expect(match).not.toBeNull();
+    expect(match![1].trim()).toBeTruthy();
   });
 
-  it("all 3 themes have different --page-accent values in light mode", () => {
-    const accentValues = themes.map((theme) => {
-      const block = extractBlock(globalsCss, `[data-theme="${theme}"][data-color-scheme="light"]`);
-      const match = block.match(/--page-accent:\s*([^;]+)/);
-      return match ? match[1].trim() : null;
-    });
-
-    expect(accentValues.every(Boolean)).toBe(true);
-
-    const unique = new Set(accentValues);
-    expect(unique.size).toBe(3);
+  it(".os-page base has --page-accent value", () => {
+    const match = baseBlock.match(/--page-accent:\s*([^;]+)/);
+    expect(match).not.toBeNull();
+    expect(match![1].trim()).toBeTruthy();
   });
 
-  it("all 3 themes have different --page-font-heading values in light mode", () => {
-    const fontValues = themes.map((theme) => {
-      const block = extractBlock(globalsCss, `[data-theme="${theme}"][data-color-scheme="light"]`);
-      const match = block.match(/--page-font-heading:\s*([^;]+)/);
-      return match ? match[1].trim() : null;
-    });
-
-    expect(fontValues.every(Boolean)).toBe(true);
-
-    const unique = new Set(fontValues);
-    expect(unique.size).toBe(3);
+  it(".os-page.surface-clay has different --page-bg than canvas base", () => {
+    const canvasBg = baseBlock.match(/--page-bg:\s*([^;]+)/)?.[1]?.trim();
+    const clayBlock = extractBlock(globalsCss, ".os-page.surface-clay");
+    const clayBg = clayBlock.match(/--page-bg:\s*([^;]+)/)?.[1]?.trim();
+    expect(canvasBg).toBeTruthy();
+    expect(clayBg).toBeTruthy();
+    expect(canvasBg).not.toBe(clayBg);
   });
 
-  it("minimal uses sans-serif heading font", () => {
-    const block = extractBlock(globalsCss, `[data-theme="minimal"][data-color-scheme="light"]`);
-    expect(block).toMatch(/--page-font-heading:.*sans-serif/);
+  it(".os-page.surface-archive has different --page-bg than canvas base", () => {
+    const canvasBg = baseBlock.match(/--page-bg:\s*([^;]+)/)?.[1]?.trim();
+    const archiveBlock = extractBlock(globalsCss, ".os-page.surface-archive");
+    const archiveBg = archiveBlock.match(/--page-bg:\s*([^;]+)/)?.[1]?.trim();
+    expect(canvasBg).toBeTruthy();
+    expect(archiveBg).toBeTruthy();
+    // Archive is #ffffff (white) while canvas is off-white — they differ
+    expect(canvasBg).not.toBe(archiveBg);
   });
 
-  it("warm uses serif heading font", () => {
-    const block = extractBlock(globalsCss, `[data-theme="warm"][data-color-scheme="light"]`);
-    expect(block).toMatch(/--page-font-heading:.*serif/);
+  it(".os-page.light-night has dark --page-bg", () => {
+    const nightBlock = extractBlock(globalsCss, ".os-page.light-night");
+    const bg = nightBlock.match(/--page-bg:\s*([^;]+)/)?.[1]?.trim();
+    expect(bg).toBeTruthy();
+    // Night mode should start with #0 (dark color)
+    expect(bg).toMatch(/^#0/);
   });
 
-  it("editorial-360 uses rounded heading font", () => {
-    const block = extractBlock(globalsCss, `[data-theme="editorial-360"][data-color-scheme="light"]`);
-    expect(block).toMatch(/--page-font-heading:.*font-sans|system-ui/i);
+  it(".os-page.voice-narrative uses serif heading font", () => {
+    const narrativeBlock = extractBlock(globalsCss, ".os-page.voice-narrative");
+    expect(narrativeBlock).toContain("--h-font");
+    expect(narrativeBlock).toContain("serif");
+  });
+
+  it(".os-page.voice-terminal uses monospace font", () => {
+    const terminalBlock = extractBlock(globalsCss, ".os-page.voice-terminal");
+    expect(terminalBlock).toContain("--h-font");
+    expect(terminalBlock).toContain("monospace");
+  });
+
+  it("canvas base uses sans-serif heading font (Signal)", () => {
+    expect(baseBlock).toContain("--h-font");
+    expect(baseBlock).toContain("sans-serif");
   });
 });
 
-// ── 2. Theme registry tests ─────────────────────────────────────────
+// ── 2. Presence registry tests ───────────────────────────────────────
 
-describe("Theme registry", () => {
-  it("getTheme resolves all 3 theme IDs", async () => {
-    const { getTheme } = await import("@/themes/index");
+describe("Presence registry", () => {
+  it("listSurfaces returns all 3 surfaces", async () => {
+    const { listSurfaces } = await import("@/lib/presence");
 
-    for (const themeId of ["minimal", "warm", "editorial-360"]) {
-      const theme = getTheme(themeId);
-      expect(theme).toBeDefined();
-      expect(theme.Layout).toBeDefined();
-      expect(typeof theme.components).toBe("object");
+    const surfaces = listSurfaces();
+    expect(surfaces).toHaveLength(3);
+    const ids = surfaces.map((s) => s.id);
+    expect(ids).toContain("canvas");
+    expect(ids).toContain("clay");
+    expect(ids).toContain("archive");
+  });
+
+  it("listVoices returns all 3 voices", async () => {
+    const { listVoices } = await import("@/lib/presence");
+
+    const voices = listVoices();
+    expect(voices).toHaveLength(3);
+    const ids = voices.map((v) => v.id);
+    expect(ids).toContain("signal");
+    expect(ids).toContain("narrative");
+    expect(ids).toContain("terminal");
+  });
+
+  it("isValidSurface accepts canvas, clay, archive", async () => {
+    const { isValidSurface } = await import("@/lib/presence");
+
+    expect(isValidSurface("canvas")).toBe(true);
+    expect(isValidSurface("clay")).toBe(true);
+    expect(isValidSurface("archive")).toBe(true);
+  });
+
+  it("isValidSurface rejects unknown values", async () => {
+    const { isValidSurface } = await import("@/lib/presence");
+
+    expect(isValidSurface("minimal")).toBe(false);
+    expect(isValidSurface("warm")).toBe(false);
+    expect(isValidSurface("hacker")).toBe(false);
+    expect(isValidSurface("")).toBe(false);
+  });
+
+  it("isValidVoice accepts signal, narrative, terminal", async () => {
+    const { isValidVoice } = await import("@/lib/presence");
+
+    expect(isValidVoice("signal")).toBe(true);
+    expect(isValidVoice("narrative")).toBe(true);
+    expect(isValidVoice("terminal")).toBe(true);
+  });
+
+  it("isValidVoice rejects unknown values", async () => {
+    const { isValidVoice } = await import("@/lib/presence");
+
+    expect(isValidVoice("bold")).toBe(false);
+    expect(isValidVoice("inter")).toBe(false);
+    expect(isValidVoice("")).toBe(false);
+  });
+
+  it("isValidLight accepts day and night", async () => {
+    const { isValidLight } = await import("@/lib/presence");
+
+    expect(isValidLight("day")).toBe(true);
+    expect(isValidLight("night")).toBe(true);
+  });
+
+  it("isValidLight rejects unknown values", async () => {
+    const { isValidLight } = await import("@/lib/presence");
+
+    expect(isValidLight("dark")).toBe(false);
+    expect(isValidLight("light")).toBe(false);
+    expect(isValidLight("")).toBe(false);
+  });
+
+  it("each surface has required fields", async () => {
+    const { listSurfaces } = await import("@/lib/presence");
+
+    for (const s of listSurfaces()) {
+      expect(s.id).toBeTruthy();
+      expect(s.displayName).toBeTruthy();
+      expect(s.cssClass).toBeTruthy();
+      expect(typeof s.readingMax).toBe("number");
+      expect(typeof s.sectionLabelOpacity).toBe("number");
     }
   });
 
-  it("getTheme falls back to editorial-360 for unknown theme", async () => {
-    const { getTheme, THEMES } = await import("@/themes/index");
-    const fallback = getTheme("nonexistent");
-    expect(fallback).toBe(THEMES["editorial-360"]);
+  it("each voice has required fields", async () => {
+    const { listVoices } = await import("@/lib/presence");
+
+    for (const v of listVoices()) {
+      expect(v.id).toBeTruthy();
+      expect(v.displayName).toBeTruthy();
+      expect(v.cssClass).toBeTruthy();
+      expect(v.headingFont).toBeTruthy();
+      expect(v.bodyFont).toBeTruthy();
+    }
   });
 });
 
@@ -197,40 +275,52 @@ describe("Section components use CSS custom properties (no hardcoded hex colors)
   });
 });
 
-// ── 4. Layout.tsx uses CSS custom properties ────────────────────────
+// ── 4. OsPageWrapper applies presence classes ────────────────────────
 
-describe("EditorialLayout uses CSS custom properties", () => {
-  const layoutPath = path.resolve(
+describe("OsPageWrapper applies presence classes", () => {
+  const wrapperPath = path.resolve(
     __dirname,
-    "../../src/themes/editorial-360/Layout.tsx"
+    "../../src/components/page/OsPageWrapper.tsx"
   );
-  const layoutContent = fs.readFileSync(layoutPath, "utf-8");
+  const wrapperContent = fs.readFileSync(wrapperPath, "utf-8");
 
-  it("uses var(--page-bg) instead of hardcoded background", () => {
-    expect(layoutContent).toContain("var(--page-bg)");
-    expect(layoutContent).not.toMatch(/bg-\[#[0-9a-fA-F]{6}\]/);
+  it("applies os-page base class", () => {
+    expect(wrapperContent).toContain('"os-page"');
   });
 
-  it("uses var(--page-fg) instead of hardcoded text color", () => {
-    expect(layoutContent).toContain("var(--page-fg)");
-    expect(layoutContent).not.toMatch(/text-\[#[0-9a-fA-F]{6}\]/);
+  it("applies surface-clay class for clay surface", () => {
+    expect(wrapperContent).toContain("surface-${surface}");
+  });
+
+  it("applies light-night class for night light", () => {
+    expect(wrapperContent).toContain("light-night");
+  });
+
+  it("applies voice-narrative/terminal class for non-default voice", () => {
+    expect(wrapperContent).toContain("voice-${voice}");
+  });
+
+  it("reads surface, voice, light from config", () => {
+    expect(wrapperContent).toContain("config.surface");
+    expect(wrapperContent).toContain("config.voice");
+    expect(wrapperContent).toContain("config.light");
   });
 });
 
-// ── 5. PageRenderer applies data-theme attribute ────────────────────
+// ── 5. PageRenderer renders sections ────────────────────────────────
 
-describe("PageRenderer applies data-theme attribute", () => {
+describe("PageRenderer renders sections", () => {
   const rendererPath = path.resolve(
     __dirname,
     "../../src/components/page/PageRenderer.tsx"
   );
   const rendererContent = fs.readFileSync(rendererPath, "utf-8");
 
-  it("renders data-theme attribute from config.theme", () => {
-    expect(rendererContent).toContain("data-theme=");
+  it("renders data-section attribute for sections", () => {
+    expect(rendererContent).toContain("data-section=");
   });
 
-  it("renders data-color-scheme attribute from config.style.colorScheme", () => {
-    expect(rendererContent).toContain("data-color-scheme=");
+  it("maps section types to components", () => {
+    expect(rendererContent).toContain("section.type");
   });
 });

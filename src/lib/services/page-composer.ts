@@ -37,15 +37,16 @@ import { TAGLINE_TEMPLATES } from "@/lib/i18n/hero-fallbacks";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { getProfileAvatar } from "@/lib/services/media-service";
+import { isValidSurface, isValidVoice, isValidLight } from "@/lib/presence";
 
 const DEFAULT_STYLE: StyleConfig = {
-  colorScheme: "light",
   primaryColor: "#111111",
-  fontFamily: "inter",
   layout: "centered",
 };
 
-const DEFAULT_THEME = "minimal";
+const DEFAULT_SURFACE = "canvas";
+const DEFAULT_VOICE = "signal";
+const DEFAULT_LIGHT = "day";
 
 // --- Localized strings for page content ---
 
@@ -1430,7 +1431,9 @@ export function composeOptimisticPage(
   const config: PageConfig = {
     version: 1,
     username,
-    theme: DEFAULT_THEME,
+    surface: DEFAULT_SURFACE,
+    voice: DEFAULT_VOICE,
+    light: DEFAULT_LIGHT,
     layoutTemplate: finalTemplate,
     style: { ...DEFAULT_STYLE },
     sections: finalSections,
@@ -1449,7 +1452,9 @@ function buildMinimalSafeConfig(username: string, _language: string): PageConfig
   return {
     version: 1,
     username,
-    theme: DEFAULT_THEME,
+    surface: DEFAULT_SURFACE,
+    voice: DEFAULT_VOICE,
+    light: DEFAULT_LIGHT,
     style: { ...DEFAULT_STYLE },
     sections: [
       {
@@ -1471,22 +1476,22 @@ function attemptRepair(config: PageConfig, errors: string[]): void {
   if (typeof config.username !== "string" || config.username.trim().length === 0) {
     // Cannot fix without context — caller should handle
   }
-  if (typeof config.theme !== "string" || config.theme.trim().length === 0) {
-    config.theme = DEFAULT_THEME;
+  if (typeof config.surface !== "string" || !isValidSurface(config.surface)) {
+    config.surface = DEFAULT_SURFACE;
+  }
+  if (typeof config.voice !== "string" || !isValidVoice(config.voice)) {
+    config.voice = DEFAULT_VOICE;
+  }
+  if (typeof config.light !== "string" || !isValidLight(config.light)) {
+    config.light = DEFAULT_LIGHT;
   }
 
   // Fix style
   if (!config.style || typeof config.style !== "object") {
     config.style = { ...DEFAULT_STYLE };
   } else {
-    if (config.style.colorScheme !== "light" && config.style.colorScheme !== "dark") {
-      config.style.colorScheme = DEFAULT_STYLE.colorScheme;
-    }
     if (typeof config.style.primaryColor !== "string" || config.style.primaryColor.trim().length === 0) {
       config.style.primaryColor = DEFAULT_STYLE.primaryColor;
-    }
-    if (typeof config.style.fontFamily !== "string" || config.style.fontFamily.trim().length === 0) {
-      config.style.fontFamily = DEFAULT_STYLE.fontFamily;
     }
     if (config.style.layout !== "centered" && config.style.layout !== "split" && config.style.layout !== "stack") {
       config.style.layout = DEFAULT_STYLE.layout;

@@ -41,16 +41,23 @@ describe("getExpertiseCalibration — enhanced", () => {
       expect(novice).toContain("EXPERTISE CALIBRATION: novice");
     });
 
-    it("instructs to explain every action", () => {
-      expect(novice).toMatch(/explain every action/i);
+    it("instructs NOT to proactively announce saved facts", () => {
+      expect(novice).toMatch(/do\s*not.*proactively.*announce|not.*enumerate.*unprompted/i);
     });
 
-    it("uses user-friendly phrasing examples", () => {
-      expect(novice).toContain("I'm adding this skill to your page");
+    it("allows recap if user explicitly asks", () => {
+      expect(novice).toMatch(/explicitly\s*asks.*recap|user.*asks.*what.*saved/i);
     });
 
-    it("instructs to walk through steps", () => {
-      expect(novice).toMatch(/walk.*through.*step/i);
+    it("explains structural and visual actions only", () => {
+      expect(novice).toMatch(/structural.*visual|visual.*actions/i);
+    });
+
+    it("includes all 4 required error exceptions", () => {
+      expect(novice).toMatch(/success.*false/i);
+      expect(novice).toMatch(/REQUIRES_CONFIRMATION/);
+      expect(novice).toMatch(/pageVisible.*false/i);
+      expect(novice).toMatch(/recomposeOk.*false/i);
     });
 
     it("instructs to preview results explicitly", () => {

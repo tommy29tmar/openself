@@ -146,7 +146,7 @@ export function hasAnyPublishedPage(sessionIds: string[]): boolean {
 }
 
 /**
- * Write/update the draft row. Used by generate_page, set_theme, reorder, update_page_config.
+ * Write/update the draft row. Used by generate_page, update_page_style, reorder, update_page_config.
  * Draft id = sessionId.
  */
 export function upsertDraft(username: string, config: PageConfig, sessionId: string = "__default__", profileId?: string): void {

@@ -39,11 +39,11 @@ function makeValidConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -131,7 +131,7 @@ describe("Tool level — request_publish", () => {
   });
 
   it("does NOT recompose from facts (preserves manual changes)", async () => {
-    const customConfig = makeValidConfig({ theme: "warm" });
+    const customConfig = makeValidConfig({ surface: "clay" });
     vi.mocked(getDraft).mockReturnValue({ config: customConfig, username: "alice", status: "draft", configHash: null, updatedAt: null });
     vi.mocked(requestPublish).mockImplementation(() => {});
 
@@ -159,39 +159,26 @@ describe("Tool level — request_publish", () => {
   });
 });
 
-describe("Tool level — set_theme", () => {
-  it("calls upsertDraft with draft status", async () => {
-    const mockConfig = makeValidConfig();
-    vi.mocked(getDraft).mockReturnValue({ config: mockConfig, username: "testuser", status: "draft", configHash: null, updatedAt: null });
-    vi.mocked(upsertDraft).mockImplementation(() => {});
-
-    await agentTools.set_theme.execute(
-      { username: "testuser", theme: "warm" },
-      toolContext,
-    );
-
-    expect(upsertDraft).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe("Tool level — update_page_style", () => {
-  it("calls upsertDraft with style changes", async () => {
-    const config = makeValidConfig();
-    vi.mocked(upsertDraft).mockImplementation(() => {});
-    vi.mocked(getDraft).mockReturnValue({
-      config,
-      username: "testuser",
-      status: "draft",
-      configHash: "abc",
-      updatedAt: null,
+  it("calls /api/draft/style with presence changes", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
     });
+    vi.stubGlobal("fetch", fetchMock);
 
     await agentTools.update_page_style.execute(
-      { username: "testuser", theme: "warm" },
+      { username: "testuser", surface: "clay" },
       toolContext,
     );
 
-    expect(upsertDraft).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/draft/style");
+    const body = JSON.parse(opts.body);
+    expect(body.surface).toBe("clay");
+
+    vi.unstubAllGlobals();
   });
 });
 
@@ -230,14 +217,14 @@ describe("Integration — draft does not break live", () => {
     expect(confirmPublish).toHaveBeenCalledWith("testuser");
 
     // Step 2: Edit draft
-    const newConfig = makeValidConfig({ theme: "warm" });
+    const newConfig = makeValidConfig({ surface: "clay" });
     upsertDraft("testuser", newConfig);
     expect(upsertDraft).toHaveBeenCalledWith("testuser", newConfig);
 
     // Step 3: Published page is still the original
     const published = getPublishedPage("testuser");
     expect(published).toBeDefined();
-    expect(published!.theme).toBe("minimal"); // Original, not "warm"
+    expect(published!.surface).toBe("canvas"); // Original, not "clay"
   });
 });
 

@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
 import type { LanguageCode } from "@/lib/i18n/languages";
-import type { AvailableFont } from "@/lib/page-config/fonts";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import type { AuthState } from "@/app/builder/page";
 import { ChatPanel } from "@/components/chat/ChatPanel";
-import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { PresencePanel } from "@/components/presence/PresencePanel";
 import { SignupModal } from "@/components/auth/SignupModal";
 import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
@@ -15,12 +14,6 @@ import { PageRenderer } from "@/components/page";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { HERO_NAME_FALLBACKS } from "@/lib/i18n/hero-fallbacks";
 import { friendlyError } from "@/lib/i18n/error-messages";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { VoiceProvider } from "@/components/voice/VoiceProvider";
 import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
 import { isVoiceEnabled } from "@/lib/voice/feature-flags";
@@ -37,6 +30,30 @@ type SplitViewProps = {
 };
 
 const POLL_INTERVAL = 3000; // 3 seconds
+
+function ChatIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function PreviewIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18" />
+    </svg>
+  );
+}
+function StyleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+    </svg>
+  );
+}
 
 function EmptyPreview({ language }: { language: string }) {
   const t = getUiL10n(language);
@@ -69,7 +86,9 @@ function deriveUsernameFromConfig(config: PageConfig | null): string {
 }
 
 async function persistStyle(patch: {
-  theme?: string;
+  surface?: string;
+  voice?: string;
+  light?: string;
   style?: Partial<StyleConfig>;
   layoutTemplate?: string;
 }): Promise<boolean> {
@@ -107,7 +126,6 @@ export function SplitView({
 }: SplitViewProps) {
   const isMobile = useIsMobile();
   const voiceEnabled = isVoiceEnabled();
-  const [activeTab, setActiveTab] = useState(voiceEnabled ? "preview" : "chat");
 
   // Lifted chat data fetching — bootstrap + messages fetched once, shared by both ChatPanel instances
   const [bootstrapData, setBootstrapData] = useState<Record<string, unknown> | null>(null);
@@ -158,22 +176,19 @@ export function SplitView({
   const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
   const [publishUsername, setPublishUsername] = useState<string>("");
-  const [theme, setTheme] = useState(config?.theme ?? "minimal");
-  const [colorScheme, setColorScheme] = useState<StyleConfig["colorScheme"]>(
-    config?.style?.colorScheme ?? "light",
-  );
-  const [fontFamily, setFontFamily] = useState<string>(
-    config?.style?.fontFamily ?? "inter",
-  );
+  const [surface, setSurface] = useState(config?.surface ?? "canvas");
+  const [voice, setVoice] = useState(config?.voice ?? "signal");
+  const [light, setLight] = useState<"day" | "night">((config?.light as "day" | "night") ?? "day");
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplateId>(
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview" | "style">("chat");
 
-  // Auto-open settings when returning from OAuth connector flow
+  // Auto-open presence when returning from OAuth connector flow
   useEffect(() => {
     if (openSettings) {
-      setSettingsOpen(true);
+      setPresenceOpen(true);
     }
   }, [openSettings]);
 
@@ -237,22 +252,30 @@ export function SplitView({
     void doPublish(username);
   };
 
-  const handleThemeChange = useCallback((t: string) => {
-    setTheme(t);
+  const handleSurfaceChange = useCallback((s: string) => {
+    setSurface(s);
     lastUserEdit.current = Date.now();
-    persistStyle({ theme: t });
+    persistStyle({ surface: s });
   }, []);
 
-  const handleColorSchemeChange = useCallback((cs: "light" | "dark") => {
-    setColorScheme(cs);
+  const handleVoiceChange = useCallback((v: string) => {
+    setVoice(v);
     lastUserEdit.current = Date.now();
-    persistStyle({ style: { colorScheme: cs } });
+    persistStyle({ voice: v });
   }, []);
 
-  const handleFontFamilyChange = useCallback((f: AvailableFont) => {
-    setFontFamily(f);
+  const handleLightChange = useCallback((l: "day" | "night") => {
+    setLight(l);
     lastUserEdit.current = Date.now();
-    persistStyle({ style: { fontFamily: f } });
+    persistStyle({ light: l });
+  }, []);
+
+  const handleComboSelect = useCallback(async (s: string, v: string, l: string) => {
+    setSurface(s);
+    setVoice(v);
+    setLight(l as "day" | "night");
+    lastUserEdit.current = Date.now();
+    await persistStyle({ surface: s, voice: v, light: l });
   }, []);
 
   const handleLayoutTemplateChange = useCallback(async (t: LayoutTemplateId) => {
@@ -288,9 +311,9 @@ export function SplitView({
 
         const userEditAge = Date.now() - lastUserEdit.current;
         if (userEditAge > POLL_INTERVAL) {
-          if (data.config.theme) setTheme(data.config.theme);
-          if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
-          if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+          if (data.config.surface) setSurface(data.config.surface);
+          if (data.config.voice) setVoice(data.config.voice);
+          if (data.config.light) setLight(data.config.light as "day" | "night");
           if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
         }
       }
@@ -323,9 +346,9 @@ export function SplitView({
             setConfig(data.config);
             const userEditAge = Date.now() - lastUserEdit.current;
             if (userEditAge > POLL_INTERVAL) {
-              if (data.config.theme) setTheme(data.config.theme);
-              if (data.config.style?.colorScheme) setColorScheme(data.config.style.colorScheme);
-              if (data.config.style?.fontFamily) setFontFamily(data.config.style.fontFamily);
+              if (data.config.surface) setSurface(data.config.surface);
+              if (data.config.voice) setVoice(data.config.voice);
+              if (data.config.light) setLight(data.config.light as "day" | "night");
               if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
             }
           }
@@ -367,30 +390,32 @@ export function SplitView({
   const displayConfig: PageConfig | null = config
     ? {
         ...config,
-        theme,
+        surface,
+        voice,
+        light,
         layoutTemplate,
-        style: { ...config.style, colorScheme, fontFamily },
       }
     : null;
 
-  const settingsPanel = (
-    <SettingsPanel
-      open={settingsOpen}
-      onClose={() => setSettingsOpen(false)}
-      language={language}
-      onLanguageChange={(lang) => {
-        onLanguageChange?.(lang);
-        setSettingsOpen(false);
-      }}
-      theme={theme}
-      onThemeChange={handleThemeChange}
-      colorScheme={colorScheme}
-      onColorSchemeChange={handleColorSchemeChange}
-      fontFamily={fontFamily}
-      onFontFamilyChange={handleFontFamilyChange}
+  const handlePresenceClose = useCallback(() => setPresenceOpen(false), []);
+  const handleAvatarChange = useCallback(() => { void fetchPreview(); }, [fetchPreview]);
+
+  const presencePanel = (
+    <PresencePanel
+      open={presenceOpen}
+      onClose={handlePresenceClose}
+      config={config}
+      surface={surface}
+      voice={voice}
+      light={light}
       layoutTemplate={layoutTemplate}
-      onLayoutTemplateChange={handleLayoutTemplateChange}
-      onAvatarChange={() => { void fetchPreview(); }}
+      onSurfaceChange={handleSurfaceChange}
+      onVoiceChange={handleVoiceChange}
+      onLightChange={handleLightChange}
+      onComboSelect={handleComboSelect}
+      onLayoutChange={handleLayoutTemplateChange}
+      onAvatarChange={handleAvatarChange}
+      language={language}
     />
   );
 
@@ -402,7 +427,7 @@ export function SplitView({
       publishError={publishError}
       onPublish={handlePublish}
       onSignup={() => setSignupOpen(true)}
-      onSettingsOpen={() => setSettingsOpen(true)}
+      onPresenceOpen={() => setPresenceOpen(true)}
     />
   );
 
@@ -453,30 +478,13 @@ export function SplitView({
         </div>
       )}
       <PageRenderer config={displayConfig} previewMode={true} />
-      {settingsPanel}
+      {presencePanel}
     </div>
   ) : (
     <div className="relative h-full overflow-y-auto">
       {navBar}
       <EmptyPreview language={language} />
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        language={language}
-        onLanguageChange={(lang) => {
-          onLanguageChange?.(lang);
-          setSettingsOpen(false);
-        }}
-        languageOnly
-        theme={theme}
-        onThemeChange={handleThemeChange}
-        colorScheme={colorScheme}
-        onColorSchemeChange={handleColorSchemeChange}
-        fontFamily={fontFamily}
-        onFontFamilyChange={handleFontFamilyChange}
-        layoutTemplate={layoutTemplate}
-        onLayoutTemplateChange={handleLayoutTemplateChange}
-      />
+      {presencePanel}
     </div>
   );
 
@@ -494,37 +502,113 @@ export function SplitView({
         {/* Desktop: side-by-side */}
         <div className="hidden h-screen md:flex">
           <div className="w-[400px] shrink-0 overflow-hidden border-r">
-            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={!isMobile} />}
+            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={!isMobile} />}
           </div>
           <div className="relative flex-1">{previewPane}</div>
         </div>
 
-        {/* Mobile: tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-dvh flex-col gap-0 overflow-hidden md:hidden">
-          <TabsList className="sticky top-0 z-40 w-full rounded-none">
-            <TabsTrigger value="chat" className="flex-1">
-              Chat
-            </TabsTrigger>
-            <TabsTrigger value="preview" className="flex-1">
-              Preview
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent
-            value="chat"
-            forceMount
-            className="flex-1 overflow-hidden data-[state=inactive]:hidden"
-          >
-            {chatDataReady && <ChatPanel language={language} authV2={authState?.authV2} authState={authState} onSignupRequest={() => { setSettingsOpen(false); setSignupOpen(true); }} initialBootstrap={bootstrapData} initialMessages={chatInitialMessages} disableInitialFetch={chatDataReady} isPrimaryVoiceConsumer={isMobile} />}
-          </TabsContent>
-          <TabsContent
-            value="preview"
-            forceMount
-            className="relative flex-1 overflow-hidden data-[state=inactive]:hidden"
-          >
-            {previewPane}
-            {voiceEnabled && <VoiceOverlay onOpenChat={() => setActiveTab("chat")} />}
-          </TabsContent>
-        </Tabs>
+        {/* Mobile: bottom tab bar */}
+        <div className="flex h-dvh flex-col overflow-hidden md:hidden">
+          {/* Content area */}
+          <div className="flex-1 overflow-hidden relative">
+            {/* Chat — always mounted, hidden when not active */}
+            <div className={`absolute inset-0 flex flex-col ${activeMobileTab === "chat" ? "" : "hidden"}`}>
+              {/* Unpublished changes banner — above ChatPanel so it doesn't overlap content */}
+              {hasUnpublishedChanges && (
+                <div style={{
+                  flexShrink: 0,
+                  background: "#c9a96e", color: "#111",
+                  padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>Changes ready to publish</span>
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={publishing}
+                    style={{
+                      background: "rgba(0,0,0,0.15)", border: "none", color: "#111",
+                      padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    {publishing ? "Publishing\u2026" : "Publish \u2192"}
+                  </button>
+                </div>
+              )}
+              {chatDataReady && (
+                <div className="flex-1 overflow-hidden">
+                  <ChatPanel
+                    language={language}
+                    authV2={authState?.authV2}
+                    authState={authState}
+                    onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }}
+                    initialBootstrap={bootstrapData}
+                    initialMessages={chatInitialMessages}
+                    disableInitialFetch={chatDataReady}
+                    isPrimaryVoiceConsumer={isMobile}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Preview */}
+            <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "preview" ? "block" : "hidden"}`}>
+              {previewPane}
+              {voiceEnabled && <VoiceOverlay onOpenChat={() => setActiveMobileTab("chat")} />}
+            </div>
+
+            {/* Style (Presence panel as full-height sheet — inlineFullscreen on mobile) */}
+            {activeMobileTab === "style" && (
+              <div className="absolute inset-0 overflow-y-auto" style={{ background: "#0e0e10" }}>
+                <PresencePanel
+                  open={true}
+                  onClose={() => setActiveMobileTab("chat")}
+                  config={config}
+                  surface={surface}
+                  voice={voice}
+                  light={light}
+                  layoutTemplate={layoutTemplate}
+                  onSurfaceChange={handleSurfaceChange}
+                  onVoiceChange={handleVoiceChange}
+                  onLightChange={handleLightChange}
+                  onComboSelect={handleComboSelect}
+                  onLayoutChange={handleLayoutTemplateChange}
+                  onAvatarChange={handleAvatarChange}
+                  language={language}
+                  inlineFullscreen={true}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Bottom tab bar — 56px */}
+          <div style={{
+            height: 56, flexShrink: 0,
+            background: "#111113", borderTop: "1px solid rgba(255,255,255,0.07)",
+            display: "flex",
+          }}>
+            {([
+              { id: "chat", label: "Chat", icon: <ChatIcon /> },
+              { id: "preview", label: "Preview", icon: <PreviewIcon /> },
+              { id: "style", label: "Style", icon: <StyleIcon /> },
+            ] as const).map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveMobileTab(tab.id)}
+                style={{
+                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "center", gap: 4, border: "none", background: "none", cursor: "pointer",
+                  fontFamily: "var(--font-jetbrains, monospace)", fontSize: 9, letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: activeMobileTab === tab.id ? "#c9a96e" : "rgba(255,255,255,0.35)",
+                }}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </>
     </VoiceProvider>
   );

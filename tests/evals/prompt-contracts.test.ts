@@ -23,4 +23,19 @@ describe("prompt contracts", () => {
     expect(src).toMatch(/UNSUPPORTED FEATURES/i);
     expect(src).toMatch(/[Vv]ideo/);
   });
+
+  it("OUTPUT_CONTRACT includes silent fact-saving rule with all 4 error exceptions", () => {
+    // Extract OUTPUT_CONTRACT specifically — avoid false positives from TOOL_POLICY
+    const outputContractMatch = src.match(/OUTPUT_CONTRACT\s*=\s*`([\s\S]*?)`/);
+    expect(outputContractMatch).not.toBeNull();
+    const outputContract = outputContractMatch![1];
+
+    expect(outputContract).toMatch(/save\s*facts\s*silently|do\s*not.*proactively.*announce/i);
+    expect(outputContract).toMatch(/explicitly\s*asks.*recap|user.*asks.*what.*saved/i);
+    // All 4 exceptions must be in OUTPUT_CONTRACT itself
+    expect(outputContract).toMatch(/success.*false/i);
+    expect(outputContract).toMatch(/REQUIRES_CONFIRMATION/);
+    expect(outputContract).toMatch(/pageVisible.*false/i);
+    expect(outputContract).toMatch(/recomposeOk.*false/i);
+  });
 });

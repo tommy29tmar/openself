@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDraft, upsertDraft, getPublishedPage, getPublishedUsername } from "@/lib/services/page-service";
-import { AVAILABLE_THEMES } from "@/lib/page-config/schema";
-import { isAvailableFont } from "@/lib/page-config/fonts";
+import { isValidSurface, isValidVoice, isValidLight } from "@/lib/presence";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
@@ -42,12 +41,13 @@ export async function POST(req: Request) {
       const { factLanguage, language } = getPreferences(primaryKey);
       const factLang = factLanguage ?? language ?? "en";
       const authProfileId = scope?.cognitiveOwnerKey ?? authCtx?.profileId ?? primaryKey;
-      // Carry forward theme/style from published page if it exists
-      // NOTE: readKeys is already declared earlier in this block — reuse it
+      // Carry forward surface/voice/light from published page if it exists
       const pubUsername = getPublishedUsername(readKeys);
       const published = pubUsername ? getPublishedPage(pubUsername) : null;
       const draftMeta = published ? {
-        theme: published.theme,
+        surface: published.surface,
+        voice: published.voice,
+        light: published.light,
         style: published.style,
         layoutTemplate: published.layoutTemplate,
         sections: published.sections,
@@ -65,25 +65,33 @@ export async function POST(req: Request) {
 
     const config = { ...draft.config };
 
-    // Merge theme if provided
-    if (
-      typeof body.theme === "string" &&
-      (AVAILABLE_THEMES as readonly string[]).includes(body.theme)
-    ) {
-      config.theme = body.theme;
+    // Merge surface if provided
+    if (body.surface !== undefined) {
+      if (!isValidSurface(body.surface)) {
+        return NextResponse.json({ error: "Invalid surface" }, { status: 400 });
+      }
+      config.surface = body.surface;
     }
 
-    // Merge style fields if provided
+    // Merge voice if provided
+    if (body.voice !== undefined) {
+      if (!isValidVoice(body.voice)) {
+        return NextResponse.json({ error: "Invalid voice" }, { status: 400 });
+      }
+      config.voice = body.voice;
+    }
+
+    // Merge light if provided
+    if (body.light !== undefined) {
+      if (!isValidLight(body.light)) {
+        return NextResponse.json({ error: "Invalid light" }, { status: 400 });
+      }
+      config.light = body.light;
+    }
+
+    // Merge style fields if provided (layout only — colorScheme/fontFamily removed)
     if (body.style && typeof body.style === "object") {
       const style = { ...config.style };
-
-      if (body.style.colorScheme === "light" || body.style.colorScheme === "dark") {
-        style.colorScheme = body.style.colorScheme;
-      }
-
-      if (isAvailableFont(body.style.fontFamily)) {
-        style.fontFamily = body.style.fontFamily;
-      }
 
       if (
         body.style.layout === "centered" ||

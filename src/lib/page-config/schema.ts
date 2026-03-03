@@ -1,4 +1,7 @@
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
+import "@/lib/presence/surfaces";
+import "@/lib/presence/voices";
+import { isValidSurface, isValidVoice, isValidLight } from "@/lib/presence";
 
 export type ComponentType =
   | "hero"
@@ -25,9 +28,7 @@ export type CommunityComponentType = `x.${string}.${string}`;
 export type AnyComponentType = ComponentType | CommunityComponentType;
 
 export type StyleConfig = {
-  colorScheme: "light" | "dark";
   primaryColor: string;
-  fontFamily: string;
   layout: "centered" | "split" | "stack";
 };
 
@@ -63,7 +64,9 @@ export type Section = {
 export type PageConfig = {
   version: number;
   username: string;
-  theme: string;
+  surface: string;
+  voice: string;
+  light: string;
   layoutTemplate?: LayoutTemplateId;
   style: StyleConfig;
   sections: Section[];
@@ -146,14 +149,8 @@ function validateStyleConfig(style: unknown, errors: string[]): void {
     return;
   }
 
-  if (style.colorScheme !== "light" && style.colorScheme !== "dark") {
-    errors.push("style.colorScheme must be 'light' or 'dark'");
-  }
   if (!isString(style.primaryColor)) {
     errors.push("style.primaryColor must be a non-empty string");
-  }
-  if (!isString(style.fontFamily)) {
-    errors.push("style.fontFamily must be a non-empty string");
   }
   if (style.layout !== "centered" && style.layout !== "split" && style.layout !== "stack") {
     errors.push("style.layout must be one of centered|split|stack");
@@ -416,9 +413,6 @@ function validateSectionLockProposal(proposal: unknown, path: string, errors: st
   }
 }
 
-export const AVAILABLE_THEMES = ["minimal", "warm", "editorial-360"] as const;
-export type AvailableTheme = (typeof AVAILABLE_THEMES)[number];
-
 export function validatePageConfig(
   input: unknown,
   options: ValidatePageConfigOptions = {},
@@ -435,12 +429,20 @@ export function validatePageConfig(
   if (!isString(input.username)) {
     errors.push("username must be a non-empty string");
   }
-  if (!isString(input.theme)) {
-    errors.push("theme must be a non-empty string");
-  } else if (!(AVAILABLE_THEMES as readonly string[]).includes(input.theme)) {
-    errors.push(
-      `theme must be one of: ${AVAILABLE_THEMES.join(", ")}`,
-    );
+  if (!isString(input.surface)) {
+    errors.push("surface must be a non-empty string");
+  } else if (!isValidSurface(input.surface)) {
+    errors.push(`Unknown surface: "${input.surface}"`);
+  }
+  if (!isString(input.voice)) {
+    errors.push("voice must be a non-empty string");
+  } else if (!isValidVoice(input.voice)) {
+    errors.push(`Unknown voice: "${input.voice}"`);
+  }
+  if (!isString(input.light)) {
+    errors.push("light must be a non-empty string");
+  } else if (!isValidLight(input.light)) {
+    errors.push(`Unknown light: "${input.light}"`);
   }
 
   // Validate layoutTemplate if present
@@ -467,4 +469,12 @@ export function validatePageConfig(
   }
 
   return { ok: errors.length === 0, errors };
+}
+
+export function validatePresenceFields(config: PageConfig): string[] {
+  const errors: string[] = [];
+  if (!isValidSurface(config.surface)) errors.push(`Unknown surface: "${config.surface}"`);
+  if (!isValidVoice(config.voice)) errors.push(`Unknown voice: "${config.voice}"`);
+  if (!isValidLight(config.light)) errors.push(`Unknown light: "${config.light}"`);
+  return errors;
 }

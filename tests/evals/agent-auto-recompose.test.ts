@@ -124,8 +124,10 @@ import { computeConfigHash } from "@/lib/services/page-service";
 describe("auto-recompose after fact mutations", () => {
   const draftConfig = {
     username: "draft",
-    theme: "editorial-360",
-    style: { colorScheme: "dark" },
+    surface: "archive",
+    voice: "narrative",
+    light: "day",
+    style: { primaryColor: "#000", layout: "centered" },
     layoutTemplate: "curator",
     sections: [
       { id: "hero-1", type: "hero", variant: "large", content: { name: "Elena" } },
@@ -146,8 +148,10 @@ describe("auto-recompose after fact mutations", () => {
     // projectCanonicalConfig returns a NEW config (different hash)
     vi.mocked(projectCanonicalConfig).mockReturnValue({
       username: "draft",
-      theme: "editorial-360",
-      style: { colorScheme: "dark" },
+      surface: "archive",
+      voice: "narrative",
+      light: "day",
+      style: { primaryColor: "#000", layout: "centered" },
       layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Elena" } },
@@ -177,12 +181,14 @@ describe("auto-recompose after fact mutations", () => {
       { category: "skill", key: "figma", value: { name: "Figma" } },
       { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
     );
-    // Verify DraftMeta was passed with theme, style, layoutTemplate, AND sections
+    // Verify DraftMeta was passed with surface, voice, light, style, layoutTemplate, AND sections
     const call = vi.mocked(projectCanonicalConfig).mock.calls[0];
     const draftMeta = call[3]; // 4th arg
     expect(draftMeta).toBeDefined();
-    expect(draftMeta!.theme).toBe("editorial-360");
-    expect(draftMeta!.style).toEqual({ colorScheme: "dark" });
+    expect(draftMeta!.surface).toBe("archive");
+    expect(draftMeta!.voice).toBe("narrative");
+    expect(draftMeta!.light).toBe("day");
+    expect(draftMeta!.style).toEqual({ primaryColor: "#000", layout: "centered" });
     expect(draftMeta!.layoutTemplate).toBe("curator");
     expect(draftMeta!.sections).toHaveLength(2); // preserves section array for order/lock merge
   });

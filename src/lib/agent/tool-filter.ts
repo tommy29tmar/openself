@@ -29,9 +29,8 @@ const ONBOARDING_TOOLS = [
   "propose_soul_change",
   "set_fact_visibility", // user may say "don't show my email" during onboarding
   "inspect_page_state",  // read-only diagnostic, helps agent before generate_page
-  "set_theme",           // user may request theme during onboarding; ensureDraft() auto-composes
   "set_layout",          // user may request layout during onboarding; ensureDraft() auto-composes
-  "update_page_style",   // user may request font/style during onboarding; ensureDraft() auto-composes
+  "update_page_style",   // user may request surface/voice/light during onboarding; ensureDraft() auto-composes
 ] as const;
 
 export const TOOL_SETS: Partial<Record<JourneyState, readonly string[]>> = {
