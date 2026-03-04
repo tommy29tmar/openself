@@ -3,6 +3,31 @@ import { getLayoutTemplate } from "@/lib/layout/registry";
 import type { LayoutComponentProps } from "./types";
 import type { Section } from "@/lib/page-config/schema";
 
+// Variant overrides applied at render time for Monolith layout.
+// Bypasses widgetId auto-assignment from assignSlotsFromFacts.
+// Each entry maps section.type → the variant name to inject.
+const MONOLITH_VARIANT_OVERRIDES: Partial<Record<string, string>> = {
+  // Named "monolith" variants (implemented in Tasks 2–5, 7–11):
+  experience: "monolith",
+  education: "monolith",
+  achievements: "monolith",
+  timeline: "monolith",
+  reading: "monolith",
+  music: "monolith",
+  activities: "monolith",
+  interests: "monolith",
+  languages: "monolith",
+  // Explicitly named variants:
+  projects: "projects-grid",
+  skills: "skills-accent-pills",
+};
+
+function applyMonolithOverride(section: Section): Section {
+  const variant = MONOLITH_VARIANT_OVERRIDES[section.type];
+  if (!variant) return section;
+  return { ...section, variant, widgetId: undefined };
+}
+
 const BLEED_SECTIONS = new Set(["projects", "reading", "music"]);
 const DENSE_SECTIONS = new Set(["stats", "skills", "interests", "languages", "activities", "social", "contact"]);
 const HERO_SECTIONS = new Set(["hero", "footer"]);
@@ -71,7 +96,7 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
                   className={`${laneClass} ${spacingClass}`}
                   style={section.type !== "footer" ? { borderBottom: "1px solid var(--page-border)" } : undefined}
                 >
-                  {renderSection(section)}
+                  {renderSection(applyMonolithOverride(section))}
                 </div>
               );
             })}

@@ -1,4 +1,5 @@
-import React from "react";
+"use client";
+import React, { useState } from "react";
 import type { SectionProps } from "../../types";
 import { CollapsibleList } from "@/components/page/CollapsibleList";
 
@@ -8,7 +9,44 @@ type ProjectItem = {
     url?: string;
     year?: string;
     role?: string;
+    tags?: string[];
 };
+
+function ProjectCard({ item }: { item: ProjectItem }) {
+    return (
+        <div style={{
+            background: "var(--page-card-bg, var(--page-muted))",
+            border: "1px solid var(--page-border)",
+            borderRadius: 10,
+            padding: 20,
+        }}>
+            <h3 style={{ fontWeight: 600, fontSize: 16, color: "var(--page-fg)", margin: "0 0 8px" }}>
+                {item.url ? (
+                    <a href={item.url} target="_blank" rel="noopener noreferrer"
+                        style={{ color: "inherit", textDecoration: "none" }}>
+                        {item.title}
+                    </a>
+                ) : item.title}
+            </h3>
+            {item.description && (
+                <p style={{ fontSize: 13, color: "var(--page-fg-secondary)", lineHeight: 1.6, margin: 0 }}>
+                    {item.description}
+                </p>
+            )}
+            {item.tags && item.tags.length > 0 && (
+                <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+                    {item.tags.map((tag, i) => (
+                        <span key={i} style={{
+                            fontSize: 11, color: "var(--page-accent)",
+                            background: "var(--page-muted)", padding: "3px 9px",
+                            borderRadius: 10, border: "1px solid var(--page-border)",
+                        }}>{tag}</span>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 type ProjectsContent = {
     title?: string;
@@ -17,8 +55,42 @@ type ProjectsContent = {
 
 export function Projects({ content, variant = "projects-list" }: SectionProps<ProjectsContent>) {
     const { items = [], title } = content;
+    const [gridExpanded, setGridExpanded] = useState(false);
 
     if (!items.length) return null;
+
+    if (variant === "projects-grid") {
+        const VISIBLE = 4;
+        const visibleItems = items.slice(0, VISIBLE);
+        const hiddenItems = items.slice(VISIBLE);
+
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Projects"}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {visibleItems.map((item, i) => <ProjectCard key={i} item={item} />)}
+                    {gridExpanded && hiddenItems.map((item, i) => <ProjectCard key={`h${i}`} item={item} />)}
+                </div>
+                {hiddenItems.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => setGridExpanded(!gridExpanded)}
+                        style={{
+                            display: "flex", alignItems: "center", gap: 6, fontSize: 12,
+                            color: "var(--page-fg-secondary)", opacity: 0.6, background: "none",
+                            border: "none", cursor: "pointer", padding: "8px 0", marginTop: 8,
+                            letterSpacing: "0.05em",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+                    >
+                        <span>{gridExpanded ? "▴" : "▾"}</span>
+                        <span>{gridExpanded ? "collapse" : `${hiddenItems.length} more projects`}</span>
+                    </button>
+                )}
+            </section>
+        );
+    }
 
     if (variant === "projects-bento") {
         return (
