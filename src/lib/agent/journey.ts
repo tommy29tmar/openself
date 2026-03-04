@@ -96,6 +96,31 @@ const ARCHIVABLE_SAFETY_FLOOR = 5;
 /** TTL in days for cached archetype — re-detect after this period. */
 export const ARCHETYPE_TTL_DAYS = 14;
 
+/** Cooldown in days after a rejected soul proposal before a new one can be auto-proposed. */
+const SOUL_PROPOSAL_COOLDOWN_DAYS = 30;
+
+/**
+ * Returns the soul proposal cooldown status for an owner.
+ * Blocked = a rejection exists within the last SOUL_PROPOSAL_COOLDOWN_DAYS days.
+ * Uses resolved_at (when the rejection was confirmed), with COALESCE fallback to
+ * created_at for legacy rows that may have null resolved_at.
+ */
+export function getSoulProposalCooldownStatus(ownerKey: string): { blocked: boolean; lastRejectedAt: string | null } {
+  const row = sqlite
+    .prepare(
+      `SELECT MAX(COALESCE(resolved_at, created_at)) as latest FROM soul_change_proposals WHERE owner_key = ? AND status = 'rejected'`,
+    )
+    .get(ownerKey) as { latest: string | null } | undefined;
+
+  const lastRejectedAt = row?.latest ?? null;
+  if (!lastRejectedAt) return { blocked: false, lastRejectedAt: null };
+
+  // Compare ms directly — avoids ~12h rounding error from daysBetween()
+  const cooldownMs = SOUL_PROPOSAL_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+  const blocked = Date.now() - new Date(lastRejectedAt).getTime() < cooldownMs;
+  return { blocked, lastRejectedAt };
+}
+
 /**
  * Recency factor for relevance scoring.
  * <30d: 1.0, 30-90d: 0.7, 90-180d: 0.4, >180d: 0.2
@@ -516,10 +541,11 @@ export function assembleBootstrapPayload(
   const soul = getActiveSoul(ownerKey);
 
   // Circuito A: Archetype → Soul auto-proposal
-  // When archetype is non-generalist, no soul exists, and no pending proposals,
-  // propose an initial soul profile based on archetype strategies.
+  // When archetype is non-generalist, no soul exists, no pending proposals,
+  // and no recent rejection (30-day cooldown), propose an initial soul profile.
   // Guard against duplicates: assembleBootstrapPayload runs every message (R7-S6).
-  if (archetype !== "generalist" && !soul) {
+  const { blocked: soulCooldownActive } = getSoulProposalCooldownStatus(ownerKey);
+  if (!soul && !soulCooldownActive && archetype !== "generalist") {
     const pendingSoulProposals = getPendingProposals(ownerKey);
     if (pendingSoulProposals.length === 0) {
       const strategy = ARCHETYPE_STRATEGIES[archetype];
