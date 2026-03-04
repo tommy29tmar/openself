@@ -299,7 +299,20 @@ export async function POST(req: Request) {
       messages: safeMessages,
       tools,
       maxSteps: MAX_STEPS,
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: 0 } },
+      },
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
+        // Fast path: strip markdown code fences that Gemini sometimes wraps around JSON
+        const rawArgs = typeof toolCall.args === "string" ? toolCall.args : JSON.stringify(toolCall.args);
+        const stripped = rawArgs.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+        try {
+          JSON.parse(stripped);
+          return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: stripped };
+        } catch {
+          // Fall through to LLM repair
+        }
+
         const schema = parameterSchema({ toolName: toolCall.toolName });
         const { text } = await generateText({
           model,
@@ -308,7 +321,7 @@ export async function POST(req: Request) {
             `Error: ${error.message}`,
             ``,
             `Original arguments:`,
-            toolCall.args,
+            rawArgs,
             ``,
             `Expected JSON Schema:`,
             JSON.stringify(schema, null, 2),
@@ -316,8 +329,11 @@ export async function POST(req: Request) {
             `Produce ONLY valid JSON that satisfies the schema. No explanation, no markdown — just the JSON object.`,
           ].join("\n"),
         });
+        // Strip fences from LLM repair response too
+        const repairedArgs = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
         try {
-          return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: text };
+          JSON.parse(repairedArgs);
+          return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: repairedArgs };
         } catch {
           return null;
         }
@@ -364,9 +380,9 @@ export async function POST(req: Request) {
           try { mergeSessionMeta(writeSessionId, { pendingOperations: null }); } catch { /* best-effort */ }
         }
 
-        // Step exhaustion with no text: save a synthetic assistant message
-        // so the client can recover by refreshing from DB
-        if (finishReason === "tool-calls" && (!text || !text.trim())) {
+        // No text from model (step exhaustion OR Gemini finishing after tool calls with no follow-up):
+        // save a synthetic assistant message so the client can recover by refreshing from DB
+        if (!text || !text.trim()) {
           try {
             const syntheticText =
               STEP_EXHAUSTION_FALLBACK[bootstrap?.journeyState ?? "active_fresh"]?.[sessionLanguage]

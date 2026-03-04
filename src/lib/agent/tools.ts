@@ -247,7 +247,15 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           "Unique key within the category (e.g., 'typescript' for a skill, 'acme-corp' for experience). Use lowercase kebab-case.",
         ),
       value: z
-        .record(z.unknown())
+        .preprocess((v) => {
+          if (typeof v === "object" && v !== null) return v;
+          if (typeof v === "string") {
+            try { return JSON.parse(v); } catch { /* fall through */ }
+            // Handle JS object literal syntax: {key: "val"} → {"key": "val"}
+            try { return JSON.parse(v.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3')); } catch { /* fall through */ }
+          }
+          return v;
+        }, z.record(z.unknown()))
         .describe(
           "REQUIRED. Structured value object. Examples: {name: 'TypeScript', level: 'advanced'} for skills, {full: 'Tommaso Rossi'} for identity name, {role: 'economist', company: 'Acme', status: 'current'} for experience, {institution: 'MIT', degree: 'MSc', field: 'Computer Science', period: '2018-2020'} for education, {label: 'Years Experience', value: '10+'} for stat, {language: 'Spanish', proficiency: 'fluent'} for language, {type: 'email', value: 'me@example.com'} for contact, {title: 'Clean Code', author: 'Robert Martin', rating: 5} for reading, {title: 'Bohemian Rhapsody', artist: 'Queen'} for music, {name: 'Tennis', activityType: 'sport', frequency: 'weekly'} for activity. Use lowercase for common nouns (job titles, roles, skills) — only capitalize proper nouns (names, companies, brands). Must always be provided.",
         ),

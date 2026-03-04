@@ -2,16 +2,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Name** | Beatriz Santos |
+| **Name** | Giulia Ferraro |
 | **Age** | 31 |
-| **Profession** | Urban rooftop farmer & sustainable agriculture educator |
-| **City, Country** | São Paulo, Brazil |
-| **Preferred language** | pt (Portuguese) |
-| **Communication style** | Passionate, goes off on tangents, uses exclamation marks, emotionally expressive |
-| **Personality** | Enthusiastic and verbose, easily distracted, changes topic mid-thought |
-| **Tech level** | medium |
-| **Personal goal** | Build a personal brand to attract participants for her urban farming workshops |
-| **Quirks** | 1. Always brings up the climate crisis when talking about her work. 2. Wants the page to "feel like a garden" — obsessed with earthy/warm colors |
+| **Profession** | Product designer UX/UI per startup fintech, Milano |
+| **City, Country** | Milano, Italia |
+| **Preferred language** | it |
+| **Communication style** | Disinvolta, frasi brevi, va fuori tema, usa "..." |
+| **Personality** | Indecisa, cambia idea, si entusiasma poi torna sui propri passi |
+| **Tech level** | high |
+| **Personal goal** | Portfolio professionale per clienti freelance |
+| **Quirks** | Ossessionata dall'estetica ("ma è bello però?"), non vuole mettere il telefono |
 
 ## Background
-Beatriz grew up in a small town in Minas Gerais but moved to São Paulo at 22 for university, studying agronomy. She now runs "Teto Verde SP," a community project teaching urban dwellers how to grow food on rooftops and balconies. She's passionate about food sovereignty, climate justice, and getting more women into agriculture. She also loves cumbia music and reads lots of books about permaculture and regenerative farming. She's comfortable with smartphones but doesn't understand much about web hosting or HTML.
+Ha studiato design della comunicazione allo IULM di Milano, poi 4 anni in Studio Forma (agenzia di design) prima di diventare freelance. Ha una side-project: CyclePriv, app per la salute femminile con focus sulla privacy, in beta. Nel tempo libero dipinge con acquerelli e va a concerti indie/elettronica (ama Floating Points e Nils Frahm).

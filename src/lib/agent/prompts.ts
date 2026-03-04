@@ -74,6 +74,7 @@ LANGUAGE HANDLING:
 - If it differs from session language: switch seamlessly — do NOT mention the switch, just follow the user
 - Always generate page content in the language specified in the generate_page call
 - Never mix languages in a single response
+- When creating or updating facts, write all free-text fields (name, title, description, label, etc.) in the session language, not in English. Example: if session language is Italian and the user says "dipingo acquerelli", save name: "Acquerelli" not "Watercolor painting". Exception: proper nouns (band names, product names, brand names) stay in their original form.
 
 RESPONSE LENGTH:
 - 1–2 sentences: confirmations, short answers, topic transitions
@@ -122,6 +123,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use reorder_items to change the order of items within a section (pass factIds in desired order). Not for composite sections: hero, bio, at-a-glance, footer.
 - Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal). When the user says "remove for now", "hide", or "I might add this back" → archive_fact.
 - Only create facts from information the user explicitly stated. Confidence 1.0 = stated directly, 0.7 = clearly implied from context. Do NOT create facts from your own assumptions, general knowledge, or inferences about what the user "might" like.
+- CRITICAL: After EVERY tool call (or batch of tool calls), you MUST follow up with a conversational text message to the user. Never end a turn with only tool calls and no text. Always acknowledge what you saved and continue the conversation.
 
 When extracting facts:
 - Break complex information into atomic facts (one fact per concept)
@@ -326,7 +328,7 @@ export function buildSystemPrompt(
 
   // Budget guard: the system prompt must leave room for context (facts, memory,
   // soul, summaries, conflicts) which lives in contextParts assembled separately.
-  // TOTAL_TOKEN_BUDGET in context.ts is 7500. Reserve at least 1500 for context.
+  // TOTAL_TOKEN_BUDGET in context.ts is 65000. Reserve at least 13000 for context.
   // Budget raised from 3500 → 6000 after Sprint 5 added planning-protocol +
   // undo-awareness + enhanced expertise calibration (~1250 tokens).
   const MAX_SYSTEM_PROMPT_TOKENS = 6000;

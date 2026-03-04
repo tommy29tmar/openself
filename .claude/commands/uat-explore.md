@@ -10,6 +10,7 @@ You are a QA Automation Engineer running an **exploratory** UAT. Unlike scripted
 4. **Full-page screenshots** — ALWAYS use `fullPage: true` to capture the entire scrollable page
 5. **Verify everything** — DB check + full-page screenshot after every agent action
 6. **Goal-based, not scripted** — achieve all goals in whatever order feels natural
+7. **Let the agent lead** — follow the agent's questions and prompts, don't dump info unprompted
 
 ## Tools
 
@@ -17,21 +18,13 @@ You are a QA Automation Engineer running an **exploratory** UAT. Unlike scripted
 - **Bash** (`sqlite3`): DB verification after every agent action
 - **Bash** (`browser_console_messages`): Console error monitoring
 
-## Available Layouts & Themes
+## Available Layouts
 
-**Layouts:**
 | Layout ID | Alias |
 |-----------|-------|
 | `vertical` | monolith |
 | `sidebar-left` | sidebar, curator |
 | `bento-standard` | bento, architect |
-
-**Themes:**
-| Theme |
-|-------|
-| `minimal` |
-| `warm` |
-| `editorial-360` |
 
 ---
 
@@ -49,6 +42,7 @@ mkdir -p ~/dev/repos/openself/uat
 lsof -ti:3000 | xargs -r kill -9 2>/dev/null || true
 pkill -f "next-router-worker" 2>/dev/null || true
 pkill -f "next dev.*openself" 2>/dev/null || true
+pkill -f "dev-watch" 2>/dev/null || true
 ```
 Wait 2 seconds.
 
@@ -59,7 +53,7 @@ cd ~/dev/repos/openself && rm -f db/openself.db db/openself.db-shm db/openself.d
 
 ### 0.4 Start dev server (background)
 ```bash
-cd ~/dev/repos/openself && npm run dev
+cd ~/dev/repos/openself && npm run dev:watch
 ```
 Run with `run_in_background: true`. Wait ~5 seconds.
 
@@ -98,7 +92,7 @@ Invent ALL of these fields. Write them to `uat/persona.md`:
 | **Quirks** | [1-2 behavioral quirks: "always asks 'why?'", "refuses to give email", "obsessed with dark mode", etc.] |
 
 ## Background
-[2-3 sentences of backstory: education, career highlights, hobbies, passions. This is the material the persona will naturally share during conversation.]
+[2-3 sentences of backstory: education, career highlights, hobbies, passions. Include at least one job/role, one project or side project, one hobby/activity, and a music taste. This is the material the persona will naturally share during conversation when the agent asks.]
 ```
 
 ### Persona constraints
@@ -106,6 +100,7 @@ Invent ALL of these fields. Write them to `uat/persona.md`:
 - Profession should be specific: "pediatric nurse in a rural clinic", not "nurse"
 - Communication style should challenge the agent: not everyone is a cooperative, articulate user
 - Quirks should create interesting test scenarios naturally
+- Background MUST include: work history, at least one project, at least one activity/hobby, music taste
 
 ### Stay in character
 For the ENTIRE test session:
@@ -113,6 +108,7 @@ For the ENTIRE test session:
 - Match the communication style (terse = short, verbose = longer, etc.)
 - Express the personality (indecisive = change your mind, skeptical = push back)
 - Play the quirks naturally (don't force them, let them emerge)
+- **Let the agent lead the conversation** — answer what it asks, don't volunteer everything at once
 
 ---
 
@@ -128,11 +124,22 @@ Read the agent's welcome message. Then begin conversing **in character**.
 
 1. **Read the agent's reply fully** before responding
 2. **Respond to what it asks** — if it asks your name, give your name (in character)
-3. **Volunteer information naturally** — don't dump everything at once
-4. **Follow your persona's style** — a terse person gives one-word answers, a verbose person rambles
-5. **Be unpredictable sometimes** — go off-topic, ignore a question, change your mind
-6. **Play your quirks** — if your persona is obsessed with dark mode, bring it up
-7. **Never break character** — you ARE this person
+3. **Let the agent drive** — follow its questions and prompts, don't dump all your info at once
+4. **Reveal information gradually** — one fact at a time, only when the agent asks or the moment feels right
+5. **Follow your persona's style** — a terse person gives one-word answers, a verbose person rambles
+6. **Be unpredictable sometimes** — go off-topic, ignore a question, change your mind
+7. **Play your quirks** — if your persona is obsessed with dark mode, bring it up
+8. **Never break character** — you ARE this person
+
+### Conversation depth target
+
+The conversation should be **long enough to surface 10+ facts** across these categories:
+- **Work**: current role, previous roles, company/org name
+- **Projects**: side projects, open source, portfolio work, notable achievements
+- **Activities**: hobbies, sports, volunteer work, passions outside work
+- **Music**: genres, artists, instruments played, how music fits into their life
+
+Do NOT rush to cover all categories. Let the agent ask. If the agent doesn't ask about a category, steer the conversation naturally in-character ("oh, and I also..." or simply wait for the next agent question).
 
 ### After EVERY agent action (fact created, page generated, layout changed):
 
@@ -172,24 +179,24 @@ Check off goals as you achieve them. Some will happen automatically through norm
 | # | Goal | How to verify | Status |
 |---|------|---------------|--------|
 | G1 | Introduce yourself to the agent | DB: `SELECT * FROM facts WHERE category='identity'` returns >= 1 row | [ ] |
-| G2 | Share 5+ personal facts | DB: `SELECT count(*) FROM facts WHERE owner_key=...` >= 5 | [ ] |
+| G2 | Share 10+ facts across work, projects, activities, music | DB: `SELECT count(*) FROM facts WHERE owner_key=...` >= 10 | [ ] |
 | G3 | Have a page generated | DB: `SELECT id FROM page WHERE id='draft'` returns a row | [ ] |
 | G4 | Test >= 2 different layouts | Ask for layout changes, verify in DB/page config | [ ] |
-| G5 | Test >= 2 different themes | Ask for theme changes, verify in DB/page config | [ ] |
-| G6 | Contradict yourself at least once | Change info you gave before, observe agent reaction | [ ] |
-| G7 | Make an out-of-scope request | Ask for something impossible (video, recipe section, etc.) | [ ] |
-| G8 | Publish the page | DB: `SELECT status FROM page WHERE id != 'draft'` = published | [ ] |
-| G9 | Verify published page | Navigate to `/{username}`, full-page screenshot | [ ] |
-| G10 | Modify something after publishing | Update a fact post-publish, verify change | [ ] |
+| G5 | Contradict yourself at least once | Change info you gave before, observe agent reaction | [ ] |
+| G6 | Make an out-of-scope request | Ask for something impossible (video, recipe section, etc.) | [ ] |
+| G7 | Publish the page | DB: `SELECT status FROM page WHERE id != 'draft'` = published | [ ] |
+| G8 | Verify published page | Navigate to `/{username}`, full-page screenshot | [ ] |
+| G9 | Modify something after publishing | Update a fact post-publish, verify change | [ ] |
 
 ### Goal pursuit strategy
 
-- **G1-G3** will happen naturally through introduction
-- **G4-G5** weave into conversation: "I don't like this look, can we change it?"
-- **G6** pick a fact you already gave and contradict it: "actually I'm not from [city], I'm from [other city]"
-- **G7** ask for something the app can't do, in character: e.g. "can you add a video of my work?"
-- **G8-G9** when the page looks good, ask to publish (or click publish button)
-- **G10** after publishing, go back to chat and change something
+- **G1-G3** will happen naturally through introduction — let the agent ask the questions
+- **G2** is reached gradually: answer work questions first, then projects when asked, then slip in activities/music naturally
+- **G4** weave into conversation: "I don't like this look, can we change it?"
+- **G5** pick a fact you already gave and contradict it: "actually I'm not from [city], I'm from [other city]"
+- **G6** ask for something the app can't do, in character: e.g. "can you add a video of my work?"
+- **G7-G8** when the page looks good, ask to publish (or click publish button)
+- **G9** after publishing, go back to chat and change something
 
 ### When all goals are achieved
 
@@ -207,7 +214,7 @@ Full-page screenshot: `uat/published-full.png` (with `fullPage: true`).
 
 Verify:
 - All sections from preview are present
-- Theme and layout applied correctly
+- Layout applied correctly
 - No "draft" text visible
 - No broken/empty sections
 - Fact data matches DB
@@ -279,20 +286,29 @@ Create `uat/UAT-REPORT.md` in this EXACT format (compatible with `/uat-loop`):
 | # | Goal | Status | Notes |
 |---|------|--------|-------|
 | G1 | Introduce self | Pass/Fail | ... |
-| G2 | 5+ facts | Pass/Fail | ... |
+| G2 | 10+ facts (work/projects/activities/music) | Pass/Fail | ... |
 | G3 | Page generated | Pass/Fail | ... |
 | G4 | 2+ layouts | Pass/Fail | ... |
-| G5 | 2+ themes | Pass/Fail | ... |
-| G6 | Contradiction | Pass/Fail | ... |
-| G7 | Out-of-scope request | Pass/Fail | ... |
-| G8 | Publish | Pass/Fail | ... |
-| G9 | Verify published | Pass/Fail | ... |
-| G10 | Post-publish edit | Pass/Fail | ... |
+| G5 | Contradiction | Pass/Fail | ... |
+| G6 | Out-of-scope request | Pass/Fail | ... |
+| G7 | Publish | Pass/Fail | ... |
+| G8 | Verify published | Pass/Fail | ... |
+| G9 | Post-publish edit | Pass/Fail | ... |
 
-## Layout/Theme Matrix
-| Layout | Theme | Result | Screenshot | Notes |
-|--------|-------|--------|------------|-------|
-| ... | ... | Pass/Fail | uat/XX.png | ... |
+## Facts Coverage
+| Category | Facts collected | Notes |
+|----------|----------------|-------|
+| Work | N | ... |
+| Projects | N | ... |
+| Activities | N | ... |
+| Music | N | ... |
+| Identity | N | ... |
+| Other | N | ... |
+
+## Layout Matrix
+| Layout | Result | Screenshot | Notes |
+|--------|--------|------------|-------|
+| ... | Pass/Fail | uat/XX.png | ... |
 
 ## Agent Behavior Analysis
 
@@ -300,8 +316,10 @@ Create `uat/UAT-REPORT.md` in this EXACT format (compatible with `/uat-loop`):
 | Scenario | Agent Response | Rating |
 |----------|---------------|--------|
 | Introduction | ... | 1-5 stars |
-| Detail gathering | ... | 1-5 stars |
-| Style preferences | ... | 1-5 stars |
+| Detail gathering (work) | ... | 1-5 stars |
+| Detail gathering (projects) | ... | 1-5 stars |
+| Detail gathering (activities/music) | ... | 1-5 stars |
+| Conversation flow (letting agent lead) | ... | 1-5 stars |
 | Contradiction handling | ... | 1-5 stars |
 | Out-of-scope request | ... | 1-5 stars |
 | Publish flow | ... | 1-5 stars |
@@ -347,7 +365,7 @@ Create `uat/UAT-REPORT.md` in this EXACT format (compatible with `/uat-loop`):
 | Severity | Criteria |
 |----------|----------|
 | **High** | Blocks flow, data loss, security hole, crash, 500 error |
-| **Medium** | Wrong content, missing section, layout/theme mismatch, L10N error |
+| **Medium** | Wrong content, missing section, layout mismatch, L10N error |
 | **Low** | Cosmetic, spacing, suboptimal wording |
 
 ## Red Flags — Always High Severity
@@ -381,7 +399,7 @@ The ONLY exception is element-specific screenshots (e.g. a single button), which
 # All facts for current user
 sqlite3 ~/dev/repos/openself/db/openself.db "SELECT category, key, substr(value,1,80), visibility FROM facts WHERE owner_key=(SELECT cognitive_owner_key FROM sessions ORDER BY created_at DESC LIMIT 1) ORDER BY category, key;"
 
-# Draft config (layout + theme)
+# Draft config (layout)
 sqlite3 ~/dev/repos/openself/db/openself.db "SELECT substr(config,1,200) FROM page WHERE id='draft' AND owner_key=(SELECT cognitive_owner_key FROM sessions ORDER BY created_at DESC LIMIT 1);"
 
 # Published page status
