@@ -1,5 +1,6 @@
 import React from "react";
 import type { SectionProps } from "../../types";
+import { CollapsibleList } from "@/components/page/CollapsibleList";
 
 type TimelineItem = {
     title: string;
@@ -13,10 +14,46 @@ type TimelineContent = {
     items: TimelineItem[];
 };
 
-export function Timeline({ content }: SectionProps<TimelineContent>) {
+const dotStyle: React.CSSProperties = {
+    width: 8, height: 8, borderRadius: "50%",
+    background: "var(--page-accent)", opacity: 0.5,
+    marginTop: 7, flexShrink: 0,
+};
+
+export function Timeline({ content, variant }: SectionProps<TimelineContent>) {
     const { items = [], title } = content;
 
     if (!items.length) return null;
+
+    if (variant === "monolith") {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Timeline"}</h2>
+                <CollapsibleList
+                    visibleCount={2}
+                    moreLabel="more"
+                    items={items.map((item, index) => (
+                        <div key={index} style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 32 }}>
+                            <div style={dotStyle} />
+                            <article style={{ flex: 1 }}>
+                                <h3 style={{ fontSize: 17, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.25, margin: 0 }}>
+                                    {item.subtitle ? `${item.title} — ${item.subtitle}` : item.title}
+                                </h3>
+                                {item.date && (
+                                    <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 4 }}>{item.date}</div>
+                                )}
+                                {item.description && (
+                                    <p style={{ fontSize: 14, color: "var(--page-fg-secondary)", lineHeight: 1.6, marginTop: 8, maxWidth: "60ch" }}>
+                                        {item.description}
+                                    </p>
+                                )}
+                            </article>
+                        </div>
+                    ))}
+                />
+            </section>
+        );
+    }
 
     return (
         <section className="theme-reveal">
