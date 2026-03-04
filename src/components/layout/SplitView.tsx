@@ -665,7 +665,7 @@ export function SplitView({
         </div>
 
         {/* Mobile: bottom tab bar */}
-        <div className="flex h-dvh flex-col overflow-hidden md:hidden">
+        <div className="flex h-dvh flex-col overflow-hidden md:hidden" style={{ background: "#0d0d0f" }}>
           {/* Content area */}
           <div className="flex-1 overflow-hidden relative">
             {/* Chat tab */}
