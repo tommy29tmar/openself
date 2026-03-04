@@ -18,6 +18,7 @@ import {
   DEFAULT_SESSION_ID,
 } from "@/lib/services/session-service";
 import { enqueueSummaryJob } from "@/lib/services/summary-service";
+import { enqueueJob } from "@/lib/worker/index";
 import { mergeSessionMeta } from "@/lib/services/session-metadata";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 import { pruneUnconfirmedPendings } from "@/lib/services/confirmation-service";
@@ -414,6 +415,15 @@ export async function POST(req: Request) {
 
         // Enqueue summary generation (best-effort, non-blocking)
         enqueueSummaryJob(effectiveScope.cognitiveOwnerKey, effectiveScope.knowledgeReadKeys);
+
+        // Enqueue session compaction (best-effort, dedup-safe via UNIQUE constraint)
+        try {
+          enqueueJob("session_compaction", { ownerKey: effectiveScope.cognitiveOwnerKey, sessionKey: messageSessionId });
+        } catch (e) {
+          if (!String(e).includes("UNIQUE constraint failed")) {
+            console.warn("[chat] Failed to enqueue session_compaction:", e);
+          }
+        }
       },
     });
 
