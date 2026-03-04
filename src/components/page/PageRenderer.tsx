@@ -52,18 +52,19 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     );
   };
 
+  const stickyNav = !previewMode && shouldShowStickyNav(sections) ? (
+    <StickyNav
+      sections={sections}
+      name={(config.sections.find(s => s.type === "hero")?.content?.name as string | undefined) ?? config.username}
+      avatarUrl={config.sections.find(s => s.type === "hero")?.content?.avatarUrl as string | undefined}
+    />
+  ) : null;
+
   return (
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
       {!isOwner && !previewMode && <VisitorBanner />}
-      {!previewMode && shouldShowStickyNav(sections) && (
-        <StickyNav
-          sections={sections}
-          name={(config.sections.find(s => s.type === "hero")?.content?.name as string | undefined) ?? config.username}
-          avatarUrl={config.sections.find(s => s.type === "hero")?.content?.avatarUrl as string | undefined}
-        />
-      )}
-      <OsPageWrapper config={config} previewMode={previewMode}>
+      <OsPageWrapper config={config} previewMode={previewMode} stickyNav={stickyNav}>
         <LayoutComponent slots={slots} renderSection={renderSection} />
       </OsPageWrapper>
     </>

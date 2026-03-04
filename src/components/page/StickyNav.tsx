@@ -35,8 +35,8 @@ export function StickyNav({ sections, name, avatarUrl }: StickyNavProps) {
 
   return (
     <nav
-      className={`fixed top-9 left-0 right-0 z-40 transition-opacity duration-300 ${visible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
-      style={{ backgroundColor: "var(--page-bg)", borderBottom: "1px solid var(--page-border)" }}
+      className={`fixed top-9 left-0 right-0 z-40 backdrop-blur-md transition-opacity duration-300 ${visible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      style={{ backgroundColor: "color-mix(in srgb, var(--page-bg) 92%, transparent)", borderBottom: "1px solid var(--page-border)" }}
     >
       <div className="flex items-center gap-4 px-6 py-2 max-w-4xl mx-auto">
         {/* Avatar / initials */}

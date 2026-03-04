@@ -7,6 +7,7 @@ type OsPageWrapperProps = {
   config: PageConfig;
   previewMode?: boolean;
   children: React.ReactNode;
+  stickyNav?: React.ReactNode;
 };
 
 function findScrollParent(el: HTMLElement): HTMLElement | null {
@@ -19,7 +20,7 @@ function findScrollParent(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
-export function OsPageWrapper({ config, previewMode = false, children }: OsPageWrapperProps) {
+export function OsPageWrapper({ config, previewMode = false, children, stickyNav }: OsPageWrapperProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const surface = config.surface ?? "canvas";
@@ -74,6 +75,7 @@ export function OsPageWrapper({ config, previewMode = false, children }: OsPageW
       className={presenceClasses}
       style={{ minHeight: "100%", position: "relative", overflowX: "hidden" }}
     >
+      {stickyNav}
       <main style={{ minHeight: "100svh", display: "flex", flexDirection: "column" }}>
         {children}
       </main>
