@@ -46,13 +46,6 @@ function PreviewIcon() {
     </svg>
   );
 }
-function PublishIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  );
-}
 
 function EmptyPreview({ language }: { language: string }) {
   const t = getUiL10n(language);
@@ -182,7 +175,7 @@ export function SplitView({
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
   const [presenceOpen, setPresenceOpen] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview" | "publish">("chat");
+  const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview">("chat");
 
   // Auto-open presence when returning from OAuth connector flow
   useEffect(() => {
@@ -510,6 +503,33 @@ export function SplitView({
           >
             Presence
           </button>
+          {hasUnpublishedChanges && !publishing && authenticated && (
+            <button
+              type="button"
+              onClick={handlePublish}
+              style={{
+                background: "#c9a96e", color: "#111", border: "none",
+                borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+              }}
+            >
+              Publish →
+            </button>
+          )}
+          {hasUnpublishedChanges && !publishing && !authenticated && (
+            <button
+              type="button"
+              onClick={() => setSignupOpen(true)}
+              style={{
+                background: "#c9a96e", color: "#111", border: "none",
+                borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+              }}
+            >
+              Sign up →
+            </button>
+          )}
+          {publishing && (
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Publishing…</span>
+          )}
           {authenticated && (
             <button
               type="button"
@@ -528,56 +548,6 @@ export function SplitView({
       </div>
       {desktopPreviewContent}
     </>
-  );
-
-  // Mobile publish tab content
-  const mobilePublishContent = (
-    <div style={{ padding: "32px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
-      {!displayConfig ? (
-        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, fontStyle: "italic" }}>
-          Keep chatting to build your page
-        </p>
-      ) : (
-        <>
-          {usernameInput}
-          {publishError && (
-            <p style={{ color: "#f87171", fontSize: 13 }}>{publishError}</p>
-          )}
-          {hasUnpublishedChanges && !publishing && (
-            <button
-              type="button"
-              onClick={handlePublish}
-              style={{
-                background: "#c9a96e", color: "#111", border: "none",
-                borderRadius: 8, padding: "14px 24px",
-                fontSize: 15, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Publish →
-            </button>
-          )}
-          {publishing && (
-            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Publishing…</p>
-          )}
-          {!hasUnpublishedChanges && !publishing && authState?.publishedUsername && (
-            <div>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginBottom: 8 }}>Your page is live</p>
-              <a
-                href={`/${authState.publishedUsername}`}
-                style={{ color: "#c9a96e", fontFamily: "monospace", fontSize: 13 }}
-              >
-                openself.dev/{authState.publishedUsername}
-              </a>
-            </div>
-          )}
-          {!hasUnpublishedChanges && !publishing && !authState?.publishedUsername && (
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
-              No changes to publish
-            </p>
-          )}
-        </>
-      )}
-    </div>
   );
 
   // Presence panels: split desktop vs mobile
@@ -705,10 +675,6 @@ export function SplitView({
               {voiceEnabled && <VoiceOverlay />}
             </div>
 
-            {/* Publish tab */}
-            <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "publish" ? "block" : "hidden"}`} style={{ background: "#0d0d0f" }}>
-              {mobilePublishContent}
-            </div>
           </div>
 
           {/* Bottom tab bar — 56px */}
@@ -720,7 +686,6 @@ export function SplitView({
             {([
               { id: "chat", label: "Chat", icon: <ChatIcon /> },
               { id: "preview", label: "Preview", icon: <PreviewIcon /> },
-              { id: "publish", label: "Publish", icon: <PublishIcon /> },
             ] as const).map(tab => (
               <button
                 key={tab.id}
