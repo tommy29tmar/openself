@@ -10,6 +10,9 @@ import { generateSummary } from "@/lib/services/summary-service";
 import { handleHeartbeatLight, handleHeartbeatDeep } from "./heartbeat";
 import { expireStaleProposals } from "@/lib/services/soul-service";
 import { handleConnectorSync } from "@/lib/connectors/connector-sync-handler";
+import { runSessionCompaction, persistCompactionLog, getLastCompactionRowid } from "@/lib/services/session-compaction-service";
+import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
+import { saveMemory } from "@/lib/services/memory-service";
 import "@/lib/connectors/register-all";
 
 const MAX_ATTEMPTS = 3;
@@ -64,6 +67,70 @@ const handlers: Record<string, JobHandler> = {
 
   taxonomy_review: () => {
     // Placeholder — taxonomy review not yet implemented
+  },
+
+  session_compaction: async (payload: Record<string, unknown>) => {
+    const ownerKey = payload.ownerKey as string;
+    const sessionKey = payload.sessionKey as string;
+    if (!ownerKey || !sessionKey) { console.warn("[worker] session_compaction: missing keys", payload); return; }
+
+    const scope = resolveOwnerScopeForWorker(ownerKey);
+    const MAX_WINDOWS = 5;
+    let lastRowsLength = 0;
+
+    for (let window = 0; window < MAX_WINDOWS; window++) {
+      const lastRowid = getLastCompactionRowid(sessionKey);
+
+      const rows = sqlite.prepare(`
+        SELECT rowid, role, content FROM messages
+        WHERE session_id = ? AND rowid > ?
+        ORDER BY rowid ASC LIMIT 40
+      `).all(sessionKey, lastRowid) as Array<{ rowid: number; role: string; content: string }>;
+
+      lastRowsLength = rows.length;
+
+      if (rows.length < 4) {
+        if (window === 0) console.info(`[worker] session_compaction: skip ${sessionKey} — ${rows.length} new msgs`);
+        lastRowsLength = 0; // not a full window, no continuation needed
+        break;
+      }
+
+      const cursorRowid = rows[rows.length - 1].rowid;
+      const result = await runSessionCompaction({ ownerKey, sessionKey, messages: rows, knowledgeReadKeys: scope.knowledgeReadKeys });
+      persistCompactionLog(ownerKey, sessionKey, cursorRowid, result);
+
+      if (result.success && result.structuredSummary) {
+        for (const pattern of result.structuredSummary.patternsObserved.slice(0, 2)) {
+          try { saveMemory(ownerKey, pattern, "pattern"); } catch (e) { console.warn("[worker] pattern save failed:", e); }
+        }
+        console.info(`[worker] compaction window ${window + 1}: ${sessionKey} — ${result.factsExtracted} extracted`);
+        if (rows.length < 40) break; // partial window = backlog drained
+      } else if (result.skipped) {
+        // Anti-burn skip: cursor advanced via 'skipped' row.
+        console.info(`[worker] compaction window ${window + 1} skipped (anti-burn): ${sessionKey}`);
+        if (rows.length < 40) break; // partial skipped window = end of current backlog
+        // else: continue loop to process next window
+      } else {
+        // Transient or deterministic failure (not yet at anti-burn limit):
+        // Throw so executeJob marks job as failed and schedules retry via attempts + backoff.
+        const err = `[worker] compaction failed at window ${window + 1}: ${sessionKey} — ${result.error}`;
+        console.warn(err);
+        throw new Error(err);
+      }
+    }
+
+    // If we exhausted MAX_WINDOWS and the last batch was full, more messages may remain.
+    // Enqueue a continuation job; dedup index prevents duplicate enqueues.
+    if (lastRowsLength === 40) {
+      try {
+        enqueueJob("session_compaction", { ownerKey, sessionKey });
+        console.info(`[worker] session_compaction: re-enqueued for continued backlog drain: ${sessionKey}`);
+      } catch (e) {
+        if (!String(e).includes("UNIQUE constraint failed")) {
+          console.warn("[worker] Failed to re-enqueue session_compaction:", e);
+        }
+      }
+    }
   },
 };
 
