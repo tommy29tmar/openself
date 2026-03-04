@@ -93,6 +93,9 @@ const ARCHIVABLE_RELEVANCE_THRESHOLD = 0.3;
 /** Minimum active facts to keep — never suggest archival below this floor. */
 const ARCHIVABLE_SAFETY_FLOOR = 5;
 
+/** TTL in days for cached archetype — re-detect after this period. */
+export const ARCHETYPE_TTL_DAYS = 14;
+
 /**
  * Recency factor for relevance scoring.
  * <30d: 1.0, 30-90d: 0.7, 90-180d: 0.4, >180d: 0.2
@@ -117,6 +120,45 @@ export function computeRelevance(f: FactRow, childCountMap?: Map<string, number>
   const recency = recencyFactor(f.updatedAt);
   const children = childCountMap?.get(f.id) ?? 0;
   return (f.confidence ?? 1.0) * recency * (1 + children * 0.1);
+}
+
+// ---------------------------------------------------------------------------
+// Archetype TTL + identity-change invalidation
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the archetype should be re-detected.
+ * Triggers:
+ * 1. No cached archetype.
+ * 2. TTL (ARCHETYPE_TTL_DAYS) expired.
+ * 3. An identity/role or identity/title fact was updated after the archetype was detected.
+ */
+export function shouldRedetectArchetype(
+  meta: Record<string, unknown>,
+  facts: FactRow[],
+): boolean {
+  if (!meta.archetype || !meta.archetypeDetectedAt) return true;
+
+  // TTL check: use ms comparison for precision
+  const detectedAtMs = new Date(meta.archetypeDetectedAt as string).getTime();
+  const ttlMs = ARCHETYPE_TTL_DAYS * 24 * 60 * 60 * 1000;
+  if (Date.now() - detectedAtMs > ttlMs) return true;
+
+  // Identity change check: use NEWEST updatedAt across both role and title
+  const identityFacts = facts.filter(
+    f => f.category === "identity" && (f.key === "role" || f.key === "title"),
+  );
+  const newestUpdatedAt = identityFacts.reduce<string | null>((best, f) => {
+    if (!f.updatedAt) return best;
+    if (!best) return f.updatedAt;
+    return f.updatedAt > best ? f.updatedAt : best;
+  }, null);
+
+  if (newestUpdatedAt) {
+    return newestUpdatedAt > (meta.archetypeDetectedAt as string);
+  }
+
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -444,23 +486,29 @@ export function assembleBootstrapPayload(
   const archetypeSessionId = scope.knowledgePrimaryKey;
   const meta = archetypeSessionId ? getSessionMeta(archetypeSessionId) : {};
   let archetype: Archetype;
-  if (meta.archetype && typeof meta.archetype === "string") {
+
+  if (!shouldRedetectArchetype(meta, facts)) {
     archetype = meta.archetype as Archetype;
   } else {
     // Detect from role fact + last message, then refine from all facts
-    const roleFact = facts.find(
-      (f) => f.category === "identity" && (f.key === "role" || f.key === "title"),
-    );
+    // Prefer role over title; among equals, prefer newer
+    const roleFact = facts
+      .filter(f => f.category === "identity" && (f.key === "role" || f.key === "title"))
+      .sort((a, b) => {
+        if (a.key === "role" && b.key !== "role") return -1;
+        if (b.key === "role" && a.key !== "role") return 1;
+        return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
+      })[0];
     const roleStr = roleFact
-      ? typeof roleFact.value === "object" && roleFact.value !== null
+      ? (typeof roleFact.value === "object" && roleFact.value !== null
         ? (roleFact.value as Record<string, unknown>).role as string ?? JSON.stringify(roleFact.value)
-        : String(roleFact.value)
+        : String(roleFact.value))
       : null;
     const raw = detectArchetypeFromSignals(roleStr, lastUserMessage ?? null);
     archetype = refineArchetype(facts, raw);
-    // Cache in session metadata
+    // Cache in session metadata with timestamp for TTL + identity-change invalidation
     if (archetypeSessionId) {
-      mergeSessionMeta(archetypeSessionId, { archetype });
+      mergeSessionMeta(archetypeSessionId, { archetype, archetypeDetectedAt: new Date().toISOString() });
     }
   }
 

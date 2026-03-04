@@ -203,7 +203,8 @@ describe("archetype session cache", () => {
   });
 
   it("uses cached archetype from session on subsequent calls", () => {
-    mockGetSessionMeta.mockReturnValue({ archetype: "developer" });
+    const recentDetectedAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    mockGetSessionMeta.mockReturnValue({ archetype: "developer", archetypeDetectedAt: recentDetectedAt });
 
     const result = assembleBootstrapPayload(SCOPE, "en");
 
