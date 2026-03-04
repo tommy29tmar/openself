@@ -8,8 +8,12 @@
  * Expertise modulation (from getExpertiseCalibration) adjusts verbosity externally.
  */
 
+import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
+
 export function planningProtocol(): string {
   return `PLANNING PROTOCOL:
+
+${SEARCH_FACTS_RULE}
 
 Before acting, classify the user's request:
 
@@ -18,7 +22,7 @@ Examples: create a single fact, change theme, answer a question.
 
 COMPOUND (3+ tool calls): State your plan in 1-2 sentences, then execute.
 Rules:
-- Always search_facts first to understand current state
+- Use search_facts to find specific factIds when updating or deleting
 - Use batch_facts for multiple fact changes (not individual create_fact calls)
 - One generate_page at the end, not after each change
 - If a tool returns { blocked: true } or { success: false }, read the suggestion and adjust your plan

@@ -25,9 +25,9 @@ describe("memoryUsageDirectives", () => {
       expect(directives).toMatch(/tier\s*1|facts.*source\s*of\s*truth/i);
     });
 
-    it("instructs to use search_facts before asking questions", () => {
+    it("contains the canonical search_facts rule", () => {
       expect(directives).toContain("search_facts");
-      expect(directives).toMatch(/search_facts.*before.*ask|before.*question.*search_facts/i);
+      expect(directives).toContain("WHEN TO CALL search_facts");
     });
 
     it("instructs to use name from facts on first response", () => {

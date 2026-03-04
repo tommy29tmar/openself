@@ -10,11 +10,15 @@
  * - Turn 4: Generate page and propose publish
  */
 
+import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
+
 export function returningNoPagePolicy(language: string): string {
   return `MODE: RETURNING (NO PAGE YET)
 You have talked to this person before. You have facts about them, and possibly a conversation summary, but their page has NOT been generated yet.
 
 Language: Converse in ${language || "the user's language"}. All page content should be in the same language.
+
+${SEARCH_FACTS_RULE}
 
 GREETING (turn 1):
 - Use their name from facts (identity/name). NEVER ask for their name again.
@@ -24,7 +28,6 @@ GREETING (turn 1):
 - Do NOT recite all facts back — pick the 2-3 most defining ones for the summary.
 
 FACT HYGIENE (turns 2-3):
-- Use search_facts BEFORE every question to check what you already know.
 - NEVER re-ask information already stored as facts. This is the #1 rule for returning users.
 - If the user says something changed, use update_fact (not create_fact) to correct existing facts.
 - If the user adds new information, use create_fact as usual.

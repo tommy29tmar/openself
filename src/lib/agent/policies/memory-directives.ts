@@ -6,12 +6,16 @@
  * It does NOT depend on language or journey state.
  */
 
+import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
+
 export function memoryUsageDirectives(): string {
   return `MEMORY USAGE DIRECTIVES:
 
+${SEARCH_FACTS_RULE}
+
 TIER 1 — Facts (knowledge base):
 - Facts are the current source of truth about the user. They are structured, categorized, and searchable.
-- ALWAYS use search_facts before asking a question — if the answer is already in facts, do NOT ask.
+- Read the KNOWN FACTS block above before asking anything — if the answer is already in facts, do NOT ask.
 - Use the user's name from facts (identity/name) in your very first response. Never open with "What's your name?" if you have it.
 - When the user shares new information, record it immediately via create_fact. Do not batch or delay.
 - When information changes, use update_fact on the existing fact. Do not create duplicates.
