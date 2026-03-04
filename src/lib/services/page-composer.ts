@@ -531,6 +531,33 @@ function buildHeroSection(
   if (contactEmail) content.contactEmail = contactEmail;
   if (languageItems.length > 0) content.languages = languageItems;
 
+  // Location
+  for (const fact of identityFacts) {
+    const v = val(fact);
+    const loc = str(v.location) ?? str(v.city);
+    if (loc) { content.location = loc; break; }
+  }
+
+  // Availability
+  for (const fact of identityFacts) {
+    const v = val(fact);
+    const avail = str(v.availability) ?? str(v.openTo);
+    if (avail) { content.availability = avail; break; }
+  }
+
+  // Years of experience — computed from oldest experience start year
+  const currentYear = new Date().getFullYear();
+  const expStartYears = (experienceFacts ?? []).map(f => {
+    const v = val(f);
+    const raw = str(v.startYear) ?? str(v.startDate) ?? str(v.start) ?? str(v.period) ?? str(v.date);
+    if (!raw) return null;
+    const n = parseInt(raw.slice(0, 4));
+    return !isNaN(n) && n >= 1950 && n <= currentYear ? n : null;
+  }).filter((n): n is number => n !== null);
+  if (expStartYears.length > 0) {
+    content.yearsExp = Math.max(0, currentYear - Math.min(...expStartYears));
+  }
+
   // Avatar
   if (profileId) {
     const avatarMediaId = getProfileAvatar(profileId);

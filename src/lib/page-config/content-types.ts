@@ -4,7 +4,10 @@ export type HeroContent = {
   avatarUrl?: string;
   socialLinks?: SocialLink[];
   contactEmail?: string;
-  languages?: { language: string; proficiency?: string }[];
+  languages?: { language: string; proficiency?: string; canonicalProficiency?: string }[];
+  location?: string;
+  availability?: string;
+  yearsExp?: number;
 };
 
 export type BioContent = {
