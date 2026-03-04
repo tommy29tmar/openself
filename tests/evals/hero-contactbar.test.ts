@@ -47,7 +47,8 @@ describe("Hero ContactBar integration", () => {
     ];
 
     process.env.EXTENDED_SECTIONS = "true";
-    const config = composeOptimisticPage(facts as any, "alice", "en");
+    // In curator (non-monolith) layout, languages remain absorbed into hero without standalone section
+    const config = composeOptimisticPage(facts as any, "alice", "en", "curator");
     delete process.env.EXTENDED_SECTIONS;
 
     const types = config.sections.map((s) => s.type);

@@ -1367,6 +1367,7 @@ export function composeOptimisticPage(
   const languageFacts = grouped.get("language") ?? [];
 
   const extended = isExtendedSectionsEnabled();
+  const resolvedTemplate = layoutTemplate ?? "monolith";
 
   const hero = buildHeroSection(
     identityFacts, experienceFacts, interestFacts, language, username,
@@ -1390,13 +1391,26 @@ export function composeOptimisticPage(
 
     if (bio) sections.push(bio);
 
-    const atAGlance = buildAtAGlanceSection(
-      grouped.get("skill") ?? [],
-      grouped.get("stat") ?? [],
-      interestFacts,
-      language,
-    );
-    if (atAGlance) sections.push(atAGlance);
+    if (resolvedTemplate === "monolith") {
+      // Monolith layout: standalone sections for better readability
+      const skills = buildSkillsSection(grouped.get("skill") ?? [], language);
+      if (skills) sections.push(skills);
+
+      const interests = buildInterestsSection(interestFacts, language);
+      if (interests) sections.push(interests);
+
+      const langs = buildLanguagesSection(grouped.get("language") ?? [], language);
+      if (langs) sections.push(langs);
+    } else {
+      // Other layouts: keep existing at-a-glance summary card
+      const atAGlance = buildAtAGlanceSection(
+        grouped.get("skill") ?? [],
+        grouped.get("stat") ?? [],
+        interestFacts,
+        language,
+      );
+      if (atAGlance) sections.push(atAGlance);
+    }
 
     const experience = buildExperienceSection(experienceFacts, language);
     if (experience) sections.push(experience);
@@ -1453,7 +1467,6 @@ export function composeOptimisticPage(
   sections.push(buildFooterSection());
 
   // Slot assignment: distribute sections into layout slots
-  const resolvedTemplate = layoutTemplate ?? "monolith";
   const template = getLayoutTemplate(resolvedTemplate);
   const { sections: assigned, issues } = assignSlotsFromFacts(template, sections, undefined, undefined, draftSlots);
 

@@ -308,8 +308,8 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
       const facts: FactRow[] = [
         makeFact({ category: "stat", key: "experience", value: { label: "Years", value: "10+" } }),
       ];
-      const page = composeOptimisticPage(facts, "alice");
-      // Stats are fused into at-a-glance when EXTENDED_SECTIONS=true
+      const page = composeOptimisticPage(facts, "alice", undefined, "curator");
+      // Stats are fused into at-a-glance when EXTENDED_SECTIONS=true (non-monolith layouts)
       const aag = page.sections.find((s) => s.type === "at-a-glance");
       expect(aag).toBeDefined();
       const content = aag!.content as Record<string, unknown>;
@@ -337,8 +337,8 @@ describe("composeOptimisticPage — fact-to-section mapping", () => {
         makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
         makeFact({ category: "language", key: "spanish", value: { language: "Spanish", proficiency: "fluent" } }),
       ];
-      const page = composeOptimisticPage(facts, "alice");
-      // Languages are absorbed into hero, no standalone section
+      // In non-monolith layouts, languages are absorbed into hero without a standalone section
+      const page = composeOptimisticPage(facts, "alice", undefined, "curator");
       expect(page.sections.find((s) => s.type === "languages")).toBeUndefined();
       const hero = page.sections.find((s) => s.type === "hero");
       expect(hero).toBeDefined();

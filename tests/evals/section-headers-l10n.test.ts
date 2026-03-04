@@ -44,7 +44,7 @@ describe("section headers L10N", () => {
       ...baseFacts,
       makeFact({ category: "interest", key: "i1", value: { name: "Typography" } }),
     ];
-    const page = composeOptimisticPage(facts, "draft", "it");
+    const page = composeOptimisticPage(facts, "draft", "it", "curator");
     const aag = page.sections.find((s) => s.type === "at-a-glance");
     expect(aag).toBeDefined();
     const content = aag!.content as { interestsInto?: string };

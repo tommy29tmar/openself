@@ -142,7 +142,7 @@ describe("F9: Skill domain labels L10N", () => {
       { id: "2", category: "skill", key: "react", value: { name: "React" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
       { id: "3", category: "skill", key: "python", value: { name: "Python" }, source: "chat", confidence: 1.0, visibility: "proposed", createdAt: null, updatedAt: null },
     ];
-    const config = composeOptimisticPage(facts as any, "draft", "it");
+    const config = composeOptimisticPage(facts as any, "draft", "it", "curator");
     const aag = config.sections.find((s) => s.type === "at-a-glance");
     expect(aag).toBeDefined();
     const groups = (aag!.content as any).skillGroups;

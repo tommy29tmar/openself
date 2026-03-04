@@ -30,7 +30,7 @@ describe("At a Glance section composition", () => {
     ];
 
     process.env.EXTENDED_SECTIONS = "true";
-    const config = composeOptimisticPage(facts as any, "alice", "en");
+    const config = composeOptimisticPage(facts as any, "alice", "en", "curator");
     delete process.env.EXTENDED_SECTIONS;
 
     const aag = config.sections.find((s) => s.type === "at-a-glance");
@@ -51,7 +51,7 @@ describe("At a Glance section composition", () => {
     ];
 
     process.env.EXTENDED_SECTIONS = "true";
-    const config = composeOptimisticPage(facts as any, "alice", "en");
+    const config = composeOptimisticPage(facts as any, "alice", "en", "curator");
     delete process.env.EXTENDED_SECTIONS;
 
     const aag = config.sections.find((s) => s.type === "at-a-glance");
@@ -78,7 +78,7 @@ describe("At a Glance section composition", () => {
     ];
 
     process.env.EXTENDED_SECTIONS = "true";
-    const config = composeOptimisticPage(facts as any, "alice", "en");
+    const config = composeOptimisticPage(facts as any, "alice", "en", "curator");
     delete process.env.EXTENDED_SECTIONS;
 
     const types = config.sections.map((s) => s.type);

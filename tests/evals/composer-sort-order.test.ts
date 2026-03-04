@@ -33,7 +33,7 @@ describe("sortOrder in page composition", () => {
       makeFact({ category: "skill", key: "react", value: { name: "React" }, sortOrder: 0 }),
       makeFact({ category: "skill", key: "vue", value: { name: "Vue" }, sortOrder: 1 }),
     ];
-    const page = composeOptimisticPage(facts, "test", "en");
+    const page = composeOptimisticPage(facts, "test", "en", "curator");
     const aag = page.sections.find(s => s.type === "at-a-glance");
     const groups = (aag?.content as any)?.skillGroups ?? [];
     // All same domain → single group preserves sort order
@@ -67,7 +67,7 @@ describe("sortOrder in page composition", () => {
         sortOrder: 0, createdAt: "2024-01-01T00:00:00Z",
       }),
     ];
-    const page = composeOptimisticPage(facts, "test", "en");
+    const page = composeOptimisticPage(facts, "test", "en", "curator");
     const aag = page.sections.find(s => s.type === "at-a-glance");
     const groups = (aag?.content as any)?.skillGroups ?? [];
     const allSkills = groups.flatMap((g: any) => g.skills);
@@ -97,5 +97,24 @@ describe("sortOrder in page composition", () => {
     const edu = page.sections.find(s => s.type === "education");
     const items = (edu?.content as any)?.items;
     expect(items.map((i: any) => i.institution)).toEqual(["MIT", "Stanford"]);
+  });
+
+  it("monolith layout generates skills section (not at-a-glance)", () => {
+    const facts: FactRow[] = [
+      makeFact({ category: "identity", key: "name", value: { name: "Test" } }),
+      makeFact({ category: "skill", key: "react", value: { name: "React" }, sortOrder: 0 }),
+    ];
+    const page = composeOptimisticPage(facts, "test", "en", "monolith");
+    expect(page.sections.find(s => s.type === "at-a-glance")).toBeUndefined();
+    expect(page.sections.find(s => s.type === "skills")).toBeDefined();
+  });
+
+  it("non-monolith layouts keep at-a-glance", () => {
+    const facts: FactRow[] = [
+      makeFact({ category: "identity", key: "name", value: { name: "Test" } }),
+      makeFact({ category: "skill", key: "react", value: { name: "React" }, sortOrder: 0 }),
+    ];
+    const page = composeOptimisticPage(facts, "test", "en", "curator");
+    expect(page.sections.find(s => s.type === "at-a-glance")).toBeDefined();
   });
 });
