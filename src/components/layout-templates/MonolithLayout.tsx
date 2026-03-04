@@ -39,10 +39,19 @@ export function getLane(sectionType: string): Lane {
   return "reading";
 }
 
+// All lanes: left-aligned from the same 48px horizontal padding (matching prototype).
+// max-width applied via inline style to correctly use CSS calc() with custom properties.
 const LANE_CLASSES: Record<Lane, string> = {
-  hero: "w-full",
-  reading: "w-full max-w-[var(--reading-max,660px)] mx-auto px-6 md:px-12",
-  bleed: "w-full max-w-[calc(var(--reading-max,660px)*1.35)] mx-auto px-6 md:px-12",
+  hero: "w-full px-6 md:px-12",
+  reading: "w-full px-6 md:px-12",
+  bleed: "w-full px-6 md:px-12",
+};
+
+// Max-width includes 96px (2×48px) for the horizontal padding,
+// so the content area equals reading-max / reading-max*1.35.
+const LANE_MAX_WIDTHS: Partial<Record<Lane, string>> = {
+  reading: "calc(var(--reading-max, 660px) + 96px)",
+  bleed: "calc(var(--reading-max, 660px) * 1.35 + 96px)",
 };
 
 export function MonolithLayout({ slots, renderSection, className }: LayoutComponentProps) {
@@ -69,6 +78,7 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
                     paddingTop: isHeroOrFooter ? undefined : "48px",
                     paddingBottom: isHeroOrFooter ? undefined : "48px",
                     borderBottom: section.type !== "footer" ? "1px solid var(--page-border)" : undefined,
+                    maxWidth: LANE_MAX_WIDTHS[lane],
                   }}
                 >
                   {renderSection(applyMonolithOverride(section))}
