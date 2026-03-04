@@ -54,20 +54,6 @@ const DRAFT_READY_WELCOME: Record<string, string> = {
   zh: "欢迎回来！你的页面已准备好——看看右边。想做什么修改吗？",
 };
 
-/**
- * Legacy welcome messages — kept as fallback.
- */
-const WELCOME_MESSAGES: Record<string, string> = {
-  en: "Hey! I\u2019m going to build your personal page. Tell me \u2014 who are you and what are you into?",
-  it: "Ciao! Costruir\u00f2 la tua pagina personale. Raccontami \u2014 chi sei e cosa ti appassiona?",
-  de: "Hey! Ich werde deine pers\u00f6nliche Seite erstellen. Erz\u00e4hl mir \u2014 wer bist du und was begeistert dich?",
-  fr: "Salut\u00a0! Je vais cr\u00e9er ta page personnelle. Dis-moi \u2014 qui es-tu et qu\u2019est-ce qui te passionne\u00a0?",
-  es: "\u00a1Hola! Voy a crear tu p\u00e1gina personal. Cu\u00e9ntame \u2014 \u00bfqui\u00e9n eres y qu\u00e9 te apasiona?",
-  pt: "Ol\u00e1! Vou criar a tua p\u00e1gina pessoal. Conta-me \u2014 quem \u00e9s e o que te apaixona?",
-  ja: "\u3053\u3093\u306b\u3061\u306f\uff01\u3042\u306a\u305f\u306e\u30d1\u30fc\u30bd\u30ca\u30eb\u30da\u30fc\u30b8\u3092\u4f5c\u308a\u307e\u3059\u3002\u6559\u3048\u3066\u304f\u3060\u3055\u3044\u2014\u2014\u3042\u306a\u305f\u306f\u8ab0\u3067\u3059\u304b\uff1f\u4f55\u306b\u60c5\u71b1\u3092\u6ce8\u3044\u3067\u3044\u307e\u3059\u304b\uff1f",
-  zh: "\u4f60\u597d\uff01\u6211\u5c06\u4e3a\u4f60\u521b\u5efa\u4e2a\u4eba\u9875\u9762\u3002\u544a\u8bc9\u6211\u2014\u2014\u4f60\u662f\u8c01\uff0c\u4f60\u5bf9\u4ec0\u4e48\u5145\u6ee1\u70ed\u60c5\uff1f",
-};
-
 const LIMIT_MESSAGES: Record<string, string> = {
   en: "You\u2019ve used all your messages. Pick a username to publish your page!",
   it: "Hai esaurito i messaggi. Scegli un username per pubblicare la tua pagina!",
@@ -79,14 +65,6 @@ const LIMIT_MESSAGES: Record<string, string> = {
   zh: "\u4f60\u5df2\u7528\u5b8c\u6240\u6709\u6d88\u606f\u3002\u9009\u62e9\u4e00\u4e2a\u7528\u6237\u540d\u6765\u53d1\u5e03\u4f60\u7684\u9875\u9762\uff01",
 };
 
-function getWelcomeMessage(language: string) {
-  return {
-    id: "welcome",
-    role: "assistant" as const,
-    content: WELCOME_MESSAGES[language] ?? WELCOME_MESSAGES.en,
-  };
-}
-
 type BootstrapResponse = {
   journeyState?: string;
   userName?: string | null;
@@ -94,63 +72,60 @@ type BootstrapResponse = {
   language?: string;
 };
 
-function getSmartWelcomeMessage(
+function buildWelcomeMessage(
   language: string,
   bootstrap: BootstrapResponse | null,
-): { id: string; role: "assistant"; content: string } {
+): StoredMessage {
   const lang = language || "en";
 
   if (!bootstrap) {
-    // Fallback to legacy welcome
-    return {
-      id: "welcome",
-      role: "assistant",
-      content: WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en,
+    // Neutral fallback — NOT first-visit copy (returning users would get confused)
+    const neutral: Record<string, string> = {
+      en: "Hey! What would you like to work on?",
+      it: "Ciao! Su cosa vuoi lavorare?",
+      de: "Hey! Woran möchtest du arbeiten?",
+      fr: "Salut\u00a0! Sur quoi veux-tu travailler\u00a0?",
+      es: "¡Hola! ¿En qué quieres trabajar?",
+      pt: "Olá! Em que queres trabalhar?",
+      ja: "こんにちは！何に取り組みますか？",
+      zh: "你好！想做什么？",
     };
+    return { id: "welcome", role: "assistant", content: neutral[lang] ?? neutral.en };
   }
-
-  let content: string;
 
   switch (bootstrap.journeyState) {
     case "first_visit":
-      content = FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en;
-      break;
+      return { id: "welcome", role: "assistant", content: FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en };
+
     case "returning_no_page":
-      content = RETURNING_WELCOME[lang] ?? RETURNING_WELCOME.en;
-      break;
+      return { id: "welcome", role: "assistant", content: RETURNING_WELCOME[lang] ?? RETURNING_WELCOME.en };
+
     case "draft_ready":
-      content = DRAFT_READY_WELCOME[lang] ?? DRAFT_READY_WELCOME.en;
-      break;
+      return { id: "welcome", role: "assistant", content: DRAFT_READY_WELCOME[lang] ?? DRAFT_READY_WELCOME.en };
+
+    case "blocked": {
+      return { id: "welcome", role: "assistant", content: LIMIT_MESSAGES[lang] ?? LIMIT_MESSAGES.en };
+    }
+
     case "active_fresh":
     case "active_stale": {
-      // For returning active users, greet by name if known
       const name = bootstrap.userName;
-      if (name) {
-        const templates: Record<string, string> = {
-          en: `Hey ${name}! What's new?`,
-          it: `Ciao ${name}! Cosa c'è di nuovo?`,
-          de: `Hey ${name}! Was gibt's Neues?`,
-          fr: `Salut ${name}\u00a0! Quoi de neuf\u00a0?`,
-          es: `¡Hola ${name}! ¿Qué hay de nuevo?`,
-          pt: `Olá ${name}! Novidades?`,
-          ja: `${name}さん、お久しぶりです！何か新しいことはありますか？`,
-          zh: `${name}，你好！有什么新动态吗？`,
-        };
-        content = templates[lang] ?? templates.en;
-      } else {
-        content = WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en;
-      }
-      break;
+      const templates: Record<string, string> = {
+        en: name ? `Hey ${name}! What would you like to update?` : "Hey! What would you like to update?",
+        it: name ? `Ciao ${name}! Cosa vuoi aggiornare?` : "Ciao! Cosa vuoi aggiornare?",
+        de: name ? `Hey ${name}! Was möchtest du aktualisieren?` : "Hey! Was möchtest du aktualisieren?",
+        fr: name ? `Salut ${name}\u00a0! Que veux-tu mettre à jour\u00a0?` : "Salut\u00a0! Que veux-tu mettre à jour\u00a0?",
+        es: name ? `¡Hola ${name}! ¿Qué quieres actualizar?` : "¡Hola! ¿Qué quieres actualizar?",
+        pt: name ? `Olá ${name}! O que queres atualizar?` : "Olá! O que queres atualizar?",
+        ja: name ? `${name}さん！何を更新しますか？` : "何を更新しますか？",
+        zh: name ? `${name}，你好！想更新什么？` : "你好！想更新什么？",
+      };
+      return { id: "welcome", role: "assistant", content: templates[lang] ?? templates.en };
     }
-    case "blocked":
-      // Shouldn't normally reach here (blocked users can't chat much)
-      content = WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en;
-      break;
-    default:
-      content = WELCOME_MESSAGES[lang] ?? WELCOME_MESSAGES.en;
-  }
 
-  return { id: "welcome", role: "assistant", content };
+    default:
+      return { id: "welcome", role: "assistant", content: FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en };
+  }
 }
 
 const LIMIT_AUTHENTICATED_MESSAGES: Record<string, string> = {
@@ -366,7 +341,7 @@ function ChatPanelLoading() {
 
 export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
-    getWelcomeMessage(language),
+    buildWelcomeMessage(language, null),
   ]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
@@ -374,7 +349,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
     if (disableInitialFetch) {
       // Use pre-fetched data from parent
       const bootstrap = initialBootstrap as BootstrapResponse | null;
-      const smartWelcome = getSmartWelcomeMessage(language, bootstrap);
+      const smartWelcome = buildWelcomeMessage(language, bootstrap);
 
       const restoredMessages: StoredMessage[] = (propMessages ?? [])
         .filter((m): m is {id: string; role: string; content: string} =>
@@ -384,12 +359,8 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
       if (restoredMessages.length === 0) {
         setInitialMessages([smartWelcome]);
       } else {
-        const allWelcomes = new Set([
-          ...Object.values(WELCOME_MESSAGES), ...Object.values(FIRST_VISIT_WELCOME),
-          ...Object.values(RETURNING_WELCOME), ...Object.values(DRAFT_READY_WELCOME),
-        ]);
-        const hasWelcome = restoredMessages.some(m => m.role === "assistant" && allWelcomes.has(m.content));
-        setInitialMessages(hasWelcome ? restoredMessages : [smartWelcome, ...restoredMessages]);
+        const welcomeAlreadyStored = restoredMessages.some(m => m.role === "assistant" && m.id === "welcome");
+        setInitialMessages(welcomeAlreadyStored ? restoredMessages : [smartWelcome, ...restoredMessages]);
       }
       setHistoryLoaded(true);
       return;
@@ -416,7 +387,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
       }
 
       // Compute smart welcome based on bootstrap
-      const smartWelcome = getSmartWelcomeMessage(language, bootstrap);
+      const smartWelcome = buildWelcomeMessage(language, bootstrap);
 
       try {
         const res = historyRes ?? await fetch("/api/messages", { cache: "no-store" });
@@ -460,20 +431,11 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
         setInitialMessages(() => {
           if (restoredMessages.length === 0) return [smartWelcome];
 
-          // Check if any existing message matches the smart welcome
           const welcomeAlreadyStored = restoredMessages.some(
-            (message) =>
-              message.role === "assistant" && message.content === smartWelcome.content,
+            (message) => message.role === "assistant" && message.id === "welcome",
           );
 
-          // Also check legacy welcome messages
-          const legacyWelcome = WELCOME_MESSAGES[language] ?? WELCOME_MESSAGES.en;
-          const legacyAlreadyStored = restoredMessages.some(
-            (message) =>
-              message.role === "assistant" && message.content === legacyWelcome,
-          );
-
-          if (welcomeAlreadyStored || legacyAlreadyStored) {
+          if (welcomeAlreadyStored) {
             return restoredMessages;
           }
 
@@ -614,17 +576,10 @@ function ChatPanelInner({
           role: m.role as StoredMessage["role"],
           content: m.content,
         }));
-      // Check if ANY welcome variant is already in stored history
-      const allWelcomeTexts = new Set([
-        ...Object.values(WELCOME_MESSAGES),
-        ...Object.values(FIRST_VISIT_WELCOME),
-        ...Object.values(RETURNING_WELCOME),
-        ...Object.values(DRAFT_READY_WELCOME),
-      ]);
       const welcomeAlreadyStored = restored.some(
-        (msg) => msg.role === "assistant" && allWelcomeTexts.has(msg.content),
+        (msg) => msg.role === "assistant" && msg.id === "welcome",
       );
-      const welcome = getWelcomeMessage(language);
+      const welcome = buildWelcomeMessage(language, null);
       const normalizedMessages = welcomeAlreadyStored ? restored : [welcome, ...restored];
       setMessages(normalizedMessages);
       setChatError(null);
