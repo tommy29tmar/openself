@@ -15,6 +15,7 @@ import type { FactRow } from "@/lib/services/kb-service";
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
+import { isNewTopicSignal } from "@/lib/agent/policies/topic-signal-detector";
 import type { PromptMode } from "./promptAssembler";
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 
@@ -380,22 +381,35 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
   // would miss data in multi-session authenticated setups.
   const PENDING_OPS_TTL_MS = 60 * 60 * 1000; // 1 hour
   const anchorSessionId = scope.knowledgePrimaryKey;
+
+  // Declare latestUserMessage here so the pending ops gate can use it
+  const latestUserMessage = [...clientMessages].reverse().find(m => m.role === "user")?.content ?? "";
+
   if (anchorSessionId) {
     try {
       const meta = getSessionMeta(anchorSessionId);
       const pending = meta.pendingOperations as { timestamp: string; journal: unknown[]; finishReason: string } | undefined;
       if (pending?.timestamp) {
         const age = Date.now() - new Date(pending.timestamp).getTime();
-        if (age < PENDING_OPS_TTL_MS && pending.journal?.length > 0) {
-          const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
-            .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)
-            .join("\n");
-          contextParts.push(
-            `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
-          );
-        } else if (age >= PENDING_OPS_TTL_MS) {
+        if (age >= PENDING_OPS_TTL_MS) {
           // Stale — clean up
           mergeSessionMeta(anchorSessionId, { pendingOperations: undefined });
+        } else if (pending.journal?.length > 0) {
+          // Gate: if user sent a new request, clear pending ops — don't resume
+          const isNewRequest = latestUserMessage
+            ? isNewTopicSignal(latestUserMessage, language)
+            : false;
+
+          if (isNewRequest) {
+            mergeSessionMeta(anchorSessionId, { pendingOperations: null });
+          } else {
+            const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
+              .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)
+              .join("\n");
+            contextParts.push(
+              `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
+            );
+          }
         }
       }
     } catch { /* best-effort */ }
@@ -427,7 +441,6 @@ Do NOT interrupt an active topic abruptly. Weave it into the conversation.`);
   }
 
   // --- Magic paste: detect connector URLs from the latest user message ---
-  const latestUserMessage = [...clientMessages].reverse().find(m => m.role === "user")?.content ?? "";
   const detectedConnectors = detectConnectorUrls(latestUserMessage);
   const magicPasteHint = detectedConnectors.length > 0
     ? `\nDETECTED SOURCE URLS: ${detectedConnectors.map(d => `${d.connectorId} (${d.url})`).join(", ")}. If relevant, suggest the user connect it as a Source via the Sources panel.`
