@@ -5,8 +5,6 @@
  * - Phase A: Identity (turns 1-2) — ask name, ask what they do
  * - Phase B: Breadth-first exploration (turns 3-6) — skills, projects, interests, achievements
  * - Phase C: Generate + publish (turns 7-8) — build page, propose publish
- *
- * Replaces the monolithic onboardingPolicy() in prompts.ts.
  */
 
 export function firstVisitPolicy(language: string): string {

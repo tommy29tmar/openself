@@ -227,7 +227,8 @@ export function getSituationDirectives(
   for (const s of resolved) {
     const ctx = getCtxFor(s, context);
     if (ctx === null) continue; // missing field — already logged
-    const text = DIRECTIVE_POLICY[s].build(ctx);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const text = DIRECTIVE_POLICY[s].build(ctx as any);
     if (text) parts.push(text);
   }
 

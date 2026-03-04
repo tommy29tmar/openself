@@ -262,9 +262,6 @@ PATTERN VARIATION:
 /**
  * Build the full system prompt from a BootstrapPayload.
  *
- * This is the new composable prompt builder that replaces the monolithic
- * getSystemPromptText for bootstrap-aware code paths.
- *
  * Composition order:
  * [CORE_CHARTER, SAFETY_POLICY, TOOL_POLICY, FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE,
  *  OUTPUT_CONTRACT, journeyPolicy, situationDirectives?, expertiseCalibration,
@@ -272,7 +269,7 @@ PATTERN VARIATION:
  */
 export function buildSystemPrompt(
   bootstrap: BootstrapPayload,
-  opts?: { includeSchemaReference?: boolean; schemaMode?: "full" | "minimal" | "none" },
+  opts?: { schemaMode?: "full" | "minimal" | "none" },
 ): string {
   const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
 
@@ -295,16 +292,8 @@ export function buildSystemPrompt(
 
   const expertiseCalibration = getExpertiseCalibration(bootstrap.expertiseLevel);
 
-  // Resolve effective schemaMode:
-  // - schemaMode takes precedence when provided
-  // - fall back to includeSchemaReference (legacy) if schemaMode not set
-  // - default to "full" for backward compatibility
-  const effectiveSchemaMode: "full" | "minimal" | "none" =
-    opts?.schemaMode !== undefined
-      ? opts.schemaMode
-      : opts?.includeSchemaReference === false
-        ? "none"
-        : "full";
+  // Resolve effective schemaMode (default to "full" for backward compatibility)
+  const effectiveSchemaMode: "full" | "minimal" | "none" = opts?.schemaMode ?? "full";
 
   const schemaBlocks: string[] =
     effectiveSchemaMode === "full"
