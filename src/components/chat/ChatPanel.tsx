@@ -10,7 +10,6 @@ import { extractErrorMessage } from "@/lib/services/errors";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { friendlyError } from "@/lib/i18n/error-messages";
 import { useVoice } from "@/components/voice/VoiceProvider";
-import { MicButton } from "@/components/voice/MicButton";
 
 /**
  * Welcome messages for first-time visitors.
@@ -780,8 +779,6 @@ function ChatPanelInner({
             onSubmit={handleChatSubmit}
             isLoading={isLoading}
             placeholder={t.typeMessage}
-            interimText={voice.voiceMode ? voice.interimText : undefined}
-            micButton={voice.enabled ? <MicButton /> : undefined}
           />
         </>
       )}

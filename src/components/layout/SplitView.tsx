@@ -176,6 +176,16 @@ export function SplitView({
   );
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview">("chat");
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // Detect keyboard open via visualViewport — hide tab bar to maximise chat space
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const handler = () => setKeyboardOpen(vv.height < window.innerHeight - 150);
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, []);
 
   // Auto-open presence when returning from OAuth connector flow
   useEffect(() => {
@@ -640,14 +650,16 @@ export function SplitView({
           <div className="flex-1 overflow-hidden relative">
             {/* Chat tab */}
             <div className={`absolute inset-0 flex flex-col ${activeMobileTab === "chat" ? "" : "hidden"}`}>
-              {/* Mobile chat header */}
-              <div style={{
-                textAlign: "center", padding: "12px 0 8px",
-                fontSize: 12, fontFamily: "monospace", letterSpacing: "0.1em",
-                color: "rgba(255,255,255,0.5)", background: "#0d0d0f", flexShrink: 0,
-              }}>
-                {heroName ? `${heroName}'s page` : "My page"} · Draft
-              </div>
+              {/* Mobile chat header — hidden when keyboard is open to maximise space */}
+              {!keyboardOpen && (
+                <div style={{
+                  textAlign: "center", padding: "12px 0 8px",
+                  fontSize: 12, fontFamily: "monospace", letterSpacing: "0.1em",
+                  color: "rgba(255,255,255,0.5)", background: "#0d0d0f", flexShrink: 0,
+                }}>
+                  {heroName ? `${heroName}'s page` : "My page"} · Draft
+                </div>
+              )}
               {!chatDataReady && (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
                   Loading…
@@ -672,15 +684,17 @@ export function SplitView({
             {/* Preview tab */}
             <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "preview" ? "block" : "hidden"}`}>
               {mobilePreviewContent}
-              {voiceEnabled && <VoiceOverlay />}
             </div>
 
           </div>
 
-          {/* Bottom tab bar — 56px */}
+          {/* Voice FAB — fixed above tab bar, only on preview tab */}
+          {voiceEnabled && activeMobileTab === "preview" && <VoiceOverlay />}
+
+          {/* Bottom tab bar — 56px, hidden when keyboard is open */}
           <div style={{
-            height: 56, flexShrink: 0,
-            background: "#111113", borderTop: "1px solid rgba(255,255,255,0.07)",
+            height: keyboardOpen ? 0 : 56, flexShrink: 0, overflow: "hidden",
+            background: "#111113", borderTop: keyboardOpen ? "none" : "1px solid rgba(255,255,255,0.07)",
             display: "flex",
           }}>
             {([

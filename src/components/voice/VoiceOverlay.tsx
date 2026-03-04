@@ -10,28 +10,54 @@ export function VoiceOverlay() {
 
   if (!enabled) return null;
 
+  const isListening = voiceState === VoiceState.LISTENING;
+  const isThinking = voiceState === VoiceState.WAITING || voiceState === VoiceState.TRANSCRIBING;
+
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 pb-6 pt-4 bg-transparent">
-      {/* Interim text display */}
+    <div style={{
+      position: "fixed",
+      right: 20,
+      bottom: 72, // 56px tab bar + 16px margin
+      zIndex: 50,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "flex-end",
+      gap: 8,
+      pointerEvents: "none",
+    }}>
+      {/* Transcript text — appears above FAB while listening */}
       {voiceMode && interimText && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{ fontFamily: "monospace", fontSize: 13, color: "rgba(255,255,255,0.5)", padding: "4px 16px" }}
-        >
-          ... {interimText}
+        <div style={{
+          background: "rgba(0,0,0,0.7)",
+          color: "rgba(255,255,255,0.85)",
+          fontSize: 13,
+          fontFamily: "monospace",
+          padding: "6px 12px",
+          borderRadius: 8,
+          maxWidth: "72vw",
+          lineHeight: 1.4,
+          backdropFilter: "blur(8px)",
+          pointerEvents: "none",
+        }}>
+          {interimText}
         </div>
       )}
 
-      {/* State indicator */}
-      {voiceMode && voiceState === VoiceState.WAITING && (
-        <div role="status" aria-live="polite" className="text-xs text-muted-foreground animate-pulse">
-          Thinking...
+      {/* State label — thinking */}
+      {voiceMode && isThinking && !interimText && (
+        <div style={{
+          color: "rgba(201,169,110,0.7)",
+          fontSize: 11,
+          fontFamily: "monospace",
+          letterSpacing: "0.08em",
+          pointerEvents: "none",
+        }}>
+          …
         </div>
       )}
 
-      {/* Mic button */}
-      <div className="flex items-center gap-4">
+      {/* FAB mic button */}
+      <div style={{ pointerEvents: "auto" }}>
         <MicButton size="large" />
       </div>
     </div>

@@ -41,6 +41,23 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
     toggleVoiceMode();
   };
 
+  const stateStyle = (() => {
+    if (voiceState === VoiceState.LISTENING)
+      return { background: "#c0392b", color: "#fff", border: "none", boxShadow: "0 0 0 4px rgba(192,57,43,0.25)" };
+    if (voiceState === VoiceState.TRANSCRIBING)
+      return { background: "rgba(201,169,110,0.9)", color: "#111", border: "none" };
+    if (voiceState === VoiceState.WAITING)
+      return { background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" };
+    if (voiceState === VoiceState.SPEAKING)
+      return { background: "rgba(255,255,255,0.2)", color: "#fff", border: "none" };
+    if (voiceState === VoiceState.ERROR)
+      return { background: "#c0392b", color: "#fff", border: "none" };
+    if (voiceState === VoiceState.PERMISSION_DENIED)
+      return { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.1)" };
+    // IDLE
+    return { background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.15)" };
+  })();
+
   return (
     <button
       type="button"
@@ -51,28 +68,10 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
       className={cn(
         "relative flex items-center justify-center rounded-full transition-all",
         isLarge ? "h-14 w-14" : "h-9 w-9",
-        // Base styles
-        !isActive && "border bg-background/80 text-muted-foreground hover:bg-accent",
-        // Active listening — pulsing ring
-        voiceState === VoiceState.LISTENING &&
-          "border-2 border-red-500 bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400",
-        // Transcribing
-        voiceState === VoiceState.TRANSCRIBING &&
-          "border-2 border-amber-500 bg-amber-50 text-amber-600 dark:bg-amber-950",
-        // Waiting
-        voiceState === VoiceState.WAITING &&
-          "border bg-background/80 text-muted-foreground animate-pulse",
-        // Speaking — waveform indicator
-        voiceState === VoiceState.SPEAKING &&
-          "border-2 border-blue-500 bg-blue-50 text-blue-600 dark:bg-blue-950",
-        // Error
-        voiceState === VoiceState.ERROR &&
-          "border-2 border-red-500 bg-red-100 text-red-600",
-        // Permission denied
-        voiceState === VoiceState.PERMISSION_DENIED &&
-          "border border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed",
+        voiceState === VoiceState.WAITING && "animate-pulse",
         className,
       )}
+      style={stateStyle}
     >
       {/* Mic icon */}
       <svg
