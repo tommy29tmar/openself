@@ -5,7 +5,7 @@ import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
-import { getSystemPromptText, buildSystemPrompt } from "@/lib/agent/prompts";
+import { buildSystemPrompt } from "@/lib/agent/prompts";
 import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
@@ -297,10 +297,28 @@ export function assembleContext(
     conflictsBlock = truncateToTokenBudget(conflictsBlock, profile?.conflicts.budget ?? BUDGET.conflicts);
   }
 
-  // Base system prompt — use new composable path when bootstrap available
+  // Base system prompt — always use composable path; synthesise a minimal bootstrap when not provided
   const basePrompt = bootstrap
     ? buildSystemPrompt(bootstrap, { schemaMode: profile?.schemaMode ?? "full" })
-    : getSystemPromptText(mode, language);
+    : buildSystemPrompt(
+        {
+          journeyState: "first_visit",
+          language,
+          situations: [],
+          expertiseLevel: "novice",
+          userName: null,
+          lastSeenDaysAgo: null,
+          publishedUsername: null,
+          pendingProposalCount: 0,
+          thinSections: [],
+          staleFacts: [],
+          openConflicts: [],
+          archivableFacts: [],
+          conversationContext: null,
+          archetype: "generalist",
+        } as BootstrapPayload,
+        { schemaMode: "minimal" }
+      );
 
   // Compose full system prompt
   const contextParts = [basePrompt];

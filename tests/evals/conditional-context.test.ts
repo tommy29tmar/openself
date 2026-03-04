@@ -43,7 +43,6 @@ vi.mock("@/lib/services/page-projection", () => ({
 
 const mockBuildSystemPrompt = vi.fn(() => "BOOTSTRAP_PROMPT");
 vi.mock("@/lib/agent/prompts", () => ({
-  getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
   buildSystemPrompt: (...args: any[]) => mockBuildSystemPrompt(...args),
 }));
 

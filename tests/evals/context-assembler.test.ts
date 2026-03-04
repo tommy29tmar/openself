@@ -33,7 +33,6 @@ vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn(() => []),
 }));
 vi.mock("@/lib/agent/prompts", () => ({
-  getSystemPromptText: vi.fn(() => "BASE_PROMPT"),
   buildSystemPrompt: vi.fn(() => "BOOTSTRAP_PROMPT"),
 }));
 vi.mock("@/lib/agent/journey", () => ({
@@ -50,7 +49,6 @@ import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
 import { buildSystemPrompt } from "@/lib/agent/prompts";
-import { getSystemPromptText } from "@/lib/agent/prompts";
 
 const SCOPE: OwnerScope = {
   cognitiveOwnerKey: "cog-1",
@@ -433,12 +431,15 @@ describe("assembleContext with bootstrap", () => {
     expect(result.systemPrompt).toContain("BOOTSTRAP_PROMPT");
   });
 
-  it("uses getSystemPromptText when no bootstrap provided", () => {
+  it("uses buildSystemPrompt with minimal first_visit bootstrap when no bootstrap provided", () => {
     vi.mocked(countFacts).mockReturnValue(0);
     vi.mocked(hasAnyPublishedPage).mockReturnValue(false);
 
     const result = assembleContext(SCOPE, "en", []);
-    expect(buildSystemPrompt).not.toHaveBeenCalled();
-    expect(result.systemPrompt).toContain("BASE_PROMPT");
+    expect(buildSystemPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ journeyState: "first_visit" }),
+      expect.objectContaining({ schemaMode: "minimal" }),
+    );
+    expect(result.systemPrompt).toContain("BOOTSTRAP_PROMPT");
   });
 });

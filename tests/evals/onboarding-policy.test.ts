@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { firstVisitPolicy } from "@/lib/agent/policies/first-visit";
-import { getSystemPromptText } from "@/lib/agent/prompts";
+
 
 describe("firstVisitPolicy", () => {
   const policyEn = firstVisitPolicy("en");
@@ -199,26 +199,3 @@ describe("firstVisitPolicy", () => {
   });
 });
 
-describe("legacy onboardingPolicy() via getSystemPromptText('onboarding')", () => {
-  const legacyPrompt = getSystemPromptText("onboarding", "en");
-
-  it("contains cluster approach guidance", () => {
-    expect(legacyPrompt).toMatch(/topic.*cluster|cluster.*topic|~2\s*exchange/i);
-  });
-
-  it("does NOT contain old 'Cover BREADTH first' directive", () => {
-    expect(legacyPrompt).not.toMatch(/Cover BREADTH first.*before going deep/i);
-  });
-
-  it("does NOT use old '~5 exchanges' trigger for generate_page", () => {
-    expect(legacyPrompt).not.toMatch(/~5\s*exchanges.*call.*generate_page|~5\s*exchanges.*suggest building/i);
-  });
-
-  it("contains bridge sentence guidance", () => {
-    expect(legacyPrompt).toMatch(/bridge.*sentence|fuori del lavoro/i);
-  });
-
-  it("contains unconditional gate (one attempt then generate) before generate_page", () => {
-    expect(legacyPrompt).toMatch(/one.*attempt|one.*direct.*question|one.*attempt.*answered.*declined/i);
-  });
-});
