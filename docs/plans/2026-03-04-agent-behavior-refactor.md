@@ -8,6 +8,8 @@
 
 **Design doc:** `docs/plans/2026-03-04-agent-behavior-refactor-design.md`
 
+**Plan revision:** v7 — post Codex review rounds 1-6 (29 issues addressed)
+
 **Tech Stack:** TypeScript, Next.js App Router, Vitest, SQLite/Drizzle, Vercel AI SDK
 
 **Test runner:** `npx vitest run tests/evals/<file>.test.ts`
@@ -79,7 +81,9 @@ export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContex
   has_stale_facts:       ["staleFacts"],
   has_open_conflicts:    ["openConflicts"],
   has_archivable_facts:  ["archivableFacts"],
-  has_recent_import:     ["importGapReport"],
+  // importGapReport is NOT required — has_recent_import can be set from connector facts
+  // even when route.ts hasn't yet resolved the gap report. Build returns "" when missing.
+  has_recent_import:     [],
   has_name:              [],
   has_soul:              [],
 };
@@ -152,7 +156,8 @@ const fullCtx: SituationContext = {
   staleFacts: ["experience/acme"],
   openConflicts: [],
   archivableFacts: [],
-  importGapReport: undefined,
+  // has_recent_import is only set when a real importGapReport exists — provide one
+  importGapReport: { missingFields: ["skills"], importedAt: "2026-03-01T00:00:00.000Z" } as any,
 };
 
 describe("getCtxFor", () => {
@@ -210,7 +215,7 @@ export function getCtxFor<S extends Situation>(
     if (context[key] === undefined || context[key] === null) {
       const msg = `[directive-registry] Missing context field "${key}" for situation "${situation}"`;
       if (process.env.NODE_ENV !== "production") throw new Error(msg);
-      logEvent("directive_context_missing_field", { situation, field: key });
+      logEvent({ eventType: "directive_context_missing_field", actor: "system", payload: { situation, field: key } });
       return null;
     }
   }
@@ -266,7 +271,9 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     tieBreak: "has_recent_import",
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
     incompatibleWith: [],
-    build: (ctx) => recentImportDirective(ctx.importGapReport!),
+    // importGapReport may be undefined when has_recent_import comes from detectSituations
+    // (connector facts). Guard: skip directive if report not available.
+    build: (ctx) => ctx.importGapReport ? recentImportDirective(ctx.importGapReport) : "",
   },
   // Signal-only situations — never produce directives
   has_name: {
@@ -332,7 +339,9 @@ const mockCtx: SituationContext = {
   staleFacts: ["experience/acme"],
   openConflicts: ["identity/role"],
   archivableFacts: ["interest/chess"],
-  importGapReport: undefined,
+  // has_recent_import requires a non-undefined importGapReport.
+  // In practice, the situation is only set when importGapReport != null (route.ts L264).
+  importGapReport: { missingFields: ["skills"], importedAt: "2026-03-01T00:00:00.000Z" } as any,
 };
 
 // ── Guard by construction ────────────────────────────────────────────────────
@@ -477,20 +486,25 @@ function resolveIncompatibilities(
         `[directive-registry] Conflict: ${s}(p=${winnerPriority}) ` +
         `vs ${incompatible}(p=${loserPriority}) in ${journeyState} — ${incompatible} dropped`;
 
-      if (process.env.NODE_ENV === "test" && winnerPriority === loserPriority) {
-        // Only throw if same priority (genuinely ambiguous — this is a policy bug)
+      if (winnerPriority === loserPriority) {
+        // Equal priority incompatible directives = policy bug.
+        // Throw in all environments — validateDirectivePolicy() runs at startup
+        // and will catch this before production traffic reaches it.
+        // If this throws at runtime it means validateDirectivePolicy() was skipped.
         throw new DirectiveConflictError(msg);
       }
       if (process.env.NODE_ENV === "development") console.warn(msg);
 
       // prod: structured log (always, not sampled — conflicts should be rare)
-      logEvent("directive_conflict_resolved", {
-        winner: s,
-        dropped: incompatible,
-        journeyState,
-        winnerPriority,
-        droppedPriority: loserPriority,
-      });
+      // Only log when the conflict is UNEXPECTED (equal-priority — should never happen in prod
+      // since validateDirectivePolicy() prevents it at startup). Expected priority-resolved
+      // conflicts (the common case) are silent to avoid per-turn DB writes.
+      if (process.env.NODE_ENV !== "production" || winnerPriority === loserPriority) {
+        logEvent({ eventType: "directive_conflict_resolved", actor: "system", payload: {
+          winner: s, dropped: incompatible, journeyState,
+          winnerPriority, droppedPriority: loserPriority,
+        } });
+      }
 
       dropped.add(incompatible);
     }
@@ -636,7 +650,7 @@ export function validateDirectivePolicy(policy: DirectivePolicy): void {
       }
     }
 
-    // 4. Symmetric incompatibleWith
+    // 4. Symmetric incompatibleWith + no equal-priority pairs
     for (const other of entry.incompatibleWith) {
       const otherEntry = policy[other];
       if (!otherEntry) {
@@ -646,6 +660,13 @@ export function validateDirectivePolicy(policy: DirectivePolicy): void {
         throw new Error(
           `[DIRECTIVE_POLICY] Asymmetric incompatibility: "${situation}" → "${other}" ` +
           `but "${other}" does not list "${situation}". Add it, or document why asymmetric.`
+        );
+      }
+      // Equal-priority incompatible pairs are ambiguous — resolveIncompatibilities() will throw at runtime
+      if (entry.priority === otherEntry.priority) {
+        throw new Error(
+          `[DIRECTIVE_POLICY] Equal-priority incompatible pair: "${situation}" (p=${entry.priority}) ` +
+          `and "${other}" (p=${otherEntry.priority}). Assign different priorities or remove incompatibility.`
         );
       }
     }
@@ -662,27 +683,49 @@ In `src/lib/agent/policies/index.ts`, replace the old `getSituationDirectives` e
 
 // REMOVE: old import of getSituationDirectives logic
 // ADD:
-export { getSituationDirectives } from "@/lib/agent/policies/directive-registry";
+export { getSituationDirectives, DIRECTIVE_POLICY } from "@/lib/agent/policies/directive-registry";
 export { validateDirectivePolicy } from "@/lib/agent/policies/validate-directive-policy";
 
 // Keep: getJourneyPolicy, getExpertiseCalibration (unchanged)
+
+// ── Startup validation (TOP-LEVEL, outside any function) ─────────────────────
+// Executes at module import time — before any request is served.
+// Dev/test: throws immediately so CI catches policy bugs.
+// Prod: throws at server startup with a clear error message.
+// MUST remain at top level — placing inside a function defeats the purpose.
+import { validateDirectivePolicy } from "@/lib/agent/policies/validate-directive-policy";
+import { DIRECTIVE_POLICY } from "@/lib/agent/policies/directive-registry";
+validateDirectivePolicy(DIRECTIVE_POLICY);
 ```
 
-Also update `getSituationDirectives` call in `context.ts` to pass `bootstrap.journeyState` as third argument:
+Update `getSituationDirectives` call in `prompts.ts` (it's in `buildSystemPrompt` ~line 336, NOT in context.ts):
 
 ```typescript
-// src/lib/agent/context.ts — find getSituationDirectives call (~line 336)
+// src/lib/agent/prompts.ts — find getSituationDirectives call in buildSystemPrompt
 // Before:
 const situationDirectives = getSituationDirectives(bootstrap.situations, situationContext);
 // After:
 const situationDirectives = getSituationDirectives(
   bootstrap.situations,
-  bootstrap.journeyState,  // NEW
+  bootstrap.journeyState,  // NEW — journeyState must be passed from bootstrap
   situationContext,
 );
 ```
 
-**Step 5: Run all tests — must PASS**
+**Step 5: Migrate existing tests that call `getSituationDirectives` with old 2-arg API**
+
+```bash
+grep -rn "getSituationDirectives" tests/ --include="*.ts"
+# Known: tests/evals/policy-registry.test.ts, tests/evals/archivable-facts-directive.test.ts,
+#        tests/evals/import-reaction-pipeline.test.ts, tests/evals/build-system-prompt.test.ts
+```
+
+For each test file found:
+1. Add the `journeyState` argument to all `getSituationDirectives(situations, ctx)` calls → `getSituationDirectives(situations, journeyState, ctx)`
+2. If any test asserts behavior for `first_visit` + non-empty situations: update expectation to `""` (first_visit guard now returns empty)
+3. Use the appropriate journey state for each test scenario (active_stale, returning_no_page, etc.)
+
+**Step 6: Run all tests — must PASS**
 
 ```bash
 npx vitest run tests/evals/validate-directive-policy.test.ts
@@ -690,13 +733,17 @@ npx vitest run tests/evals/directive-matrix.test.ts
 npx vitest run  # full suite — no regressions
 ```
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
 git add src/lib/agent/policies/validate-directive-policy.ts \
         src/lib/agent/policies/index.ts \
         src/lib/agent/context.ts \
-        tests/evals/validate-directive-policy.test.ts
+        tests/evals/validate-directive-policy.test.ts \
+        tests/evals/policy-registry.test.ts \
+        tests/evals/archivable-facts-directive.test.ts \
+        tests/evals/import-reaction-pipeline.test.ts \
+        tests/evals/build-system-prompt.test.ts
 git commit -m "feat(agent): add policy validator + wire new getSituationDirectives into context"
 ```
 
@@ -816,14 +863,27 @@ export function sortFactsForContext(
   cap: number,
   recentGuaranteeCount = 5,
 ): FactRow[] {
-  if (facts.length <= cap) return facts;
+  // Always sort for consistent ordering (tests rely on this even for small sets).
+  // The recency-guarantee branch only applies when facts exceed cap.
+  if (facts.length <= cap) {
+    return [...facts]
+      .map(f => ({ f, score: computeRelevance(f, childCountMap) }))
+      .sort((a, b) =>
+        b.score - a.score ||
+        new Date(b.f.updatedAt ?? 0).getTime() - new Date(a.f.updatedAt ?? 0).getTime()
+      )
+      .map(({ f }) => f);
+  }
+
+  // Clamp guarantee count: can't guarantee more than cap, or more than we have
+  const g = Math.min(recentGuaranteeCount, cap, facts.length);
 
   const sorted = [...facts].sort(
     (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
   );
 
-  const recentIds = new Set(sorted.slice(0, recentGuaranteeCount).map(f => f.id));
-  const guaranteed = sorted.slice(0, recentGuaranteeCount);
+  const guaranteed = sorted.slice(0, g);
+  const recentIds = new Set(guaranteed.map(f => f.id));
 
   const rest = facts
     .filter(f => !recentIds.has(f.id))
@@ -833,7 +893,7 @@ export function sortFactsForContext(
       new Date(b.f.updatedAt ?? 0).getTime() - new Date(a.f.updatedAt ?? 0).getTime()
     )
     .map(({ f }) => f)
-    .slice(0, cap - recentGuaranteeCount);
+    .slice(0, cap - g);  // guaranteed + rest = exactly cap
 
   return [...guaranteed, ...rest];
 }
@@ -841,6 +901,24 @@ export function sortFactsForContext(
 // In assembleContext, replace `existingFacts.slice(0, 50)` with:
 const childCountMap = bootstrapData?.childCountMap ?? new Map<string, number>();
 const topFacts = sortFactsForContext(existingFacts, childCountMap, 50);
+```
+
+**Step 3b: Update journey mocks in tests that mock `@/lib/agent/journey` as empty**
+
+`context-assembler.test.ts` and `conditional-context.test.ts` mock `@/lib/agent/journey` — update to export `computeRelevance`:
+
+```typescript
+// In tests that have: vi.mock("@/lib/agent/journey", () => ({ ... }))
+// Add computeRelevance to the mock:
+vi.mock("@/lib/agent/journey", () => ({
+  // ...existing mocked exports...
+  computeRelevance: vi.fn(() => 0.5),  // deterministic score for tests
+}));
+```
+
+```bash
+grep -rn 'vi.mock.*agent/journey' tests/ --include="*.ts"
+# Update each file found to include computeRelevance
 ```
 
 **Step 4: Run tests — must PASS**
@@ -917,6 +995,14 @@ describe("schemaMode per journey state", () => {
     const prompt = buildSystemPrompt(makeBootstrap("active_fresh"), { schemaMode: "none" });
     expect(prompt).not.toContain(FULL_SCHEMA_MARKER);
   });
+
+  it("active_stale: injects no schema (returning users don't need model explanation)", () => {
+    const prompt = buildSystemPrompt(makeBootstrap("active_stale"), { schemaMode: "none" });
+    expect(prompt).not.toContain(FULL_SCHEMA_MARKER);
+    expect(prompt).not.toContain(MINIMAL_SCHEMA_MARKER);
+    // Must also not contain onboarding flow directive
+    expect(prompt).not.toContain("call generate_page");
+  });
 });
 ```
 
@@ -947,7 +1033,8 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
   returning_no_page: { ..., schemaMode: "full"    },
   draft_ready:       { ..., schemaMode: "none"    },
   active_fresh:      { ..., schemaMode: "none"    },
-  active_stale:      { ..., schemaMode: "minimal" },
+  // active_stale: "none" — returning users already know the model, schema causes premature generate_page
+  active_stale:      { ..., schemaMode: "none"    },
   blocked:           { ..., schemaMode: "none"    },
 };
 ```
@@ -989,27 +1076,42 @@ export function buildSystemPrompt(
   // ...
 }
 
-// Update call in context.ts:
+// Update call in context.ts — bootstrap path only (leave !bootstrap fallback for Task 16):
+// Find: `? buildSystemPrompt(bootstrap)` or `buildSystemPrompt(bootstrap, {...})`
+// After:
 const basePrompt = bootstrap
   ? buildSystemPrompt(bootstrap, { schemaMode: profile?.schemaMode ?? "full" })
-  : buildSystemPrompt(
-      { journeyState: "first_visit", language, situations: [],
-        expertiseLevel: "novice", /* safe defaults */ } as BootstrapPayload,
-      { schemaMode: "minimal" }
-    );
+  : getSystemPromptText(mode, language);  // ← LEAVE UNCHANGED — Task 16 removes this
 ```
 
-**Step 5: Run tests — must PASS**
+**Step 5: Migrate existing tests that reference `includeSchemaReference`**
+
+Two test files use the old `includeSchemaReference` API — update them before running the suite:
+
+```bash
+grep -rn "includeSchemaReference" tests/ --include="*.ts"
+# Expected: tests/evals/conditional-context.test.ts, tests/evals/context-assembler.test.ts
+```
+
+In `conditional-context.test.ts` (~lines 111-124): replace `includeSchemaReference: true/false` expectations with `schemaMode: "full"/"none"`.
+
+In `context-assembler.test.ts` (~line 431): replace `includeSchemaReference: expect.any(Boolean)` with `schemaMode: expect.stringMatching(/^(full|minimal|none)$/)`.
+
+**Step 6: Run tests — must PASS**
 
 ```bash
 npx vitest run tests/evals/schema-mode.test.ts
-npx vitest run  # full suite
+npx vitest run  # full suite including migrated tests
 ```
 
-**Step 6: Commit**
+**Step 7: Commit**
+
+NOTE: The `!bootstrap` fallback in `context.ts` still calls `getSystemPromptText` at this point.
+Do NOT change that fallback in this task. Leave `getSystemPromptText` in place — it will be replaced in Task 16.
+Task 6 only adds `schemaMode` support to the bootstrap path; Task 16 removes the legacy fallback.
 
 ```bash
-git add src/lib/agent/context.ts src/lib/agent/prompts.ts tests/evals/schema-mode.test.ts
+git add src/lib/agent/context.ts src/lib/agent/prompts.ts tests/evals/schema-mode.test.ts         tests/evals/conditional-context.test.ts tests/evals/context-assembler.test.ts
 git commit -m "feat(agent): add schemaMode per journey state, minimal schema for onboarding"
 ```
 
@@ -1065,9 +1167,8 @@ describe("shouldRedetectArchetype", () => {
     expect(shouldRedetectArchetype({ archetype: "developer", archetypeDetectedAt: detectedAt }, [roleUpdatedAfter])).toBe(true);
   });
 
-  it("prefers identity/role over identity/title for invalidation check", () => {
+  it("role updated after detectedAt triggers re-detection", () => {
     const detectedAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    // role updated recently, title is old
     const roleNew: FactRow = { ...roleFact(new Date().toISOString()), key: "role" };
     const titleOld: FactRow = {
       ...roleFact(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()),
@@ -1076,6 +1177,17 @@ describe("shouldRedetectArchetype", () => {
     expect(shouldRedetectArchetype(
       { archetype: "developer", archetypeDetectedAt: detectedAt },
       [titleOld, roleNew]
+    )).toBe(true);
+  });
+
+  it("title updated after detectedAt triggers re-detection even when role is older", () => {
+    // Fix for: role is stale (pre-detection), title is newly updated → should still re-detect
+    const detectedAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const roleOld: FactRow = { ...roleFact(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()), key: "role" };
+    const titleNew: FactRow = { ...roleFact(new Date().toISOString()), key: "title", id: "t1" };
+    expect(shouldRedetectArchetype(
+      { archetype: "developer", archetypeDetectedAt: detectedAt },
+      [roleOld, titleNew]
     )).toBe(true);
   });
 });
@@ -1104,17 +1216,18 @@ export function shouldRedetectArchetype(
     return true;
   }
 
-  // Check if identity/role (preferred) or identity/title changed after detection
-  const roleFact = facts
-    .filter(f => f.category === "identity" && (f.key === "role" || f.key === "title"))
-    .sort((a, b) => {
-      if (a.key === "role" && b.key !== "role") return -1;
-      if (b.key === "role" && a.key !== "role") return 1;
-      return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
-    })[0];
+  // Check if any identity/role or identity/title fact changed after detection.
+  // Use the NEWEST updated timestamp across both keys — not just role.
+  // (If role is old but title was just updated, we should still re-detect.)
+  const identityFacts = facts.filter(f => f.category === "identity" && (f.key === "role" || f.key === "title"));
+  const newestUpdatedAt = identityFacts.reduce<string | null>((best, f) => {
+    if (!f.updatedAt) return best;
+    if (!best) return f.updatedAt;
+    return f.updatedAt > best ? f.updatedAt : best;
+  }, null);
 
-  if (roleFact?.updatedAt) {
-    return new Date(roleFact.updatedAt) > new Date(meta.archetypeDetectedAt as string);
+  if (newestUpdatedAt) {
+    return newestUpdatedAt > (meta.archetypeDetectedAt as string);
   }
 
   return false;
@@ -1208,8 +1321,9 @@ describe("getSoulProposalCooldownStatus", () => {
     expect(getSoulProposalCooldownStatus("owner1").blocked).toBe(true);
   });
 
-  it("returns { blocked: false } when rejected more than 30 days ago", () => {
-    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+  it("returns { blocked: false } when rejected exactly 30 days + 1ms ago", () => {
+    // ms precision: 30d + 1ms is outside cooldown window
+    const old = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000 + 1)).toISOString();
     mockGet.mockReturnValue({ latest: old });
     expect(getSoulProposalCooldownStatus("owner1").blocked).toBe(false);
   });
@@ -1230,27 +1344,36 @@ npx vitest run tests/evals/soul-proposal-cooldown.test.ts
 const SOUL_PROPOSAL_COOLDOWN_DAYS = 30;
 
 export function getSoulProposalCooldownStatus(ownerKey: string): { blocked: boolean; lastRejectedAt: string | null } {
+  // Use resolved_at (when rejection was confirmed) not created_at (when proposal was made).
+  // COALESCE for legacy rows that may have null resolved_at.
   const row = sqlite
-    .prepare(`SELECT MAX(created_at) as latest FROM soul_change_proposals WHERE owner_key = ? AND status = 'rejected'`)
+    .prepare(`SELECT MAX(COALESCE(resolved_at, created_at)) as latest FROM soul_change_proposals WHERE owner_key = ? AND status = 'rejected'`)
     .get(ownerKey) as { latest: string | null } | undefined;
 
   const lastRejectedAt = row?.latest ?? null;
   if (!lastRejectedAt) return { blocked: false, lastRejectedAt: null };
 
-  const blocked = daysBetween(new Date(lastRejectedAt), new Date()) < SOUL_PROPOSAL_COOLDOWN_DAYS;
+  // Compare ms directly — avoids ~12h rounding error from daysBetween()
+  const cooldownMs = SOUL_PROPOSAL_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+  const blocked = Date.now() - new Date(lastRejectedAt).getTime() < cooldownMs;
   return { blocked, lastRejectedAt };
 }
 
-// In assembleBootstrapPayload, replace soul auto-proposal guard:
-// Before:
+// In assembleBootstrapPayload (~line 467-480), the existing code uses `ownerKey` (not `cognitiveOwnerKey`):
+//   const soul = getActiveSoul(ownerKey);          ← variable is `soul`, not `activeSoul`
 //   const pendingSoulProposals = getPendingProposals(ownerKey);
-//   if (pendingSoulProposals.length === 0) { proposeSoulChange(...) }
-// After:
+//   if (!soul && pendingSoulProposals.length === 0) { proposeSoulChange(...) }
+//
+// Replace ONLY the guard condition block (keep existing variable declarations):
 const { blocked: soulCooldownActive } = getSoulProposalCooldownStatus(ownerKey);
-if (!soul && !soulCooldownActive && pendingSoulProposals.length === 0) {
+if (!soul && !soulCooldownActive && archetype !== "generalist" && pendingSoulProposals.length === 0) {
+  const strategy = ARCHETYPE_STRATEGIES[archetype];
   try {
-    proposeSoulChange(ownerKey, { tone: strategy.toneHint, communicationStyle: strategy.communicationStyle },
-      `Auto-suggested from detected archetype: ${archetype}`);
+    proposeSoulChange(
+      ownerKey,
+      { tone: strategy.toneHint, communicationStyle: strategy.communicationStyle },
+      `Auto-suggested from detected archetype: ${archetype}`
+    );
   } catch { /* best-effort: don't block bootstrap */ }
 }
 ```
@@ -1298,7 +1421,19 @@ function buildWelcomeMessage(
   const lang = language || "en";
 
   if (!bootstrap) {
-    return { id: "welcome", role: "assistant", content: FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en };
+    // Neutral fallback for when bootstrap is unavailable (network error, timing).
+    // Do NOT use FIRST_VISIT_WELCOME here — returning users would get onboarding questions.
+    const neutral: Record<string, string> = {
+      en: "Hey! What would you like to work on?",
+      it: "Ciao! Su cosa vuoi lavorare?",
+      de: "Hey! Woran möchtest du arbeiten?",
+      fr: "Salut ! Sur quoi veux-tu travailler ?",
+      es: "¡Hola! ¿En qué quieres trabajar?",
+      pt: "Olá! Em que queres trabalhar?",
+      ja: "こんにちは！何に取り組みますか？",
+      zh: "你好！想做什么？",
+    };
+    return { id: "welcome", role: "assistant", content: neutral[lang] ?? neutral.en };
   }
 
   switch (bootstrap.journeyState) {
@@ -1312,7 +1447,8 @@ function buildWelcomeMessage(
       return { id: "welcome", role: "assistant", content: DRAFT_READY_WELCOME[lang] ?? DRAFT_READY_WELCOME.en };
 
     case "blocked":
-      return { id: "welcome", role: "assistant", content: QUOTA_EXHAUSTED_MESSAGES[lang] ?? QUOTA_EXHAUSTED_MESSAGES.en };
+      // Use LIMIT_MESSAGES — the existing constant in ChatPanel.tsx for quota-exhausted copy
+      return { id: "welcome", role: "assistant", content: LIMIT_MESSAGES[lang] ?? LIMIT_MESSAGES.en };
 
     case "active_fresh":
     case "active_stale": {
@@ -1546,20 +1682,33 @@ DO NOT call search_facts:
 This avoids unnecessary round-trips that add latency.`;
 ```
 
-**Step 2: Update the three policy files to import and embed the rule**
+**Step 2: Update the three policy files to remove ALL unconditional search directives and embed the rule**
 
-In `returning-no-page.ts` (~line 27), replace:
+In `returning-no-page.ts`, find and REMOVE the old instruction:
 ```
 - Use search_facts BEFORE every question to check what you already know.
 ```
-With:
+Replace the surrounding block with:
 ```typescript
 import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
-// ... in the template string:
+// ... in the template string where the old "before every question" instruction was:
 ${SEARCH_FACTS_RULE}
 ```
 
-Same pattern for `planning-protocol.ts` (~line 21) and `memory-directives.ts` (~line 14).
+In `memory-directives.ts` (~line 14), find and REMOVE:
+```
+- ALWAYS use search_facts before asking a question — if the answer is already in facts, do NOT ask.
+```
+Replace with `${SEARCH_FACTS_RULE}` at the same location.
+
+In `planning-protocol.ts`, find and REMOVE any "always search" / "before every" instruction.
+Replace with `${SEARCH_FACTS_RULE}`.
+
+Also check `active-fresh.ts` (~line 29) — it has:
+```
+- Use search_facts to find the existing fact before updating — confirm the right fact ID.
+```
+This instruction is CORRECT (search before update is the right behavior). Leave it unchanged.
 
 **Step 3: Verify the text appears in composed prompts**
 
@@ -1584,9 +1733,15 @@ describe("search_facts rule embedding", () => {
   it("memoryUsageDirectives contains the unified search_facts rule", () => {
     expect(memoryUsageDirectives()).toContain("WHEN TO CALL search_facts");
   });
-  it("none of them contain the old over-eager instruction", () => {
+  it("none of them contain the old over-eager instruction (BEFORE every question)", () => {
     for (const text of [returningNoPagePolicy("en"), planningProtocol(), memoryUsageDirectives()]) {
       expect(text).not.toContain("BEFORE every question");
+    }
+  });
+
+  it("none of them contain 'ALWAYS use search_facts before asking'", () => {
+    for (const text of [returningNoPagePolicy("en"), planningProtocol(), memoryUsageDirectives()]) {
+      expect(text).not.toContain("ALWAYS use search_facts before asking");
     }
   });
 });
@@ -1636,6 +1791,12 @@ describe("isNewTopicSignal", () => {
     }
   });
 
+  it("continuation phrases are NOT new topics even if longer than 30 chars", () => {
+    expect(isNewTopicSignal("yes, do it — go ahead", "en")).toBe(false);
+    expect(isNewTopicSignal("continue, please go on with the previous task", "en")).toBe(false);
+    expect(isNewTopicSignal("sì, continua pure con quello che stavi facendo", "it")).toBe(false);
+  });
+
   it("action verbs in English trigger new topic", () => {
     expect(isNewTopicSignal("change the layout", "en")).toBe(true);
     expect(isNewTopicSignal("add my new job", "en")).toBe(true);
@@ -1648,8 +1809,29 @@ describe("isNewTopicSignal", () => {
     expect(isNewTopicSignal("rimuovi quella competenza", "it")).toBe(true);
   });
 
+  it("action phrases in Japanese trigger new topic", () => {
+    expect(isNewTopicSignal("レイアウトを変更して", "ja")).toBe(true);
+    expect(isNewTopicSignal("新しい仕事を追加してください", "ja")).toBe(true);
+  });
+
+  it("short Japanese acknowledgments do NOT trigger new topic", () => {
+    // These were false positives with the old character-class regex
+    expect(isNewTopicSignal("はい", "ja")).toBe(false);      // 'い' was in [してください]
+    expect(isNewTopicSignal("分かりました", "ja")).toBe(false); // 'し' was in class
+    expect(isNewTopicSignal("了解", "ja")).toBe(false);
+  });
+
   it("unknown language falls back to English patterns", () => {
     expect(isNewTopicSignal("change the layout", "xx")).toBe(true);
+  });
+
+  it("Italian action in English session is detected", () => {
+    // User switches language mid-session — should still detect new topic
+    expect(isNewTopicSignal("cambia il layout", "en")).toBe(true);
+  });
+
+  it("Italian continuation in English session is NOT new topic", () => {
+    expect(isNewTopicSignal("sì, continua pure", "en")).toBe(false);
   });
 });
 ```
@@ -1672,22 +1854,65 @@ const NEW_TOPIC_PATTERNS: Record<string, RegExp> = {
   fr: /\b(change|modifie|ajoute|supprime|crée|construis|génère|montre|déplace|renomme|je veux|peux.tu|s.il te plaît|corrige)\b/i,
   es: /\b(cambia|actualiza|agrega|elimina|crea|construye|genera|muestra|mueve|renombra|quiero|puedes|por favor|corrige|edita)\b/i,
   pt: /\b(muda|atualiza|adiciona|remove|elimina|cria|constrói|gera|mostra|move|renomeia|quero|podes|por favor|corrige|edita)\b/i,
-  ja: /[変更追加削除作成移動修正してください]/,
+  // Japanese: phrase-based matching only — character classes cause false positives
+  // (e.g., [してください] matches 'い' in 'はい'). Use explicit action phrases.
+  ja: /(変更|追加|削除|更新|作成|移動|修正|変えて|追加して|削除して|更新して|変更して|作って|してください|お願い|やって)/,
+  // Chinese: character classes are safe (no overlap with common acks like 好/是/谢谢)
   zh: /[改变更新添加删除创建移动修改]/,
+};
+
+// Continuation phrases: these are affirmations that continue an existing operation.
+// Even if they match action verbs or are long, they should NOT clear pending ops.
+const CONTINUATION_PATTERNS: Record<string, RegExp> = {
+  en: /^(yes[,! ]*do it|continue|go on|proceed|ok[, ]*go ahead|sure[, ]*go ahead|keep going|yes please|yep|yeah)/i,
+  it: /^(sì[,! ]*fai|continua|vai avanti|procedi|ok[, ]*vai|certo[, ]*vai|si|esatto|già)/i,
+  de: /^(ja[,! ]*mach|weiter|fortfahren|ja bitte|klar[, ]*mach|ja genau)/i,
+  fr: /^(oui[,! ]*fais|continue|vas-y|procède|oui s'il te|ouais)/i,
+  es: /^(sí[,! ]*hazlo|continúa|adelante|procede|sí por favor|sí claro)/i,
+  pt: /^(sim[,! ]*faz|continua|vai em frente|procede|sim por favor)/i,
+  ja: /^(はい|そうです|続けて|お願い|そうしてください)/,
+  zh: /^(好的|是的|请继续|继续|可以)/,
 };
 
 export function isNewTopicSignal(message: string, language: string = "en"): boolean {
   const trimmed = message.trim();
-  if (trimmed.length > 30) return true;
-  const pattern = NEW_TOPIC_PATTERNS[language] ?? NEW_TOPIC_PATTERNS.en;
-  return pattern.test(trimmed);
+
+  // Check continuation allowlist FIRST in ALL languages.
+  // Users may write in any language regardless of session language.
+  for (const contPattern of Object.values(CONTINUATION_PATTERNS)) {
+    if (contPattern.test(trimmed)) return false;
+  }
+
+  // Check action patterns in ALL languages (session language may differ from message language).
+  // Match on first hit — safe since patterns don't overlap across languages.
+  for (const [lang, pattern] of Object.entries(NEW_TOPIC_PATTERNS)) {
+    if (pattern.test(trimmed)) return true;
+  }
+
+  // Long messages without explicit action verbs: treat as new topic if >60 chars
+  return trimmed.length > 60;
 }
 ```
 
-**Step 4: Update `context.ts` — gate INCOMPLETE_OPERATION injection**
+**Step 4: Update `context.ts` — hoist `latestUserMessage` and gate INCOMPLETE_OPERATION injection**
+
+IMPORTANT: In current `context.ts`, `latestUserMessage` is declared at ~line 383 (after the pending-ops block at ~line 334).
+The pending-ops gate needs it earlier. Move the declaration to BEFORE the pending-ops block:
 
 ```typescript
-// src/lib/agent/context.ts — in the pending ops injection block (~line 330)
+// src/lib/agent/context.ts — move this line UP before line 334 (before pending-ops block):
+// BEFORE (was at ~line 383):
+//   const latestUserMessage = [...clientMessages].reverse().find(m => m.role === "user")?.content ?? "";
+//   const detectedConnectors = detectConnectorUrls(latestUserMessage);
+// AFTER: declare latestUserMessage at ~line 330 (before pending-ops), keep detectedConnectors where it was:
+const latestUserMessage = [...clientMessages].reverse().find(m => m.role === "user")?.content ?? "";
+// (detectedConnectors stays at line 384 — it references the same const, no change needed)
+```
+
+Then replace the pending ops injection:
+
+```typescript
+// src/lib/agent/context.ts — in the pending ops injection block (~line 334)
 import { isNewTopicSignal } from "@/lib/agent/policies/topic-signal-detector";
 
 // Replace the existing pending ops injection:
@@ -2051,13 +2276,23 @@ git commit -m "refactor(agent): migrate types from promptAssembler.ts, delete de
 - Modify: `src/lib/agent/prompts.ts`
 - Modify: `src/lib/agent/context.ts`
 
-**Step 1: Verify `getSystemPromptText` callers**
+**Step 1: Verify `getSystemPromptText` callers and update them**
 
 ```bash
 grep -rn "getSystemPromptText\|onboardingPolicy\|steadyStatePolicy" src/ --include="*.ts" --include="*.tsx"
 ```
 
-Expected: only `prompts.ts` itself and `context.ts:255`.
+Known callers (must be updated in this task BEFORE removing the function):
+- `src/lib/agent/context.ts:255` — the `!bootstrap` fallback (updated in Step 2 below)
+- `src/lib/agent/context.ts:8` — the import (updated in Step 4)
+
+**Test files that also import `getSystemPromptText` — update them in this step:**
+- `tests/evals/context-assembler.test.ts:36,52,435` — mock + import + assertion
+- `tests/evals/conditional-context.test.ts:46` — mock
+- `tests/evals/onboarding-policy.test.ts:9` — import
+
+For each: remove the `getSystemPromptText` mock/import and update assertions to use `buildSystemPrompt` instead.
+For `context-assembler.test.ts:435` ("uses getSystemPromptText when no bootstrap provided"): rewrite the test to verify that `buildSystemPrompt` is called with `schemaMode: "minimal"` when bootstrap is null.
 
 **Step 2: Update `context.ts` — close the `!bootstrap` fallback**
 
