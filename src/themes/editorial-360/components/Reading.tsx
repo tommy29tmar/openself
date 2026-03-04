@@ -1,5 +1,6 @@
 import React from "react";
 import type { SectionProps } from "../../types";
+import { CollapsibleList } from "@/components/page/CollapsibleList";
 
 type ReadingItem = {
     title: string;
@@ -28,6 +29,38 @@ export function Reading({ content, variant }: SectionProps<ReadingContent>) {
     const { items = [], title } = content;
 
     if (!items.length) return null;
+
+    if (variant === "monolith") {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Reading"}</h2>
+                <CollapsibleList
+                    visibleCount={3}
+                    moreLabel="more books"
+                    items={items.map((item, index) => (
+                        <div key={index} style={{ marginBottom: 24 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.3 }}>
+                                {item.url ? (
+                                    <a href={item.url} target="_blank" rel="noopener noreferrer"
+                                        style={{ color: "inherit", textDecoration: "none" }}>
+                                        {item.title}
+                                    </a>
+                                ) : item.title}
+                            </div>
+                            {item.author && (
+                                <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 2 }}>{item.author}</div>
+                            )}
+                            {item.note && (
+                                <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 6, lineHeight: 1.5, opacity: 0.8 }}>
+                                    {item.note}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                />
+            </section>
+        );
+    }
 
     const isCompact = variant === "compact";
     const maxItems = isCompact ? 5 : items.length;

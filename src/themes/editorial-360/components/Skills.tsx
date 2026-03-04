@@ -18,6 +18,34 @@ export function Skills({ content, variant = "skills-list" }: SectionProps<Skills
 
     if (!groups.length) return null;
 
+    if (variant === "skills-accent-pills") {
+        const allSkills: string[] = (groups ?? []).flatMap((g) => {
+            const raw = g.items ?? g.skills ?? [];
+            return raw.map((item: string | { name: string }) =>
+                typeof item === "string" ? item : item.name
+            );
+        });
+
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Skills"}</h2>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {allSkills.map((name, i) => (
+                        <span key={i} style={{
+                            fontSize: 12, fontWeight: 500,
+                            padding: "6px 14px", borderRadius: 20,
+                            border: i < 2 ? "1px solid var(--page-accent)" : "1px solid var(--page-border)",
+                            background: i < 2 ? "var(--page-accent)" : "var(--page-muted)",
+                            color: i < 2 ? "var(--page-accent-fg)" : "var(--page-fg)",
+                        }}>
+                            {name}
+                        </span>
+                    ))}
+                </div>
+            </section>
+        );
+    }
+
     if (variant === "skills-chips") {
         return (
             <section className="theme-reveal">

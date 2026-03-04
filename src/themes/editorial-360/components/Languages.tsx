@@ -11,10 +11,29 @@ type LanguagesContent = {
     title?: string;
 };
 
-export function Languages({ content }: SectionProps<LanguagesContent>) {
+export function Languages({ content, variant }: SectionProps<LanguagesContent>) {
     const { items = [], title } = content;
 
     if (!items.length) return null;
+
+    if (variant === "monolith") {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Languages"}</h2>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {items.map((item, i) => (
+                        <span key={i} style={{
+                            fontSize: 12, padding: "6px 14px", borderRadius: 20,
+                            border: "1px solid var(--page-border)",
+                            background: "var(--page-muted)", color: "var(--page-fg)",
+                        }}>
+                            {item.language}{item.proficiency ? ` · ${item.proficiency}` : ""}
+                        </span>
+                    ))}
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section className="theme-reveal">

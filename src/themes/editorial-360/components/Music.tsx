@@ -1,5 +1,6 @@
 import React from "react";
 import type { SectionProps } from "../../types";
+import { CollapsibleList } from "@/components/page/CollapsibleList";
 
 type MusicItem = {
     title: string;
@@ -17,6 +18,33 @@ export function Music({ content, variant }: SectionProps<MusicContent>) {
     const { items = [], title } = content;
 
     if (!items.length) return null;
+
+    if (variant === "monolith") {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Music"}</h2>
+                <CollapsibleList
+                    visibleCount={3}
+                    moreLabel="more tracks"
+                    items={items.map((item, index) => (
+                        <div key={index} style={{ marginBottom: 24 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.3 }}>
+                                {item.title}
+                            </div>
+                            {item.artist && (
+                                <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 2 }}>{item.artist}</div>
+                            )}
+                            {item.note && (
+                                <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 6, lineHeight: 1.5, opacity: 0.8 }}>
+                                    {item.note}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                />
+            </section>
+        );
+    }
 
     const isCompact = variant === "compact";
     const maxItems = isCompact ? 5 : items.length;
