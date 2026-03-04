@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSelf — Monolith Pro · Design Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,300;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=Figtree:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&family=Lato:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #070709;
+      --bg-card:     #0e0e11;
+      --fg:          #ece8e0;
+      --fg-2:        #7a7670;
+      --fg-3:        #2a2924;
+      --accent:      #c08040;
+      --accent-soft: rgba(192,128,64,.12);
+      --accent-light:#e8c090;
+      --border:      #1d1d20;
+      --green:       #7ab87a;
+      --red:         #d06060;
+
+      --ff-display: 'Fraunces', Georgia, serif;
+      --ff-mono:    'IBM Plex Mono', monospace;
+      --ff-body:    'Figtree', system-ui, sans-serif;
+
+      /* Inner page tokens */
+      --os-bg:      #fafaf8;
+      --os-fg:      #111111;
+      --os-fg-sec:  #888880;
+      --os-accent:  #1f3d8c;
+      --os-border:  #e8e5e0;
+      --os-ease:    cubic-bezier(0.16, 1, 0.32, 1);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--ff-body);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 9999;
+      opacity: .028;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ━━━ HEADER ━━━ */
+    .site-header {
+      text-align: center;
+      padding: 96px 40px 72px;
+      border-bottom: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .site-header::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 400px;
+      background: radial-gradient(ellipse at top, rgba(192,128,64,.07) 0%, transparent 68%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 10px; letter-spacing: .3em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 28px;
+    }
+    .display-title {
+      font-family: var(--ff-display);
+      font-size: clamp(3.5rem, 8vw, 7.5rem);
+      font-weight: 300; line-height: .9; letter-spacing: -.03em;
+      margin-bottom: 24px;
+    }
+    .display-title em { font-style: italic; color: var(--accent); }
+    .subtitle {
+      font-size: 1rem; color: var(--fg-2); font-weight: 300;
+      max-width: 52ch; margin: 0 auto;
+    }
+
+    /* ━━━ SECTION WRAPPER ━━━ */
+    .section {
+      padding: 72px 64px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 9px; letter-spacing: .25em; text-transform: uppercase;
+      color: var(--fg-2); margin-bottom: 40px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-eyebrow::before {
+      content: ''; display: block; width: 20px; height: 1px;
+      background: var(--accent); flex-shrink: 0;
+    }
+
+    /* ━━━ DNA SPECIMEN STRIP ━━━ */
+    .dna-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .dna-card {
+      padding: 28px 20px 24px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-card);
+      transition: background .2s;
+    }
+    .dna-card:last-child { border-right: none; }
+    .dna-card:hover { background: #13131a; }
+    .dna-num {
+      font-family: var(--ff-mono); font-size: 9px;
+      color: var(--accent); letter-spacing: .1em; margin-bottom: 12px;
+    }
+    .dna-name {
+      font-family: var(--ff-display); font-size: 1rem;
+      font-weight: 400; margin-bottom: 8px; line-height: 1.2;
+    }
+    .dna-desc {
+      font-family: var(--ff-mono); font-size: 9.5px;
+      color: var(--fg-2); line-height: 1.55;
+    }
+    .dna-demo {
+      margin-top: 20px; height: 36px;
+      display: flex; align-items: center;
+    }
+
+    /* DNA demo: L1 accent bar */
+    .d-bar {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .d-bar::before {
+      content: ''; display: block;
+      width: 3px; height: 16px; background: var(--accent); flex-shrink: 0;
+    }
+    .d-bar span { font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--fg-2); }
+
+    /* DNA demo: L2 spacing bars */
+    .d-spacing { display: flex; align-items: flex-end; gap: 5px; }
+    .d-spacing-bar { width: 16px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .5; }
+
+    /* DNA demo: L3 curve viz */
+    .d-curve { width: 100%; }
+    .d-curve path { stroke: var(--accent); stroke-width: 1.5; fill: none; opacity: .7; }
+
+    /* DNA demo: L4 reveal bars */
+    .d-reveal { display: flex; gap: 5px; align-items: center; width: 100%; }
+    .d-reveal-bar { height: 7px; background: var(--accent); border-radius: 2px; opacity: 0;
+      animation: revealLoop 3s var(--os-ease, cubic-bezier(0.16,1,0.32,1)) infinite; }
+    .d-reveal-bar:nth-child(1) { width: 50%; animation-delay: 0s; }
+    .d-reveal-bar:nth-child(2) { width: 35%; animation-delay: .18s; }
+    .d-reveal-bar:nth-child(3) { width: 20%; animation-delay: .34s; }
+    @keyframes revealLoop {
+      0%,70%,100% { opacity: 0; transform: translateY(5px); }
+      20%,55%     { opacity: .7; transform: translateY(0); }
+    }
+
+    /* DNA demo: L5 underline grow */
+    .d-thread { position: relative; font-size: 11px; color: var(--fg-2); display: inline-block; }
+    .d-thread::after {
+      content: ''; position: absolute; bottom: 0; left: 0;
+      width: 100%; height: 1px; background: var(--accent);
+      transform: scaleX(0); transform-origin: left;
+      animation: threadLoop 3s ease infinite;
+    }
+    @keyframes threadLoop {
+      0%,100% { transform: scaleX(0); }
+      25%,75%  { transform: scaleX(1); }
+    }
+
+    /* DNA demo: L6 signature */
+    .d-sig { font-family: var(--ff-mono); font-size: 9px; color: var(--accent); opacity: .5; letter-spacing: .05em; }
+
+    /* ━━━ BROWSER FRAME SECTION ━━━ */
+    .browser-section {
+      padding: 64px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .browser-controls {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .toggle-btn {
+      padding: 6px 16px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg-2);
+      font-family: var(--ff-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+      border-radius: 4px; cursor: pointer; transition: all .2s;
+    }
+    .toggle-btn:hover, .toggle-btn.active {
+      border-color: var(--accent); color: var(--accent);
+    }
+
+    .browser-scale-container {
+      width: 100%; overflow: hidden;
+      border-radius: 10px 10px 0 0;
+      border: 1px solid #2a2a30;
+      box-shadow: 0 40px 120px rgba(0,0,0,.7);
+    }
+
+    .browser-inner-wrapper {
+      width: 1280px;
+      transform-origin: top left;
+    }
+
+    /* Browser chrome */
+    .browser-chrome {
+      background: #18181e;
+      height: 44px;
+      display: flex; align-items: center;
+      padding: 0 16px; gap: 12px;
+      border-bottom: 1px solid #2a2a30;
+    }
+    .chrome-dots { display: flex; gap: 6px; }
+    .chrome-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .chrome-dot-r { background: #ff5f56; }
+    .chrome-dot-y { background: #ffbd2e; }
+    .chrome-dot-g { background: #27c93f; }
+    .chrome-urlbar {
+      flex: 1; max-width: 380px; height: 26px;
+      background: #0e0e12; border-radius: 6px; border: 1px solid #2a2a30;
+      display: flex; align-items: center; padding: 0 10px; gap: 6px;
+    }
+    .chrome-urlbar-text { font-family: var(--ff-mono); font-size: 11px; color: #666; }
+
+    /* ━━━ INNER OS PAGE ━━━ */
+    .os-page {
+      background: var(--os-bg);
+      color: var(--os-fg);
+      font-family: 'Lato', sans-serif;
+      font-weight: 300;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Grain */
+    .os-grain {
+      position: absolute; inset: 0;
+      pointer-events: none; z-index: 8;
+      opacity: .025;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* Edge lines */
+    .os-edge { position: absolute; top: 0; width: 1px; height: 100%; opacity: .1; pointer-events: none; z-index: 9; }
+    .os-edge-l { left: 0; background: linear-gradient(to bottom, transparent 0%, var(--os-fg) 5%, var(--os-fg) 95%, transparent 100%); }
+    .os-edge-r { right: 0; background: linear-gradient(to bottom, transparent 0%, var(--os-fg) 5%, var(--os-fg) 95%, transparent 100%); }
+
+    /* Zone overlay (shown when toggled) */
+    .os-zone-overlay { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+    .os-zone-overlay.active { display: block; }
+    .os-zone-reading {
+      position: absolute; top: 0; height: 100%;
+      left: calc(64px + (1280px - 128px) * 1/12);
+      width: calc((1280px - 128px) * 7/12);
+      background: rgba(31,61,140,.05);
+    }
+    .os-zone-bleed {
+      position: absolute; top: 0; height: 100%;
+      left: 64px;
+      width: calc((1280px - 128px) * 10/12 + 16px);
+      background: rgba(31,61,140,.03);
+    }
+
+    /* Zone labels */
+    .os-zone-label {
+      position: absolute; top: 16px;
+      font-family: var(--ff-mono); font-size: 9px; letter-spacing: .15em;
+      text-transform: uppercase; color: var(--os-accent); opacity: .5;
+    }
+
+    /* ━━━ OS HERO ━━━ */
+    .os-hero {
+      padding: 80px 64px 48px;
+      border-bottom: 1px solid var(--os-border);
+      position: relative;
+    }
+    .os-hero-name {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 3.75rem; font-weight: 400;
+      line-height: .97; letter-spacing: -.02em;
+      margin-bottom: 12px; color: var(--os-fg);
+    }
+    .os-hero-tagline {
+      font-size: 1.05rem; color: var(--os-fg-sec);
+      margin-bottom: 28px; font-weight: 300;
+    }
+    .os-hero-links {
+      display: flex; gap: 20px; flex-wrap: wrap;
+    }
+    .os-hero-link {
+      font-size: 0.7rem; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--os-fg-sec); text-decoration: none; position: relative;
+    }
+    .os-hero-link::after {
+      content: ''; position: absolute; bottom: -2px; left: 0;
+      width: 100%; height: 1px; background: var(--os-accent);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform .3s var(--os-ease);
+    }
+    .os-hero-link:hover::after { transform: scaleX(1); }
+
+    /* ━━━ OS SECTION LAYOUT ━━━ */
+    .os-content {
+      padding: 0 64px;
+    }
+
+    /* Reading+Ambient row: reading content + right ambient column */
+    .os-row-reading {
+      display: flex; gap: 0; align-items: flex-start;
+      border-bottom: 1px solid var(--os-border);
+    }
+    .os-reading-pane {
+      flex: 0 0 680px; /* ~7/12 of 1152px content width */
+      padding: 48px 0;
+    }
+    .os-ambient-pane {
+      flex: 1;
+      padding: 48px 0 48px 48px;
+      overflow: hidden;
+    }
+    .os-ambient-marker {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 7rem; line-height: 1;
+      writing-mode: vertical-rl; text-orientation: mixed;
+      letter-spacing: -.02em;
+      color: var(--os-fg); opacity: .04;
+      pointer-events: none; user-select: none;
+      white-space: nowrap;
+    }
+
+    /* Bleed row */
+    .os-row-bleed {
+      border-bottom: 1px solid var(--os-border);
+      padding: 48px 0;
+      /* bleed: extends to near the right edge, wider than reading */
+      max-width: 900px;
+    }
+
+    /* Dense row (skills) */
+    .os-row-dense {
+      border-bottom: 1px solid var(--os-border);
+      padding: 32px 0;
+      max-width: 680px;
+    }
+
+    /* Section label (DNA L1) */
+    .os-sec-label {
+      font-family: var(--ff-mono); font-size: 9.5px;
+      letter-spacing: .18em; text-transform: uppercase;
+      color: var(--os-fg-sec);
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 24px;
+    }
+    .os-sec-label::before {
+      content: ''; display: block;
+      width: 3px; height: 16px; background: var(--os-accent); flex-shrink: 0;
+    }
+
+    /* Bio */
+    .os-bio { font-size: .975rem; line-height: 1.8; color: var(--os-fg); }
+
+    /* Experience */
+    .os-exp-entry {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 14px 0; border-bottom: 1px solid var(--os-border);
+    }
+    .os-exp-entry:last-child { border-bottom: none; }
+    .os-exp-role { font-family: 'DM Serif Display', serif; font-size: 1.05rem; }
+    .os-exp-co   { font-size: .85rem; color: var(--os-fg-sec); margin-top: 3px; }
+    .os-exp-period { font-family: var(--ff-mono); font-size: .72rem; color: var(--os-fg-sec); white-space: nowrap; }
+
+    /* Projects bleed */
+    .os-projects { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 4px; }
+    .os-project-card {
+      padding: 24px 20px; border: 1px solid var(--os-border); border-radius: 4px;
+      transition: border-color .2s;
+    }
+    .os-project-card:hover { border-color: var(--os-accent); }
+    .os-project-year { font-family: var(--ff-mono); font-size: .68rem; color: var(--os-fg-sec); margin-bottom: 8px; }
+    .os-project-name { font-family: 'DM Serif Display', serif; font-size: 1.15rem; margin-bottom: 8px; }
+    .os-project-desc { font-size: .83rem; color: var(--os-fg-sec); line-height: 1.5; }
+
+    /* Skills */
+    .os-skills { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+    .os-skill {
+      font-size: .875rem; color: var(--os-fg-sec);
+      position: relative; cursor: default;
+    }
+    .os-skill::after {
+      content: ''; position: absolute; bottom: -1px; left: 0;
+      width: 100%; height: 1px; background: var(--os-accent);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform .3s var(--os-ease);
+    }
+    .os-skill:hover::after { transform: scaleX(1); }
+
+    /* Footer */
+    .os-footer {
+      padding: 28px 64px; text-align: center;
+      border-top: 1px solid var(--os-border);
+    }
+    .os-footer a {
+      font-family: var(--ff-mono); font-size: 9.5px; letter-spacing: .1em;
+      color: var(--os-fg-sec); text-decoration: none; opacity: .45;
+      transition: opacity .2s;
+    }
+    .os-footer a:hover { opacity: 1; }
+
+    /* ━━━ ANNOTATION BADGES ━━━ */
+    .ann {
+      position: absolute;
+      background: var(--accent); color: #070709;
+      font-family: var(--ff-mono); font-size: 8.5px; font-weight: 500;
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50; cursor: help;
+      box-shadow: 0 0 0 2px rgba(192,128,64,.3);
+    }
+
+    /* ━━━ ANNOTATION KEY TABLE ━━━ */
+    .ann-table {
+      margin-top: 32px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    .ann-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 16px; background: var(--bg-card); border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .ann-badge {
+      background: var(--accent); color: #070709;
+      font-family: var(--ff-mono); font-size: 8.5px; font-weight: 500;
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .ann-text strong { display: block; font-size: .8rem; margin-bottom: 4px; }
+    .ann-text span { font-size: .75rem; color: var(--fg-2); font-family: var(--ff-mono); }
+
+    /* ━━━ MOBILE SECTION ━━━ */
+    .mobile-section { padding: 72px 64px; border-bottom: 1px solid var(--border); }
+    .mobile-row {
+      display: flex; gap: 96px; justify-content: center;
+      flex-wrap: wrap; align-items: flex-start;
+    }
+    .phone-col { display: flex; flex-direction: column; align-items: center; gap: 20px; flex: 0 0 auto; }
+    .phone-col-label {
+      font-family: var(--ff-mono); font-size: 9.5px; letter-spacing: .15em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .col-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .col-dot-b { background: var(--fg-2); }
+    .col-dot-a { background: var(--accent); }
+
+    /* Phone frame */
+    .phone {
+      width: 284px; height: 615px;
+      background: #18181e; border-radius: 44px;
+      border: 2px solid #2a2a30;
+      position: relative; overflow: hidden;
+      box-shadow: 0 32px 80px rgba(0,0,0,.65), inset 0 0 0 1px rgba(255,255,255,.04);
+    }
+    .phone-island {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      width: 88px; height: 26px; background: #000; border-radius: 13px; z-index: 10;
+    }
+    .phone-screen {
+      position: absolute; inset: 0;
+      overflow-y: auto; overflow-x: hidden;
+      scrollbar-width: none; border-radius: 42px;
+    }
+    .phone-screen::-webkit-scrollbar { display: none; }
+
+    /* ── BEFORE PHONE ── */
+    .pb-page { background: #fafaf8; min-height: 100%; font-family: 'Lato', sans-serif; font-weight: 300; }
+    .pb-hero { padding: 80px 22px 48px; border-bottom: 1px solid #e8e5e0; }
+    .pb-hero h1 { font-family: 'DM Serif Display', serif; font-size: 2rem; color: #111; margin-bottom: 8px; line-height: 1.05; }
+    .pb-tagline { font-size: .875rem; color: #888; margin-bottom: 20px; }
+    .pb-social { display: flex; gap: 8px; }
+    .pb-icon { width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #aaa; }
+    .pb-section { padding: 20px 22px; border-bottom: 1px solid #e8e5e0; }
+    .pb-label { font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: #bbb; margin-bottom: 14px; }
+    .pb-skill-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: .83rem; color: #555; }
+    .pb-skill-bar { flex: 1; height: 2px; background: #eee; border-radius: 2px; }
+    .pb-skill-fill { height: 100%; background: #1f3d8c; border-radius: 2px; opacity: .4; }
+    .pb-interest { font-size: .83rem; color: #666; margin-bottom: 8px; }
+    .pb-interest::before { content: '→ '; color: #bbb; }
+
+    /* issue badges */
+    .pb-issue { background: var(--red); color: #fff; font-family: var(--ff-mono); font-size: 8px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-bottom: 10px; }
+
+    /* ── AFTER PHONE ── */
+    .pa-page { background: #fafaf8; min-height: 100%; font-family: 'Lato', sans-serif; font-weight: 300; }
+
+    /* peek-a-boo hero */
+    .pa-hero {
+      min-height: 523px; /* ~85% of 615px */
+      padding: 68px 22px 36px;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      border-bottom: 1px solid #e8e5e0;
+      background: linear-gradient(160deg, #f3f1ed 0%, #fafaf8 100%);
+      position: relative;
+    }
+    .pa-hero h1 { font-family: 'DM Serif Display', serif; font-size: 2.1rem; color: #111; margin-bottom: 8px; line-height: 1.05; }
+    .pa-tagline { font-size: .875rem; color: #888; margin-bottom: 20px; }
+    .pa-social { display: flex; gap: 8px; }
+    .pa-icon { width: 44px; height: 44px; border: 1px solid #e0ddd8; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #1f3d8c; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .pa-peek { position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); width: 30px; height: 4px; background: #ccc; border-radius: 2px; }
+
+    .pa-section { padding: 20px 22px; border-bottom: 1px solid #e8e5e0; }
+    .pa-label {
+      font-size: 8.5px; letter-spacing: .18em; text-transform: uppercase;
+      color: #999; font-family: 'IBM Plex Mono', monospace;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    }
+    .pa-label::before { content: ''; display: block; width: 3px; height: 13px; background: #1f3d8c; flex-shrink: 0; }
+
+    /* scroll snap skills */
+    .pa-skills-scroll {
+      display: flex; gap: 8px;
+      overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+      -webkit-mask-image: linear-gradient(to right, black 75%, transparent 100%);
+      mask-image: linear-gradient(to right, black 75%, transparent 100%);
+    }
+    .pa-skills-scroll::-webkit-scrollbar { display: none; }
+    .pa-chip { flex: 0 0 auto; scroll-snap-align: start; padding: 5px 12px; background: #f0eee9; border-radius: 16px; font-size: .75rem; color: #333; white-space: nowrap; }
+
+    /* flex-wrap interests */
+    .pa-badges { display: flex; flex-wrap: wrap; gap: 7px; }
+    .pa-badge { padding: 5px 11px; border: 1px solid #e8e5e0; border-radius: 4px; font-size: .73rem; color: #666; }
+
+    /* lang scroll */
+    .pa-lang-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+    .pa-lang-row::-webkit-scrollbar { display: none; }
+    .pa-lang-card { flex: 0 0 72px; padding: 10px 8px; border: 1px solid #e8e5e0; border-radius: 6px; text-align: center; }
+    .pa-lang-name { font-size: .72rem; font-weight: 500; color: #111; margin-bottom: 3px; }
+    .pa-lang-lvl  { font-size: .65rem; color: #aaa; }
+
+    .pa-footer { padding: 16px 22px; text-align: center; }
+    .pa-footer a { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; letter-spacing: .08em; color: #bbb; text-decoration: none; }
+
+    /* phone annotation badge */
+    .p-ann {
+      position: absolute; background: var(--accent); color: #070709;
+      font-family: var(--ff-mono); font-size: 7.5px; font-weight: 500;
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; z-index: 50;
+      pointer-events: none;
+    }
+
+    /* ━━━ CHEATSHEET ━━━ */
+    .cheatsheet { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 8px; }
+    .cs-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
+    .cs-title { font-family: var(--ff-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+    .cs-code { font-family: var(--ff-mono); font-size: 10.5px; color: var(--fg-2); line-height: 1.85; white-space: pre; }
+
+    /* ━━━ TICKER ━━━ */
+    .ticker-wrap { overflow: hidden; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 14px 0; }
+    .ticker-inner { display: flex; gap: 48px; animation: ticker 24s linear infinite; white-space: nowrap; width: max-content; }
+    .ticker-item { font-family: var(--ff-mono); font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--fg-2); display: flex; align-items: center; gap: 16px; }
+    .ticker-item::before { content: '◆'; color: var(--accent); font-size: 7px; }
+    @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+    @media (max-width: 900px) {
+      .section, .browser-section, .mobile-section { padding: 48px 24px; }
+      .dna-grid { grid-template-columns: repeat(3, 1fr); }
+      .ann-table { grid-template-columns: 1fr 1fr; }
+      .cheatsheet { grid-template-columns: 1fr; }
+      .mobile-row { gap: 48px; }
+      .browser-controls { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ━━━━━━━━━━ HEADER ━━━━━━━━━━ -->
+<header class="site-header">
+  <p class="eyebrow">OpenSelf · Design System · Monolith Pro</p>
+  <h1 class="display-title">The <em>Monolith</em>,<br>redesigned.</h1>
+  <p class="subtitle">Desktop rhythm zoning, mobile peek-a-boo, e il DNA che rende ogni pagina OpenSelf immediatamente riconoscibile.</p>
+</header>
+
+<!-- ━━━━━━━━━━ TICKER ━━━━━━━━━━ -->
+<div class="ticker-wrap">
+  <div class="ticker-inner">
+    <span class="ticker-item">Rhythm Zoning</span>
+    <span class="ticker-item">Ambient Markers</span>
+    <span class="ticker-item">Peek-a-boo Hero</span>
+    <span class="ticker-item">Scroll Snap Skills</span>
+    <span class="ticker-item">44px Touch Targets</span>
+    <span class="ticker-item">CSS Scroll-Driven Progress</span>
+    <span class="ticker-item">DNA Law 1–6</span>
+    <span class="ticker-item">OpenSelf Signature</span>
+    <span class="ticker-item">Rhythm Zoning</span>
+    <span class="ticker-item">Ambient Markers</span>
+    <span class="ticker-item">Peek-a-boo Hero</span>
+    <span class="ticker-item">Scroll Snap Skills</span>
+    <span class="ticker-item">44px Touch Targets</span>
+    <span class="ticker-item">CSS Scroll-Driven Progress</span>
+    <span class="ticker-item">DNA Law 1–6</span>
+    <span class="ticker-item">OpenSelf Signature</span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━ DNA SPECIMEN ━━━━━━━━━━ -->
+<section class="section">
+  <p class="section-eyebrow">OpenSelf DNA — Le Sei Leggi</p>
+  <div class="dna-grid">
+
+    <div class="dna-card">
+      <div class="dna-num">L1</div>
+      <div class="dna-name">L'Accent Bar</div>
+      <div class="dna-desc">3px × 16px<br>var(--page-accent)<br>.section-label::before</div>
+      <div class="dna-demo">
+        <div class="d-bar"><span>Experience</span></div>
+      </div>
+    </div>
+
+    <div class="dna-card">
+      <div class="dna-num">L2</div>
+      <div class="dna-name">Il Respiro</div>
+      <div class="dna-desc">Hero 80px<br>Narrative 48px<br>Dense 32px</div>
+      <div class="dna-demo">
+        <div class="d-spacing">
+          <div class="d-spacing-bar" style="height:40px;"></div>
+          <div class="d-spacing-bar" style="height:24px;"></div>
+          <div class="d-spacing-bar" style="height:16px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dna-card">
+      <div class="dna-num">L3</div>
+      <div class="dna-name">La Curva</div>
+      <div class="dna-desc">cubic-bezier<br>(0.16, 1, 0.32, 1)<br>--os-dna-ease</div>
+      <div class="dna-demo">
+        <svg class="d-curve" viewBox="0 0 80 36" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 4 32 C 16 32 16 4 76 4" />
+          <circle cx="4" cy="32" r="2" fill="#c08040" opacity=".6"/>
+          <circle cx="76" cy="4" r="2" fill="#c08040" opacity=".6"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="dna-card">
+      <div class="dna-num">L4</div>
+      <div class="dna-name">La Nascita</div>
+      <div class="dna-desc">theme-reveal<br>fade-in + translateY<br>CSS, prefers-reduced-motion</div>
+      <div class="dna-demo">
+        <div class="d-reveal">
+          <div class="d-reveal-bar"></div>
+          <div class="d-reveal-bar"></div>
+          <div class="d-reveal-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dna-card">
+      <div class="dna-num">L5</div>
+      <div class="dna-name">Il Filo</div>
+      <div class="dna-desc">hover-underline-grow<br>scaleX(0→1)<br>transform-origin: left</div>
+      <div class="dna-demo">
+        <div class="d-thread">github.com/evasquez</div>
+      </div>
+    </div>
+
+    <div class="dna-card">
+      <div class="dna-num">L6</div>
+      <div class="dna-name">La Firma</div>
+      <div class="dna-desc">openself.dev<br>footer, text only<br>obbligatorio</div>
+      <div class="dna-demo">
+        <div class="d-sig">openself.dev</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━ DESKTOP BROWSER FRAME ━━━━━━━━━━ -->
+<section class="browser-section">
+  <p class="section-eyebrow">Monolith Pro — Desktop Layout (≥1024px)</p>
+
+  <div class="browser-controls">
+    <button class="toggle-btn" id="toggleZones">Show Rhythm Zones</button>
+    <span style="font-family:var(--ff-mono);font-size:9px;color:var(--fg-2);">Simulazione 1280px · le zone vengono scalate proporzionalmente</span>
+  </div>
+
+  <div class="browser-scale-container">
+    <div class="browser-inner-wrapper" id="browserFrame">
+
+      <!-- Browser chrome -->
+      <div class="browser-chrome">
+        <div class="chrome-dots">
+          <div class="chrome-dot chrome-dot-r"></div>
+          <div class="chrome-dot chrome-dot-y"></div>
+          <div class="chrome-dot chrome-dot-g"></div>
+        </div>
+        <div class="chrome-urlbar">
+          <span class="chrome-urlbar-text">openself.dev/evasquez</span>
+        </div>
+      </div>
+
+      <!-- OpenSelf Page -->
+      <div class="os-page">
+        <!-- Grain (DNA: OpenSelfChrome) -->
+        <div class="os-grain"></div>
+
+        <!-- Edge lines (DNA: OpenSelfChrome) -->
+        <div class="os-edge os-edge-l"></div>
+        <div class="os-edge os-edge-r"></div>
+
+        <!-- Zone overlay (toggled) -->
+        <div class="os-zone-overlay" id="zoneOverlay">
+          <div class="os-zone-bleed" style="opacity:.4;">
+            <div class="os-zone-label" style="left:8px;">Bleed lane</div>
+          </div>
+          <div class="os-zone-reading" style="opacity:.8;">
+            <div class="os-zone-label" style="left:8px;">Reading lane</div>
+          </div>
+        </div>
+
+        <!-- ANNOTATIONS -->
+        <!-- A: section-label accent bar (over Bio) -->
+        <div class="ann" style="top:215px;left:64px;" title="L1 — Accent Bar: section-label::before 3px×16px var(--page-accent)">A</div>
+        <!-- B: ambient marker -->
+        <div class="ann" style="top:278px;right:128px;" title="Ambient Marker: nome sezione in colonna dx, writing-mode: vertical-rl, opacity 0.04">B</div>
+        <!-- C: edge line -->
+        <div class="ann" style="top:140px;left:4px;" title="L*: Edge lines — OpenSelfChrome, 1px, opacity 0.1, hidden mobile">C</div>
+        <!-- D: reading lane (bio narrower than bleed) -->
+        <div class="ann" style="top:215px;left:780px;" title="Reading Lane: max ~680px — narrative sections (bio, experience, education)">D</div>
+        <!-- E: projects bleed wider -->
+        <div class="ann" style="top:598px;left:64px;" title="Bleed Lane: max ~900px — showcase sections (projects, achievements)">E</div>
+        <!-- F: footer openself.dev -->
+        <div class="ann" style="bottom:10px;left:50%;transform:translateX(-50%);" title="L6 — La Firma: openself.dev nel footer, obbligatorio">F</div>
+
+        <!-- ═══ HERO (full width) ═══ -->
+        <div class="os-hero">
+          <div class="os-hero-name">Elena Vasquez</div>
+          <div class="os-hero-tagline">Principal Product Designer</div>
+          <div class="os-hero-links">
+            <a class="os-hero-link" href="#">github.com/evasquez</a>
+            <span style="color:var(--os-fg-sec);opacity:.25;">·</span>
+            <a class="os-hero-link" href="#">elena@vasquez.design</a>
+            <span style="color:var(--os-fg-sec);opacity:.25;">·</span>
+            <span style="font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;color:var(--os-fg-sec);">English · Spanish · Italian</span>
+          </div>
+        </div>
+
+        <div class="os-content">
+
+          <!-- ═══ BIO — reading lane ═══ -->
+          <div class="os-row-reading">
+            <div class="os-reading-pane">
+              <div class="os-sec-label">Bio</div>
+              <div class="os-bio">
+                I design the systems that design teams use. Eleven years at the intersection of engineering and design culture — from the early days of Material Design iteration at Google to Stripe's current component architecture. I'm most alive when I'm turning abstract principles into reusable, documented, accessible systems that scale beyond their first author.
+              </div>
+            </div>
+            <div class="os-ambient-pane">
+              <div class="os-ambient-marker">BIO</div>
+            </div>
+          </div>
+
+          <!-- ═══ EXPERIENCE — reading lane + ambient ═══ -->
+          <div class="os-row-reading">
+            <div class="os-reading-pane">
+              <div class="os-sec-label">Experience</div>
+              <div class="os-exp-entry">
+                <div>
+                  <div class="os-exp-role">Principal Product Designer</div>
+                  <div class="os-exp-co">Stripe</div>
+                </div>
+                <div class="os-exp-period">2021 — present</div>
+              </div>
+              <div class="os-exp-entry">
+                <div>
+                  <div class="os-exp-role">Staff Designer</div>
+                  <div class="os-exp-co">Google</div>
+                </div>
+                <div class="os-exp-period">2017 — 2021</div>
+              </div>
+              <div class="os-exp-entry">
+                <div>
+                  <div class="os-exp-role">Lead Product Designer</div>
+                  <div class="os-exp-co">Airbnb</div>
+                </div>
+                <div class="os-exp-period">2014 — 2017</div>
+              </div>
+            </div>
+            <div class="os-ambient-pane">
+              <div class="os-ambient-marker">EXP</div>
+            </div>
+          </div>
+
+          <!-- ═══ PROJECTS — bleed lane ═══ -->
+          <div class="os-row-bleed">
+            <div class="os-sec-label">Projects</div>
+            <div class="os-projects">
+              <div class="os-project-card">
+                <div class="os-project-year">2024</div>
+                <div class="os-project-name">Design Token Pipeline</div>
+                <div class="os-project-desc">Automated pipeline for token governance from Figma to production across 4 platforms. Zero manual sync.</div>
+              </div>
+              <div class="os-project-card">
+                <div class="os-project-year">2023</div>
+                <div class="os-project-name">The Accessibility Playbook</div>
+                <div class="os-project-desc">Open-source framework for baking WCAG 2.1 AA compliance into component design from the start.</div>
+              </div>
+              <div class="os-project-card">
+                <div class="os-project-year">2022</div>
+                <div class="os-project-name">Pattern Language v3</div>
+                <div class="os-project-desc">Visual language documentation spanning 280 components, with live Storybook integration.</div>
+              </div>
+              <div class="os-project-card">
+                <div class="os-project-year">2021</div>
+                <div class="os-project-name">Design System Audit Kit</div>
+                <div class="os-project-desc">Automated quality checks for visual consistency across teams shipping independently.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ SKILLS — reading lane, dense ═══ -->
+          <div class="os-row-dense">
+            <div class="os-sec-label">Skills</div>
+            <div class="os-skills">
+              <span class="os-skill">Figma</span>
+              <span class="os-skill">Design Tokens</span>
+              <span class="os-skill">Systems Thinking</span>
+              <span class="os-skill">User Research</span>
+              <span class="os-skill">Prototyping</span>
+              <span class="os-skill">Storybook</span>
+              <span class="os-skill">WCAG 2.1</span>
+              <span class="os-skill">Component Architecture</span>
+              <span class="os-skill">Design Critique</span>
+              <span class="os-skill">Team Leadership</span>
+            </div>
+          </div>
+
+        </div><!-- /os-content -->
+
+        <!-- Footer (DNA L6) -->
+        <div class="os-footer">
+          <a href="#">openself.dev</a>
+        </div>
+
+      </div><!-- /os-page -->
+    </div><!-- /browser-inner-wrapper -->
+  </div><!-- /browser-scale-container -->
+
+  <!-- Annotation key -->
+  <div class="ann-table">
+    <div class="ann-row"><div class="ann-badge">A</div><div class="ann-text"><strong>L1 — L'Accent Bar</strong><span>section-label::before · 3px×16px · var(--page-accent)</span></div></div>
+    <div class="ann-row"><div class="ann-badge">B</div><div class="ann-text"><strong>Ambient Marker</strong><span>writing-mode: vertical-rl · opacity 0.04 · sticky top 80px</span></div></div>
+    <div class="ann-row"><div class="ann-badge">C</div><div class="ann-text"><strong>Edge Lines</strong><span>OpenSelfChrome · 1px · opacity 0.1 · hidden mobile</span></div></div>
+    <div class="ann-row"><div class="ann-badge">D</div><div class="ann-text"><strong>Reading Lane</strong><span>max ~680px · bio, experience, education, custom</span></div></div>
+    <div class="ann-row"><div class="ann-badge">E</div><div class="ann-text"><strong>Bleed Lane</strong><span>max ~900px · projects, achievements · respira oltre la reading lane</span></div></div>
+    <div class="ann-row"><div class="ann-badge">F</div><div class="ann-text"><strong>L6 — La Firma</strong><span>openself.dev · footer · obbligatorio · text puro</span></div></div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━ MOBILE SECTION ━━━━━━━━━━ -->
+<section class="mobile-section">
+  <p class="section-eyebrow">Monolith — Mobile Layout · Prima / Dopo</p>
+  <div class="mobile-row">
+
+    <!-- ── BEFORE ── -->
+    <div class="phone-col">
+      <div class="phone-col-label"><div class="col-dot col-dot-b"></div> Prima</div>
+      <div class="phone" style="position:relative;">
+        <div class="phone-island"></div>
+
+        <!-- issue badges -->
+        <div class="p-ann" style="top:56px;right:20px;background:var(--red);color:#fff;">✕</div>
+        <div class="p-ann" style="top:200px;right:20px;background:var(--red);color:#fff;">✕</div>
+        <div class="p-ann" style="top:310px;right:20px;background:var(--red);color:#fff;">✕</div>
+
+        <div class="phone-screen">
+          <div class="pb-page">
+            <!-- OLD: troppo padding -->
+            <div class="pb-hero">
+              <div class="pb-issue">80px top padding — hero scompare oltre fold</div>
+              <h1>Elena<br>Vasquez</h1>
+              <div class="pb-tagline">Principal Product Designer</div>
+              <div class="pb-social">
+                <div class="pb-icon">gh</div>
+                <div class="pb-icon">in</div>
+                <div class="pb-icon">@</div>
+              </div>
+              <div style="margin-top:10px;"><span class="pb-issue">28px icons — troppo piccoli (< 44px)</span></div>
+            </div>
+            <!-- OLD skills: lista verticale -->
+            <div class="pb-section">
+              <div class="pb-label">Skills</div>
+              <div class="pb-issue">lista verticale — non scannerizzabile</div>
+              <div class="pb-skill-row"><span>Figma</span><div class="pb-skill-bar"><div class="pb-skill-fill" style="width:90%"></div></div></div>
+              <div class="pb-skill-row"><span>Design Tokens</span><div class="pb-skill-bar"><div class="pb-skill-fill" style="width:80%"></div></div></div>
+              <div class="pb-skill-row"><span>Systems Thinking</span><div class="pb-skill-bar"><div class="pb-skill-fill" style="width:75%"></div></div></div>
+              <div class="pb-skill-row"><span>User Research</span><div class="pb-skill-bar"><div class="pb-skill-fill" style="width:70%"></div></div></div>
+            </div>
+            <!-- OLD interests: plain text -->
+            <div class="pb-section">
+              <div class="pb-label">Interests</div>
+              <div class="pb-issue">plain text — nessuna struttura visiva</div>
+              <div class="pb-interest">Typography</div>
+              <div class="pb-interest">Design Systems</div>
+              <div class="pb-interest">Open Source</div>
+              <div class="pb-interest">Cooking</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- issues list -->
+      <div style="max-width:284px;">
+        <div style="font-family:var(--ff-mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2);margin-bottom:12px;">Problemi</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--red);flex-shrink:0;">✕</span>80px top padding: hero sparisce
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--red);flex-shrink:0;">✕</span>Icone 28px: sotto soglia touch 44px
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--red);flex-shrink:0;">✕</span>Skills: lista verticale non scannerizzabile
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--red);flex-shrink:0;">✕</span>Interessi: plain text, nessun badge
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── AFTER ── -->
+    <div class="phone-col">
+      <div class="phone-col-label"><div class="col-dot col-dot-a"></div> Dopo</div>
+      <div class="phone" style="position:relative;">
+        <div class="phone-island"></div>
+
+        <!-- callout badges -->
+        <div class="p-ann" style="top:486px;left:20px;">A</div>
+        <div class="p-ann" style="top:200px;right:20px;">B</div>
+        <div class="p-ann" style="top:560px;left:20px;">C</div>
+        <div class="p-ann" style="top:650px;left:20px;">D</div>
+
+        <div class="phone-screen">
+          <div class="pa-page">
+
+            <!-- AFTER: peek-a-boo hero -->
+            <div class="pa-hero">
+              <h1>Elena<br>Vasquez</h1>
+              <div class="pa-tagline">Principal Product Designer</div>
+              <div class="pa-social">
+                <div class="pa-icon">gh</div>
+                <div class="pa-icon">in</div>
+                <div class="pa-icon">@</div>
+              </div>
+              <div class="pa-peek"></div>
+            </div>
+
+            <!-- AFTER: bio, sezione compatta con label DNA -->
+            <div class="pa-section">
+              <div class="pa-label">Bio</div>
+              <div style="font-size:.82rem;line-height:1.65;color:#444;">
+                Eleven years designing systems. From Material Design iteration to Stripe's component architecture. Most alive when abstract principles become reusable components.
+              </div>
+            </div>
+
+            <!-- AFTER: skills con scroll snap -->
+            <div class="pa-section">
+              <div class="pa-label">Skills</div>
+              <div class="pa-skills-scroll">
+                <div class="pa-chip">Figma</div>
+                <div class="pa-chip">Design Tokens</div>
+                <div class="pa-chip">Systems Thinking</div>
+                <div class="pa-chip">User Research</div>
+                <div class="pa-chip">Storybook</div>
+                <div class="pa-chip">WCAG 2.1</div>
+                <div class="pa-chip">Prototyping</div>
+              </div>
+            </div>
+
+            <!-- AFTER: interests con flex-wrap badges -->
+            <div class="pa-section">
+              <div class="pa-label">Interests</div>
+              <div class="pa-badges">
+                <div class="pa-badge">Typography</div>
+                <div class="pa-badge">Design Systems</div>
+                <div class="pa-badge">Open Source</div>
+                <div class="pa-badge">Cooking</div>
+                <div class="pa-badge">Ceramics</div>
+              </div>
+            </div>
+
+            <!-- AFTER: lingue scroll cards -->
+            <div class="pa-section">
+              <div class="pa-label">Languages</div>
+              <div class="pa-lang-row">
+                <div class="pa-lang-card"><div class="pa-lang-name">EN</div><div class="pa-lang-lvl">Native</div></div>
+                <div class="pa-lang-card"><div class="pa-lang-name">ES</div><div class="pa-lang-lvl">Fluent</div></div>
+                <div class="pa-lang-card"><div class="pa-lang-name">IT</div><div class="pa-lang-lvl">Intermediate</div></div>
+              </div>
+            </div>
+
+            <div class="pa-footer"><a href="#">openself.dev</a></div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- improvements list -->
+      <div style="max-width:284px;">
+        <div style="font-family:var(--ff-mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2);margin-bottom:12px;">Miglioramenti</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--green);flex-shrink:0;">A</span>Hero peek-a-boo · min-h: 85% viewport
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--green);flex-shrink:0;">B</span>44px touch targets · standard WCAG
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--green);flex-shrink:0;">C</span>Skills: scroll snap · mask-image gradient
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--fg-2);">
+            <span style="color:var(--green);flex-shrink:0;">D</span>Interests: flex-wrap badges + lingue card row
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━ IMPLEMENTATION CHEATSHEET ━━━━━━━━━━ -->
+<section class="section">
+  <p class="section-eyebrow">Implementation Cheatsheet</p>
+  <div class="cheatsheet">
+
+    <div class="cs-card">
+      <div class="cs-title">Desktop — Rhythm Zones (MonolithLayout.tsx)</div>
+      <div class="cs-code">const READING_SECTIONS = new Set([
+  "bio", "experience", "education", "custom"
+]);
+const BLEED_SECTIONS = new Set([
+  "projects", "achievements", "reading", "music"
+]);
+
+// In render:
+const laneClass =
+  section.type === "hero"    ? "os-lane-hero"
+  : READING_SECTIONS.has(t)  ? "os-lane-reading"
+  : BLEED_SECTIONS.has(t)    ? "os-lane-bleed"
+  : "os-lane-reading"; // default</div>
+    </div>
+
+    <div class="cs-card">
+      <div class="cs-title">Desktop — CSS Grid Shell (globals.css)</div>
+      <div class="cs-code">/* Reading lane: col 2-9 (~68ch) */
+.os-lane-reading {
+  max-width: 680px;
+}
+/* Bleed lane: col 1-11 (~88% width) */
+.os-lane-bleed {
+  max-width: 900px;
+}
+/* Ambient marker col */
+.os-ambient-marker {
+  writing-mode: vertical-rl;
+  font-size: 7rem; opacity: .04;
+  position: sticky; top: 80px;
+}</div>
+    </div>
+
+    <div class="cs-card">
+      <div class="cs-title">Mobile — Peek-a-boo Hero (globals.css)</div>
+      <div class="cs-code">/* Hero occupa ~85% del viewport mobile */
+@media (max-width: 768px) {
+  .slot-wide:first-child {
+    min-height: 85svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: 2rem;
+  }
+}</div>
+    </div>
+
+    <div class="cs-card">
+      <div class="cs-title">Mobile — Scroll Snap Skills (globals.css)</div>
+      <div class="cs-code">/* Skills: scroll orizzontale con snap */
+@media (max-width: 768px) {
+  .skills-list {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-mask-image: linear-gradient(
+      to right, black 75%, transparent 100%);
+    gap: 8px;
+  }
+  .skills-list > * {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+}</div>
+    </div>
+
+    <div class="cs-card">
+      <div class="cs-title">DNA v1 — Token Contract (ThemeRegistryItem)</div>
+      <div class="cs-code">type DnaOverrides = Partial<{
+  "--os-dna-ease": string;
+  "--os-dna-reveal-distance": string;
+  "--os-dna-grain-opacity": string;  // 0–0.06
+  "--os-dna-edge-opacity": string;   // 0–0.5
+}>;
+
+dna: {
+  version: "v1";
+  overrides: DnaOverrides;
+}</div>
+    </div>
+
+    <div class="cs-card">
+      <div class="cs-title">DNA v1 — assertThemeDna (test)</div>
+      <div class="cs-code">// tests/evals/theme-tokens.test.ts
+it("defines required DNA tokens", () => {
+  expect(css).toContain(".section-label::before");
+  expect(css).toContain("--os-dna-ease");
+  expect(css).toContain("theme-reveal");
+  expect(css).toContain("hover-underline-grow");
+});
+it("every theme mounts OpenSelfSignature", () => {
+  // openself.dev in footer
+  expect(footerHtml).toContain("openself.dev");
+});</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- footer -->
+<footer style="padding:40px 64px;text-align:center;border-top:1px solid var(--border);">
+  <div style="font-family:var(--ff-mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--fg-2);">
+    OpenSelf · Monolith Pro Design Prototype · 2026
+  </div>
+</footer>
+
+<script>
+  // ── Scale browser frame to fit container ──
+  function scaleBrowserFrame() {
+    const wrapper = document.querySelector('.browser-scale-container');
+    const inner   = document.getElementById('browserFrame');
+    if (!wrapper || !inner) return;
+    const containerWidth = wrapper.clientWidth;
+    const scale = containerWidth / 1280;
+    inner.style.transform = `scale(${scale})`;
+    inner.style.height    = 'auto';
+    // Set container height to match scaled content
+    // Give it a moment to render
+    requestAnimationFrame(() => {
+      const innerH = inner.offsetHeight * scale;
+      wrapper.style.height = innerH + 'px';
+    });
+  }
+
+  scaleBrowserFrame();
+  window.addEventListener('resize', scaleBrowserFrame);
+
+  // ── Toggle rhythm zones ──
+  const toggleBtn   = document.getElementById('toggleZones');
+  const zoneOverlay = document.getElementById('zoneOverlay');
+  toggleBtn?.addEventListener('click', () => {
+    const active = zoneOverlay.classList.toggle('active');
+    toggleBtn.classList.toggle('active', active);
+    toggleBtn.textContent = active ? 'Hide Rhythm Zones' : 'Show Rhythm Zones';
+  });
+</script>
+
+</body>
+</html>
