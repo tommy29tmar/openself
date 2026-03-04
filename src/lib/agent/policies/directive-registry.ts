@@ -157,3 +157,79 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     build: () => "",
   },
 };
+
+function resolveIncompatibilities(
+  eligible: Situation[],
+  journeyState: JourneyState,
+): Situation[] {
+  const dropped = new Set<Situation>();
+
+  for (let i = 0; i < eligible.length; i++) {
+    const s = eligible[i];
+    if (dropped.has(s)) continue;
+
+    for (const incompatible of DIRECTIVE_POLICY[s].incompatibleWith) {
+      if (!eligible.includes(incompatible) || dropped.has(incompatible)) continue;
+
+      const winnerPriority = DIRECTIVE_POLICY[s].priority;
+      const loserPriority = DIRECTIVE_POLICY[incompatible].priority;
+
+      // s wins (lower priority number = higher importance)
+      const msg =
+        `[directive-registry] Conflict: ${s}(p=${winnerPriority}) ` +
+        `vs ${incompatible}(p=${loserPriority}) in ${journeyState} — ${incompatible} dropped`;
+
+      if (winnerPriority === loserPriority) {
+        // Equal priority incompatible directives = policy bug.
+        // Throw in all environments — validateDirectivePolicy() runs at startup
+        // and will catch this before production traffic reaches it.
+        throw new DirectiveConflictError(msg);
+      }
+      if (process.env.NODE_ENV === "development") console.warn(msg);
+
+      // Only log when the conflict is UNEXPECTED (equal-priority — should never happen in prod
+      // since validateDirectivePolicy() prevents it at startup). Expected priority-resolved
+      // conflicts (the common case) are silent to avoid per-turn DB writes.
+      if (process.env.NODE_ENV !== "production" || winnerPriority === loserPriority) {
+        logEvent({ eventType: "directive_conflict_resolved", actor: "system", payload: {
+          winner: s, dropped: incompatible, journeyState,
+          winnerPriority, droppedPriority: loserPriority,
+        } });
+      }
+
+      dropped.add(incompatible);
+    }
+  }
+
+  return eligible.filter(s => !dropped.has(s));
+}
+
+export function getSituationDirectives(
+  situations: Situation[],
+  journeyState: JourneyState,
+  context: SituationContext,
+): string {
+  // Guard by construction: first_visit never receives situation directives
+  if (journeyState === "first_visit") return "";
+
+  const eligible = situations
+    .filter(s => DIRECTIVE_POLICY[s].eligibleStates.includes(journeyState))
+    .sort((a, b) => {
+      const diff = DIRECTIVE_POLICY[a].priority - DIRECTIVE_POLICY[b].priority;
+      if (diff !== 0) return diff;
+      // Deterministic tie-break: alphabetical by tieBreak string
+      return DIRECTIVE_POLICY[a].tieBreak.localeCompare(DIRECTIVE_POLICY[b].tieBreak);
+    });
+
+  const resolved = resolveIncompatibilities(eligible, journeyState);
+
+  const parts: string[] = [];
+  for (const s of resolved) {
+    const ctx = getCtxFor(s, context);
+    if (ctx === null) continue; // missing field — already logged
+    const text = DIRECTIVE_POLICY[s].build(ctx);
+    if (text) parts.push(text);
+  }
+
+  return parts.length > 0 ? `SITUATION DIRECTIVES:\n${parts.join("\n\n")}` : "";
+}

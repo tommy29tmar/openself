@@ -1,0 +1,289 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`snapshot matrix > [active_fresh] + [has_archivable_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [active_fresh] + [has_name] 1`] = `""`;
+
+exports[`snapshot matrix > [active_fresh] + [has_open_conflicts] 1`] = `
+"SITUATION DIRECTIVES:
+OPEN CONFLICTS: There are conflicting facts that need resolution: identity/role.
+Ask the user to clarify which version is correct.
+Use resolve_conflict once the user makes a choice.
+Do not present conflicts as errors — frame them as "I noticed two different pieces of info about X, which one is current?""
+`;
+
+exports[`snapshot matrix > [active_fresh] + [has_pending_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING PROPOSALS: You have 1 content proposal waiting for user review in sections: skills.
+When appropriate, mention to the user that there are suggestions ready for review.
+Do not push — just mention it naturally if the conversation allows.
+The user can review proposals via the proposal banner in the builder."
+`;
+
+exports[`snapshot matrix > [active_fresh] + [has_recent_import] 1`] = `
+"SITUATION DIRECTIVES:
+--- BEGIN IMPORT CONTEXT ---
+LINKEDIN IMPORT JUST COMPLETED:
+The user just imported their LinkedIn profile.
+
+IMPORTED DATA SUMMARY:
+- Current role: Engineer at Acme
+- Past experiences: undefined roles
+- Education: undefined entries
+- Languages: undefined
+- Skills: undefined
+- Certifications: undefined
+--- END IMPORT CONTEXT ---
+
+POST-IMPORT REVIEW MODE:
+The user just imported their LinkedIn profile. Your job is to review the data
+and fill the gaps that LinkedIn doesn't cover.
+
+RULES:
+- Briefly acknowledge the import (1-2 sentences, mention current role + one distinctive element)
+- Ask ONE open-ended question about the top gap
+- Do NOT recite numbers, lists, or inventory of imported data
+- In subsequent turns, explore remaining gaps one at a time
+- If the user asks to generate the page at any point, do it immediately — no resistance
+- After 3-5 enrichment questions, propose generating the page
+- Keep the tone conversational, not interrogative"
+`;
+
+exports[`snapshot matrix > [active_fresh] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [active_fresh] + [has_stale_facts] 1`] = `
+"SITUATION DIRECTIVES:
+STALE FACTS: These facts haven't been updated in over 30 days: experience/acme.
+When natural, ask the user if any of these are still accurate.
+Prioritize facts that seem most likely to have changed (job roles, projects, current activities).
+Use update_fact if the user confirms a change, delete_fact if something is no longer relevant."
+`;
+
+exports[`snapshot matrix > [active_fresh] + [has_thin_sections] 1`] = `""`;
+
+exports[`snapshot matrix > [active_stale] + [has_archivable_facts] 1`] = `
+"SITUATION DIRECTIVES:
+ARCHIVABLE FACTS: These facts have low relevance (old, low confidence, or no children): interest/chess.
+When natural, ask the user if any of these are still relevant.
+Use archive_fact for facts the user confirms are outdated — this soft-deletes them (recoverable via unarchive_fact).
+Do not archive facts the user hasn't confirmed — always ask first."
+`;
+
+exports[`snapshot matrix > [active_stale] + [has_name] 1`] = `""`;
+
+exports[`snapshot matrix > [active_stale] + [has_open_conflicts] 1`] = `
+"SITUATION DIRECTIVES:
+OPEN CONFLICTS: There are conflicting facts that need resolution: identity/role.
+Ask the user to clarify which version is correct.
+Use resolve_conflict once the user makes a choice.
+Do not present conflicts as errors — frame them as "I noticed two different pieces of info about X, which one is current?""
+`;
+
+exports[`snapshot matrix > [active_stale] + [has_pending_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING PROPOSALS: You have 1 content proposal waiting for user review in sections: skills.
+When appropriate, mention to the user that there are suggestions ready for review.
+Do not push — just mention it naturally if the conversation allows.
+The user can review proposals via the proposal banner in the builder."
+`;
+
+exports[`snapshot matrix > [active_stale] + [has_recent_import] 1`] = `
+"SITUATION DIRECTIVES:
+--- BEGIN IMPORT CONTEXT ---
+LINKEDIN IMPORT JUST COMPLETED:
+The user just imported their LinkedIn profile.
+
+IMPORTED DATA SUMMARY:
+- Current role: Engineer at Acme
+- Past experiences: undefined roles
+- Education: undefined entries
+- Languages: undefined
+- Skills: undefined
+- Certifications: undefined
+--- END IMPORT CONTEXT ---
+
+POST-IMPORT REVIEW MODE:
+The user just imported their LinkedIn profile. Your job is to review the data
+and fill the gaps that LinkedIn doesn't cover.
+
+RULES:
+- Briefly acknowledge the import (1-2 sentences, mention current role + one distinctive element)
+- Ask ONE open-ended question about the top gap
+- Do NOT recite numbers, lists, or inventory of imported data
+- In subsequent turns, explore remaining gaps one at a time
+- If the user asks to generate the page at any point, do it immediately — no resistance
+- After 3-5 enrichment questions, propose generating the page
+- Keep the tone conversational, not interrogative"
+`;
+
+exports[`snapshot matrix > [active_stale] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [active_stale] + [has_stale_facts] 1`] = `
+"SITUATION DIRECTIVES:
+STALE FACTS: These facts haven't been updated in over 30 days: experience/acme.
+When natural, ask the user if any of these are still accurate.
+Prioritize facts that seem most likely to have changed (job roles, projects, current activities).
+Use update_fact if the user confirms a change, delete_fact if something is no longer relevant."
+`;
+
+exports[`snapshot matrix > [active_stale] + [has_thin_sections] 1`] = `
+"SITUATION DIRECTIVES:
+THIN SECTIONS: The following page sections need more content: education, projects.
+When the conversation naturally allows, guide the user toward topics that would fill these sections.
+Pick the 1-2 most relevant thin sections based on conversation context — don't list all of them at once.
+Frame questions naturally, not as "I need data for your skills section.""
+`;
+
+exports[`snapshot matrix > [blocked] + [has_archivable_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_name] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_open_conflicts] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_pending_proposals] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_recent_import] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_stale_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_thin_sections] 1`] = `""`;
+
+exports[`snapshot matrix > [draft_ready] + [has_archivable_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [draft_ready] + [has_name] 1`] = `""`;
+
+exports[`snapshot matrix > [draft_ready] + [has_open_conflicts] 1`] = `
+"SITUATION DIRECTIVES:
+OPEN CONFLICTS: There are conflicting facts that need resolution: identity/role.
+Ask the user to clarify which version is correct.
+Use resolve_conflict once the user makes a choice.
+Do not present conflicts as errors — frame them as "I noticed two different pieces of info about X, which one is current?""
+`;
+
+exports[`snapshot matrix > [draft_ready] + [has_pending_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING PROPOSALS: You have 1 content proposal waiting for user review in sections: skills.
+When appropriate, mention to the user that there are suggestions ready for review.
+Do not push — just mention it naturally if the conversation allows.
+The user can review proposals via the proposal banner in the builder."
+`;
+
+exports[`snapshot matrix > [draft_ready] + [has_recent_import] 1`] = `
+"SITUATION DIRECTIVES:
+--- BEGIN IMPORT CONTEXT ---
+LINKEDIN IMPORT JUST COMPLETED:
+The user just imported their LinkedIn profile.
+
+IMPORTED DATA SUMMARY:
+- Current role: Engineer at Acme
+- Past experiences: undefined roles
+- Education: undefined entries
+- Languages: undefined
+- Skills: undefined
+- Certifications: undefined
+--- END IMPORT CONTEXT ---
+
+POST-IMPORT REVIEW MODE:
+The user just imported their LinkedIn profile. Your job is to review the data
+and fill the gaps that LinkedIn doesn't cover.
+
+RULES:
+- Briefly acknowledge the import (1-2 sentences, mention current role + one distinctive element)
+- Ask ONE open-ended question about the top gap
+- Do NOT recite numbers, lists, or inventory of imported data
+- In subsequent turns, explore remaining gaps one at a time
+- If the user asks to generate the page at any point, do it immediately — no resistance
+- After 3-5 enrichment questions, propose generating the page
+- Keep the tone conversational, not interrogative"
+`;
+
+exports[`snapshot matrix > [draft_ready] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [draft_ready] + [has_stale_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [draft_ready] + [has_thin_sections] 1`] = `
+"SITUATION DIRECTIVES:
+THIN SECTIONS: The following page sections need more content: education, projects.
+When the conversation naturally allows, guide the user toward topics that would fill these sections.
+Pick the 1-2 most relevant thin sections based on conversation context — don't list all of them at once.
+Frame questions naturally, not as "I need data for your skills section.""
+`;
+
+exports[`snapshot matrix > [first_visit] + [has_archivable_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_name] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_open_conflicts] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_pending_proposals] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_recent_import] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_stale_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_thin_sections] 1`] = `""`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_archivable_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_name] 1`] = `""`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_open_conflicts] 1`] = `
+"SITUATION DIRECTIVES:
+OPEN CONFLICTS: There are conflicting facts that need resolution: identity/role.
+Ask the user to clarify which version is correct.
+Use resolve_conflict once the user makes a choice.
+Do not present conflicts as errors — frame them as "I noticed two different pieces of info about X, which one is current?""
+`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_pending_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING PROPOSALS: You have 1 content proposal waiting for user review in sections: skills.
+When appropriate, mention to the user that there are suggestions ready for review.
+Do not push — just mention it naturally if the conversation allows.
+The user can review proposals via the proposal banner in the builder."
+`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_recent_import] 1`] = `
+"SITUATION DIRECTIVES:
+--- BEGIN IMPORT CONTEXT ---
+LINKEDIN IMPORT JUST COMPLETED:
+The user just imported their LinkedIn profile.
+
+IMPORTED DATA SUMMARY:
+- Current role: Engineer at Acme
+- Past experiences: undefined roles
+- Education: undefined entries
+- Languages: undefined
+- Skills: undefined
+- Certifications: undefined
+--- END IMPORT CONTEXT ---
+
+POST-IMPORT REVIEW MODE:
+The user just imported their LinkedIn profile. Your job is to review the data
+and fill the gaps that LinkedIn doesn't cover.
+
+RULES:
+- Briefly acknowledge the import (1-2 sentences, mention current role + one distinctive element)
+- Ask ONE open-ended question about the top gap
+- Do NOT recite numbers, lists, or inventory of imported data
+- In subsequent turns, explore remaining gaps one at a time
+- If the user asks to generate the page at any point, do it immediately — no resistance
+- After 3-5 enrichment questions, propose generating the page
+- Keep the tone conversational, not interrogative"
+`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_stale_facts] 1`] = `""`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_thin_sections] 1`] = `
+"SITUATION DIRECTIVES:
+THIN SECTIONS: The following page sections need more content: education, projects.
+When the conversation naturally allows, guide the user toward topics that would fill these sections.
+Pick the 1-2 most relevant thin sections based on conversation context — don't list all of them at once.
+Frame questions naturally, not as "I need data for your skills section.""
+`;
