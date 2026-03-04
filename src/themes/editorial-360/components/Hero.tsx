@@ -235,7 +235,7 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                         {tagline && (
                             <p className="hero-stagger-tagline"
                                 style={{ fontSize: 17, fontWeight: 300, color: "var(--page-fg-secondary)", lineHeight: 1.5, maxWidth: "50ch", marginTop: 12 }}>
-                                {tagline}
+                                &#x201C;{tagline}&#x201D;
                             </p>
                         )}
                     </div>
