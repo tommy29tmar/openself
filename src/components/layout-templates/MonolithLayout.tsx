@@ -42,9 +42,9 @@ export function getLane(sectionType: string): Lane {
 // All lanes: left-aligned from the same 48px horizontal padding (matching prototype).
 // max-width applied via inline style to correctly use CSS calc() with custom properties.
 const LANE_CLASSES: Record<Lane, string> = {
-  hero: "w-full px-6 md:px-12",
-  reading: "w-full px-6 md:px-12",
-  bleed: "w-full px-6 md:px-12",
+  hero: "w-full px-6 md:px-12 md:ml-[8%]",
+  reading: "w-full px-6 md:px-12 md:ml-[8%]",
+  bleed: "w-full px-6 md:px-12 md:ml-[8%]",
 };
 
 // Max-width includes 96px (2×48px) for the horizontal padding,
