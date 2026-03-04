@@ -341,46 +341,37 @@ System prompt (agent identity + instructions)
 
 ### 4.2.1 System Prompt Architecture
 
-The system prompt is assembled by `src/lib/agent/context.ts` from deterministic blocks.
-Two prompt-building paths exist:
+The system prompt is assembled by `src/lib/agent/context.ts` from deterministic blocks
+via `buildSystemPrompt()`. The legacy `getSystemPromptText` path and `promptAssembler.ts`
+have been deleted; `PromptMode` is `@deprecated`. The legacy fallback in `context.ts` now
+calls `buildSystemPrompt()` with `first_visit` defaults.
 
-**Legacy path** (`getSystemPromptText`) — used when no bootstrap payload is available (backward compat):
+**Composable path** (`buildSystemPrompt`):
 
-1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries
+1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries. Includes: REGISTER (always informal — tu/du/vous non-formal, overridable by explicit user preference), OPENING BANS (list of banned filler openers such as "Certamente!", "Of course!"), EMOJI POLICY (only if user uses first, max 1/msg), LANGUAGE HANDLING (switch seamlessly without mentioning), RESPONSE LENGTH rules (1–2 sentences for confirmations, 3–5 max for explanations)
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
 3. **Tool policy** — 15 tools (see Section 4.3), when to call, required arguments, retry/error behavior
-4. **Fact schema reference** — Structured category→value shape table for all 14 fact categories + common mistakes to avoid
-5. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
-6. **Output contracts** — JSON/schema requirements for tool payloads and page content generation
-7. **Mode policy** — `onboarding` vs `steady_state` (mode determines conversation behavior)
+4. **Fact schema reference** — Controlled by `schemaMode: "full" | "minimal" | "none"` (per journey state). `full` injects ~1800 tokens (complete category→value shape table). `minimal` injects ~300 tokens via `buildMinimalSchemaForOnboarding()`. `none` injects nothing. Per-state assignment: `first_visit=minimal`, `returning_no_page=full`, `draft_ready=none`, `active_fresh=none`, `active_stale=minimal`, `blocked=none`. Estimated ~1500–1800 token savings per turn in none/minimal states.
+4a. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
+5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation. Includes PATTERN VARIATION block: no same acknowledgment on consecutive turns, don't always close with a question, no 3 consecutive turns opening the same way, never start two consecutive messages with the same word.
+6. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4)
+7. **Situation directives** — Contextual instructions based on detected situations (optional, only when situations are active)
+8. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
+9. **Turn management rules** — 5 rules (R1-R5) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length (see Section 4.2.5)
+10. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence (see Section 4.2.5)
+11. **Action awareness** — Explain-before-act policy classifying tools as high-impact (set_layout, set_theme, update_page_style, reorder_sections, generate_page in steady_state → explain and confirm before executing) or low-impact (fact CRUD, visibility, memory, soul → execute silently). Modulated by expertise calibration level.
+12. **Undo awareness** — Graceful reversal handling: detection keywords (EN + IT), 4-step response pattern (IDENTIFY → EXPLAIN → PROPOSE → ACT), reversal scope per tool, critical rules (never regenerate entire page as first reaction, ask specifics for vague complaints).
+13. **Step exhaustion fallback** — `STEP_EXHAUSTION_FALLBACK` in `src/lib/agent/step-exhaustion-fallback.ts`, journey-state-keyed, 8 languages, R3-compliant (no passive closings). Moved out of `route.ts` because Next.js rejects non-standard route exports.
 
-**Composable path** (`buildSystemPrompt`) — used when bootstrap payload is available (Sprint 2+):
+Token budget guard: journey policy + directives + calibration + turn management + memory directives + action awareness + undo awareness block is capped at 3500 tokens.
 
-1. **Core charter** — Same as legacy
-2. **Safety & privacy policy** — Same as legacy
-3. **Tool policy** — Same as legacy
-4. **Fact schema reference** — Same as legacy
-5. **Data model reference** — Same as legacy
-6. **Output contracts** — Same as legacy
-7. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4)
-8. **Situation directives** — Contextual instructions based on detected situations (optional, only when situations are active)
-9. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
-10. **Turn management rules** — 5 rules (R1-R5) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length (see Section 4.2.5)
-11. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence (see Section 4.2.5)
-12. **Action awareness** — Explain-before-act policy classifying tools as high-impact (set_layout, set_theme, update_page_style, reorder_sections, generate_page in steady_state → explain and confirm before executing) or low-impact (fact CRUD, visibility, memory, soul → execute silently). Modulated by expertise calibration level.
-13. **Undo awareness** — Graceful reversal handling: detection keywords (EN + IT), 4-step response pattern (IDENTIFY → EXPLAIN → PROPOSE → ACT), reversal scope per tool, critical rules (never regenerate entire page as first reaction, ask specifics for vague complaints).
+Dynamic context blocks are then appended by `assembleContext()`:
 
-The composable path replaces the monolithic `onboardingPolicy`/`steadyStatePolicy` functions
-with fine-grained, per-journey-state policies composed from the bootstrap payload.
-Token budget guard: the journey policy + directives + calibration + turn management + memory directives + action awareness + undo awareness block is capped at 3500 tokens.
-
-Both paths then have dynamic context blocks appended by `assembleContext()`:
-
-8/10. **Known facts** — Top 50 facts, 2000 token budget (truncated if over)
-9/11. **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
-10/12. **Conversation summary** — Tier 2 rolling summary, 800 token budget
-11/13. **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
-12/14. **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
+- **Known facts** — Top 50 facts, relevance-sorted with guaranteed recency quota (see §4.2.2), 2000 token budget (truncated if over)
+- **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
+- **Conversation summary** — Tier 2 rolling summary, 800 token budget
+- **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
+- **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
 
 Total context budget: 7500 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
@@ -414,6 +405,17 @@ designer, executive, student, creator, developer, or generalist. The detected ar
 is injected into the system prompt as a "PAGE LAYOUT INTELLIGENCE" block with per-archetype
 reordering guidance (e.g., designer = portfolio-first, student = education before experience).
 
+Archetype detection is TTL-gated (14 days) and identity-invalidated. `shouldRedetectArchetype()`
+(exported from `journey.ts`) re-detects when: (1) archetype was never detected, (2) the TTL
+has expired, or (3) a role or title fact was updated after the last detection timestamp.
+Detection is owner-scoped (not session-scoped), so it survives multi-session correctly.
+
+**Fact relevance sorting:**
+`sortFactsForContext()` (exported from `context.ts`) applies a relevance sort with a guaranteed
+recency quota: the top 5 most-recently-updated facts are always included, then up to 45 more
+facts are scored and sorted by relevance. `childCountMap` (pre-computed parent→child count map)
+is part of `BootstrapData` and passed to `assembleContext()` to inform relevance scoring.
+
 ### 4.2.3 Journey Intelligence
 
 Before the LLM sees anything, a deterministic (zero-LLM) detection layer runs to
@@ -441,6 +443,8 @@ system prompt, mode selection, and UI behavior.
 - `has_open_conflicts` — unresolved fact conflicts
 - `has_name` — identity name or full-name fact exists
 - `has_soul` — active soul profile exists
+- `has_archivable_facts` — facts older than 90 days with low confidence (detected in `active_stale` only — suggest archiving)
+- `has_recent_import` — connector import processed in the last 24h (detected in returning/active states — acknowledge import and prompt gap review)
 
 **Expertise Level** — based on distinct session count:
 
@@ -454,23 +458,23 @@ system prompt, mode selection, and UI behavior.
 Assembled by `assembleBootstrapPayload()` and exposed via `GET /api/chat/bootstrap`.
 Contains all detection results plus derived data (userName, lastSeenDaysAgo,
 publishedUsername, pendingProposalCount, thinSections list, staleFacts list, language).
+Also includes `childCountMap: Map<string, number>` — pre-computed parent→child count map
+for relevance scoring, passed to `assembleContext()`.
 
-**Mode Mapping:**
-`mapJourneyStateToMode()` in `context.ts` maps journey states to prompt modes:
-- `first_visit` / `returning_no_page` → `onboarding`
-- All other states → `steady_state`
-
-When a bootstrap payload is provided to `assembleContext()`, mode is derived from
-the journey state instead of the legacy `detectMode()` heuristic. This ensures
-consistent behavior: the same detection that drives the UI also drives the prompt.
+**Soul proposal cooldown:**
+Soul proposals are gated by a 30-day owner-scoped cooldown. `getSoulProposalCooldownStatus()`
+(exported from `journey.ts`) queries the `soul_change_proposals` DB table directly (not session
+meta), so the cooldown survives multi-session correctly.
 
 **Shared constant:** `AUTH_MESSAGE_LIMIT` lives in `src/lib/constants.ts` and is
 imported by both the chat route (quota enforcement) and journey detection (blocked state).
 
-### 4.2.4 Composable Policy System (Sprint 2)
+### 4.2.4 Composable Policy System
 
-The legacy monolithic `onboardingPolicy()`/`steadyStatePolicy()` functions are replaced
-by a composable policy registry that maps journey states to fine-grained prompt policies.
+The composable policy registry is the only prompt-building system. The legacy monolithic
+`onboardingPolicy()`/`steadyStatePolicy()` functions and `promptAssembler.ts` have been
+deleted. `PromptMode` is `@deprecated`. The registry maps journey states to fine-grained
+prompt policies composed from the bootstrap payload.
 
 **Implementation:** `src/lib/agent/policies/`
 
@@ -478,6 +482,17 @@ by a composable policy registry that maps journey states to fine-grained prompt 
 - `getJourneyPolicy(state, language)` — maps journey state to per-state policy text
 - `getSituationDirectives(situations, context)` — composes contextual directives from active situations
 - `getExpertiseCalibration(level)` — returns verbosity/depth calibration text
+
+**Directive Policy Matrix** (`src/lib/agent/policies/directive-registry.ts`):
+`DIRECTIVE_POLICY` is the single source of truth for situation behavior. Each entry has:
+- `eligibleStates: JourneyState[]` — whitelist of states in which this situation can appear (impossible by construction for ineligible situations to be injected)
+- `priority: number` — lower number = higher priority in the composed output
+- `incompatibleWith: Situation[]` — mutually exclusive situations (symmetric)
+- `build(ctx)` — produces the directive text for injection
+
+`getSituationDirectives()` filters by eligibility, sorts by priority, and resolves
+incompatibilities before composing. `validateDirectivePolicy()` runs at startup and in CI —
+enforces no self-conflicts, symmetric incompatibilities, and valid state references.
 
 **Per-Journey-State Policies:**
 
@@ -496,6 +511,8 @@ When situations are detected by the bootstrap layer, targeted directives are inj
 - `has_thin_sections` — List thin sections, probe for more detail
 - `has_stale_facts` — List stale facts (capped at 5), verify still current
 - `has_open_conflicts` — Mention conflicts, offer to resolve
+- `has_archivable_facts` — `active_stale` only — suggest archiving facts older than 90 days with low confidence
+- `has_recent_import` — returning/active states only — acknowledge the connector import, prompt the user to review any gaps
 
 **Expertise Calibration:**
 - `novice` — Explain features, use step-by-step guidance
@@ -503,18 +520,15 @@ When situations are detected by the bootstrap layer, targeted directives are inj
 - `expert` — Be concise, skip explanations, power-user mode
 
 **Dynamic Welcome Messages** (`ChatPanel.tsx`):
-The ChatPanel fetches the bootstrap payload on mount and selects a journey-aware welcome
-message instead of the static language-only welcome. Three message maps (8 languages each):
-- `FIRST_VISIT_WELCOME` — "Tell me about yourself" (identity-gathering)
-- `RETURNING_WELCOME` — "Let's pick up where we left off" (resumption)
-- `DRAFT_READY_WELCOME` — "Your page is ready, let's review it" (publish push)
+**`buildWelcomeMessage(language, bootstrap | null)`** — single function replacing the legacy
+`getWelcomeMessage()`, `getSmartWelcomeMessage()`, and `WELCOME_MESSAGES` maps (all deleted).
+Handles all 6 journey states. All welcome messages share `id: 'welcome'` — dedup is
+id-based and language-agnostic. The `blocked` state uses `QUOTA_EXHAUSTED_MESSAGES` for
+coherence with `LimitReachedUI`.
 
-For `active_fresh`/`active_stale`, the welcome is personalized with the user's name
-(from bootstrap payload). Fallback: generic steady-state greeting.
+### 4.2.5 Cross-Cutting Prompt Blocks
 
-### 4.2.5 Cross-Cutting Prompt Blocks (Sprint 3)
-
-Two fixed prompt blocks are injected into every system prompt regardless of journey state:
+Several fixed prompt blocks are injected into every system prompt regardless of journey state:
 
 **Turn Management Rules** (`src/lib/agent/policies/turn-management.ts`):
 - R1: No consecutive same-area questions (ensures breadth)
@@ -523,11 +537,23 @@ Two fixed prompt blocks are injected into every system prompt regardless of jour
 - R4: Stall detection and recovery (options → fill-in-the-blank → generate page)
 - R5: Proportional response length (match user message length)
 
+**Topic Signal Detector** (`src/lib/agent/policies/topic-signal-detector.ts`):
+`isNewTopicSignal(message, language)` gates `INCOMPLETE_OPERATION` injection. If the user's
+new message signals a new topic — via action verbs in 5 languages, or message length >30
+characters — stale pending operations are cleared rather than re-surfaced. Continuation-first
+logic: short, ambiguous messages are treated as continuation by default.
+
+**Search Facts Rule** (`src/lib/agent/policies/search-facts-rule.ts`):
+`SEARCH_FACTS_RULE` is a canonical constant injected only via `memoryUsageDirectives()` —
+single source of truth for when to call `search_facts` vs read existing context. Previously
+duplicated in 3 places (`returning-no-page.ts`, `planning-protocol.ts`, and inline); now
+managed in one location.
+
 **Memory Usage Directives** (`src/lib/agent/policies/memory-directives.ts`):
 - Tier 1 (Facts) = WHAT you know — search before asking, record immediately
 - Tier 2 (Summary) = CONTEXT of past conversations — use for continuity, never recite
 - Tier 3 (Meta-Memories) = HOW to behave — communication patterns, tone preferences
-- Golden rule: call `save_memory` with at least one meta-observation per significant session
+- Golden rule: call `save_memory` with at least one meta-observation per **significant** session. "Significant" is defined explicitly in the directive with good/bad examples embedded to prevent misapplication.
 - Cross-tier discipline: factual info in facts, interaction patterns in memories
 
 ### 4.3 Tool Calling (Autonomous Actions)
@@ -3180,14 +3206,14 @@ not user-uploaded binaries.
 Cost control is enforced in the runtime, not left to provider dashboards alone.
 
 Default guardrails (single-user self-hosted starter profile):
-1. Daily token cap: `500000` (env var `LLM_DAILY_TOKEN_LIMIT`, schema default, migration 0019 backfill)
+1. Daily token cap: `2000000` (env var `LLM_DAILY_TOKEN_LIMIT`, schema default, migration 0019 backfill)
 2. Monthly estimated cost cap: `$25`
 3. Daily cost warning: `$1`
 4. Daily hard-stop cap: `$2`
 5. Per-heartbeat call cap: `3`
 6. Warning thresholds: `50%, 75%, 90%, 100%`
 7. Hard-stop mode (`hard_stop=true`) blocks new calls when limits are reached
-8. Soft mode (`hard_stop=false`) allows explicit manual override in UI
+8. Soft mode (`hard_stop=false`) allows explicit manual override in UI. Controlled by `LLM_HARD_STOP` env var (default `false` in development and production as of 2026-03-04 — warnings are logged but calls are not blocked)
 
 Accounting is tracked per day/provider/model in `llm_usage_daily`.
 
