@@ -90,33 +90,33 @@ function HeroContact({ content }: { content: HeroContent }) {
     if (!hasEmail && socialLinks.length === 0) return null;
 
     const linkStyle: React.CSSProperties = {
-        fontSize: 12, color: "var(--page-fg-secondary)", opacity: 0.7,
-        textDecoration: "none", fontWeight: 600, letterSpacing: "0.03em",
-        transition: "opacity 0.15s",
+        fontSize: 13, color: "var(--page-fg-secondary)",
+        textDecoration: "none", fontWeight: 500, letterSpacing: "0.02em",
+        transition: "color 0.15s",
     };
 
-    const ICONS: Record<string, string> = {
-        github: "GH", linkedin: "in", twitter: "𝕏", x: "𝕏",
-        website: "↗", instagram: "IG",
+    const LABELS: Record<string, string> = {
+        github: "GitHub", linkedin: "LinkedIn", twitter: "𝕏", x: "𝕏",
+        website: "↗", instagram: "Instagram",
     };
 
     return (
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
             {hasEmail && (
                 <a href={`mailto:${content.contactEmail}`} style={linkStyle}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--page-fg)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--page-fg-secondary)")}
                 >
                     {content.contactEmail}
                 </a>
             )}
             {socialLinks.map((link, i) => {
-                const label = ICONS[link.platform?.toLowerCase()] ?? link.platform?.slice(0, 2).toUpperCase() ?? "↗";
+                const label = LABELS[link.platform?.toLowerCase()] ?? link.label ?? link.platform ?? "↗";
                 return (
                     <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
                         aria-label={link.label ?? link.platform} style={linkStyle}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                        onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--page-fg)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--page-fg-secondary)")}
                     >
                         {label}
                     </a>
