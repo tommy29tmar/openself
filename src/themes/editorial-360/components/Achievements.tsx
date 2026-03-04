@@ -24,6 +24,12 @@ export function Achievements({ content, variant }: SectionProps<AchievementsCont
     const visible = items.slice(0, maxItems);
     const remaining = items.length - visible.length;
 
+    const dotStyle: React.CSSProperties = {
+        width: 8, height: 8, borderRadius: "50%",
+        background: "var(--page-accent)", opacity: 0.5,
+        marginTop: 7, flexShrink: 0,
+    };
+
     if (isCompact) {
         return (
             <section className="theme-reveal">
@@ -49,6 +55,38 @@ export function Achievements({ content, variant }: SectionProps<AchievementsCont
                         </div>
                     )}
                 </div>
+            </section>
+        );
+    }
+
+    if (variant === "monolith") {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Achievements"}</h2>
+                <CollapsibleList
+                    visibleCount={3}
+                    moreLabel="more"
+                    items={items.map((item, index) => (
+                        <div key={index} style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 32 }}>
+                            <div style={dotStyle} />
+                            <article style={{ flex: 1 }}>
+                                <h3 style={{ fontSize: 17, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.25, margin: 0 }}>
+                                    {item.title}
+                                </h3>
+                                {(item.date || item.issuer) && (
+                                    <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 4 }}>
+                                        {[item.date, item.issuer].filter(Boolean).join(" · ")}
+                                    </div>
+                                )}
+                                {item.description && (
+                                    <p style={{ fontSize: 14, color: "var(--page-fg-secondary)", lineHeight: 1.6, marginTop: 8, maxWidth: "60ch" }}>
+                                        {item.description}
+                                    </p>
+                                )}
+                            </article>
+                        </div>
+                    ))}
+                />
             </section>
         );
     }
