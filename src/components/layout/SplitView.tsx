@@ -540,6 +540,9 @@ export function SplitView({
           {publishing && (
             <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Publishing…</span>
           )}
+          {publishError && !publishing && (
+            <span style={{ fontSize: 11, color: "#f87171" }}>{publishError}</span>
+          )}
           {authenticated && (
             <button
               type="button"

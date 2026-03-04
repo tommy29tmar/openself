@@ -7,6 +7,13 @@ import { useVoice } from "./VoiceProvider";
 import { MicButton } from "./MicButton";
 import { VoiceState } from "@/hooks/useVoiceManager";
 
+// Layout constants (keep in sync with SplitView tab bar)
+const TAB_BAR_H = 56;
+const FAB_SIZE = 64;
+const FAB_MARGIN = 16;
+const FAB_BOTTOM = TAB_BAR_H + FAB_MARGIN; // 72
+const PILL_BOTTOM = FAB_BOTTOM + FAB_SIZE + FAB_MARGIN; // 152
+
 export function VoiceOverlay() {
   const { voiceMode, voiceState, interimText, enabled } = useVoice();
   const [mounted, setMounted] = useState(false);
@@ -17,16 +24,17 @@ export function VoiceOverlay() {
 
   const isListening = voiceState === VoiceState.LISTENING;
   const isThinking = voiceState === VoiceState.WAITING || voiceState === VoiceState.TRANSCRIBING;
-  const showPill = voiceMode && (!!interimText || isThinking);
+  const isSpeaking = voiceState === VoiceState.SPEAKING;
+  const showPill = voiceMode && (!!interimText || isThinking || isSpeaking);
 
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none" }}>
 
-      {/* Transcript pill — slides up above the FAB */}
+      {/* Transcript / status pill — slides up above the FAB */}
       {showPill && (
         <div style={{
           position: "absolute",
-          bottom: 148, // FAB (64px) + tab bar (56px) + gaps
+          bottom: PILL_BOTTOM,
           right: 20,
           maxWidth: "72vw",
           background: "rgba(8,8,10,0.88)",
@@ -48,6 +56,17 @@ export function VoiceOverlay() {
             }}>
               {interimText}
             </p>
+          ) : isSpeaking ? (
+            <p style={{
+              margin: 0,
+              fontSize: 11,
+              color: "rgba(255,255,255,0.5)",
+              fontFamily: "monospace",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}>
+              Speaking…
+            </p>
           ) : (
             <p style={{
               margin: 0,
@@ -67,7 +86,7 @@ export function VoiceOverlay() {
       {isListening && !interimText && (
         <div style={{
           position: "absolute",
-          bottom: 148,
+          bottom: PILL_BOTTOM,
           right: 20,
           pointerEvents: "none",
         }}>
@@ -87,7 +106,7 @@ export function VoiceOverlay() {
       {/* FAB — always visible, bottom-right above tab bar */}
       <div style={{
         position: "absolute",
-        bottom: 72, // 56px tab bar + 16px gap
+        bottom: FAB_BOTTOM,
         right: 20,
         pointerEvents: "auto",
       }}>
