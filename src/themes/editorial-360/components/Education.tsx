@@ -52,11 +52,6 @@ export function Education({ content, variant }: SectionProps<EducationContent>) 
         );
     }
 
-    const summaryLine = items
-        .slice(1)
-        .map((item) => item.institution)
-        .join(", ");
-
     return (
         <section className="theme-reveal">
             <h2 className="section-label">
@@ -65,6 +60,8 @@ export function Education({ content, variant }: SectionProps<EducationContent>) 
 
             <div>
                 <CollapsibleList
+                    visibleCount={2}
+                    moreLabel="more degrees"
                     items={items.map((item, index) => (
                         <React.Fragment key={index}>
                             <article className="group max-w-2xl">
@@ -90,7 +87,6 @@ export function Education({ content, variant }: SectionProps<EducationContent>) 
                             )}
                         </React.Fragment>
                     ))}
-                    summaryLine={summaryLine}
                 />
             </div>
         </section>

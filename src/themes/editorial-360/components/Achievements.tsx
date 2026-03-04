@@ -53,11 +53,6 @@ export function Achievements({ content, variant }: SectionProps<AchievementsCont
         );
     }
 
-    const summaryLine = items
-        .slice(1)
-        .map((item) => item.title)
-        .join(", ");
-
     return (
         <section className="theme-reveal">
             <h2 className="section-label">
@@ -66,6 +61,8 @@ export function Achievements({ content, variant }: SectionProps<AchievementsCont
 
             <div>
                 <CollapsibleList
+                    visibleCount={3}
+                    moreLabel="more"
                     items={items.map((item, index) => (
                         <React.Fragment key={index}>
                             <article className="group max-w-2xl">
@@ -96,7 +93,6 @@ export function Achievements({ content, variant }: SectionProps<AchievementsCont
                             )}
                         </React.Fragment>
                     ))}
-                    summaryLine={summaryLine}
                 />
             </div>
         </section>

@@ -3,64 +3,95 @@
 import React, { useState, useRef, useEffect } from "react";
 
 type CollapsibleListProps = {
-    items: React.ReactNode[];
-    summaryLine: string;
-    threshold?: number;
+  items: React.ReactNode[];
+  visibleCount?: number;  // how many items to show before collapse (default: 1)
+  moreLabel?: string;     // e.g. "more roles" — count is prepended automatically
 };
 
-export function CollapsibleList({ items, summaryLine, threshold = 3 }: CollapsibleListProps) {
-    const [expanded, setExpanded] = useState(false);
-    const contentRef = useRef<HTMLDivElement>(null);
-    const [contentHeight, setContentHeight] = useState(0);
+// Exported utility: pure split logic, testable without React
+export function splitItems<T>(items: T[], visibleCount: number): { visible: T[]; hidden: T[] } {
+  return {
+    visible: items.slice(0, visibleCount),
+    hidden: items.slice(visibleCount),
+  };
+}
 
-    useEffect(() => {
-        if (contentRef.current) {
-            setContentHeight(contentRef.current.scrollHeight);
-        }
-    }, [expanded, items]);
+export function CollapsibleList({
+  items,
+  visibleCount = 1,
+  moreLabel = "more",
+}: CollapsibleListProps) {
+  const [expanded, setExpanded] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
 
-    if (items.length < threshold) {
-        return <>{items}</>;
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
     }
+  }, [expanded, items]);
 
-    const firstItem = items[0];
-    const restItems = items.slice(1);
+  const { visible: visibleItems, hidden: hiddenItems } = splitItems(items, visibleCount);
 
-    return (
-        <div>
-            {firstItem}
-            {!expanded && (
-                <button
-                    onClick={() => setExpanded(true)}
-                    className="mt-4 flex items-center gap-2 text-sm text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors cursor-pointer group"
-                >
-                    <span className="text-xs">&#9660;</span>
-                    <span className="border-b border-transparent group-hover:border-[var(--page-fg)] transition-colors">
-                        {summaryLine}
-                    </span>
-                </button>
-            )}
-            <div
-                ref={contentRef}
-                style={{
-                    maxHeight: expanded ? `${contentHeight}px` : "0px",
-                    overflow: "hidden",
-                    transition: "max-height 0.4s ease-in-out",
-                }}
-            >
-                {restItems}
-            </div>
-            {expanded && (
-                <button
-                    onClick={() => setExpanded(false)}
-                    className="mt-4 flex items-center gap-2 text-sm text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors cursor-pointer group"
-                >
-                    <span className="text-xs">&#9650;</span>
-                    <span className="border-b border-transparent group-hover:border-[var(--page-fg)] transition-colors">
-                        Collapse
-                    </span>
-                </button>
-            )}
-        </div>
-    );
+  // Show all if within visibleCount
+  if (hiddenItems.length === 0) {
+    return <>{visibleItems}</>;
+  }
+
+  const hiddenCount = hiddenItems.length;
+
+  const buttonStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "var(--page-fg2, var(--page-fg-secondary))",
+    opacity: 0.6,
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "8px 0",
+    letterSpacing: "0.05em",
+    transition: "opacity 0.15s",
+  };
+
+  return (
+    <div>
+      {visibleItems}
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          style={buttonStyle}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+        >
+          <span>▾</span>
+          <span>{hiddenCount} {moreLabel}</span>
+        </button>
+      )}
+      <div
+        ref={contentRef}
+        style={{
+          maxHeight: expanded ? `${contentHeight}px` : "0px",
+          overflow: "hidden",
+          transition: "max-height 0.4s ease-in-out",
+        }}
+      >
+        {hiddenItems}
+      </div>
+      {expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          style={{ ...buttonStyle, marginTop: 8 }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+        >
+          <span>▴</span>
+          <span>collapse</span>
+        </button>
+      )}
+    </div>
+  );
 }

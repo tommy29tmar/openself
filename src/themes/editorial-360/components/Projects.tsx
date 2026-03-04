@@ -20,11 +20,6 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
 
     if (!items.length) return null;
 
-    const summaryLine = items
-        .slice(1)
-        .map((item) => item.title)
-        .join(", ");
-
     if (variant === "projects-bento") {
         return (
             <section className="theme-reveal">
@@ -67,7 +62,8 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
                                 </article>
                             );
                         })}
-                        summaryLine={summaryLine}
+                        visibleCount={1}
+                        moreLabel="more projects"
                     />
                 </div>
             </section>
@@ -98,7 +94,8 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
                                 </div>
                             </div>
                         ))}
-                        summaryLine={summaryLine}
+                        visibleCount={1}
+                        moreLabel="more projects"
                     />
                     <div className="border-t border-[var(--page-border)]"></div>
                 </div>

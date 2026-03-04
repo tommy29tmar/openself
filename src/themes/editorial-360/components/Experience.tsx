@@ -28,11 +28,6 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
         return 0;
     });
 
-    const summaryLine = sortedItems
-        .slice(1)
-        .map((item) => `${item.title}${item.company ? ` @ ${item.company}` : ""}`)
-        .join(", ");
-
     return (
         <section className="theme-reveal">
             <h2 className="section-label">
@@ -41,6 +36,8 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
 
             <div>
                 <CollapsibleList
+                    visibleCount={2}
+                    moreLabel="more roles"
                     items={sortedItems.map((item, index) => (
                         <React.Fragment key={index}>
                             <article className="group max-w-2xl">
@@ -74,7 +71,6 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
                             )}
                         </React.Fragment>
                     ))}
-                    summaryLine={summaryLine}
                 />
             </div>
         </section>
