@@ -181,14 +181,16 @@ describe("getSituationDirectives", () => {
     expect(result).toContain("STALE:");
   });
 
-  it("includes proposals directive when situation flag is set even with count 0 (guard is in build())", () => {
+  it("passes count=0 through to directive function (guard is in pendingProposalsDirective, not in registry build)", () => {
     const ctx: SituationContext = {
       ...emptyContext,
       pendingProposalCount: 0,
       pendingProposalSections: [],
     };
     const result = getSituationDirectives(["has_pending_proposals"], "active_stale", ctx);
-    // The registry calls build() unconditionally; count=0 guard is the caller's responsibility
+    // The registry invokes pendingProposalsDirective unconditionally and omits empty results.
+    // The guard (count <= 0 → "") lives in pendingProposalsDirective itself.
+    // This mock always returns a non-empty string, so the header is present here.
     expect(result).toContain("SITUATION DIRECTIVES:");
   });
 });

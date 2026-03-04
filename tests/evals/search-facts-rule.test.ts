@@ -7,14 +7,14 @@ import { planningProtocol } from "@/lib/agent/policies/planning-protocol";
 import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
 
 describe("search_facts rule embedding", () => {
-  it("returningNoPagePolicy contains the unified search_facts rule", () => {
-    expect(returningNoPagePolicy("en")).toContain("WHEN TO CALL search_facts");
-  });
-  it("planningProtocol contains the unified search_facts rule", () => {
-    expect(planningProtocol()).toContain("WHEN TO CALL search_facts");
-  });
   it("memoryUsageDirectives contains the unified search_facts rule", () => {
     expect(memoryUsageDirectives()).toContain("WHEN TO CALL search_facts");
+  });
+  it("returningNoPagePolicy does NOT contain the search_facts rule (consolidated into memoryUsageDirectives)", () => {
+    expect(returningNoPagePolicy("en")).not.toContain("WHEN TO CALL search_facts");
+  });
+  it("planningProtocol does NOT contain the search_facts rule (consolidated into memoryUsageDirectives)", () => {
+    expect(planningProtocol()).not.toContain("WHEN TO CALL search_facts");
   });
   it("none of them contain 'BEFORE every question'", () => {
     for (const text of [returningNoPagePolicy("en"), planningProtocol(), memoryUsageDirectives()]) {

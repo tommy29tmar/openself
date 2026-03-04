@@ -1,5 +1,17 @@
 import type { BootstrapPayload } from "@/lib/agent/journey";
+import {
+  getJourneyPolicy,
+  getSituationDirectives,
+  getExpertiseCalibration,
+} from "@/lib/agent/policies";
+import type { SituationContext } from "@/lib/agent/policies";
+import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
+import { turnManagementRules } from "@/lib/agent/policies/turn-management";
+import { planningProtocol } from "@/lib/agent/policies/planning-protocol";
+import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
+import { buildPresenceReference } from "@/lib/presence/prompt-builder";
 
+/** @deprecated JourneyState now drives prompt assembly. PromptMode remains for backward-compatible context.ts interface. */
 export type PromptMode = "onboarding" | "steady_state" | "heartbeat";
 
 export type PromptBlock = {
@@ -24,17 +36,6 @@ export type AssembledPrompt = {
   text: string;
   blocks: Array<{ id: string; version: number }>;
 };
-import {
-  getJourneyPolicy,
-  getSituationDirectives,
-  getExpertiseCalibration,
-} from "@/lib/agent/policies";
-import type { SituationContext } from "@/lib/agent/policies";
-import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
-import { turnManagementRules } from "@/lib/agent/policies/turn-management";
-import { planningProtocol } from "@/lib/agent/policies/planning-protocol";
-import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
-import { buildPresenceReference } from "@/lib/presence/prompt-builder";
 
 const CORE_CHARTER = `You are the OpenSelf agent — a warm, direct AI that helps people build their personal web page through natural conversation.
 

@@ -11,6 +11,7 @@
  * Directive: pending proposals from the heartbeat that need user review.
  */
 export function pendingProposalsDirective(count: number, sections: string[]): string {
+  if (count <= 0) return "";
   const sectionList = sections.length > 0 ? ` in sections: ${sections.join(", ")}` : "";
   return `PENDING PROPOSALS: You have ${count} content proposal${count !== 1 ? "s" : ""} waiting for user review${sectionList}.
 When appropriate, mention to the user that there are suggestions ready for review.

@@ -8,12 +8,8 @@
  * Expertise modulation (from getExpertiseCalibration) adjusts verbosity externally.
  */
 
-import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
-
 export function planningProtocol(): string {
   return `PLANNING PROTOCOL:
-
-${SEARCH_FACTS_RULE}
 
 Before acting, classify the user's request:
 

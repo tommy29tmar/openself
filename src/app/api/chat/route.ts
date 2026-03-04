@@ -78,6 +78,8 @@ export const STEP_EXHAUSTION_FALLBACK: Record<JourneyState, Record<string, strin
     ja: "完了 — これらの更新で再公開しますか？",
     zh: "完成了 — 要用这些更新重新发布吗？",
   },
+  // blocked state: step exhaustion in a blocked session should surface the quota message
+  // since the next user action is to register, regardless of which limit was hit.
   blocked: {
     en: "You've reached the message limit — pick a username to keep going!",
     it: "Hai raggiunto il limite di messaggi — scegli un username per continuare!",

@@ -10,15 +10,11 @@
  * - Turn 4: Generate page and propose publish
  */
 
-import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
-
 export function returningNoPagePolicy(language: string): string {
   return `MODE: RETURNING (NO PAGE YET)
 You have talked to this person before. You have facts about them, and possibly a conversation summary, but their page has NOT been generated yet.
 
 Language: Converse in ${language || "the user's language"}. All page content should be in the same language.
-
-${SEARCH_FACTS_RULE}
 
 GREETING (turn 1):
 - Use their name from facts (identity/name). NEVER ask for their name again.

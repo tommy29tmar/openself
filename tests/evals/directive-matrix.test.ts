@@ -55,7 +55,9 @@ describe("eligibility filtering", () => {
 
   it("has_thin_sections IS injected in active_stale", () => {
     const result = getSituationDirectives(["has_thin_sections"], "active_stale", mockCtx);
-    expect(result).not.toBe("");
+    expect(result).toContain("THIN SECTIONS:");
+    expect(result).toContain("education");
+    expect(result).toContain("projects");
   });
 
   it("has_archivable_facts is NOT injected in active_fresh", () => {
@@ -72,7 +74,7 @@ describe("conflict resolution", () => {
       "active_stale",
       mockCtx,
     );
-    expect(result).not.toBe("");
+    expect(result).toContain("THIN SECTIONS:");
     // has_thin_sections wins (lower priority number), has_archivable_facts dropped
     const r2 = getSituationDirectives(["has_archivable_facts"], "active_stale", mockCtx);
     const r1 = getSituationDirectives(["has_thin_sections"], "active_stale", mockCtx);
@@ -104,7 +106,7 @@ describe("combinations", () => {
       "active_stale",
       mockCtx,
     );
-    expect(result).not.toBe("");
+    expect(result).toContain("PENDING PROPOSALS:");
     // Both should appear
     const r1 = getSituationDirectives(["has_pending_proposals"], "active_stale", mockCtx);
     const r2 = getSituationDirectives(["has_stale_facts"], "active_stale", mockCtx);
@@ -118,7 +120,8 @@ describe("combinations", () => {
       "draft_ready",
       mockCtx,
     );
-    expect(result).not.toBe("");
+    expect(result).toContain("PENDING PROPOSALS:");
+    expect(result).toContain("OPEN CONFLICTS:");
   });
 });
 
