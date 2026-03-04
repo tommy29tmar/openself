@@ -509,14 +509,16 @@ function buildHeroSection(
       ? str(val(emailFacts[0]).email) ?? str(val(emailFacts[0]).value)
       : undefined;
 
-  const languageItems: { language: string; proficiency?: string }[] = [];
+  const languageItems: { language: string; proficiency?: string; canonicalProficiency?: string }[] = [];
   for (const f of languageFacts ?? []) {
     const v = val(f);
     const rawLang = str(v.language) ?? str(v.name) ?? str(v.value);
     if (rawLang) {
+      const rawProf = str(v.proficiency) ?? str(v.level);
       languageItems.push({
         language: localizeLanguageName(rawLang, language),
-        proficiency: localizeProficiency(str(v.proficiency) ?? str(v.level), language),
+        proficiency: localizeProficiency(rawProf, language),
+        ...(rawProf ? { canonicalProficiency: normalizeCanonicalProficiency(rawProf) } : {}),
       });
     }
   }
@@ -1065,6 +1067,36 @@ const PROF_ALIASES: Record<string, string> = {
   "avanzato": "advanced",
   "intermedio": "intermediate",
 };
+
+/** Maps raw proficiency aliases to canonical English tokens for chip filtering in Hero.tsx. */
+const PROFICIENCY_ALIAS: Record<string, string> = {
+  // Italian
+  "madrelingua": "native",
+  // German
+  "muttersprachler": "native",
+  "muttersprachlerin": "native",
+  "fließend": "fluent",
+  "fliessend": "fluent",
+  // French
+  "natif": "native",
+  "native": "native",
+  "courant": "fluent",
+  "couramment": "fluent",
+  // Spanish/Portuguese
+  "nativo": "native",
+  "nativa": "native",
+  "fluente": "fluent",
+  // Common
+  "bilingual": "bilingual",
+  "bilingue": "bilingual",
+  "near-native": "native",
+  "proficient": "fluent",
+};
+
+function normalizeCanonicalProficiency(raw: string): string {
+  const lower = raw.toLowerCase().trim();
+  return PROFICIENCY_ALIAS[lower] ?? lower;
+}
 
 function localizeProficiency(rawProf: string | undefined, language: string): string | undefined {
   if (!rawProf) return undefined;

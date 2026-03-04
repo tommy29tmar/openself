@@ -5,14 +5,126 @@ type HeroContent = {
     name: string;
     tagline: string;
     avatarUrl?: string;
-    socialLinks?: { platform: string; url: string }[];
+    socialLinks?: { platform: string; url: string; label?: string }[];
     contactEmail?: string;
-    languages?: { language: string; proficiency?: string }[];
+    languages?: { language: string; proficiency?: string; canonicalProficiency?: string }[];
+    location?: string;
+    availability?: string;
+    yearsExp?: number;
 };
 
 type HeroProps = SectionProps<HeroContent> & {
     onAvatarClick?: () => void;
 };
+
+// Canonical high-proficiency tokens (language-independent).
+// page-composer.ts stores canonicalProficiency = raw fact value (pre-localization).
+// We filter on canonical tokens only — safe across all locales.
+const HIGH_PROFICIENCY_CANONICAL = new Set(["native", "bilingual", "fluent", "c1", "c2"]);
+
+const PROFICIENCY_ALIAS: Record<string, string> = {
+    // Italian
+    "madrelingua": "native",
+    // German
+    "muttersprachler": "native",
+    "muttersprachlerin": "native",
+    "fließend": "fluent",
+    "fliessend": "fluent",
+    // French
+    "natif": "native",
+    "native": "native",
+    "courant": "fluent",
+    "couramment": "fluent",
+    // Spanish/Portuguese
+    "nativo": "native",
+    "nativa": "native",
+    "fluente": "fluent",
+    // Common
+    "bilingual": "bilingual",
+    "bilingue": "bilingual",
+    "near-native": "native",
+    "proficient": "fluent",
+};
+
+function isHighProficiency(l: { proficiency?: string; canonicalProficiency?: string }): boolean {
+    if (l.canonicalProficiency) {
+        return HIGH_PROFICIENCY_CANONICAL.has(l.canonicalProficiency.toLowerCase().trim());
+    }
+    const prof = (l.proficiency ?? "").toLowerCase().trim();
+    const normalized = PROFICIENCY_ALIAS[prof] ?? prof;
+    return HIGH_PROFICIENCY_CANONICAL.has(normalized);
+}
+
+function HeroChips({ content }: { content: HeroContent }) {
+    const chips: string[] = [];
+
+    if (content.location) chips.push(content.location);
+    if (content.availability) chips.push(content.availability);
+    if (content.yearsExp && content.yearsExp > 0) chips.push(`${content.yearsExp} yrs exp.`);
+
+    const langs = (content.languages ?? [])
+        .filter(l => (l.proficiency || l.canonicalProficiency) && isHighProficiency(l))
+        .slice(0, 2)
+        .map(l => l.language);
+    if (langs.length > 0) chips.push(langs.join(" · "));
+
+    if (chips.length === 0) return null;
+
+    const chipStyle: React.CSSProperties = {
+        fontSize: 12, color: "var(--page-fg-secondary)",
+        background: "var(--page-muted)", padding: "5px 12px",
+        borderRadius: 20, border: "1px solid var(--page-border)",
+        whiteSpace: "nowrap",
+    };
+
+    return (
+        <div style={{ display: "flex", gap: 16, marginTop: 20, flexWrap: "wrap" }}>
+            {chips.map((chip, i) => <span key={i} style={chipStyle}>{chip}</span>)}
+        </div>
+    );
+}
+
+function HeroContact({ content }: { content: HeroContent }) {
+    const hasEmail = !!content.contactEmail;
+    const socialLinks = (content.socialLinks ?? []).filter(l => l.url);
+    if (!hasEmail && socialLinks.length === 0) return null;
+
+    const linkStyle: React.CSSProperties = {
+        fontSize: 12, color: "var(--page-fg-secondary)", opacity: 0.7,
+        textDecoration: "none", fontWeight: 600, letterSpacing: "0.03em",
+        transition: "opacity 0.15s",
+    };
+
+    const ICONS: Record<string, string> = {
+        github: "GH", linkedin: "in", twitter: "𝕏", x: "𝕏",
+        website: "↗", instagram: "IG",
+    };
+
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12 }}>
+            {hasEmail && (
+                <a href={`mailto:${content.contactEmail}`} style={linkStyle}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+                >
+                    {content.contactEmail}
+                </a>
+            )}
+            {socialLinks.map((link, i) => {
+                const label = ICONS[link.platform?.toLowerCase()] ?? link.platform?.slice(0, 2).toUpperCase() ?? "↗";
+                return (
+                    <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                        aria-label={link.label ?? link.platform} style={linkStyle}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+                    >
+                        {label}
+                    </a>
+                );
+            })}
+        </div>
+    );
+}
 
 export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroProps) {
     const { name = "Unknown", tagline = "", avatarUrl } = content;
@@ -62,7 +174,6 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
     if (variant === "hero-centered") {
         return (
             <header className="mb-32 mt-16 theme-reveal flex flex-col items-center text-center relative">
-                {/* Avatar: 120px centered */}
                 <div className="mb-8 z-10">
                     {renderAvatar("w-[120px] h-[120px]", "text-4xl")}
                 </div>
@@ -72,8 +183,6 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                 <p className="text-xl md:text-3xl font-[var(--h-font)] text-[var(--page-fg-secondary)] max-w-2xl mx-auto italic leading-relaxed relative z-10">
                     {tagline}
                 </p>
-
-                {/* Decorative background element */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-[radial-gradient(ellipse_at_center,var(--page-accent)_0%,transparent_50%)] opacity-5 pointer-events-none blur-3xl rounded-full"></div>
             </header>
         );
@@ -83,7 +192,6 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
         return (
             <header className="mb-32 mt-8 theme-reveal">
                 <div className="relative overflow-hidden rounded-[2rem] p-8 md:p-16 border border-[var(--page-border)] bg-[var(--page-bg)]/40 backdrop-blur-xl shadow-sm">
-                    {/* Abstract background shapes */}
                     <div className="absolute -top-24 -right-24 w-96 h-96 bg-[var(--page-accent)]/10 rounded-full blur-3xl pointer-events-none"></div>
                     <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-[var(--page-fg)]/5 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -107,14 +215,13 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
         );
     }
 
-    // Default: hero-split — Magazine editorial with 80px avatar, flex row
+    // Default: hero-split — left-aligned, avatar row, chip pills, contact row
     return (
         <header className="py-24 theme-reveal">
-            <div className="border-b border-[var(--page-border)] pb-10">
-                <div className="flex items-center gap-6 mb-4">
-                    {/* Avatar: 80px left-aligned */}
+            <div style={{ borderBottom: "1px solid var(--page-border)", paddingBottom: 40 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
                     {renderAvatar("w-20 h-20", "text-2xl")}
-                    <div className="flex-1 min-w-0">
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <h1
                             className="hero-stagger-name font-[var(--h-font)] font-medium tracking-[-0.03em] leading-[0.95]"
                             style={{ fontSize: "clamp(2.5rem, 5vw, 3.75rem)" }}
@@ -122,53 +229,16 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                             {name}
                         </h1>
                         {tagline && (
-                            <p className="hero-stagger-tagline text-[var(--text-xl)] font-light text-[var(--page-fg-secondary)] leading-relaxed max-w-xl mt-4">
+                            <p className="hero-stagger-tagline"
+                                style={{ fontSize: 17, fontWeight: 300, color: "var(--page-fg-secondary)", lineHeight: 1.5, maxWidth: "50ch", marginTop: 12 }}>
                                 {tagline}
                             </p>
                         )}
                     </div>
                 </div>
+                <HeroChips content={content} />
+                <HeroContact content={content} />
             </div>
-            {/* Contact bar */}
-            {(content.socialLinks?.length || content.contactEmail || content.languages?.length) && (
-                <div className="hero-stagger-social mt-6 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
-                    {content.socialLinks && content.socialLinks.length > 0 && (
-                        <>
-                            {content.socialLinks.map((link, i) => (
-                                <React.Fragment key={i}>
-                                    {i > 0 && <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span>}
-                                    <a
-                                        href={link.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="hover-underline-grow text-[var(--page-fg-secondary)] hover:text-[var(--page-fg)] transition-colors uppercase tracking-[0.05em] text-xs font-medium"
-                                    >
-                                        {(link as { platform: string; url: string; label?: string }).label ?? link.platform}
-                                    </a>
-                                </React.Fragment>
-                            ))}
-                        </>
-                    )}
-                    {content.contactEmail && (
-                        <>
-                            {content.socialLinks?.length ? <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span> : null}
-                            <span className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
-                                {content.contactEmail}
-                            </span>
-                        </>
-                    )}
-                    {content.languages && content.languages.length > 0 && (
-                        <>
-                            {(content.socialLinks?.length || content.contactEmail) && <span className="text-[var(--page-fg-secondary)] opacity-20 select-none">&middot;</span>}
-                            <span className="text-[var(--page-fg-secondary)] text-xs tracking-wide">
-                                {content.languages
-                                    .map((l) => `${l.language}${l.proficiency ? ` (${l.proficiency})` : ""}`)
-                                    .join(" · ")}
-                            </span>
-                        </>
-                    )}
-                </div>
-            )}
         </header>
     );
 }
