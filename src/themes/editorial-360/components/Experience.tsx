@@ -16,7 +16,13 @@ type ExperienceContent = {
     currentLabel?: string;
 };
 
-export function Experience({ content }: SectionProps<ExperienceContent>) {
+const dotStyle: React.CSSProperties = {
+    width: 8, height: 8, borderRadius: "50%",
+    background: "var(--page-accent)", opacity: 0.5,
+    marginTop: 7, flexShrink: 0,
+};
+
+export function Experience({ content, variant }: SectionProps<ExperienceContent>) {
     const { items = [], title, currentLabel } = content;
 
     if (!items.length) return null;
@@ -27,6 +33,43 @@ export function Experience({ content }: SectionProps<ExperienceContent>) {
         if (!a.current && b.current) return 1;
         return 0;
     });
+
+    if (variant === "monolith") {
+        return (
+            <section className="theme-reveal">
+                <h2 className="section-label">{title || "Experience"}</h2>
+                <CollapsibleList
+                    visibleCount={2}
+                    moreLabel="more roles"
+                    items={sortedItems.map((item, index) => (
+                        <div key={index} style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 32 }}>
+                            <div style={dotStyle} />
+                            <article style={{ flex: 1 }}>
+                                <h3 style={{ fontSize: 17, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.25, margin: 0 }}>
+                                    {item.title}{item.company ? ` — ${item.company}` : ""}
+                                </h3>
+                                {item.period && (
+                                    <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 4 }}>
+                                        {item.period}
+                                        {item.current && (
+                                            <span style={{ marginLeft: 8, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--page-accent)" }}>
+                                                {currentLabel || "Current"}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {item.description && (
+                                    <p style={{ fontSize: 14, color: "var(--page-fg-secondary)", lineHeight: 1.6, marginTop: 8, maxWidth: "60ch" }}>
+                                        {item.description}
+                                    </p>
+                                )}
+                            </article>
+                        </div>
+                    ))}
+                />
+            </section>
+        );
+    }
 
     return (
         <section className="theme-reveal">
