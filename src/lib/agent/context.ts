@@ -16,7 +16,7 @@ import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import { isNewTopicSignal } from "@/lib/agent/policies/topic-signal-detector";
-import type { PromptMode } from "./promptAssembler";
+import type { PromptMode } from "./prompts";
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 
 /**

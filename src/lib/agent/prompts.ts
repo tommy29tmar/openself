@@ -1,5 +1,29 @@
-import type { PromptMode, PromptContext } from "./promptAssembler";
 import type { BootstrapPayload } from "@/lib/agent/journey";
+
+export type PromptMode = "onboarding" | "steady_state" | "heartbeat";
+
+export type PromptBlock = {
+  id: string;
+  version: number;
+  content: string;
+};
+
+export type PromptContext = {
+  mode: PromptMode;
+  agentIdentity: string;
+  safetyPolicy: string;
+  toolPolicy: string;
+  outputContract: string;
+  retrievedFacts: string;
+  historySummary: string;
+  pageConfigContext: string;
+  connectorContext: string;
+};
+
+export type AssembledPrompt = {
+  text: string;
+  blocks: Array<{ id: string; version: number }>;
+};
 import {
   getJourneyPolicy,
   getSituationDirectives,
