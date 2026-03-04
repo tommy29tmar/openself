@@ -1,4 +1,4 @@
-import type { JourneyState, Situation, ExpertiseLevel } from "@/lib/agent/journey";
+import type { JourneyState, ExpertiseLevel } from "@/lib/agent/journey";
 import type { ImportGapReport } from "@/lib/connectors/import-gap-analyzer";
 import { firstVisitPolicy } from "./first-visit";
 import { returningNoPagePolicy } from "./returning-no-page";
@@ -48,59 +48,17 @@ export function getJourneyPolicy(state: JourneyState, language: string): string 
 }
 
 // ---------------------------------------------------------------------------
-// Situation Directives
+// Situation Directives — re-exported from directive-registry (Task 3/4)
 // ---------------------------------------------------------------------------
 
-// Individual directive functions (re-exported from situations.ts in Task 4)
-import {
-  pendingProposalsDirective,
-  thinSectionsDirective,
-  staleFactsDirective,
-  openConflictsDirective,
-  archivableFactsDirective,
-  recentImportDirective,
-} from "./situations";
+export { getSituationDirectives, DIRECTIVE_POLICY } from "@/lib/agent/policies/directive-registry";
+export { validateDirectivePolicy } from "@/lib/agent/policies/validate-directive-policy";
 
-/**
- * Composes situation-specific directives from active situations + context data.
- * Returns empty string if no situations are active.
- */
-export function getSituationDirectives(
-  situations: Situation[],
-  context: SituationContext,
-): string {
-  const directives: string[] = [];
-
-  if (situations.includes("has_pending_proposals") && context.pendingProposalCount > 0) {
-    directives.push(pendingProposalsDirective(context.pendingProposalCount, context.pendingProposalSections));
-  }
-
-  if (situations.includes("has_thin_sections") && context.thinSections.length > 0) {
-    directives.push(thinSectionsDirective(context.thinSections));
-  }
-
-  if (situations.includes("has_stale_facts") && context.staleFacts.length > 0) {
-    directives.push(staleFactsDirective(context.staleFacts));
-  }
-
-  if (situations.includes("has_open_conflicts") && context.openConflicts.length > 0) {
-    directives.push(openConflictsDirective(context.openConflicts));
-  }
-
-  if (situations.includes("has_archivable_facts") && context.archivableFacts.length > 0) {
-    directives.push(archivableFactsDirective(context.archivableFacts));
-  }
-
-  // Import reaction: gated on importGapReport presence (flag-driven), NOT on
-  // has_recent_import situation, because re-import/upsert may not update createdAt.
-  if (context.importGapReport) {
-    directives.push(recentImportDirective(context.importGapReport));
-  }
-
-  if (directives.length === 0) return "";
-
-  return `SITUATION DIRECTIVES:\n${directives.join("\n\n")}`;
-}
+// ── Startup validation (TOP-LEVEL, outside any function) ─────────────────────
+// Executes at module import time — before any request is served.
+import { validateDirectivePolicy as _validateOnStartup } from "@/lib/agent/policies/validate-directive-policy";
+import { DIRECTIVE_POLICY as _DIRECTIVE_POLICY } from "@/lib/agent/policies/directive-registry";
+_validateOnStartup(_DIRECTIVE_POLICY);
 
 // ---------------------------------------------------------------------------
 // Expertise Calibration

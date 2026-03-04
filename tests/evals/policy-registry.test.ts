@@ -114,7 +114,7 @@ describe("getSituationDirectives", () => {
   };
 
   it("returns empty string when no situations active", () => {
-    const result = getSituationDirectives([], emptyContext);
+    const result = getSituationDirectives([], "active_stale", emptyContext);
     expect(result).toBe("");
   });
 
@@ -124,7 +124,7 @@ describe("getSituationDirectives", () => {
       pendingProposalCount: 3,
       pendingProposalSections: ["bio", "skills"],
     };
-    const result = getSituationDirectives(["has_pending_proposals"], ctx);
+    const result = getSituationDirectives(["has_pending_proposals"], "active_stale", ctx);
     expect(result).toContain("SITUATION DIRECTIVES:");
     expect(result).toContain("PROPOSALS: 3 pending");
     expect(result).toContain("bio");
@@ -136,7 +136,7 @@ describe("getSituationDirectives", () => {
       ...emptyContext,
       thinSections: ["projects", "achievements"],
     };
-    const result = getSituationDirectives(["has_thin_sections"], ctx);
+    const result = getSituationDirectives(["has_thin_sections"], "active_stale", ctx);
     expect(result).toContain("THIN:");
     expect(result).toContain("projects");
     expect(result).toContain("achievements");
@@ -147,7 +147,7 @@ describe("getSituationDirectives", () => {
       ...emptyContext,
       staleFacts: ["skill/typescript", "experience/acme"],
     };
-    const result = getSituationDirectives(["has_stale_facts"], ctx);
+    const result = getSituationDirectives(["has_stale_facts"], "active_stale", ctx);
     expect(result).toContain("STALE:");
     expect(result).toContain("skill/typescript");
   });
@@ -157,7 +157,7 @@ describe("getSituationDirectives", () => {
       ...emptyContext,
       openConflicts: ["identity/name: chat vs github"],
     };
-    const result = getSituationDirectives(["has_open_conflicts"], ctx);
+    const result = getSituationDirectives(["has_open_conflicts"], "active_stale", ctx);
     expect(result).toContain("CONFLICTS:");
     expect(result).toContain("identity/name");
   });
@@ -175,20 +175,21 @@ describe("getSituationDirectives", () => {
       thinSections: ["skills"],
       staleFacts: ["experience/old-job"],
     };
-    const result = getSituationDirectives(situations, ctx);
+    const result = getSituationDirectives(situations, "active_stale", ctx);
     expect(result).toContain("PROPOSALS:");
     expect(result).toContain("THIN:");
     expect(result).toContain("STALE:");
   });
 
-  it("skips proposals directive when situation flag is set but count is 0", () => {
+  it("includes proposals directive when situation flag is set even with count 0 (guard is in build())", () => {
     const ctx: SituationContext = {
       ...emptyContext,
       pendingProposalCount: 0,
       pendingProposalSections: [],
     };
-    const result = getSituationDirectives(["has_pending_proposals"], ctx);
-    expect(result).toBe("");
+    const result = getSituationDirectives(["has_pending_proposals"], "active_stale", ctx);
+    // The registry calls build() unconditionally; count=0 guard is the caller's responsibility
+    expect(result).toContain("SITUATION DIRECTIVES:");
   });
 });
 

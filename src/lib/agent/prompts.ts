@@ -335,6 +335,7 @@ export function buildSystemPrompt(
 
   const situationDirectives = getSituationDirectives(
     bootstrap.situations,
+    bootstrap.journeyState,
     situationContext,
   );
 

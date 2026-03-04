@@ -290,7 +290,7 @@ describe("getSituationDirectives with archivable facts", () => {
       openConflicts: [],
       archivableFacts: ["experience/old-job", "skill/legacy"],
     };
-    const result = getSituationDirectives(["has_archivable_facts"], ctx);
+    const result = getSituationDirectives(["has_archivable_facts"], "active_stale", ctx);
     expect(result).toContain("ARCHIVABLE FACTS:");
     expect(result).toContain("experience/old-job");
   });
@@ -304,7 +304,7 @@ describe("getSituationDirectives with archivable facts", () => {
       openConflicts: [],
       archivableFacts: [],
     };
-    const result = getSituationDirectives(["has_archivable_facts"], ctx);
+    const result = getSituationDirectives(["has_archivable_facts"], "active_stale", ctx);
     expect(result).toBe("");
   });
 });

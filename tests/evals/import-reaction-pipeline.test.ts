@@ -71,7 +71,7 @@ describe("import reaction pipeline (unit-level)", () => {
     expect(report.summary.currentRole).toContain("CTO");
 
     // 6. Generate directive (pure function)
-    const directive = getSituationDirectives(situations, {
+    const directive = getSituationDirectives(situations, "active_stale", {
       pendingProposalCount: 0,
       pendingProposalSections: [],
       thinSections: [],

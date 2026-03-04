@@ -161,6 +161,7 @@ describe("buildSystemPrompt", () => {
     it("includes situation directives when situations are active", () => {
       const result = buildSystemPrompt(
         makeBootstrap({
+          journeyState: "active_stale",
           situations: ["has_thin_sections"],
           thinSections: ["skills", "projects"],
         }),
@@ -249,6 +250,7 @@ describe("buildSystemPrompt", () => {
     it("composition has 13 blocks with situation directives", () => {
       const result = buildSystemPrompt(
         makeBootstrap({
+          journeyState: "active_stale",
           situations: ["has_thin_sections"],
           thinSections: ["skills", "projects"],
         }),
