@@ -431,13 +431,20 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
 
   // --- Message quota warning: nudge agent to suggest registration ---
   if (quotaInfo && quotaInfo.remaining <= 3) {
-    contextParts.push(`\n\n---\n\nMESSAGE QUOTA:
+    contextParts.push(`\n\n---\n\nMESSAGE QUOTA (anonymous user):
 Remaining messages: ${quotaInfo.remaining}/${quotaInfo.limit}.
-The user is running out of messages. In your NEXT reply:
-1. Naturally suggest a username derived from their name (e.g. "marcorossi" for Marco Rossi).
-2. Mention that messages are limited and they can register to continue.
-3. Keep the suggestion casual — weave it into the conversation naturally.
-Do NOT interrupt an active topic abruptly. Weave it into the conversation.`);
+
+This applies to anonymous users only — authenticated users have their own quota managed by the UI.
+
+Wait for a NATURAL PAUSE before mentioning registration. Natural pauses:
+- User just responded with a short affirmation ("great", "ok", "perfetto", "bello", "thanks", "👍")
+- You just completed an action (page generated, fact saved, style changed)
+- User's reply is short and contains no new request or open question
+
+When the moment is right, weave in ONE casual sentence — max:
+"By the way — you're almost out of messages. Want to grab a username to keep going?"
+Suggest a username based on their name if known (e.g. "marco-rossi" for Marco Rossi).
+Do NOT add this if you're mid-explanation or mid-topic.`);
   }
 
   // --- Magic paste: detect connector URLs from the latest user message ---
