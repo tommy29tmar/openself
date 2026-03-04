@@ -54,8 +54,8 @@ export function MicButton({ size = "default", className }: MicButtonProps) {
       return { background: "#c0392b", color: "#fff", border: "none" };
     if (voiceState === VoiceState.PERMISSION_DENIED)
       return { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.1)" };
-    // IDLE
-    return { background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.15)" };
+    // IDLE — dark glass, always visible on any page background
+    return { background: "rgba(10,10,14,0.82)", color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 4px 24px rgba(0,0,0,0.35)", backdropFilter: "blur(12px)" };
   })();
 
   return (

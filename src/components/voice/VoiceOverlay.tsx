@@ -1,65 +1,100 @@
 // src/components/voice/VoiceOverlay.tsx
 "use client";
 
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useVoice } from "./VoiceProvider";
 import { MicButton } from "./MicButton";
 import { VoiceState } from "@/hooks/useVoiceManager";
 
 export function VoiceOverlay() {
   const { voiceMode, voiceState, interimText, enabled } = useVoice();
+  const [mounted, setMounted] = useState(false);
 
-  if (!enabled) return null;
+  useEffect(() => setMounted(true), []);
+
+  if (!enabled || !mounted) return null;
 
   const isListening = voiceState === VoiceState.LISTENING;
   const isThinking = voiceState === VoiceState.WAITING || voiceState === VoiceState.TRANSCRIBING;
+  const showPill = voiceMode && (!!interimText || isThinking);
 
-  return (
-    <div style={{
-      position: "fixed",
-      right: 20,
-      bottom: 72, // 56px tab bar + 16px margin
-      zIndex: 50,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "flex-end",
-      gap: 8,
-      pointerEvents: "none",
-    }}>
-      {/* Transcript text — appears above FAB while listening */}
-      {voiceMode && interimText && (
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none" }}>
+
+      {/* Transcript pill — slides up above the FAB */}
+      {showPill && (
         <div style={{
-          background: "rgba(0,0,0,0.7)",
-          color: "rgba(255,255,255,0.85)",
-          fontSize: 13,
-          fontFamily: "monospace",
-          padding: "6px 12px",
-          borderRadius: 8,
+          position: "absolute",
+          bottom: 148, // FAB (64px) + tab bar (56px) + gaps
+          right: 20,
           maxWidth: "72vw",
-          lineHeight: 1.4,
-          backdropFilter: "blur(8px)",
+          background: "rgba(8,8,10,0.88)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.08)",
+          padding: "10px 14px",
           pointerEvents: "none",
         }}>
-          {interimText}
+          {interimText ? (
+            <p style={{
+              margin: 0,
+              fontSize: 13,
+              color: "rgba(255,255,255,0.85)",
+              fontFamily: "monospace",
+              lineHeight: 1.5,
+              wordBreak: "break-word",
+            }}>
+              {interimText}
+            </p>
+          ) : (
+            <p style={{
+              margin: 0,
+              fontSize: 11,
+              color: "rgba(201,169,110,0.75)",
+              fontFamily: "monospace",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}>
+              Updating your page…
+            </p>
+          )}
         </div>
       )}
 
-      {/* State label — thinking */}
-      {voiceMode && isThinking && !interimText && (
+      {/* Listening label */}
+      {isListening && !interimText && (
         <div style={{
-          color: "rgba(201,169,110,0.7)",
-          fontSize: 11,
-          fontFamily: "monospace",
-          letterSpacing: "0.08em",
+          position: "absolute",
+          bottom: 148,
+          right: 20,
           pointerEvents: "none",
         }}>
-          …
+          <p style={{
+            margin: 0,
+            fontSize: 11,
+            color: "rgba(255,100,80,0.8)",
+            fontFamily: "monospace",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}>
+            Listening…
+          </p>
         </div>
       )}
 
-      {/* FAB mic button */}
-      <div style={{ pointerEvents: "auto" }}>
+      {/* FAB — always visible, bottom-right above tab bar */}
+      <div style={{
+        position: "absolute",
+        bottom: 72, // 56px tab bar + 16px gap
+        right: 20,
+        pointerEvents: "auto",
+      }}>
         <MicButton size="large" />
       </div>
-    </div>
+
+    </div>,
+    document.body
   );
 }
