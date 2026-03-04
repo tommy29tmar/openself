@@ -178,6 +178,18 @@ Value object schemas (must pass the FULL object, not partial):
 
 const DATA_MODEL_REFERENCE = buildDataModelReference();
 
+function buildMinimalSchemaForOnboarding(): string {
+  return `FACT CATEGORIES (most common):
+- identity: {full?, role?, city?, tagline?}
+- experience: {role, company, start?: "YYYY-MM"|null, end?: "YYYY-MM"|null, status: "current"|"past"}
+- education: {institution, degree?, field?, period?}
+- skill: {name, level?: "beginner"|"intermediate"|"advanced"|"expert"}
+- interest: {name, detail?}
+- project: {name, description?, url?, status?: "active"|"completed"}
+- language: {language, proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"}
+After collecting name + role + 2-3 more facts, call generate_page.`;
+}
+
 const OUTPUT_CONTRACT = `Output rules:
 - Respond in natural language to the user
 - Tool calls happen silently — the user should not see JSON or technical details
@@ -318,7 +330,7 @@ export function getSystemPromptText(
  */
 export function buildSystemPrompt(
   bootstrap: BootstrapPayload,
-  opts?: { includeSchemaReference?: boolean },
+  opts?: { includeSchemaReference?: boolean; schemaMode?: "full" | "minimal" | "none" },
 ): string {
   const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
 
@@ -341,13 +353,29 @@ export function buildSystemPrompt(
 
   const expertiseCalibration = getExpertiseCalibration(bootstrap.expertiseLevel);
 
-  const includeSchema = opts?.includeSchemaReference !== false; // default true
+  // Resolve effective schemaMode:
+  // - schemaMode takes precedence when provided
+  // - fall back to includeSchemaReference (legacy) if schemaMode not set
+  // - default to "full" for backward compatibility
+  const effectiveSchemaMode: "full" | "minimal" | "none" =
+    opts?.schemaMode !== undefined
+      ? opts.schemaMode
+      : opts?.includeSchemaReference === false
+        ? "none"
+        : "full";
+
+  const schemaBlocks: string[] =
+    effectiveSchemaMode === "full"
+      ? [FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE]
+      : effectiveSchemaMode === "minimal"
+        ? [buildMinimalSchemaForOnboarding()]
+        : [];
 
   const blocks = [
     CORE_CHARTER,
     SAFETY_POLICY,
     TOOL_POLICY,
-    ...(includeSchema ? [FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE] : []),
+    ...schemaBlocks,
     OUTPUT_CONTRACT,
     journeyPolicy,
   ];

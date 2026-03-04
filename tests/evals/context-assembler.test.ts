@@ -429,7 +429,7 @@ describe("assembleContext with bootstrap", () => {
     };
 
     const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);
-    expect(buildSystemPrompt).toHaveBeenCalledWith(bootstrap, expect.objectContaining({ includeSchemaReference: expect.any(Boolean) }));
+    expect(buildSystemPrompt).toHaveBeenCalledWith(bootstrap, expect.objectContaining({ schemaMode: expect.stringMatching(/^(full|minimal|none)$/) }));
     expect(result.systemPrompt).toContain("BOOTSTRAP_PROMPT");
   });
 

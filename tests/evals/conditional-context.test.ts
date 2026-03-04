@@ -108,20 +108,20 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveMemories).not.toHaveBeenCalled();
     expect(mockGetOpenConflicts).not.toHaveBeenCalled();
 
-    // Schema reference IS included (buildSystemPrompt receives includeSchemaReference: true)
+    // Schema reference IS included (buildSystemPrompt receives schemaMode: "minimal" for first_visit)
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ includeSchemaReference: true }),
+      expect.objectContaining({ schemaMode: expect.stringMatching(/^(full|minimal|none)$/) }),
     );
   });
 
   it("draft_ready: omits schema reference, includes soul + richness", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("draft_ready"));
 
-    // buildSystemPrompt receives includeSchemaReference: false
+    // buildSystemPrompt receives schemaMode: "none" for draft_ready
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ includeSchemaReference: false }),
+      expect.objectContaining({ schemaMode: "none" }),
     );
 
     // Soul IS queried
@@ -145,7 +145,7 @@ describe("conditional context by journey state", () => {
     // Schema reference is off for active states
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ includeSchemaReference: false }),
+      expect.objectContaining({ schemaMode: "none" }),
     );
   });
 
@@ -171,7 +171,7 @@ describe("conditional context by journey state", () => {
     // Schema reference is on (returning user still needs to collect facts)
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ includeSchemaReference: true }),
+      expect.objectContaining({ schemaMode: "full" }),
     );
   });
 

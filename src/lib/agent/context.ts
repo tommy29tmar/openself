@@ -102,7 +102,7 @@ export type ContextProfile = {
   conflicts: { include: boolean; budget: number };
   richness: { include: boolean };
   layoutIntelligence: { include: boolean };
-  includeSchemaReference: boolean;
+  schemaMode: "full" | "minimal" | "none";
 };
 
 export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
@@ -114,7 +114,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     conflicts: { include: false, budget: 0 },
     richness: { include: false },
     layoutIntelligence: { include: false },
-    includeSchemaReference: true,
+    schemaMode: "minimal",
   },
   returning_no_page: {
     facts: { include: true, budget: 2000 },
@@ -124,7 +124,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     conflicts: { include: true, budget: 200 },
     richness: { include: false },
     layoutIntelligence: { include: false },
-    includeSchemaReference: true,
+    schemaMode: "full",
   },
   draft_ready: {
     facts: { include: true, budget: 1500 },
@@ -134,7 +134,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     conflicts: { include: true, budget: 200 },
     richness: { include: true },
     layoutIntelligence: { include: true },
-    includeSchemaReference: false,
+    schemaMode: "none",
   },
   active_fresh: {
     facts: { include: true, budget: 1500 },
@@ -144,7 +144,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     conflicts: { include: true, budget: 200 },
     richness: { include: true },
     layoutIntelligence: { include: true },
-    includeSchemaReference: false,
+    schemaMode: "none",
   },
   active_stale: {
     facts: { include: true, budget: 2000 },
@@ -154,7 +154,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     conflicts: { include: true, budget: 200 },
     richness: { include: true },
     layoutIntelligence: { include: false },
-    includeSchemaReference: false,
+    schemaMode: "none",
   },
   blocked: {
     facts: { include: false, budget: 0 },
@@ -164,7 +164,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     conflicts: { include: false, budget: 0 },
     richness: { include: false },
     layoutIntelligence: { include: false },
-    includeSchemaReference: false,
+    schemaMode: "none",
   },
 };
 
@@ -298,9 +298,7 @@ export function assembleContext(
 
   // Base system prompt — use new composable path when bootstrap available
   const basePrompt = bootstrap
-    ? buildSystemPrompt(bootstrap, {
-        includeSchemaReference: profile?.includeSchemaReference ?? true,
-      })
+    ? buildSystemPrompt(bootstrap, { schemaMode: profile?.schemaMode ?? "full" })
     : getSystemPromptText(mode, language);
 
   // Compose full system prompt

@@ -27,7 +27,7 @@ Skip the cluster approach. Make the requested change, confirm briefly, and move 
 
 R2 — Max 6 fact-gathering exchanges:
 After 6 exchanges focused on gathering information, you MUST propose an action:
-- If no page exists: call generate_page. Exception: if name or role/work is still missing, ask ONE direct question to collect all missing fields ("What's your name and what do you do?"), then generate immediately after (answered or declined).
+- If no page exists: use generate_page to build it. Exception: if name or role/work is still missing, ask ONE direct question to collect all missing fields ("What's your name and what do you do?"), then generate immediately after (answered or declined).
 - If page exists: offer to regenerate or publish.
 - If user seems done: propose publish.
 Do NOT keep asking questions beyond 6 exchanges without offering a concrete next step.
