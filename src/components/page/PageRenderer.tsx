@@ -7,8 +7,8 @@ import { resolveVariant } from "@/lib/layout/widgets";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
 import { getLayoutComponent } from "@/components/layout-templates";
 import { OwnerBanner } from "@/components/page/OwnerBanner";
-import { VisitorBanner } from "@/components/page/VisitorBanner";
 import { StickyNav, shouldShowStickyNav } from "@/components/page/StickyNav";
+import { PageTopBar } from "@/components/page/PageTopBar";
 import { filterCompleteSections } from "@/lib/page-config/section-completeness";
 import { OsPageWrapper } from "@/components/page/OsPageWrapper";
 import { SECTION_COMPONENTS } from "@/components/sections";
@@ -52,19 +52,22 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
     );
   };
 
-  const stickyNav = !previewMode && shouldShowStickyNav(sections) ? (
-    <StickyNav
-      sections={sections}
-      name={(config.sections.find(s => s.type === "hero")?.content?.name as string | undefined) ?? config.username}
-      avatarUrl={config.sections.find(s => s.type === "hero")?.content?.avatarUrl as string | undefined}
-    />
-  ) : null;
+  const heroSection = config.sections.find(s => s.type === "hero");
+  const heroName = (heroSection?.content?.name as string | undefined) ?? config.username;
+  const heroAvatarUrl = heroSection?.content?.avatarUrl as string | undefined;
+
+  // Owner view: keep OwnerBanner (sticky top) + StickyNav (fixed top-9) inside themed wrapper
+  // Visitor view: unified PageTopBar (fixed top-0) — logo/login split on scroll, nav fades in center
+  const topBar = previewMode ? null : isOwner
+    ? (shouldShowStickyNav(sections)
+        ? <StickyNav sections={sections} name={heroName} avatarUrl={heroAvatarUrl} />
+        : null)
+    : <PageTopBar sections={sections} name={heroName} avatarUrl={heroAvatarUrl} showStickyNav={shouldShowStickyNav(sections)} />;
 
   return (
     <>
       {isOwner && !previewMode && <OwnerBanner username={config.username} />}
-      {!isOwner && !previewMode && <VisitorBanner />}
-      <OsPageWrapper config={config} previewMode={previewMode} stickyNav={stickyNav}>
+      <OsPageWrapper config={config} previewMode={previewMode} stickyNav={topBar}>
         <LayoutComponent slots={slots} renderSection={renderSection} />
       </OsPageWrapper>
     </>
