@@ -29,7 +29,6 @@ function applyMonolithOverride(section: Section): Section {
 }
 
 const BLEED_SECTIONS = new Set(["projects", "reading", "music"]);
-const DENSE_SECTIONS = new Set(["stats", "skills", "interests", "languages", "activities", "social", "contact"]);
 const HERO_SECTIONS = new Set(["hero", "footer"]);
 
 export type Lane = "hero" | "reading" | "bleed";
@@ -38,13 +37,6 @@ export function getLane(sectionType: string): Lane {
   if (HERO_SECTIONS.has(sectionType)) return "hero";
   if (BLEED_SECTIONS.has(sectionType)) return "bleed";
   return "reading";
-}
-
-export function getSpacingClass(sectionType: string, isLastBeforeFooter: boolean): string {
-  if (sectionType === "hero") return "mb-20";
-  if (isLastBeforeFooter) return "mb-20";
-  if (DENSE_SECTIONS.has(sectionType)) return "mb-8";
-  return "mb-12";
 }
 
 const LANE_CLASSES: Record<Lane, string> = {
@@ -57,23 +49,6 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
   const template = getLayoutTemplate("monolith");
   const sortedSlots = [...template.slots].sort((a, b) => a.order - b.order);
 
-  // Flatten all sections in slot order to detect last-before-footer
-  const allSections: { section: Section; slotId: string }[] = [];
-  for (const slot of sortedSlots) {
-    const sections = slots[slot.id];
-    if (!sections?.length) continue;
-    for (const section of sections) {
-      allSections.push({ section, slotId: slot.id });
-    }
-  }
-
-  // Find the last non-footer section index
-  const lastNonFooterIdx = allSections.findLastIndex(
-    (s) => s.section.type !== "footer"
-  );
-
-  let globalIdx = 0;
-
   return (
     <div className={`layout-monolith flex flex-col ${className ?? ""}`}>
       {sortedSlots.map((slot) => {
@@ -82,19 +57,19 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
         return (
           <div key={slot.id} className="w-full">
             {sections.map((section) => {
-              const currentIdx = globalIdx++;
-              const isLastBeforeFooter = currentIdx === lastNonFooterIdx;
-              const spacingClass = section.type === "footer"
-                ? ""
-                : getSpacingClass(section.type, isLastBeforeFooter);
               const lane = getLane(section.type);
               const laneClass = LANE_CLASSES[lane];
+              const isHeroOrFooter = section.type === "hero" || section.type === "footer";
 
               return (
                 <div
                   key={section.id}
-                  className={`${laneClass} ${spacingClass}`}
-                  style={section.type !== "footer" ? { borderBottom: "1px solid var(--page-border)" } : undefined}
+                  className={laneClass}
+                  style={{
+                    paddingTop: isHeroOrFooter ? undefined : "48px",
+                    paddingBottom: isHeroOrFooter ? undefined : "48px",
+                    borderBottom: section.type !== "footer" ? "1px solid var(--page-border)" : undefined,
+                  }}
                 >
                   {renderSection(applyMonolithOverride(section))}
                 </div>

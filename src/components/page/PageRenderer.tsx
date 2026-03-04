@@ -22,7 +22,11 @@ export type PageRendererProps = {
 export function PageRenderer({ config, previewMode = false, isOwner = false }: PageRendererProps) {
   const template = resolveLayoutTemplate(config);
   const LayoutComponent = getLayoutComponent(template.id);
-  const sections = previewMode ? config.sections : filterCompleteSections(config.sections);
+  const rawSections = previewMode ? config.sections : filterCompleteSections(config.sections);
+  const MONOLITH_HIDDEN = new Set(["social", "contact", "at-a-glance"]);
+  const sections = template.id === "monolith"
+    ? rawSections.filter(s => !MONOLITH_HIDDEN.has(s.type))
+    : rawSections;
   const slots = groupSectionsBySlot(sections, template);
 
   const renderSection = (section: Section) => {
