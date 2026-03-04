@@ -13,6 +13,7 @@ vi.mock("@/lib/services/kb-service", () => ({
 }));
 vi.mock("@/lib/services/page-service", () => ({
   hasAnyPublishedPage: vi.fn(() => false),
+  getDraft: vi.fn(() => null),
 }));
 
 const mockGetSummary = vi.fn(() => "A conversation summary");

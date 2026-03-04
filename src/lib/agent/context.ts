@@ -1,6 +1,6 @@
 import type { OwnerScope } from "@/lib/auth/session";
 import { getActiveFacts, countFacts } from "@/lib/services/kb-service";
-import { hasAnyPublishedPage } from "@/lib/services/page-service";
+import { hasAnyPublishedPage, getDraft } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
@@ -18,6 +18,7 @@ import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import { isNewTopicSignal } from "@/lib/agent/policies/topic-signal-detector";
 import type { PromptMode } from "./prompts";
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
+import type { PageConfig } from "@/lib/page-config/schema";
 
 /**
  * Sort facts for context injection:
@@ -80,6 +81,7 @@ const BUDGET = {
   summary: 7000,
   memories: 3500,
   conflicts: 1500,
+  pageState: 1500,
   recentTurns: 22000,
   total: 65000,
 } as const;
@@ -101,6 +103,7 @@ export type ContextProfile = {
   summary: { include: boolean; budget: number };
   memories: { include: boolean; budget: number };
   conflicts: { include: boolean; budget: number };
+  pageState: { include: boolean; budget: number };
   richness: { include: boolean };
   layoutIntelligence: { include: boolean };
   schemaMode: "full" | "minimal" | "none";
@@ -113,6 +116,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     summary: { include: false, budget: 0 },
     memories: { include: false, budget: 0 },
     conflicts: { include: false, budget: 0 },
+    pageState: { include: false, budget: 0 },
     richness: { include: false },
     layoutIntelligence: { include: false },
     schemaMode: "minimal",
@@ -123,6 +127,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     summary: { include: true, budget: 7000 },
     memories: { include: true, budget: 3500 },
     conflicts: { include: true, budget: 1500 },
+    pageState: { include: false, budget: 0 },
     richness: { include: false },
     layoutIntelligence: { include: false },
     schemaMode: "full",
@@ -133,6 +138,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     summary: { include: false, budget: 0 },
     memories: { include: false, budget: 0 },
     conflicts: { include: true, budget: 1500 },
+    pageState: { include: true, budget: 1500 },
     richness: { include: true },
     layoutIntelligence: { include: true },
     schemaMode: "none",
@@ -143,6 +149,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     summary: { include: true, budget: 7000 },
     memories: { include: true, budget: 3500 },
     conflicts: { include: true, budget: 1500 },
+    pageState: { include: true, budget: 1500 },
     richness: { include: true },
     layoutIntelligence: { include: true },
     schemaMode: "none",
@@ -153,6 +160,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     summary: { include: true, budget: 7000 },
     memories: { include: true, budget: 3500 },
     conflicts: { include: true, budget: 1500 },
+    pageState: { include: true, budget: 1500 },
     richness: { include: true },
     layoutIntelligence: { include: false },
     schemaMode: "none",
@@ -163,6 +171,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     summary: { include: false, budget: 0 },
     memories: { include: false, budget: 0 },
     conflicts: { include: false, budget: 0 },
+    pageState: { include: false, budget: 0 },
     richness: { include: false },
     layoutIntelligence: { include: false },
     schemaMode: "none",
@@ -241,7 +250,7 @@ export function assembleContext(
     existingFacts = bootstrapData?.facts
       ?? getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
     const childCountMap = bootstrapData?.childCountMap ?? new Map<string, number>();
-    const topFacts = sortFactsForContext(existingFacts, childCountMap, 50);
+    const topFacts = sortFactsForContext(existingFacts, childCountMap, 120);
     factsBlock =
       topFacts.length > 0
         ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts
@@ -297,6 +306,22 @@ export function assembleContext(
     conflictsBlock = truncateToTokenBudget(conflictsBlock, profile?.conflicts.budget ?? BUDGET.conflicts);
   }
 
+  // Page state block — draft layout/presence/sections snapshot
+  let pageStateBlock = "";
+  if (profile?.pageState.include) {
+    const draft = getDraft(scope.knowledgePrimaryKey);
+    if (draft?.config) {
+      const cfg = draft.config as PageConfig;
+      const sections = (cfg.sections ?? []).map(s =>
+        `  - ${s.type}${s.slot ? ` [slot:${s.slot}]` : ""}${s.widgetId ? ` widget:${s.widgetId}` : ""}`
+      ).join("\n");
+      const presenceLine = `surface:${cfg.surface ?? "?"} voice:${cfg.voice ?? "?"} light:${cfg.light ?? "?"}`;
+      const layoutLine = cfg.layoutTemplate ? `layoutTemplate: ${cfg.layoutTemplate}` : "layoutTemplate: (default)";
+      pageStateBlock = `CURRENT DRAFT PAGE:\n${layoutLine}\npresence: ${presenceLine}\nsections:\n${sections || "  (none)"}`;
+      pageStateBlock = truncateToTokenBudget(pageStateBlock, profile.pageState.budget ?? BUDGET.pageState);
+    }
+  }
+
   // Base system prompt — always use composable path; synthesise a minimal bootstrap when not provided
   const basePrompt = bootstrap
     ? buildSystemPrompt(bootstrap, { schemaMode: profile?.schemaMode ?? "full" })
@@ -320,20 +345,21 @@ export function assembleContext(
         { schemaMode: "minimal" }
       );
 
-  // Compose full system prompt
-  const contextParts = [basePrompt];
-  if (factsBlock) contextParts.push(`\n\n---\n\n${factsBlock}`);
-  if (soulBlock) contextParts.push(`\n\n---\n\nSOUL PROFILE:\n${soulBlock}`);
-  if (summaryBlock)
-    contextParts.push(`\n\n---\n\nCONVERSATION SUMMARY:\n${summaryBlock}`);
-  if (memoriesBlock)
-    contextParts.push(`\n\n---\n\nAGENT MEMORIES:\n${memoriesBlock}`);
-  if (conflictsBlock)
-    contextParts.push(`\n\n---\n\nPENDING CONFLICTS:\n${conflictsBlock}`);
+  // --- Mutable parts: truncatable blocks (rebuilt during budget overflow) ---
+  const mutableParts: string[] = [basePrompt];
+  if (factsBlock) mutableParts.push(`\n\n---\n\n${factsBlock}`);
+  if (soulBlock) mutableParts.push(`\n\n---\n\nSOUL PROFILE:\n${soulBlock}`);
+  if (summaryBlock) mutableParts.push(`\n\n---\n\nCONVERSATION SUMMARY:\n${summaryBlock}`);
+  if (memoriesBlock) mutableParts.push(`\n\n---\n\nAGENT MEMORIES:\n${memoriesBlock}`);
+  if (conflictsBlock) mutableParts.push(`\n\n---\n\nPENDING CONFLICTS:\n${conflictsBlock}`);
+  if (pageStateBlock) mutableParts.push(`\n\n---\n\nPAGE STATE:\n${pageStateBlock}`);
+
+  // --- Static parts: non-truncatable blocks (always preserved during budget overflow) ---
+  const staticParts: string[] = [];
 
   // Auth context for steady-state publishing guidance
   if (mode === "steady_state" && authInfo?.authenticated && authInfo.username) {
-    contextParts.push(
+    staticParts.push(
       `\n\n---\n\nUSER AUTH: Authenticated as "${authInfo.username}". Published page: /${authInfo.username}.\n` +
       `Use request_publish with username "${authInfo.username}" — do NOT ask for a username.\n` +
       `The user can also publish from the navigation bar.`,
@@ -361,7 +387,7 @@ export function assembleContext(
         (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
       );
       const explorationBlock = `ARCHETYPE: ${archetype}\nEXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
-      contextParts.push(`\n\n---\n\n${explorationBlock}`);
+      staticParts.push(`\n\n---\n\n${explorationBlock}`);
     }
   } else if (mode === "steady_state") {
     // Steady state: richness + layout intelligence (conditional)
@@ -379,7 +405,7 @@ export function assembleContext(
           (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
         );
         const explorationBlock = `EXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
-        contextParts.push(`\n\n---\n\n${explorationBlock}`);
+        staticParts.push(`\n\n---\n\n${explorationBlock}`);
       }
     }
 
@@ -389,7 +415,7 @@ Profile archetype: ${archetype}
 Section priority: ${strategy.sectionPriority.join(" → ")}
 
 Before proposing a reorder, explain reasoning and ask for confirmation.`;
-      contextParts.push(`\n\n---\n\n${layoutIntelligence}`);
+      staticParts.push(`\n\n---\n\n${layoutIntelligence}`);
     }
   }
 
@@ -424,7 +450,7 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
             const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
               .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)
               .join("\n");
-            contextParts.push(
+            staticParts.push(
               `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
             );
           }
@@ -442,14 +468,14 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
       const allIssues = [...warnings, ...infos];
       const directive = coherenceIssuesDirective(allIssues);
       if (directive) {
-        contextParts.push(`\n\n---\n\n${directive}`);
+        staticParts.push(`\n\n---\n\n${directive}`);
       }
     } catch { /* best-effort */ }
   }
 
   // --- Message quota warning: nudge agent to suggest registration ---
   if (quotaInfo && quotaInfo.remaining <= 3) {
-    contextParts.push(`\n\n---\n\nMESSAGE QUOTA (anonymous user):
+    staticParts.push(`\n\n---\n\nMESSAGE QUOTA (anonymous user):
 Remaining messages: ${quotaInfo.remaining}/${quotaInfo.limit}.
 
 This applies to anonymous users only — authenticated users have their own quota managed by the UI.
@@ -471,21 +497,23 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
     ? `\nDETECTED SOURCE URLS: ${detectedConnectors.map(d => `${d.connectorId} (${d.url})`).join(", ")}. If relevant, suggest the user connect it as a Source via the Sources panel.`
     : "";
   if (magicPasteHint) {
-    contextParts.push(`\n\n---\n\n${magicPasteHint}`);
+    staticParts.push(`\n\n---\n\n${magicPasteHint}`);
   }
 
-  let systemPrompt = contextParts.join("");
+  const staticSuffix = staticParts.join("");
+  let systemPrompt = mutableParts.join("") + staticSuffix;
 
   // --- Post-assembly guard: iteratively truncate if over total budget ---
   let totalTokens = estimateTokens(systemPrompt);
   if (totalTokens > BUDGET.total) {
-    // Identify blocks and their current sizes for iterative truncation
+    // Only mutable blocks are shrunk; static blocks (auth, quota, magic paste, etc.) are always preserved.
     const blocks = [
       { name: "facts", content: factsBlock, budget: BUDGET.facts },
       { name: "soul", content: soulBlock, budget: BUDGET.soul },
       { name: "summary", content: summaryBlock, budget: BUDGET.summary },
       { name: "memories", content: memoriesBlock, budget: BUDGET.memories },
       { name: "conflicts", content: conflictsBlock, budget: BUDGET.conflicts },
+      { name: "pageState", content: pageStateBlock, budget: BUDGET.pageState },
     ];
 
     let iterations = 0;
@@ -507,7 +535,7 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
         largest.content = largest.content.slice(0, -3) + "...";
       }
 
-      // Rebuild prompt
+      // Rebuild mutable parts only; always append staticSuffix
       const parts = [basePrompt];
       for (const b of blocks) {
         if (b.content) {
@@ -520,11 +548,13 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
                   ? "CONVERSATION SUMMARY:\n"
                   : b.name === "memories"
                     ? "AGENT MEMORIES:\n"
-                    : "PENDING CONFLICTS:\n";
+                    : b.name === "conflicts"
+                      ? "PENDING CONFLICTS:\n"
+                      : "PAGE STATE:\n";
           parts.push(`\n\n---\n\n${label}${b.content}`);
         }
       }
-      systemPrompt = parts.join("");
+      systemPrompt = parts.join("") + staticSuffix;
       totalTokens = estimateTokens(systemPrompt);
       iterations++;
     }
@@ -546,8 +576,8 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
     trimmedMessages.unshift(msg);
   }
 
-  // Cap at 12 most recent turns
-  const maxTurns = 12;
+  // Cap at 20 most recent turns
+  const maxTurns = 20;
   const finalMessages =
     trimmedMessages.length > maxTurns
       ? trimmedMessages.slice(-maxTurns)

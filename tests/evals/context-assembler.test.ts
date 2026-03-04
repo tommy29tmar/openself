@@ -16,6 +16,7 @@ vi.mock("@/lib/services/kb-service", () => {
 });
 vi.mock("@/lib/services/page-service", () => ({
   hasAnyPublishedPage: vi.fn(() => false),
+  getDraft: vi.fn(() => null),
 }));
 vi.mock("@/lib/services/summary-service", () => ({
   getSummary: vi.fn(() => null),
@@ -180,24 +181,24 @@ describe("assembleContext", () => {
   });
 
   it("truncates oversized facts block to budget", () => {
-    // Generate facts that exceed the 2000-token (8000-char) budget
-    const bigFacts = Array.from({ length: 50 }, (_, i) => ({
+    // Generate 200 facts with large values so top-120 (cap) still exceed 17000-token budget.
+    // 120 facts × ~730 chars each ≈ 87600 chars ≈ 21900 tokens > 17000
+    const bigFacts = Array.from({ length: 200 }, (_, i) => ({
       id: `f${i}`, sessionId: "s", profileId: null,
       category: "skill", key: `skill_${i}`,
-      value: JSON.stringify({ name: "x".repeat(200) }),
+      value: JSON.stringify({ name: "x".repeat(700) }),
       source: "chat", confidence: 1, visibility: "public",
       createdAt: "", updatedAt: "",
     }));
     vi.mocked(getActiveFacts).mockReturnValue(bigFacts as any);
 
     const result = assembleContext(SCOPE, "en", []);
-    // The facts portion should not exceed its budget (2000 tokens = 8000 chars)
     // Verify truncation marker is present
     expect(result.systemPrompt).toContain("...");
-    // Total facts-related text should be bounded
+    // Total facts-related text should be bounded within budget (17000 tokens = 68000 chars)
     const factsMatch = result.systemPrompt.match(/KNOWN FACTS[\s\S]*?(?=\n\n---|\n*$)/);
     if (factsMatch) {
-      expect(estimateTokens(factsMatch[0])).toBeLessThanOrEqual(2000);
+      expect(estimateTokens(factsMatch[0])).toBeLessThanOrEqual(17000);
     }
   });
 });
@@ -238,24 +239,24 @@ describe("post-assembly guard", () => {
 // Message trimming
 // ---------------------------------------------------------------------------
 describe("message trimming", () => {
-  it("keeps at most 12 most recent messages", () => {
-    const msgs = Array.from({ length: 20 }, (_, i) => ({
+  it("keeps at most 20 most recent messages", () => {
+    const msgs = Array.from({ length: 25 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
       content: `msg-${i}`,
     }));
 
     const result = assembleContext(SCOPE, "en", msgs);
-    expect(result.trimmedMessages.length).toBeLessThanOrEqual(12);
+    expect(result.trimmedMessages.length).toBeLessThanOrEqual(20);
     // The last message should be preserved
-    expect(result.trimmedMessages[result.trimmedMessages.length - 1].content).toBe("msg-19");
+    expect(result.trimmedMessages[result.trimmedMessages.length - 1].content).toBe("msg-24");
   });
 
-  it("stays within ~2600 token budget for messages", () => {
-    // Each message is ~500 chars = 125 tokens; 12 of them = 1500 tokens (fits)
-    // But if each is ~1200 chars = 300 tokens, 12 would be 3600 (exceeds 2600)
-    const msgs = Array.from({ length: 12 }, (_, i) => ({
+  it("stays within char budget for messages (large messages trigger trimming)", () => {
+    // Each message is ~10000 chars = 2500 tokens; 12 of them = 30000 tokens >> budget
+    // recentTurns budget is 22000 tokens = 88000 chars; 12 * 10000 = 120000 chars exceeds it
+    const msgs = Array.from({ length: 12 }, (_i) => ({
       role: "user",
-      content: "x".repeat(1200),
+      content: "x".repeat(10000),
     }));
 
     const result = assembleContext(SCOPE, "en", msgs);
@@ -263,10 +264,10 @@ describe("message trimming", () => {
       (sum, m) => sum + m.content.length,
       0,
     );
-    // Budget is 2600 tokens = 10400 chars; allow the mandatory 2-message minimum
-    // so we just check it trimmed below the full set
+    // Should have trimmed below the full set due to char budget
     expect(result.trimmedMessages.length).toBeLessThan(12);
-    expect(totalChars).toBeLessThanOrEqual(10400 + 2400); // 2 mandatory msgs can exceed
+    // At most budget chars + 1 mandatory extra message
+    expect(totalChars).toBeLessThanOrEqual(88000 + 10000); // 2 mandatory msgs can exceed
   });
 
   it("always keeps at least 2 most recent messages even if over budget", () => {
