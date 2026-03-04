@@ -73,15 +73,21 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
               return (
                 <div
                   key={section.id}
-                  className={laneClass}
+                  className="w-full"
                   style={{
-                    paddingTop: isHeroOrFooter ? undefined : "48px",
-                    paddingBottom: isHeroOrFooter ? undefined : "48px",
                     borderBottom: section.type !== "footer" ? "1px solid var(--page-border)" : undefined,
-                    maxWidth: LANE_MAX_WIDTHS[lane],
                   }}
                 >
-                  {renderSection(applyMonolithOverride(section))}
+                  <div
+                    className={laneClass}
+                    style={{
+                      paddingTop: isHeroOrFooter ? undefined : "48px",
+                      paddingBottom: isHeroOrFooter ? undefined : "48px",
+                      maxWidth: LANE_MAX_WIDTHS[lane],
+                    }}
+                  >
+                    {renderSection(applyMonolithOverride(section))}
+                  </div>
                 </div>
               );
             })}

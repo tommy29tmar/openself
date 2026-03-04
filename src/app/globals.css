@@ -237,7 +237,7 @@
   --page-card-border: rgba(0,0,0,0.1);
   --page-card-hover: #e4d4b8;
   --page-grain: 0.025;
-  --page-edge: 0.14;
+  --page-edge: 0;
   --reading-max: 680px;
   --section-label-opacity: 0.75;
 }
@@ -255,7 +255,7 @@
   --page-card-border: rgba(0,0,0,0.08);
   --page-card-hover: #eeeeee;
   --page-grain: 0.028;
-  --page-edge: 0.18;
+  --page-edge: 0;
   --reading-max: 700px;
   --section-label-opacity: 0.85;
 }

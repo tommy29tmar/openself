@@ -166,7 +166,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "ava-stone",
     emailLocal: "ava.stone",
     language: "en",
-    layoutTemplate: "architect",
+    layoutTemplate: "monolith",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -327,7 +327,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "marco-rinaldi",
     emailLocal: "marco.rinaldi",
     language: "it",
-    layoutTemplate: "curator",
+    layoutTemplate: "monolith",
     theme: "warm",
     style: {
       colorScheme: "light",
@@ -607,7 +607,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "sofia-alvarez",
     emailLocal: "sofia.alvarez",
     language: "es",
-    layoutTemplate: "architect",
+    layoutTemplate: "monolith",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -753,7 +753,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "priya-nair",
     emailLocal: "priya.nair",
     language: "en",
-    layoutTemplate: "curator",
+    layoutTemplate: "monolith",
     theme: "minimal",
     style: {
       colorScheme: "light",
@@ -1019,7 +1019,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "elise-dubois",
     emailLocal: "elise.dubois",
     language: "fr",
-    layoutTemplate: "curator",
+    layoutTemplate: "monolith",
     theme: "warm",
     style: {
       colorScheme: "light",
@@ -1144,7 +1144,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "kenji-sato",
     emailLocal: "kenji.sato",
     language: "ja",
-    layoutTemplate: "architect",
+    layoutTemplate: "monolith",
     theme: "minimal",
     style: {
       colorScheme: "light",
@@ -1396,7 +1396,7 @@ const PROFILE_BLUEPRINTS: ProfileBlueprint[] = [
     usernameBase: "noah-brooks",
     emailLocal: "noah.brooks",
     language: "en",
-    layoutTemplate: "curator",
+    layoutTemplate: "monolith",
     theme: "editorial-360",
     style: {
       colorScheme: "light",
@@ -2153,7 +2153,7 @@ async function main() {
   const { count, tag, screenshots, mixLayouts } = parseArgs();
   const selected = PROFILE_BLUEPRINTS.slice(0, count).map((profile, idx) => {
     if (!mixLayouts) return profile;
-    const cycle: LayoutTemplateId[] = ["monolith", "cinematic", "curator", "architect"];
+    const cycle: LayoutTemplateId[] = ["monolith"];
     return {
       ...profile,
       layoutTemplate: cycle[idx % cycle.length],

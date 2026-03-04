@@ -24,7 +24,25 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          // Enable GPU acceleration via NVIDIA PRIME offload (GTX 860M).
+          // When DISPLAY is set (desktop session), PRIME env vars activate the discrete GPU.
+          // In headless environments they are silently ignored.
+          args: [
+            '--enable-gpu',
+            '--ignore-gpu-blocklist',
+            '--enable-accelerated-2d-canvas',
+            '--enable-accelerated-video-decode',
+            '--disable-software-rasterizer',
+          ],
+          env: {
+            __NV_PRIME_RENDER_OFFLOAD: '1',
+            __GLX_VENDOR_LIBRARY_NAME: 'nvidia',
+          },
+        },
+      },
     },
   ],
 
