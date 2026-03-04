@@ -74,6 +74,7 @@ export interface BootstrapData {
   soul: { compiled: string | null } | null;
   openConflictRecords: ConflictRow[];
   publishableFacts: FactRow[];
+  childCountMap: Map<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -505,6 +506,7 @@ export function assembleBootstrapPayload(
       soul,
       openConflictRecords,
       publishableFacts: publishable,
+      childCountMap,
     },
   };
 }

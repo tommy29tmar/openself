@@ -29,7 +29,8 @@ const mockBootstrapPayload = {
 };
 
 vi.mock("@/lib/agent/journey", () => ({
-  assembleBootstrapPayload: vi.fn(() => ({ payload: { ...mockBootstrapPayload }, data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] } })),
+  assembleBootstrapPayload: vi.fn(() => ({ payload: { ...mockBootstrapPayload }, data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [], childCountMap: new Map() } })),
+  computeRelevance: vi.fn(() => 0.5),
 }));
 
 vi.mock("@/lib/agent/context", () => ({

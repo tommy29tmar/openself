@@ -123,7 +123,7 @@ vi.mock("@/lib/page-config/section-completeness", () => ({ isSectionComplete: vi
 vi.mock("@/lib/services/section-richness", () => ({ classifySectionRichness: vi.fn(() => "adequate") }));
 vi.mock("@/lib/services/session-service", () => ({ isMultiUserEnabled: vi.fn(() => false) }));
 vi.mock("@/lib/page-config/usernames", () => ({ validateUsernameFormat: vi.fn(() => ({ ok: true })), RESERVED_USERNAMES: new Set() }));
-vi.mock("@/lib/agent/journey", () => ({ updateJourneyStatePin: vi.fn() }));
+vi.mock("@/lib/agent/journey", () => ({ updateJourneyStatePin: vi.fn(), computeRelevance: vi.fn(() => 0.5) }));
 
 import { createAgentTools } from "@/lib/agent/tools";
 import { projectCanonicalConfig } from "@/lib/services/page-projection";

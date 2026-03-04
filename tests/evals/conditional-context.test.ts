@@ -47,7 +47,7 @@ vi.mock("@/lib/agent/prompts", () => ({
   buildSystemPrompt: (...args: any[]) => mockBuildSystemPrompt(...args),
 }));
 
-vi.mock("@/lib/agent/journey", () => ({}));
+vi.mock("@/lib/agent/journey", () => ({ computeRelevance: vi.fn(() => 0.5) }));
 
 vi.mock("@/lib/services/session-metadata", () => ({
   getSessionMeta: vi.fn(() => ({})),

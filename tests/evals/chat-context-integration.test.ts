@@ -113,8 +113,9 @@ vi.mock("@/lib/agent/journey", () => ({
       conversationContext: null,
       archetype: "generalist",
     },
-    data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [] },
+    data: { facts: [], soul: null, openConflictRecords: [], publishableFacts: [], childCountMap: new Map() },
   })),
+  computeRelevance: vi.fn(() => 0.5),
 }));
 
 // --- Import after mocks ---

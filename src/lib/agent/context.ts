@@ -10,11 +10,59 @@ import { classifySectionRichness } from "@/lib/services/section-richness";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import type { JourneyState, BootstrapPayload, BootstrapData } from "@/lib/agent/journey";
+import { computeRelevance } from "@/lib/agent/journey";
+import type { FactRow } from "@/lib/services/kb-service";
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import type { PromptMode } from "./promptAssembler";
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
+
+/**
+ * Sort facts for context injection:
+ * 1. Guarantee the N most recently updated facts are always included
+ * 2. Fill remaining slots by relevance score (confidence × recency × children)
+ * 3. Tie-break: updatedAt desc
+ */
+export function sortFactsForContext(
+  facts: FactRow[],
+  childCountMap: Map<string, number>,
+  cap: number,
+  recentGuaranteeCount = 5,
+): FactRow[] {
+  // Always sort for consistent ordering (tests rely on this even for small sets).
+  if (facts.length <= cap) {
+    return [...facts]
+      .map(f => ({ f, score: computeRelevance(f, childCountMap) }))
+      .sort((a, b) =>
+        b.score - a.score ||
+        new Date(b.f.updatedAt ?? 0).getTime() - new Date(a.f.updatedAt ?? 0).getTime()
+      )
+      .map(({ f }) => f);
+  }
+
+  // Clamp guarantee count
+  const g = Math.min(recentGuaranteeCount, cap, facts.length);
+
+  const sorted = [...facts].sort(
+    (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
+  );
+
+  const guaranteed = sorted.slice(0, g);
+  const recentIds = new Set(guaranteed.map(f => f.id));
+
+  const rest = facts
+    .filter(f => !recentIds.has(f.id))
+    .map(f => ({ f, score: computeRelevance(f, childCountMap) }))
+    .sort((a, b) =>
+      b.score - a.score ||
+      new Date(b.f.updatedAt ?? 0).getTime() - new Date(a.f.updatedAt ?? 0).getTime()
+    )
+    .map(({ f }) => f)
+    .slice(0, cap - g);
+
+  return [...guaranteed, ...rest];
+}
 
 /**
  * Rough token estimation: ~4 chars per token.
@@ -191,7 +239,8 @@ export function assembleContext(
   if (!profile || profile.facts.include) {
     existingFacts = bootstrapData?.facts
       ?? getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
-    const topFacts = existingFacts.slice(0, 50);
+    const childCountMap = bootstrapData?.childCountMap ?? new Map<string, number>();
+    const topFacts = sortFactsForContext(existingFacts, childCountMap, 50);
     factsBlock =
       topFacts.length > 0
         ? `KNOWN FACTS ABOUT THE USER (${topFacts.length} facts):\n${topFacts

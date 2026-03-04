@@ -38,6 +38,7 @@ vi.mock("@/lib/agent/prompts", () => ({
 }));
 vi.mock("@/lib/agent/journey", () => ({
   // Module exists but we only import types — no runtime mock needed
+  computeRelevance: vi.fn(() => 0.5),
 }));
 
 import { estimateTokens, detectMode, assembleContext } from "@/lib/agent/context";
