@@ -211,7 +211,7 @@ export function Projects({ content, variant = "projects-list" }: SectionProps<Pr
                             )}
                         </React.Fragment>
                     ))}
-                    summaryLine={summaryLine}
+                    visibleCount={3}
                 />
             </div>
         </section>
