@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { STEP_EXHAUSTION_FALLBACK } from "@/app/api/chat/route";
+import { STEP_EXHAUSTION_FALLBACK } from "@/lib/agent/step-exhaustion-fallback";
 
 // R3 banned phrases from turn-management.ts
 const BANNED_PHRASES = [
