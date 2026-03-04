@@ -215,10 +215,14 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
         );
     }
 
-    // Default: hero-split — left-aligned, avatar row, chip pills, contact row
+    // Default: hero-split — content pinned to bottom (min-height 480px, flex-end)
+    // The MonolithLayout wrapper supplies the section borderBottom separator.
     return (
-        <header className="py-24 theme-reveal">
-            <div style={{ borderBottom: "1px solid var(--page-border)", paddingBottom: 40 }}>
+        <header
+            className="theme-reveal"
+            style={{ minHeight: 480, display: "flex", alignItems: "flex-end", paddingBottom: 56 }}
+        >
+            <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
                     {renderAvatar("w-20 h-20", "text-2xl")}
                     <div style={{ flex: 1, minWidth: 0 }}>
