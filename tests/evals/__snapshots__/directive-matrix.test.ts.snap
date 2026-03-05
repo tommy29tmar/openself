@@ -67,6 +67,8 @@ RULES:
 
 exports[`snapshot matrix > [active_fresh] + [has_soul] 1`] = `""`;
 
+exports[`snapshot matrix > [active_fresh] + [has_sparse_profile] 1`] = `""`;
+
 exports[`snapshot matrix > [active_fresh] + [has_stale_facts] 1`] = `
 "SITUATION DIRECTIVES:
 STALE FACTS: These facts haven't been updated in over 30 days: experience/acme.
@@ -156,6 +158,8 @@ RULES:
 
 exports[`snapshot matrix > [active_stale] + [has_soul] 1`] = `""`;
 
+exports[`snapshot matrix > [active_stale] + [has_sparse_profile] 1`] = `""`;
+
 exports[`snapshot matrix > [active_stale] + [has_stale_facts] 1`] = `
 "SITUATION DIRECTIVES:
 STALE FACTS: These facts haven't been updated in over 30 days: experience/acme.
@@ -185,6 +189,8 @@ exports[`snapshot matrix > [blocked] + [has_pending_soul_proposals] 1`] = `""`;
 exports[`snapshot matrix > [blocked] + [has_recent_import] 1`] = `""`;
 
 exports[`snapshot matrix > [blocked] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [blocked] + [has_sparse_profile] 1`] = `""`;
 
 exports[`snapshot matrix > [blocked] + [has_stale_facts] 1`] = `""`;
 
@@ -257,6 +263,8 @@ RULES:
 
 exports[`snapshot matrix > [draft_ready] + [has_soul] 1`] = `""`;
 
+exports[`snapshot matrix > [draft_ready] + [has_sparse_profile] 1`] = `""`;
+
 exports[`snapshot matrix > [draft_ready] + [has_stale_facts] 1`] = `""`;
 
 exports[`snapshot matrix > [draft_ready] + [has_thin_sections] 1`] = `
@@ -294,6 +302,8 @@ If the user declines or seems uninterested → call review_soul_proposal with ac
 exports[`snapshot matrix > [first_visit] + [has_recent_import] 1`] = `""`;
 
 exports[`snapshot matrix > [first_visit] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [first_visit] + [has_sparse_profile] 1`] = `""`;
 
 exports[`snapshot matrix > [first_visit] + [has_stale_facts] 1`] = `""`;
 
@@ -365,6 +375,8 @@ RULES:
 `;
 
 exports[`snapshot matrix > [returning_no_page] + [has_soul] 1`] = `""`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_sparse_profile] 1`] = `""`;
 
 exports[`snapshot matrix > [returning_no_page] + [has_stale_facts] 1`] = `""`;
 

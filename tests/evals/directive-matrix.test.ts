@@ -17,14 +17,14 @@ import type { Situation, JourneyState } from "@/lib/agent/journey";
 const ALL_SITUATIONS: Situation[] = [
   "has_pending_proposals", "has_thin_sections", "has_stale_facts",
   "has_open_conflicts", "has_archivable_facts", "has_recent_import",
-  "has_name", "has_soul", "has_pending_soul_proposals",
+  "has_name", "has_soul", "has_pending_soul_proposals", "has_sparse_profile",
 ];
 
 // Situations that are NOT eligible for first_visit (eligibleStates does not include it)
 const FIRST_VISIT_INELIGIBLE: Situation[] = [
   "has_pending_proposals", "has_thin_sections", "has_stale_facts",
   "has_open_conflicts", "has_archivable_facts", "has_recent_import",
-  "has_name", "has_soul",
+  "has_name", "has_soul", "has_sparse_profile",
 ];
 
 const mockCtx: SituationContext = {

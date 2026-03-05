@@ -83,6 +83,7 @@ import {
   daysBetween,
   getDistinctSessionCount,
 } from "@/lib/agent/journey";
+import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
 import type { OwnerScope } from "@/lib/auth/session";
 import { countFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage, getDraft, getPublishedUsername } from "@/lib/services/page-service";
@@ -324,9 +325,41 @@ describe("detectSituations", () => {
     expect(result).toContain("has_soul");
   });
 
-  it("returns empty array when nothing special is detected", () => {
-    const result = detectSituations([], "cog-1");
-    expect(result).toEqual([]);
+  it("returns no special situations when profile is rich and no anomalies detected", () => {
+    const richFacts = Array.from({ length: SPARSE_PROFILE_FACT_THRESHOLD }, (_, i) => ({
+      id: `f${i}`, category: "skill", key: `s${i}`, value: {},
+      source: "chat", confidence: 1, visibility: "public",
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }));
+    const result = detectSituations([], "cog-1", { publishableFacts: richFacts });
+    const unexpected = [
+      "has_sparse_profile", "has_pending_proposals", "has_stale_facts",
+      "has_open_conflicts", "has_thin_sections", "has_archivable_facts",
+      "has_recent_import",
+    ];
+    for (const s of unexpected) {
+      expect(result).not.toContain(s);
+    }
+  });
+
+  it("returns has_sparse_profile when publishable facts < threshold", () => {
+    const sparseFacts = Array.from({ length: SPARSE_PROFILE_FACT_THRESHOLD - 1 }, (_, i) => ({
+      id: `f${i}`, category: "skill", key: `s${i}`, value: {},
+      source: "chat", confidence: 1, visibility: "public",
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }));
+    expect(detectSituations([], "cog-1", { publishableFacts: sparseFacts }))
+      .toContain("has_sparse_profile");
+  });
+
+  it("does NOT return has_sparse_profile when publishable facts >= threshold", () => {
+    const richFacts = Array.from({ length: SPARSE_PROFILE_FACT_THRESHOLD }, (_, i) => ({
+      id: `f${i}`, category: "skill", key: `s${i}`, value: {},
+      source: "chat", confidence: 1, visibility: "public",
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }));
+    expect(detectSituations([], "cog-1", { publishableFacts: richFacts }))
+      .not.toContain("has_sparse_profile");
   });
 });
 

@@ -26,6 +26,7 @@ export type SituationContextMap = {
   has_name:                    Record<never, never>;
   has_soul:                    Record<never, never>;
   has_pending_soul_proposals:  Pick<SituationContext, "pendingSoulProposals">;
+  has_sparse_profile:          Pick<SituationContext, "thinSections">;
 };
 
 export type DirectiveEntry<S extends Situation> = {
@@ -70,6 +71,7 @@ export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContex
   has_soul:                   [],
   // pendingSoulProposals is optional — build returns "" when empty.
   has_pending_soul_proposals: [],
+  has_sparse_profile: ["thinSections"],
 };
 
 // ── getCtxFor ─────────────────────────────────────────────────────────────────
@@ -143,7 +145,7 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     build: (ctx) => archivableFactsDirective(ctx.archivableFacts),
   },
   has_recent_import: {
-    priority: 1,
+    priority: 2,          // was 1; renumbered so sparse (p1) wins when both situations are active
     tieBreak: "has_recent_import",
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
     incompatibleWith: [],
@@ -167,6 +169,13 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     eligibleStates: ["first_visit", "returning_no_page", "draft_ready", "active_fresh", "active_stale"],
     incompatibleWith: [],
     build: (ctx) => pendingSoulProposalsDirective(ctx.pendingSoulProposals ?? []),
+  },
+  has_sparse_profile: {
+    priority: 1,                            // outranks has_recent_import (p2) when incompatible — sparse wins, recent_import dropped
+    tieBreak: "has_sparse_profile",
+    eligibleStates: ["draft_ready", "active_fresh", "active_stale"],
+    incompatibleWith: [],                   // empty — real incompatibilities added atomically in Task 2
+    build: (_ctx) => "",                    // stub — replaced in Task 2
   },
 };
 
