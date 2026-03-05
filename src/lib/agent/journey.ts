@@ -23,6 +23,7 @@ import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 import { detectArchetypeFromSignals, refineArchetype, ARCHETYPE_STRATEGIES, type Archetype } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
+import { getPendingEpisodicProposals } from "@/lib/services/episodic-service";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,7 +47,8 @@ export type Situation =
   | "has_archivable_facts"
   | "has_recent_import"
   | "has_pending_soul_proposals"
-  | "has_sparse_profile";
+  | "has_sparse_profile"
+  | "has_pending_episodic_patterns";
 
 export type ExpertiseLevel = "novice" | "familiar" | "expert";
 
@@ -67,6 +69,7 @@ export interface BootstrapPayload {
   archetype: Archetype;
   importGapReport?: import("@/lib/connectors/import-gap-analyzer").ImportGapReport;
   pendingSoulProposals?: Array<{ id: string; overlay: Record<string, unknown>; reason: string }>;
+  pendingEpisodicPatterns?: Array<{ id: string; actionType: string; patternSummary: string }>;
 }
 
 /**
@@ -571,6 +574,12 @@ export function assembleBootstrapPayload(
     situations.push("has_pending_soul_proposals");
   }
 
+  // Post-Dream-Cycle: detect pending episodic pattern proposals and surface as a situation
+  const pendingEpisodicPatterns = getPendingEpisodicProposals(ownerKey);
+  if (pendingEpisodicPatterns.length > 0 && !situations.includes("has_pending_episodic_patterns")) {
+    situations.push("has_pending_episodic_patterns");
+  }
+
   return {
     payload: {
       journeyState,
@@ -594,6 +603,11 @@ export function assembleBootstrapPayload(
             ? p.proposedOverlay as Record<string, unknown>
             : {},
           reason: p.reason ?? "",
+        })),
+      } : {}),
+      ...(pendingEpisodicPatterns.length > 0 ? {
+        pendingEpisodicPatterns: pendingEpisodicPatterns.map(p => ({
+          id: p.id, actionType: p.actionType, patternSummary: p.patternSummary,
         })),
       } : {}),
     },

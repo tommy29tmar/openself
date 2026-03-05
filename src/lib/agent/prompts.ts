@@ -286,6 +286,7 @@ export function buildSystemPrompt(
     archivableFacts: bootstrap.archivableFacts ?? [],
     importGapReport: bootstrap.importGapReport,
     pendingSoulProposals: bootstrap.pendingSoulProposals ?? [],
+    pendingEpisodicPatterns: bootstrap.pendingEpisodicPatterns ?? [],
   };
 
   const situationDirectives = getSituationDirectives(

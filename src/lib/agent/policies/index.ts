@@ -20,6 +20,7 @@ export type SituationContext = {
   archivableFacts: string[];
   importGapReport?: ImportGapReport;
   pendingSoulProposals?: Array<{ id: string; overlay: Record<string, unknown>; reason: string }>;
+  pendingEpisodicPatterns?: Array<{ id: string; actionType: string; patternSummary: string }>;
 };
 
 // ---------------------------------------------------------------------------

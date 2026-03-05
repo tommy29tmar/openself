@@ -147,6 +147,22 @@ If the user agrees → call review_soul_proposal with accept: true.
 If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further.`;
 }
 
+export function pendingEpisodicPatternsDirective(
+  patterns: Array<{ id: string; actionType: string; patternSummary: string }>,
+): string {
+  if (patterns.length === 0) return "";
+  const first = patterns[0];
+  const safeId = sanitizeForPrompt(first.id, 50);
+  const safeType = sanitizeForPrompt(first.actionType, 30);
+  const safeSummary = sanitizeForPrompt(first.patternSummary, 200);
+  return `PENDING EPISODIC PATTERN (id: ${safeId}):
+I noticed a recurring pattern: ${safeType} — ${safeSummary}
+
+Bring this up naturally. If user wants it in profile: call confirm_episodic_pattern with accept: true.
+If they decline: call confirm_episodic_pattern with accept: false.
+Do NOT pressure. If action_type is "milestone", also ask about adding to public page.`;
+}
+
 export function recentImportDirective(report: ImportGapReport): string {
   const s = report.summary;
   const role = s.currentRole ? sanitize(s.currentRole) : "not specified";

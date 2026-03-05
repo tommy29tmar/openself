@@ -11,6 +11,7 @@ import {
   recentImportDirective,
   pendingSoulProposalsDirective,
   sparseProfileDirective,
+  pendingEpisodicPatternsDirective,
 } from "@/lib/agent/policies/situations";
 import { logEvent } from "@/lib/services/event-service";
 
@@ -28,6 +29,7 @@ export type SituationContextMap = {
   has_soul:                    Record<never, never>;
   has_pending_soul_proposals:  Pick<SituationContext, "pendingSoulProposals">;
   has_sparse_profile:          Pick<SituationContext, "thinSections">;
+  has_pending_episodic_patterns: Pick<SituationContext, "pendingEpisodicPatterns">;
 };
 
 export type DirectiveEntry<S extends Situation> = {
@@ -73,6 +75,8 @@ export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContex
   // pendingSoulProposals is optional — build returns "" when empty.
   has_pending_soul_proposals: [],
   has_sparse_profile: ["thinSections"],
+  // pendingEpisodicPatterns is optional — build returns "" when empty.
+  has_pending_episodic_patterns: [],
 };
 
 // ── getCtxFor ─────────────────────────────────────────────────────────────────
@@ -177,6 +181,13 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
     incompatibleWith: ["has_archivable_facts", "has_recent_import", "has_thin_sections"],  // symmetric; sparse (p1) wins all
     build: (ctx) => sparseProfileDirective(ctx.thinSections),
+  },
+  has_pending_episodic_patterns: {
+    priority: 2,
+    tieBreak: "has_pending_episodic_patterns",
+    eligibleStates: ["first_visit", "returning_no_page", "draft_ready", "active_fresh", "active_stale"],
+    incompatibleWith: [],
+    build: (ctx) => pendingEpisodicPatternsDirective(ctx.pendingEpisodicPatterns ?? []),
   },
 };
 
