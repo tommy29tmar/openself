@@ -196,6 +196,14 @@ function resolveIncompatibilities(
       const winnerPriority = DIRECTIVE_POLICY[s].priority;
       const loserPriority = DIRECTIVE_POLICY[incompatible].priority;
 
+      if (winnerPriority > loserPriority) {
+        // Priority inversion: s (the alleged winner) actually has LOWER priority than the incompatible.
+        // This is a policy misconfiguration — validateDirectivePolicy should have caught this.
+        throw new DirectiveConflictError(
+          `[directive-registry] Priority inversion: ${s}(p=${winnerPriority}) lists ${incompatible}(p=${loserPriority}) as incompatible but ${incompatible} has higher priority — policy bug.`,
+        );
+      }
+
       // s wins (lower priority number = higher importance)
       const msg =
         `[directive-registry] Conflict: ${s}(p=${winnerPriority}) ` +
