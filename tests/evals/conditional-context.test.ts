@@ -115,13 +115,13 @@ describe("conditional context by journey state", () => {
     );
   });
 
-  it("draft_ready: omits schema reference, includes soul + richness", () => {
+  it("draft_ready: injects minimal schema, includes soul + richness", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("draft_ready"));
 
-    // buildSystemPrompt receives schemaMode: "none" for draft_ready
+    // buildSystemPrompt receives schemaMode: "minimal" for draft_ready
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ schemaMode: "none" }),
+      expect.objectContaining({ schemaMode: "minimal" }),
     );
 
     // Soul IS queried

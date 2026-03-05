@@ -141,7 +141,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     pageState: { include: true, budget: 1500 },
     richness: { include: true },
     layoutIntelligence: { include: true },
-    schemaMode: "none",
+    schemaMode: "minimal",
   },
   active_fresh: {
     facts: { include: true, budget: 13000 },

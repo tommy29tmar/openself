@@ -165,6 +165,20 @@ describe("draftReadyPolicy", () => {
     });
   });
 
+  describe("continued enrichment behavior", () => {
+    it("says new profile information in the same conversation must still be saved", () => {
+      expect(policyEn).toMatch(/adding new profile information.*save it and keep moving|do not ignore new information/i);
+    });
+
+    it("says optional clarifications must not block progress", () => {
+      expect(policyEn).toMatch(/optional clarifications.*must not block progress|do not hold the page hostage/i);
+    });
+
+    it("says regenerate immediately when the user explicitly asks", () => {
+      expect(policyEn).toMatch(/explicitly asks to regenerate|rebuild immediately/i);
+    });
+  });
+
   describe("banned patterns", () => {
     for (const phrase of UNIVERSAL_BANNED_PHRASES) {
       it(`bans "${phrase}"`, () => {

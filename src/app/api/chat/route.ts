@@ -26,6 +26,7 @@ import { consumeImportEvent, markImportEventConsumed, revertImportEvent, type Im
 import { analyzeImportGaps, type ImportGapReport } from "@/lib/connectors/import-gap-analyzer";
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { STEP_EXHAUSTION_FALLBACK } from "@/lib/agent/step-exhaustion-fallback";
+import { stringifyToolArgsForRepair, stripMarkdownCodeFences } from "@/lib/agent/tool-call-repair";
 
 /**
  * Per-profile message quota for authenticated users.
@@ -305,8 +306,8 @@ export async function POST(req: Request) {
       },
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         // Fast path: strip markdown code fences that Gemini sometimes wraps around JSON
-        const rawArgs = typeof toolCall.args === "string" ? toolCall.args : JSON.stringify(toolCall.args);
-        const stripped = rawArgs.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+        const rawArgs = stringifyToolArgsForRepair(toolCall.args);
+        const stripped = stripMarkdownCodeFences(rawArgs);
         try {
           JSON.parse(stripped);
           return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: stripped };
@@ -331,7 +332,7 @@ export async function POST(req: Request) {
           ].join("\n"),
         });
         // Strip fences from LLM repair response too
-        const repairedArgs = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+        const repairedArgs = stripMarkdownCodeFences(text);
         try {
           JSON.parse(repairedArgs);
           return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: repairedArgs };
@@ -340,6 +341,9 @@ export async function POST(req: Request) {
         }
       },
       onFinish: async ({ text, usage, finishReason }) => {
+        const journal = getJournal();
+        const persistedToolCalls = journal.length > 0 ? journal : null;
+
         if (text) {
           db.insert(messagesTable)
             .values({
@@ -347,6 +351,7 @@ export async function POST(req: Request) {
               sessionId: messageSessionId,
               role: "assistant",
               content: text,
+              toolCalls: persistedToolCalls,
             })
             .run();
         }
@@ -359,7 +364,6 @@ export async function POST(req: Request) {
         }
 
         // Persist operation journal + detect step exhaustion
-        const journal = getJournal();
         if (journal.length > 0) {
           const metaUpdate: Record<string, unknown> = { journal };
           if (finishReason === "tool-calls") {
@@ -395,6 +399,7 @@ export async function POST(req: Request) {
                 sessionId: messageSessionId,
                 role: "assistant",
                 content: syntheticText,
+                toolCalls: persistedToolCalls,
               })
               .run();
           } catch (e) {

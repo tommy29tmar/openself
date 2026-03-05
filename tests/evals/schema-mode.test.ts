@@ -36,10 +36,10 @@ describe("schemaMode per journey state", () => {
     expect(prompt).toContain(FULL_SCHEMA_MARKER);
   });
 
-  it("draft_ready: injects no schema", () => {
-    const prompt = buildSystemPrompt(makeBootstrap("draft_ready"), { schemaMode: "none" });
+  it("draft_ready: injects minimal schema", () => {
+    const prompt = buildSystemPrompt(makeBootstrap("draft_ready"), { schemaMode: "minimal" });
+    expect(prompt).toContain(MINIMAL_SCHEMA_MARKER);
     expect(prompt).not.toContain(FULL_SCHEMA_MARKER);
-    expect(prompt).not.toContain(MINIMAL_SCHEMA_MARKER);
   });
 
   it("active_fresh: injects no schema", () => {

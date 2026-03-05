@@ -1,6 +1,6 @@
 /**
  * Tests for the turn management rules.
- * Validates that all 5 rules (R1-R5) are present with their key directives.
+ * Validates that all 6 rules (R1-R6) are present with their key directives.
  */
 import { describe, it, expect } from "vitest";
 import { turnManagementRules } from "@/lib/agent/policies/turn-management";
@@ -18,12 +18,13 @@ describe("turnManagementRules", () => {
       expect(rules).toMatch(/TURN\s*MANAGEMENT/i);
     });
 
-    it("contains all 5 rules (R1 through R5)", () => {
+    it("contains all 6 rules (R1 through R6)", () => {
       expect(rules).toContain("R1");
       expect(rules).toContain("R2");
       expect(rules).toContain("R3");
       expect(rules).toContain("R4");
       expect(rules).toContain("R5");
+      expect(rules).toContain("R6");
     });
   });
 
@@ -148,6 +149,20 @@ describe("turnManagementRules", () => {
 
     it("bans walls of text for short messages", () => {
       expect(rules).toMatch(/never.*wall.*text|never.*long.*response.*short/i);
+    });
+  });
+
+  describe("R6 — Clarifications expire", () => {
+    it("records new explicit information even when clarification is unanswered", () => {
+      expect(rules).toMatch(/record.*new.*information.*immediately|do not ignore it/i);
+    });
+
+    it("limits repeated clarifications", () => {
+      expect(rules).toMatch(/at most one more time|same clarification/i);
+    });
+
+    it("forbids optional clarifications from blocking generation", () => {
+      expect(rules).toMatch(/missing optional.*do not block|do it with what you have/i);
     });
   });
 });
