@@ -120,7 +120,7 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     tieBreak: "has_thin_sections",
     // active_fresh included: policy now has HONEST ASSESSMENT RULE allowing thin-section feedback when asked
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
-    incompatibleWith: ["has_archivable_facts"],
+    incompatibleWith: ["has_archivable_facts", "has_sparse_profile"],
     build: (ctx) => thinSectionsDirective(ctx.thinSections),
   },
   has_stale_facts: {
@@ -175,7 +175,7 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     priority: 1,
     tieBreak: "has_sparse_profile",
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
-    incompatibleWith: ["has_archivable_facts", "has_recent_import"],  // symmetric; sparse (p1) wins both
+    incompatibleWith: ["has_archivable_facts", "has_recent_import", "has_thin_sections"],  // symmetric; sparse (p1) wins all
     build: (ctx) => sparseProfileDirective(ctx.thinSections),
   },
 };
