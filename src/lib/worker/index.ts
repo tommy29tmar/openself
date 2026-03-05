@@ -12,6 +12,7 @@ import { expireStaleProposals } from "@/lib/services/soul-service";
 import { handleConnectorSync } from "@/lib/connectors/connector-sync-handler";
 import { runSessionCompaction, persistCompactionLog, getLastCompactionRowid } from "@/lib/services/session-compaction-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
+import { consolidateEpisodesHandler } from "@/lib/worker/handlers/consolidate-episodes";
 import { saveMemory } from "@/lib/services/memory-service";
 import "@/lib/connectors/register-all";
 
@@ -132,6 +133,7 @@ const handlers: Record<string, JobHandler> = {
       }
     }
   },
+  consolidate_episodes: consolidateEpisodesHandler,
 };
 
 export function getHandlerCount(): number {
