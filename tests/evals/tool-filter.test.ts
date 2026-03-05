@@ -12,6 +12,7 @@ const ALL_TOOL_NAMES = [
   "set_fact_visibility", "save_memory", "resolve_conflict",
   "generate_page", "update_page_style", "set_layout",
   "reorder_sections", "propose_lock", "request_publish", "propose_soul_change",
+  "review_soul_proposal",
   "batch_facts", "archive_fact", "unarchive_fact", "reorder_items",
   "move_section", "publish_preflight", "inspect_page_state",
 ];
@@ -73,6 +74,14 @@ describe("tool filtering by journey state", () => {
     const tools = mockTools(ALL_TOOL_NAMES);
     const filtered = filterToolsByJourneyState(tools, "unknown_state" as any);
     expect(Object.keys(filtered).sort()).toEqual(ALL_TOOL_NAMES.sort());
+  });
+
+  it("includes review_soul_proposal in first_visit and returning_no_page", () => {
+    const tools = mockTools(ALL_TOOL_NAMES);
+    const filtered1 = filterToolsByJourneyState(tools, "first_visit");
+    expect(Object.keys(filtered1)).toContain("review_soul_proposal");
+    const filtered2 = filterToolsByJourneyState(tools, "returning_no_page");
+    expect(Object.keys(filtered2)).toContain("review_soul_proposal");
   });
 
   it("filters gracefully when tool set references tools not in input", () => {

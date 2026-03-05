@@ -25,7 +25,7 @@ import { logEvent } from "@/lib/services/event-service";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
-import { proposeSoulChange, getActiveSoul, type SoulOverlay } from "@/lib/services/soul-service";
+import { proposeSoulChange, reviewProposal, getActiveSoul, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
 import { FactValidationError } from "@/lib/services/fact-validation";
 import { LAYOUT_TEMPLATES, resolveLayoutAlias } from "@/lib/layout/contracts";
@@ -1025,6 +1025,30 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           actor: "assistant",
           payload: { requestId, tool: "propose_soul_change", error: String(error) },
         });
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
+
+  review_soul_proposal: tool({
+    description: "Accept or reject a pending soul change proposal. Use after the user explicitly agrees or disagrees with a proposed soul update you surfaced in chat.",
+    parameters: z.object({
+      proposalId: z.string().describe("The ID of the soul proposal to review"),
+      accept: z.boolean().describe("true to apply the soul change, false to reject it"),
+    }),
+    execute: async ({ proposalId, accept }) => {
+      try {
+        const result = reviewProposal(proposalId, effectiveOwnerKey, accept);
+        if (!result.success) return { success: false, error: result.error };
+        logEvent({ eventType: "tool_call", actor: "assistant", payload: { requestId, tool: "review_soul_proposal", proposalId, accept } });
+        return {
+          success: true,
+          message: accept
+            ? "Soul profile updated. Changes will apply from the next conversation."
+            : "Proposal rejected. I'll keep the current soul profile.",
+        };
+      } catch (error) {
+        logEvent({ eventType: "tool_call_error", actor: "assistant", payload: { requestId, tool: "review_soul_proposal", error: String(error) } });
         return { success: false, error: String(error) };
       }
     },

@@ -27,6 +27,7 @@ const ONBOARDING_TOOLS = [
   "resolve_conflict",
   "generate_page",
   "propose_soul_change",
+  "review_soul_proposal",
   "set_fact_visibility", // user may say "don't show my email" during onboarding
   "inspect_page_state",  // read-only diagnostic, helps agent before generate_page
   "set_layout",          // user may request layout during onboarding; ensureDraft() auto-composes
