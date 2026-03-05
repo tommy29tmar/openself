@@ -71,7 +71,7 @@ export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContex
   has_soul:                   [],
   // pendingSoulProposals is optional — build returns "" when empty.
   has_pending_soul_proposals: [],
-  has_sparse_profile: ["thinSections"],
+  has_sparse_profile: [],  // build() is a stub — no keys consumed yet; update in Task 2
 };
 
 // ── getCtxFor ─────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
   has_sparse_profile: {
     priority: 1,                            // outranks has_recent_import (p2) when incompatible — sparse wins, recent_import dropped
     tieBreak: "has_sparse_profile",
-    eligibleStates: ["draft_ready", "active_fresh", "active_stale"],
+    eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
     incompatibleWith: [],                   // empty — real incompatibilities added atomically in Task 2
     build: (_ctx) => "",                    // stub — replaced in Task 2
   },
