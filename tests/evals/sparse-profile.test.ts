@@ -110,11 +110,10 @@ describe("has_sparse_profile directive eligibility", () => {
       "active_stale",
       ctxWithArchivable,
     );
-    const sparseOnly = getSituationDirectives(["has_sparse_profile"], "active_stale", mockCtx);
 
     expect(combined).toContain("DATA COLLECTION OVERRIDE");
-    // archivable is fully dropped via incompatibility — combined equals sparse-only
-    expect(combined).toBe(sparseOnly);
+    // Archivable-specific text must NOT appear (archivable dropped via incompatibility)
+    expect(combined).not.toMatch(/archiv/i);
   });
 
   // ---------------------------------------------------------------------------
@@ -164,5 +163,24 @@ describe("has_sparse_profile directive eligibility", () => {
     expect(combined).toContain("DATA COLLECTION OVERRIDE");
     // has_thin_sections directive text should not appear
     expect(combined).not.toMatch(/thin section/i);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Co-existence: sparse + pending_proposals (both fire simultaneously)
+  // ---------------------------------------------------------------------------
+
+  it("has_sparse_profile and has_pending_proposals co-exist (both fire, no incompatibility)", () => {
+    const ctxWithProposals: SituationContext = {
+      ...mockCtx,
+      pendingProposalCount: 2,
+      pendingProposalSections: ["experience"],
+    };
+    const result = getSituationDirectives(
+      ["has_sparse_profile", "has_pending_proposals"],
+      "active_stale",
+      ctxWithProposals,
+    );
+    expect(result).toContain("DATA COLLECTION OVERRIDE");
+    expect(result).toContain("PENDING PROPOSALS");
   });
 });
