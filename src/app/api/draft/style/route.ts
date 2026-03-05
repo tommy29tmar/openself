@@ -127,7 +127,9 @@ export async function POST(req: Request) {
         draftSlots.size > 0 ? draftSlots : undefined,
       );
 
-      const errors = issues.filter((i) => i.severity === "error");
+      const errors = issues.filter(
+        (i) => i.severity === "error" && i.issue !== "missing_required",
+      );
       if (errors.length > 0) {
         return NextResponse.json(
           { success: false, error: "Layout incompatible", issues: errors },

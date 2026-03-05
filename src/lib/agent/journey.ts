@@ -290,7 +290,19 @@ export function getOrDetectJourneyState(
     .get(anchorId) as { journey_state: string | null } | undefined;
 
   if (cached?.journey_state) {
-    return cached.journey_state as JourneyState;
+    const state = cached.journey_state as JourneyState;
+    const prePublishStates: JourneyState[] = ["first_visit", "returning_no_page", "draft_ready"];
+
+    if (authInfo?.authenticated && prePublishStates.includes(state)) {
+      const hasPublished = hasAnyPublishedPage(scope.knowledgeReadKeys);
+      if (hasPublished) {
+        const detected = detectJourneyState(scope, authInfo);
+        updateJourneyStatePin(anchorId, detected);
+        return detected;
+      }
+    }
+
+    return state;
   }
 
   // No pin yet — detect and write

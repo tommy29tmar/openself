@@ -350,4 +350,29 @@ describe("POST /api/draft/style (route handler)", () => {
     await POST(makeRequest({ surface: "clay" }));
     expect(lastUpserted!.username).toBe("bob");
   });
+
+  it("allows layout switch when the only issue is missing_required", async () => {
+    mockDraft = {
+      config: makeConfig({
+        sections: [
+          {
+            id: "hero-1",
+            type: "hero",
+            variant: "large",
+            content: { name: "Test User", tagline: "Hello world" },
+          },
+        ],
+      }),
+      username: "alice",
+      status: "draft",
+      configHash: null,
+      updatedAt: null,
+    };
+
+    const res = await POST(makeRequest({ layoutTemplate: "The Architect" }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(lastUpserted!.config.layoutTemplate).toBe("architect");
+  });
 });

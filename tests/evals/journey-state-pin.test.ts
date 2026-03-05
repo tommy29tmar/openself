@@ -89,6 +89,7 @@ const SCOPE: OwnerScope = {
 function setupSqliteMocks(opts: {
   cachedState?: string | null;
   quotaCount?: number;
+  publishedUpdatedAt?: string;
 }) {
   const runMock = vi.fn();
   mockPrepare.mockImplementation((sql: string) => {
@@ -113,6 +114,15 @@ function setupSqliteMocks(opts: {
           opts.quotaCount != null
             ? { count: opts.quotaCount }
             : undefined,
+        ),
+      };
+    }
+    if (/SELECT.*updated_at.*FROM.*page.*published/i.test(sql)) {
+      return {
+        get: vi.fn(() =>
+          opts.publishedUpdatedAt != null
+            ? { updated_at: opts.publishedUpdatedAt }
+            : { updated_at: new Date().toISOString() },
         ),
       };
     }
@@ -225,5 +235,33 @@ describe("getOrDetectJourneyState", () => {
 
     // Should use the cached pin since quota is not exhausted
     expect(state).toBe("active_fresh");
+  });
+
+  it("invalidates draft_ready pin after publish for authenticated users", () => {
+    const { runMock } = setupSqliteMocks({
+      cachedState: "draft_ready",
+      publishedUpdatedAt: new Date().toISOString(),
+    });
+    vi.mocked(hasAnyPublishedPage).mockReturnValue(true);
+
+    const state = getOrDetectJourneyState(SCOPE, {
+      authenticated: true,
+      username: "alice",
+    });
+
+    expect(state).toBe("active_fresh");
+    expect(runMock).toHaveBeenCalledWith("active_fresh", SCOPE.knowledgePrimaryKey);
+  });
+
+  it("keeps pre-publish pin when user is anonymous even if a page exists", () => {
+    setupSqliteMocks({
+      cachedState: "draft_ready",
+      publishedUpdatedAt: new Date().toISOString(),
+    });
+    vi.mocked(hasAnyPublishedPage).mockReturnValue(true);
+
+    const state = getOrDetectJourneyState(SCOPE);
+
+    expect(state).toBe("draft_ready");
   });
 });

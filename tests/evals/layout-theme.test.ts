@@ -208,3 +208,35 @@ describe("update_page_style tool", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("set_layout tool", () => {
+  it("allows layout switch when the only issue is missing_required", async () => {
+    vi.mocked(getDraft).mockReturnValue(
+      {
+        config: makeValidConfig({
+          sections: [
+            {
+              id: "hero-1",
+              type: "hero",
+              variant: "large",
+              content: { name: "Test User", tagline: "Hello world" },
+            },
+          ],
+        }),
+        username: "testuser",
+        status: "draft",
+        configHash: null,
+        updatedAt: null,
+      } as any,
+    );
+
+    const result = await agentTools.set_layout.execute(
+      { username: "testuser", layoutTemplate: "The Architect" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.layoutTemplate).toBe("architect");
+    expect(upsertDraft).toHaveBeenCalled();
+  });
+});

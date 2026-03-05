@@ -1258,7 +1258,9 @@ Do NOT call in a loop.`,
           draftSlots.size > 0 ? draftSlots : undefined,
         );
 
-        const errors = issues.filter((i) => i.severity === "error");
+        const errors = issues.filter(
+          (i) => i.severity === "error" && i.issue !== "missing_required",
+        );
         if (errors.length > 0) {
           const details = errors.map((e) => `${e.slotId ?? "unknown"}: ${e.message}`).join("; ");
           return {
