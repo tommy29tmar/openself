@@ -7,6 +7,8 @@
  * These are composed by getSituationDirectives() in the registry.
  */
 
+import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
+
 /**
  * Directive: pending proposals from the heartbeat that need user review.
  */
@@ -187,4 +189,24 @@ RULES:
 - Keep the tone conversational, not interrogative`;
 
   return `${contextBlock.join("\n")}\n\n${policy}`;
+}
+
+/**
+ * Hard override directive: keeps AI in data-collection mode until profile richness threshold is met.
+ * Eligible states: returning_no_page, draft_ready, active_fresh, active_stale.
+ */
+export function sparseProfileDirective(thinSections: string[]): string {
+  const missing = thinSections.length > 0
+    ? thinSections.slice(0, 5).join(", ")
+    : "experience, education, skills";
+  return `SPARSE PROFILE — DATA COLLECTION OVERRIDE:
+This profile has fewer than ${SPARSE_PROFILE_FACT_THRESHOLD} publishable facts — not enough for a complete page yet.
+Thin or missing sections: ${missing}.
+
+MANDATORY BEHAVIOR:
+- Do NOT redirect to publishing or re-publishing yet.
+- Do NOT frame the profile as "solid", "complete", or "ready".
+- After handling any quick tweak the user explicitly requests, ask ONE focused question to fill in a missing area (experience, background, projects, education, skills, or interests).
+- Keep the conversation flowing toward richer data.
+- Exception: if the user explicitly says they want to publish or are done, respect that — do not block indefinitely.`;
 }

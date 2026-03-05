@@ -10,6 +10,7 @@ import {
   archivableFactsDirective,
   recentImportDirective,
   pendingSoulProposalsDirective,
+  sparseProfileDirective,
 } from "@/lib/agent/policies/situations";
 import { logEvent } from "@/lib/services/event-service";
 
@@ -71,7 +72,7 @@ export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContex
   has_soul:                   [],
   // pendingSoulProposals is optional — build returns "" when empty.
   has_pending_soul_proposals: [],
-  has_sparse_profile: [],  // build() is a stub — no keys consumed yet; update in Task 2
+  has_sparse_profile: ["thinSections"],
 };
 
 // ── getCtxFor ─────────────────────────────────────────────────────────────────
@@ -141,14 +142,14 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     tieBreak: "has_archivable_facts",
     // Only meaningful when page is stale and there's accumulated clutter
     eligibleStates: ["active_stale"],
-    incompatibleWith: ["has_thin_sections"],
+    incompatibleWith: ["has_thin_sections", "has_sparse_profile"],
     build: (ctx) => archivableFactsDirective(ctx.archivableFacts),
   },
   has_recent_import: {
     priority: 2,          // was 1; renumbered so sparse (p1) wins when both situations are active
     tieBreak: "has_recent_import",
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
-    incompatibleWith: [],
+    incompatibleWith: ["has_sparse_profile"],
     // importGapReport may be undefined when has_recent_import comes from detectSituations
     // (connector facts). Guard: skip directive if report not available.
     build: (ctx) => ctx.importGapReport ? recentImportDirective(ctx.importGapReport) : "",
@@ -171,11 +172,11 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     build: (ctx) => pendingSoulProposalsDirective(ctx.pendingSoulProposals ?? []),
   },
   has_sparse_profile: {
-    priority: 1,                            // outranks has_recent_import (p2) when incompatible — sparse wins, recent_import dropped
+    priority: 1,
     tieBreak: "has_sparse_profile",
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
-    incompatibleWith: [],                   // empty — real incompatibilities added atomically in Task 2
-    build: (_ctx) => "",                    // stub — replaced in Task 2
+    incompatibleWith: ["has_archivable_facts", "has_recent_import"],  // symmetric; sparse (p1) wins both
+    build: (ctx) => sparseProfileDirective(ctx.thinSections),
   },
 };
 
