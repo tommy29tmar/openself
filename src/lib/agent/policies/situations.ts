@@ -131,7 +131,8 @@ export function pendingSoulProposalsDirective(
     .join("\n");
   const omittedNote = omitted > 0 ? `\n  (${omitted} more omitted)` : "";
   const safeReason = sanitizeForPrompt(first.reason ?? "", 200);
-  return `PENDING SOUL PROPOSAL (id: ${first.id}):
+  const safeId = sanitizeForPrompt(first.id ?? "", 64);
+  return `PENDING SOUL PROPOSAL (id: ${safeId}):
 I previously noticed patterns in how you express yourself and proposed an update to your style profile:
 ${overlayLines || "  (no details available)"}${omittedNote}
 ${safeReason ? `Reason: ${safeReason}` : ""}

@@ -36,8 +36,9 @@ vi.mock("@/lib/services/page-service", () => ({
 
 vi.mock("@/lib/services/soul-service", () => ({
   getActiveSoul: vi.fn(() => null),
-  proposeSoulChange: vi.fn(),
   getPendingProposals: vi.fn(() => []),
+  proposeSoulChange: vi.fn(),
+  reviewProposal: vi.fn(),
 }));
 
 vi.mock("@/lib/services/conflict-service", () => ({
