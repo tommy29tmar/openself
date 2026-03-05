@@ -13,7 +13,7 @@ import { processJobs, getHandlerCount } from "@/lib/worker/index";
 import { runSchedulerTick, SCHEDULER_INTERVAL_MS } from "@/lib/worker/scheduler";
 
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
-const EXPECTED_HANDLER_COUNT = 9;
+const EXPECTED_HANDLER_COUNT = 10;
 
 async function healthCheck(): Promise<void> {
   // 1. Verify DB connection

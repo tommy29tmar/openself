@@ -367,13 +367,23 @@ Token budget guard: journey policy + directives + calibration + turn management 
 
 Dynamic context blocks are then appended by `assembleContext()`:
 
-- **Known facts** — Top 50 facts, relevance-sorted with guaranteed recency quota (see §4.2.2), 2000 token budget (truncated if over)
-- **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 1500 token budget
-- **Conversation summary** — Tier 2 rolling summary, 800 token budget
-- **Agent memories** — Tier 3 observations/preferences/insights, 400 token budget
-- **Pending conflicts** — Open fact contradictions awaiting resolution, 200 token budget
+**Mutable blocks** (shrunk by truncation guard if total budget is exceeded):
+- **Known facts** — Top 120 facts, relevance-sorted with guaranteed recency quota (see §4.2.2), 17000 token budget
+- **Soul profile** — Compiled identity overlay (voice, tone, values, selfDescription, communicationStyle), 13000 token budget
+- **Conversation summary** — Tier 2 rolling summary, 7000 token budget
+- **Agent memories** — Tier 3 observations/preferences/insights, 3500 token budget
+- **Pending conflicts** — Open fact contradictions awaiting resolution, 1500 token budget
+- **Page state** — Current draft layout/presence/sections (steady-state profiles only), 1500 token budget
 
-Total context budget: 7500 tokens with a post-assembly iterative guard (see Section 4.2.2).
+**Static blocks** (never truncated — always preserved):
+- **Auth context** — Authenticated username + publish guidance (steady_state only)
+- **Exploration priorities** — Archetype-weighted section richness + layout intelligence
+- **Pending operations** — Incomplete operation from previous turn (resume injection)
+- **Coherence issues** — Active coherence warnings/infos (circuit D1, steady_state only)
+- **Message quota warning** — Nudge to register when ≤3 anonymous messages remain
+- **Magic paste hint** — Detected connector URLs from latest user message
+
+Total context budget: 65000 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
 Prompt assembly is code-driven (no prompt text embedded in UI files). Each block has a
 version id for reproducibility and A/B testing.
@@ -384,20 +394,23 @@ Context is budgeted explicitly to avoid window overflows. Token estimation uses
 `estimateTokens = ceil(chars / 4)`.
 
 ```
-Total budget: 7500 tokens
+Total budget: 65000 tokens
 
-Per-block allocation:
-  Soul (compiled):     1500 tokens max
-  Facts:               2000 tokens max (top 50, truncated if over)
-  Summary (Tier 2):     800 tokens max
-  Memories (Tier 3):    400 tokens max
-  Pending conflicts:    200 tokens max
-  Recent turns:        2600 tokens max (last 12, reduce if over)
+Per-block allocation (mutable — shrinkable):
+  Facts:              17000 tokens max (top 120, truncated if over)
+  Soul (compiled):    13000 tokens max
+  Summary (Tier 2):    7000 tokens max
+  Memories (Tier 3):   3500 tokens max
+  Pending conflicts:   1500 tokens max
+  Page state:          1500 tokens max (steady-state profiles only)
+
+Recent turns:         22000 tokens max (last 20, reduce if over)
+Static blocks:        not counted against mutable budget; always preserved
 ```
 
-Post-assembly guard: if total exceeds 7500, iteratively truncate the largest block
-by 20% until under budget. Safety/policy blocks and the active user turn are never
-truncated.
+Post-assembly guard: if total exceeds 65000, iteratively truncate the largest
+**mutable** block by 20% until under budget. Static blocks (auth, exploration,
+pending ops, coherence, quota, magic paste) are **never** truncated.
 
 **Profile archetype detection** (steady_state only):
 `detectArchetype()` (`src/lib/agent/context.ts`) classifies the user's profile from facts:
@@ -412,9 +425,18 @@ Detection is owner-scoped (not session-scoped), so it survives multi-session cor
 
 **Fact relevance sorting:**
 `sortFactsForContext()` (exported from `context.ts`) applies a relevance sort with a guaranteed
-recency quota: the top 5 most-recently-updated facts are always included, then up to 45 more
-facts are scored and sorted by relevance. `childCountMap` (pre-computed parent→child count map)
-is part of `BootstrapData` and passed to `assembleContext()` to inform relevance scoring.
+recency quota: the top 5 most-recently-updated facts are always included, then up to 115 more
+facts are scored and sorted by relevance (cap: 120 total). `childCountMap` (pre-computed parent→child
+count map) is part of `BootstrapData` and passed to `assembleContext()` to inform relevance scoring.
+
+**Page state block:**
+For steady-state profiles (`draft_ready`, `active_fresh`, `active_stale`), `assembleContext()`
+injects a `CURRENT DRAFT PAGE:` block showing the current draft's `layoutTemplate`,
+`surface`/`voice`/`light` presence values, and the sections list (type, slot, widgetId).
+Built from `getDraft(scope.knowledgePrimaryKey)` — skipped if no draft exists.
+
+**Turn cap:**
+Recent turns are capped at 20 (was 12) within a 22000-token budget.
 
 ### 4.2.3 Journey Intelligence
 
@@ -725,7 +747,7 @@ and 3 retry attempts with exponential backoff. The **heartbeat scheduler**
 (`src/lib/worker/scheduler.ts`) auto-enqueues heartbeat jobs for all active owners
 every 15 minutes, with catch-up logic and anti-overlap protection.
 
-**9 job handlers:**
+**10 job handlers:**
 - `page_synthesis` — Full page rebuild from facts
 - `memory_summary` — Tier 2 conversation summary generation
 - `heartbeat_light` — Daily lightweight maintenance
@@ -735,6 +757,7 @@ every 15 minutes, with catch-up logic and anti-overlap protection.
 - `connector_sync` — Pull data from connected services
 - `page_regen` — Targeted section regeneration
 - `taxonomy_review` — Review pending category registrations
+- `session_compaction` — Async chat-to-memory distillation (see §4.5)
 
 **DB bootstrap coordination:**
 
@@ -749,9 +772,10 @@ This prevents race conditions when both processes start simultaneously.
 The agent's memory has three tiers (inspired by OpenClaw):
 
 **Tier 1 — Short-Term: Conversation History (ephemeral)**
-Raw chat messages from the current and recent sessions. Trimmed to last 12 turns
-within a 2600 token budget during context assembly. Older messages are summarized
-(Tier 2) and key facts are extracted to the KB before being dropped from context.
+Raw chat messages from the current and recent sessions. Trimmed to last 20 turns
+within a 22000-token budget during context assembly. After each chat turn, a
+`session_compaction` job is enqueued to asynchronously distill messages into
+structured memory (see Session Compaction below).
 
 **Tier 2 — Medium-Term: Conversation Summaries (rolling)**
 Compressed summaries of past conversations stored in the `conversation_summaries`
@@ -792,6 +816,34 @@ Agent memory implementation:
 
 Agent memory is stored separately from the KB and used to improve conversation
 quality over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
+
+**Session Compaction** (`src/lib/services/session-compaction-service.ts`):
+
+Asynchronous background process that distills raw chat history into structured
+semantic memory. Enqueued after every chat turn via `session_compaction` worker job.
+
+Design:
+- **Incremental rowid cursor** — processes 40-message windows using SQLite `rowid`
+  as a monotonic cursor. `getLastCompactionRowid()` orders by `cursor_rowid DESC`
+  (not `created_at`) to handle sub-second multi-window runs correctly.
+- **5-window backlog drainer** — worker handler loops up to 5 windows per job
+  execution. If the last window was full (40 messages), a continuation job is
+  enqueued to drain remaining backlog.
+- **Anti-burn guard** — counts only *deterministic* failures
+  (`json_parse_failure`, `schema_validation_failure`) toward the window limit.
+  Transient errors (network, budget) do not count — they trigger retry via
+  `executeJob` backoff. On the 3rd deterministic failure for a cursor window,
+  `skipped:true` is returned (not thrown), cursor advances, bad window is skipped.
+- **Strict JSON validation** — validates both array presence and element types
+  (`isStringArray`) before any counting; validates `sessionMood` enum via `Set`.
+- **Audit log** — `session_compaction_log` table with `cursor_rowid INTEGER` column,
+  `error_code TEXT`, and `DESC` index on `(session_key, cursor_rowid)`.
+- **Dedup** — per-session UNIQUE index on `(job_type, ownerKey, sessionKey)` WHERE
+  `status='queued'` prevents duplicate queued compaction jobs while a running job
+  can enqueue a continuation without conflict.
+- **Output** — `CompactionSummary` (topics, factsChanged, patternsObserved,
+  sessionMood, keyTakeaways). Pattern observations are saved as `type="pattern"`
+  agent memories (up to 2 per window).
 
 **Intelligent forgetting (decay + relevance signals):**
 
