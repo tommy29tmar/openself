@@ -27,6 +27,11 @@ import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
 import { proposeSoulChange, reviewProposal, getActiveSoul, type SoulOverlay } from "@/lib/services/soul-service";
 import { resolveConflict } from "@/lib/services/conflict-service";
+import {
+  insertEvent, queryEvents, countEventsByType, countKeywordEvents,
+  resolveEpisodicProposal, getEpisodicProposalById,
+} from "@/lib/services/episodic-service";
+import { enqueueJob } from "@/lib/worker/index";
 import { FactValidationError } from "@/lib/services/fact-validation";
 import { LAYOUT_TEMPLATES, resolveLayoutAlias } from "@/lib/layout/contracts";
 import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry";
@@ -1057,6 +1062,129 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     },
   }),
 
+  record_event: tool({
+    description: `Record a specific event the user experienced at a point in time.
+Use when user describes a past action with a time reference (past-tense verb + when).
+Do NOT use create_fact for episodic inputs — use this tool instead.
+
+ACTION_TYPE taxonomy (best match at 70%+; else new snake_case type):
+workout | meal | social | learning | work | travel | health | milestone | casual
+
+After recording a "milestone" event, ask if user wants it added to their public page.`,
+    parameters: z.object({
+      actionType: z.string(),
+      eventAtHuman: z.string().describe("ISO-8601 datetime"),
+      summary: z.string().describe("LLM-curated 1-2 sentences. Not verbatim user text."),
+      entities: z.array(z.string()).optional(),
+    }),
+    execute: async ({ actionType, eventAtHuman, summary, entities }) => {
+      try {
+        const eventAtUnix = Math.floor(new Date(eventAtHuman).getTime() / 1000);
+        if (isNaN(eventAtUnix)) return { success: false, error: "Invalid eventAtHuman — must be ISO-8601" };
+        const eventId = insertEvent({
+          ownerKey: effectiveOwnerKey, sessionId,
+          eventAtUnix, eventAtHuman, actionType,
+          narrativeSummary: summary, entities: entities ?? [],
+        });
+        if (ownerKey) logTrustAction(effectiveOwnerKey, "record_event", `Recorded ${actionType}`, eventId);
+        try { enqueueJob("consolidate_episodes", { ownerKey: effectiveOwnerKey }); }
+        catch (err) {
+          console.warn("[record_event] enqueueJob unexpected error:", String(err));
+        }
+        return { success: true, eventId, actionType };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    },
+  }),
+
+  recall_episodes: tool({
+    description: `Query the user's episodic event log. Returns max 10 events + accurate counts.
+When keywords are provided: countsByType is from returned events; totalFound uses FTS count query.
+Do NOT call in a loop.`,
+    parameters: z.object({
+      timeframe: z.enum(["last_7_days", "last_30_days", "last_60_days"]),
+      keywords: z.string().optional(),
+      actionType: z.string().optional(),
+    }),
+    execute: async ({ timeframe, keywords, actionType }) => {
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        const days = timeframe === "last_7_days" ? 7 : timeframe === "last_30_days" ? 30 : 60;
+        const fromUnix = now - days * 86400;
+        const events = queryEvents({ ownerKey: effectiveOwnerKey, fromUnix, toUnix: now, keywords, actionType, limit: 10 });
+
+        let countsByType: Record<string, number>;
+        let totalAll: number;
+
+        if (keywords && keywords.trim().length > 0) {
+          countsByType = {};
+          for (const e of events) countsByType[e.actionType] = (countsByType[e.actionType] ?? 0) + 1;
+          const fullCount = countKeywordEvents({
+            ownerKey: effectiveOwnerKey, fromUnix, toUnix: now, keywords, actionType,
+          });
+          totalAll = fullCount > 0 ? fullCount : events.length;
+        } else {
+          countsByType = countEventsByType(effectiveOwnerKey, fromUnix, now, actionType);
+          totalAll = Object.values(countsByType).reduce((a, b) => a + b, 0);
+        }
+
+        return {
+          success: true, timeframe,
+          totalFound: totalAll,
+          truncated: totalAll > events.length,
+          countsByType,
+          events: events.map(e => ({
+            id: e.id, actionType: e.actionType,
+            eventAtHuman: e.eventAtHuman, narrativeSummary: e.narrativeSummary,
+          })),
+        };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    },
+  }),
+
+  confirm_episodic_pattern: tool({
+    description: `Accept or reject a pending episodic pattern proposal from the Dream Cycle.
+On accept: habit fact created FIRST (atomic order), then proposal marked accepted.`,
+    parameters: z.object({
+      proposalId: z.string(),
+      accept: z.boolean(),
+    }),
+    execute: async ({ proposalId, accept }) => {
+      try {
+        const proposal = getEpisodicProposalById(proposalId);
+        if (!proposal || proposal.ownerKey !== effectiveOwnerKey) {
+          return { success: false, error: "Proposal not found or owner mismatch" };
+        }
+        if (proposal.status !== "pending") {
+          return { success: false, error: "Proposal already resolved" };
+        }
+        if (accept) {
+          if (new Date(proposal.expiresAt).getTime() < Date.now()) {
+            return { success: false, error: "Proposal has expired" };
+          }
+          await createFact(
+            {
+              category: "about",
+              key: `habit_${proposal.actionType}`,
+              value: { summary: proposal.patternSummary, actionType: proposal.actionType },
+            },
+            sessionId,
+          );
+        }
+        const ok = resolveEpisodicProposal(proposalId, effectiveOwnerKey, accept);
+        if (!ok) return { success: false, error: "Proposal not found, already resolved, expired, or owner mismatch" };
+        if (ownerKey) logTrustAction(effectiveOwnerKey, "confirm_episodic_pattern",
+          accept ? "Accepted" : "Rejected", proposalId);
+        return { success: true, proposalId, accepted: accept };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    },
+  }),
+
   save_memory: tool({
     description:
       "Save a meta-memory about the user or conversation pattern. Use for observations, preferences, insights, or patterns you notice that aren't individual facts but are useful for future interactions. Examples: 'User prefers concise responses', 'User is excited about AI projects', 'User tends to downplay achievements'.",
@@ -1598,6 +1726,9 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
       case "reorder_sections": return "reordered sections";
       case "move_section": return `moved ${args.sectionId} → ${args.targetSlot}`;
       case "request_publish": return `publish ${args.username}`;
+      case "record_event": return `event ${args.actionType}`;
+      case "recall_episodes": return `recall ${args.timeframe}${args.keywords ? ` "${args.keywords}"` : ""}`;
+      case "confirm_episodic_pattern": return `${args.accept ? "accepted" : "rejected"} pattern ${args.proposalId}`;
       default: return toolName;
     }
   }
