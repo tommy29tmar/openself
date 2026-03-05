@@ -468,6 +468,7 @@ system prompt, mode selection, and UI behavior.
 - `has_archivable_facts` — facts older than 90 days with low confidence (detected in `active_stale` only — suggest archiving)
 - `has_recent_import` — connector import processed in the last 24h (detected in returning/active states — acknowledge import and prompt gap review)
 - `has_pending_soul_proposals` — pending soul change proposals await user review (all states including `first_visit`; detected post-Circuit-A in `assembleBootstrapPayload` so same-turn auto-created proposals are captured; surfaced via natural conversation, resolved via `review_soul_proposal` tool)
+- `has_sparse_profile` — publishable fact count < 10 (threshold: `SPARSE_PROFILE_FACT_THRESHOLD`); orthogonal to journey state; keeps AI in data-collection mode regardless of elapsed time since last publish (eligible in `returning_no_page`, `draft_ready`, `active_fresh`, `active_stale`; incompatible with `has_archivable_facts`, `has_recent_import`, `has_thin_sections`)
 
 **Expertise Level** — based on distinct session count:
 
@@ -540,6 +541,7 @@ When situations are detected by the bootstrap layer, targeted directives are inj
 - `has_archivable_facts` — `active_stale` only — suggest archiving facts older than 90 days with low confidence
 - `has_recent_import` — returning/active states only — acknowledge the connector import, prompt the user to review any gaps
 - `has_pending_soul_proposals` — all states including `first_visit` — bring up the pending soul change proposal naturally in conversation; if user agrees call `review_soul_proposal` with `accept: true`, if disagrees call with `accept: false`; overlay keys capped at 5, all user-derived strings sanitized (control chars stripped, single-line enforced)
+- `has_sparse_profile` — `returning_no_page`/`draft_ready`/`active_fresh`/`active_stale` — hard data-collection override: "MANDATORY: do NOT redirect to publishing, ask ONE focused question to fill a missing area." Fires when publishable facts < 10 regardless of journey state. Priority 1 (highest); wins over `has_archivable_facts` (p4), `has_recent_import` (p2), `has_thin_sections` (p3) via incompatibility resolution. Exception: user may override by explicitly requesting to publish.
 
 **Expertise Calibration:**
 - `novice` — Explain features, use step-by-step guidance
