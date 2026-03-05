@@ -467,6 +467,7 @@ system prompt, mode selection, and UI behavior.
 - `has_soul` — active soul profile exists
 - `has_archivable_facts` — facts older than 90 days with low confidence (detected in `active_stale` only — suggest archiving)
 - `has_recent_import` — connector import processed in the last 24h (detected in returning/active states — acknowledge import and prompt gap review)
+- `has_pending_soul_proposals` — pending soul change proposals await user review (all states including `first_visit`; detected post-Circuit-A in `assembleBootstrapPayload` so same-turn auto-created proposals are captured; surfaced via natural conversation, resolved via `review_soul_proposal` tool)
 
 **Expertise Level** — based on distinct session count:
 
@@ -481,7 +482,8 @@ Assembled by `assembleBootstrapPayload()` and exposed via `GET /api/chat/bootstr
 Contains all detection results plus derived data (userName, lastSeenDaysAgo,
 publishedUsername, pendingProposalCount, thinSections list, staleFacts list, language).
 Also includes `childCountMap: Map<string, number>` — pre-computed parent→child count map
-for relevance scoring, passed to `assembleContext()`.
+for relevance scoring, passed to `assembleContext()`. Optional `pendingSoulProposals?`
+field is set only when pending soul proposals exist (omitted otherwise to keep payload lean).
 
 **Soul proposal cooldown:**
 Soul proposals are gated by a 30-day owner-scoped cooldown. `getSoulProposalCooldownStatus()`
@@ -512,9 +514,11 @@ prompt policies composed from the bootstrap payload.
 - `incompatibleWith: Situation[]` — mutually exclusive situations (symmetric)
 - `build(ctx)` — produces the directive text for injection
 
-`getSituationDirectives()` filters by eligibility, sorts by priority, and resolves
-incompatibilities before composing. `validateDirectivePolicy()` runs at startup and in CI —
-enforces no self-conflicts, symmetric incompatibilities, and valid state references.
+`getSituationDirectives()` filters by eligibility (per-situation `eligibleStates`), sorts by
+priority, and resolves incompatibilities before composing. There is no blanket per-journey-state
+guard — eligibility is declared per situation in `DIRECTIVE_POLICY`. `validateDirectivePolicy()`
+runs at startup and in CI — enforces no self-conflicts, symmetric incompatibilities, and valid
+state references.
 
 **Per-Journey-State Policies:**
 
@@ -535,6 +539,7 @@ When situations are detected by the bootstrap layer, targeted directives are inj
 - `has_open_conflicts` — Mention conflicts, offer to resolve
 - `has_archivable_facts` — `active_stale` only — suggest archiving facts older than 90 days with low confidence
 - `has_recent_import` — returning/active states only — acknowledge the connector import, prompt the user to review any gaps
+- `has_pending_soul_proposals` — all states including `first_visit` — bring up the pending soul change proposal naturally in conversation; if user agrees call `review_soul_proposal` with `accept: true`, if disagrees call with `accept: false`; overlay keys capped at 5, all user-derived strings sanitized (control chars stripped, single-line enforced)
 
 **Expertise Calibration:**
 - `novice` — Explain features, use step-by-step guidance
