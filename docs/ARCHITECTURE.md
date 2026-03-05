@@ -350,7 +350,7 @@ calls `buildSystemPrompt()` with `first_visit` defaults.
 
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries. Includes: REGISTER (always informal — tu/du/vous non-formal, overridable by explicit user preference), OPENING BANS (list of banned filler openers such as "Certamente!", "Of course!"), EMOJI POLICY (only if user uses first, max 1/msg), LANGUAGE HANDLING (switch seamlessly without mentioning), RESPONSE LENGTH rules (1–2 sentences for confirmations, 3–5 max for explanations)
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
-3. **Tool policy** — 15 tools (see Section 4.3), when to call, required arguments, retry/error behavior
+3. **Tool policy** — 25 tools (see Section 4.3), when to call, required arguments, retry/error behavior
 4. **Fact schema reference** — Controlled by `schemaMode: "full" | "minimal" | "none"` (per journey state). `full` injects ~1800 tokens (complete category→value shape table). `minimal` injects ~300 tokens via `buildMinimalSchemaForOnboarding()`. `none` injects nothing. Per-state assignment: `first_visit=minimal`, `returning_no_page=full`, `draft_ready=none`, `active_fresh=none`, `active_stale=minimal`, `blocked=none`. Estimated ~1500–1800 token savings per turn in none/minimal states.
 4a. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
 5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation. Includes PATTERN VARIATION block: no same acknowledgment on consecutive turns, don't always close with a question, no 3 consecutive turns opening the same way, never start two consecutive messages with the same word.
@@ -469,6 +469,7 @@ system prompt, mode selection, and UI behavior.
 - `has_recent_import` — connector import processed in the last 24h (detected in returning/active states — acknowledge import and prompt gap review)
 - `has_pending_soul_proposals` — pending soul change proposals await user review (all states including `first_visit`; detected post-Circuit-A in `assembleBootstrapPayload` so same-turn auto-created proposals are captured; surfaced via natural conversation, resolved via `review_soul_proposal` tool)
 - `has_sparse_profile` — publishable fact count < 10 (threshold: `SPARSE_PROFILE_FACT_THRESHOLD`); orthogonal to journey state; keeps AI in data-collection mode regardless of elapsed time since last publish (eligible in `returning_no_page`, `draft_ready`, `active_fresh`, `active_stale`; incompatible with `has_archivable_facts`, `has_recent_import`, `has_thin_sections`)
+- `has_pending_episodic_patterns` — pending episodic pattern proposals from the Dream Cycle (consolidation worker) await user review; surfaced via natural conversation; resolved via `confirm_episodic_pattern` tool (all states except `first_visit` and `blocked`; priority 2; incompatible with none)
 
 **Expertise Level** — based on distinct session count:
 
@@ -542,6 +543,7 @@ When situations are detected by the bootstrap layer, targeted directives are inj
 - `has_recent_import` — returning/active states only — acknowledge the connector import, prompt the user to review any gaps
 - `has_pending_soul_proposals` — all states including `first_visit` — bring up the pending soul change proposal naturally in conversation; if user agrees call `review_soul_proposal` with `accept: true`, if disagrees call with `accept: false`; overlay keys capped at 5, all user-derived strings sanitized (control chars stripped, single-line enforced)
 - `has_sparse_profile` — `returning_no_page`/`draft_ready`/`active_fresh`/`active_stale` — hard data-collection override: "MANDATORY: do NOT redirect to publishing, ask ONE focused question to fill a missing area." Fires when publishable facts < 10 regardless of journey state. Priority 1 (highest); wins over `has_archivable_facts` (p4), `has_recent_import` (p2), `has_thin_sections` (p3) via incompatibility resolution. Exception: user may override by explicitly requesting to publish.
+- `has_pending_episodic_patterns` — all states except `first_visit` and `blocked` — bring up the pending episodic pattern proposal naturally; if user agrees call `confirm_episodic_pattern` with `accept: true`, if disagrees call with `accept: false`. Patterns detected by Dream Cycle worker (`consolidate_episodes` job). Proposals expire after 30 days; rejected action types enter 90-day cooldown. All user-derived strings sanitized.
 
 **Expertise Calibration:**
 - `novice` — Explain features, use step-by-step guidance
@@ -616,6 +618,11 @@ Cognitive management:
   save_memory(content, memoryType?, category?)        # Save agent observation (Tier 3)
   propose_soul_change(overlay, reason?)               # Propose identity profile update
   resolve_conflict(conflictId, resolution, mergedValue?)  # Resolve a fact contradiction
+
+Episodic memory:
+  record_event(actionType, eventAtHuman, summary, ...)  # Log a user activity event
+  recall_episodes(timeframe, actionType?, keywords?)    # Query past events with FTS5 search
+  confirm_episodic_pattern(proposalId, accept)          # Accept/reject Dream Cycle pattern proposal
 ```
 
 **Example of what happens in a single exchange:**
@@ -634,7 +641,7 @@ All invisible to the user. They just had a conversation.
 ### 4.3.1 Tool Call Reliability
 
 Two mechanisms ensure the agent calls tools correctly despite the growing complexity of
-15 tools × 18 section types × 14 fact categories:
+25 tools × 18 section types × 14 fact categories:
 
 1. **Structured fact schema reference** (prevention): The system prompt includes a
    category→value shape lookup table so the LLM has the exact structure for every
@@ -754,7 +761,7 @@ and 3 retry attempts with exponential backoff. The **heartbeat scheduler**
 (`src/lib/worker/scheduler.ts`) auto-enqueues heartbeat jobs for all active owners
 every 15 minutes, with catch-up logic and anti-overlap protection.
 
-**10 job handlers:**
+**11 job handlers:**
 - `page_synthesis` — Full page rebuild from facts
 - `memory_summary` — Tier 2 conversation summary generation
 - `heartbeat_light` — Daily lightweight maintenance
@@ -765,6 +772,7 @@ every 15 minutes, with catch-up logic and anti-overlap protection.
 - `page_regen` — Targeted section regeneration
 - `taxonomy_review` — Review pending category registrations
 - `session_compaction` — Async chat-to-memory distillation (see §4.5)
+- `consolidate_episodes` — Dream Cycle: detect recurring patterns in episodic events, create proposals (see §4.5.2)
 
 **DB bootstrap coordination:**
 
@@ -851,6 +859,45 @@ Design:
 - **Output** — `CompactionSummary` (topics, factsChanged, patternsObserved,
   sessionMood, keyTakeaways). Pattern observations are saved as `type="pattern"`
   agent memories (up to 2 per window).
+
+### 4.5.2 Episodic Memory (Tier 4)
+
+Append-only event ledger for user activities and life events. While Tiers 1-3 capture
+*what the agent knows*, Tier 4 captures *what happened* — timestamped, structured events
+that the agent can query and analyze.
+
+**Schema:** `episodic_events` table with FTS5 full-text search on `narrative_summary`
+and `raw_input`. Events are append-only with correction via `superseded_by` (old event
+points to its replacement). Soft-delete via `archived` flag for retention window cleanup.
+
+**Agent tools:**
+- `record_event` — logs a user activity (workout, meal, meeting, etc.) with ISO timestamp,
+  summary, and optional details JSON. Enqueues `consolidate_episodes` job.
+- `recall_episodes` — queries events by timeframe (last_24h, last_7_days, last_30_days,
+  last_90_days, all_time), optional `actionType` filter, optional `keywords` FTS5 search.
+  Returns up to 10 events + `countsByType` aggregate + `truncated` flag.
+- `confirm_episodic_pattern` — accepts or rejects a pattern proposal. On accept:
+  atomic transaction claims proposal, writes activity fact, triggers draft recomposition
+  via `acceptEpisodicProposalAsActivity`.
+
+**Dream Cycle** (`consolidate_episodes` worker job):
+Background consolidation that detects recurring patterns and surfaces them as proposals.
+1. Auto-expires stale pending proposals (julianday-safe)
+2. `checkPatternThresholds` — deterministic: ≥3 events in 60 days, most recent within 30 days,
+   not on cooldown, no pending/accepted proposal for same action_type
+3. `evaluatePatternWithLLM` — fast-tier LLM judges if pattern is "worthy" (voluntary,
+   recurring, meaningful — not commuting/groceries)
+4. Creates `episodic_pattern_proposals` with 30-day TTL
+5. Archives events older than 180 days
+
+**Proposal lifecycle:**
+- `pending` → `accepted` (creates activity fact, recomposes draft)
+- `pending` → `rejected` (90-day cooldown on action_type)
+- `pending` → `expired` (auto-expired by Dream Cycle or julianday guard)
+
+**FTS5 safety:** `sanitizeFtsKeywords` wraps each token in double quotes to prevent
+FTS5 syntax injection. Triggers maintain sync between `episodic_events` and
+`episodic_events_fts` (INSERT, UPDATE, DELETE — all idempotent via DELETE-before-INSERT).
 
 **Intelligent forgetting (decay + relevance signals):**
 
@@ -2968,7 +3015,8 @@ CREATE TABLE jobs (
     id TEXT PRIMARY KEY,
     job_type TEXT NOT NULL CHECK (job_type IN (
         'page_synthesis', 'memory_summary', 'heartbeat_light', 'heartbeat_deep',
-        'expire_proposals', 'soul_proposal', 'connector_sync', 'page_regen', 'taxonomy_review'
+        'expire_proposals', 'soul_proposal', 'connector_sync', 'page_regen',
+        'taxonomy_review', 'session_compaction', 'consolidate_episodes'
     )),
     owner_key TEXT,                  -- OwnerScope.cognitiveOwnerKey (NULL for global jobs)
     payload JSON NOT NULL,
@@ -3180,6 +3228,55 @@ CREATE TABLE section_copy_proposals (
 );
 CREATE INDEX idx_proposals_pending
   ON section_copy_proposals(owner_key, status);
+
+-- ============================================================
+-- Episodic Memory additions (migrations 0027-0028)
+-- ============================================================
+
+-- Episodic events — append-only activity ledger (Tier 4)
+CREATE TABLE episodic_events (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    source_message_id TEXT,
+    event_at_unix INTEGER NOT NULL,
+    event_at_human TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    narrative_summary TEXT NOT NULL,
+    raw_input TEXT NOT NULL,
+    details_json TEXT,
+    superseded_by TEXT REFERENCES episodic_events(id),
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_episodic_owner_time ON episodic_events(owner_key, event_at_unix)
+    WHERE superseded_by IS NULL AND archived = 0;
+
+-- FTS5 full-text search on episodic events
+CREATE VIRTUAL TABLE episodic_events_fts USING fts5(
+    narrative_summary, raw_input, content='episodic_events', content_rowid='rowid'
+);
+
+-- Episodic pattern proposals — Dream Cycle output
+CREATE TABLE episodic_pattern_proposals (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    pattern_summary TEXT NOT NULL,
+    event_count INTEGER NOT NULL,
+    last_event_at_unix INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'accepted', 'rejected', 'expired')),
+    expires_at TEXT NOT NULL,
+    resolved_at TEXT,
+    rejection_cooldown_until TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_episodic_proposals_owner ON episodic_pattern_proposals(owner_key, status)
+    WHERE status = 'pending';
+CREATE UNIQUE INDEX uq_episodic_proposals_active
+    ON episodic_pattern_proposals(owner_key, action_type)
+    WHERE status IN ('pending', 'accepted');
 ```
 
 ### 8.2 Storage
