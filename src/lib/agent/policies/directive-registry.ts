@@ -115,8 +115,8 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
   has_thin_sections: {
     priority: 3,
     tieBreak: "has_thin_sections",
-    // active_fresh EXCLUDED: its policy explicitly says "do not suggest improvements"
-    eligibleStates: ["returning_no_page", "draft_ready", "active_stale"],
+    // active_fresh included: policy now has HONEST ASSESSMENT RULE allowing thin-section feedback when asked
+    eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
     incompatibleWith: ["has_archivable_facts"],
     build: (ctx) => thinSectionsDirective(ctx.thinSections),
   },

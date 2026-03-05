@@ -62,9 +62,9 @@ describe("first_visit eligibility", () => {
 
 // ── Eligibility filtering ────────────────────────────────────────────────────
 describe("eligibility filtering", () => {
-  it("has_thin_sections is NOT injected in active_fresh", () => {
+  it("has_thin_sections IS injected in active_fresh (HONEST ASSESSMENT RULE enabled)", () => {
     const result = getSituationDirectives(["has_thin_sections"], "active_fresh", mockCtx);
-    expect(result).toBe("");
+    expect(result).toContain("THIN SECTIONS:");
   });
 
   it("has_thin_sections IS injected in active_stale", () => {

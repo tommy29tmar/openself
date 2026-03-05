@@ -28,10 +28,12 @@ I previously noticed patterns in how you express yourself and proposed an update
   communicationStyle: concise
 Reason: Auto-suggested from archetype
 
-Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
-If the user agrees, call review_soul_proposal with accept: true.
-If the user disagrees, call review_soul_proposal with accept: false.
-Do NOT pressure the user. If they seem uninterested, let it go."
+SURFACE REQUIRED: You MUST raise this within the first 1–3 turns of this session.
+Do not wait for a perfect opening. After greeting or a brief initial exchange, mention it:
+  e.g. "A proposito — ho notato qualcosa sul tuo modo di comunicare, volevo farti una proposta..."
+Note: this proposal may differ from or update the current soul profile — the user's response is the source of truth.
+If the user agrees → call review_soul_proposal with accept: true.
+If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further."
 `;
 
 exports[`snapshot matrix > [active_fresh] + [has_recent_import] 1`] = `
@@ -73,7 +75,13 @@ Prioritize facts that seem most likely to have changed (job roles, projects, cur
 Use update_fact if the user confirms a change, delete_fact if something is no longer relevant."
 `;
 
-exports[`snapshot matrix > [active_fresh] + [has_thin_sections] 1`] = `""`;
+exports[`snapshot matrix > [active_fresh] + [has_thin_sections] 1`] = `
+"SITUATION DIRECTIVES:
+THIN SECTIONS: The following page sections need more content: education, projects.
+When the conversation naturally allows, guide the user toward topics that would fill these sections.
+Pick the 1-2 most relevant thin sections based on conversation context — don't list all of them at once.
+Frame questions naturally, not as "I need data for your skills section.""
+`;
 
 exports[`snapshot matrix > [active_stale] + [has_archivable_facts] 1`] = `
 "SITUATION DIRECTIVES:
@@ -109,10 +117,12 @@ I previously noticed patterns in how you express yourself and proposed an update
   communicationStyle: concise
 Reason: Auto-suggested from archetype
 
-Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
-If the user agrees, call review_soul_proposal with accept: true.
-If the user disagrees, call review_soul_proposal with accept: false.
-Do NOT pressure the user. If they seem uninterested, let it go."
+SURFACE REQUIRED: You MUST raise this within the first 1–3 turns of this session.
+Do not wait for a perfect opening. After greeting or a brief initial exchange, mention it:
+  e.g. "A proposito — ho notato qualcosa sul tuo modo di comunicare, volevo farti una proposta..."
+Note: this proposal may differ from or update the current soul profile — the user's response is the source of truth.
+If the user agrees → call review_soul_proposal with accept: true.
+If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further."
 `;
 
 exports[`snapshot matrix > [active_stale] + [has_recent_import] 1`] = `
@@ -208,10 +218,12 @@ I previously noticed patterns in how you express yourself and proposed an update
   communicationStyle: concise
 Reason: Auto-suggested from archetype
 
-Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
-If the user agrees, call review_soul_proposal with accept: true.
-If the user disagrees, call review_soul_proposal with accept: false.
-Do NOT pressure the user. If they seem uninterested, let it go."
+SURFACE REQUIRED: You MUST raise this within the first 1–3 turns of this session.
+Do not wait for a perfect opening. After greeting or a brief initial exchange, mention it:
+  e.g. "A proposito — ho notato qualcosa sul tuo modo di comunicare, volevo farti una proposta..."
+Note: this proposal may differ from or update the current soul profile — the user's response is the source of truth.
+If the user agrees → call review_soul_proposal with accept: true.
+If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further."
 `;
 
 exports[`snapshot matrix > [draft_ready] + [has_recent_import] 1`] = `
@@ -271,10 +283,12 @@ I previously noticed patterns in how you express yourself and proposed an update
   communicationStyle: concise
 Reason: Auto-suggested from archetype
 
-Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
-If the user agrees, call review_soul_proposal with accept: true.
-If the user disagrees, call review_soul_proposal with accept: false.
-Do NOT pressure the user. If they seem uninterested, let it go."
+SURFACE REQUIRED: You MUST raise this within the first 1–3 turns of this session.
+Do not wait for a perfect opening. After greeting or a brief initial exchange, mention it:
+  e.g. "A proposito — ho notato qualcosa sul tuo modo di comunicare, volevo farti una proposta..."
+Note: this proposal may differ from or update the current soul profile — the user's response is the source of truth.
+If the user agrees → call review_soul_proposal with accept: true.
+If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further."
 `;
 
 exports[`snapshot matrix > [first_visit] + [has_recent_import] 1`] = `""`;
@@ -313,10 +327,12 @@ I previously noticed patterns in how you express yourself and proposed an update
   communicationStyle: concise
 Reason: Auto-suggested from archetype
 
-Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
-If the user agrees, call review_soul_proposal with accept: true.
-If the user disagrees, call review_soul_proposal with accept: false.
-Do NOT pressure the user. If they seem uninterested, let it go."
+SURFACE REQUIRED: You MUST raise this within the first 1–3 turns of this session.
+Do not wait for a perfect opening. After greeting or a brief initial exchange, mention it:
+  e.g. "A proposito — ho notato qualcosa sul tuo modo di comunicare, volevo farti una proposta..."
+Note: this proposal may differ from or update the current soul profile — the user's response is the source of truth.
+If the user agrees → call review_soul_proposal with accept: true.
+If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further."
 `;
 
 exports[`snapshot matrix > [returning_no_page] + [has_recent_import] 1`] = `

@@ -24,7 +24,7 @@ describe("firstVisitPolicy", () => {
     it("contains Phase B — Cluster exploration", () => {
       expect(policyEn).toContain("PHASE B");
       expect(policyEn).toMatch(/Cluster\s*exploration/i);
-      expect(policyEn).toMatch(/exchange.*3.*6|exchanges.*3.*6/i);
+      expect(policyEn).toMatch(/exchange.*3.*8|exchanges.*3.*8/i);
     });
 
     it("contains Phase C — condition-based generate + publish with unconditional name+role gate", () => {
@@ -83,8 +83,8 @@ describe("firstVisitPolicy", () => {
       expect(policyEn).not.toMatch(/never.*2\s*consecutive.*same\s*area/i);
     });
 
-    it("handles user-volunteered third area briefly", () => {
-      expect(policyEn).toMatch(/third\s*area|1\s*exchange.*before.*Phase\s*C/i);
+    it("handles user-volunteered fourth area briefly", () => {
+      expect(policyEn).toMatch(/fourth\s*area|1\s*exchange.*before.*Phase\s*C/i);
     });
 
     it("covers at least 3 exploration area types", () => {

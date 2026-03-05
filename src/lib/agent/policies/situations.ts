@@ -137,10 +137,12 @@ I previously noticed patterns in how you express yourself and proposed an update
 ${overlayLines || "  (no details available)"}${omittedNote}
 ${safeReason ? `Reason: ${safeReason}` : ""}
 
-Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
-If the user agrees, call review_soul_proposal with accept: true.
-If the user disagrees, call review_soul_proposal with accept: false.
-Do NOT pressure the user. If they seem uninterested, let it go.`;
+SURFACE REQUIRED: You MUST raise this within the first 1–3 turns of this session.
+Do not wait for a perfect opening. After greeting or a brief initial exchange, mention it:
+  e.g. "A proposito — ho notato qualcosa sul tuo modo di comunicare, volevo farti una proposta..."
+Note: this proposal may differ from or update the current soul profile — the user's response is the source of truth.
+If the user agrees → call review_soul_proposal with accept: true.
+If the user declines or seems uninterested → call review_soul_proposal with accept: false. Do NOT insist further.`;
 }
 
 export function recentImportDirective(report: ImportGapReport): string {
