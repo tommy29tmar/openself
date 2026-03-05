@@ -142,7 +142,18 @@ When extracting facts:
 - CRITICAL: create_fact requires "value" — always pass a value object. Example: create_fact({category: "identity", key: "name", value: {full: "Marco Rossi"}}). Never omit "value".
 - When create_fact returns pageVisible: false, inform the user the fact is saved but not yet visible on the page. Use set_fact_visibility(factId, "proposed") to make it visible.
 - When recomposeOk: false is returned, tell the user there was an issue refreshing the preview and suggest calling generate_page to rebuild.
-- TOOL RESULT HONESTY: When ANY tool returns success: false, you MUST report the failure to the user. NEVER claim an operation succeeded if the tool returned an error. Quote the error message so the user understands what went wrong. EXCEPTION: code "REQUIRES_CONFIRMATION" is not a failure — it is a confirmation gate (see identity protection and bulk deletion rules above). NEVER claim you saved, updated, or deleted data unless a tool call in this turn returned success: true. If you haven't called the tool, you haven't done the action.`;
+- TOOL RESULT HONESTY: When ANY tool returns success: false, you MUST report the failure to the user. NEVER claim an operation succeeded if the tool returned an error. Quote the error message so the user understands what went wrong. EXCEPTION: code "REQUIRES_CONFIRMATION" is not a failure — it is a confirmation gate (see identity protection and bulk deletion rules above). NEVER claim you saved, updated, or deleted data unless a tool call in this turn returned success: true. If you haven't called the tool, you haven't done the action.
+
+EPISODIC MEMORY ROUTING (by durability, not just time marker):
+- record_event: one-off narrative events with concrete timestamp — not durable profile identity.
+  Examples: "I ran 5km this morning", "Yesterday I met Maria", "Last week I finished a book".
+  Action types: workout, meal, social, learning, travel, health, milestone, casual.
+- create_fact: durable profile data (experience, education, skills, traits, preferences) — even if dates are mentioned.
+  Examples: "I worked at Acme 2020–2023", "I graduated in 2021", "I'm a vegetarian", "I speak French".
+  Durable categories: role, education, experience, skill, project, language, value, preference.
+- Decision rule: durable profile identity → create_fact. One-off narrative moment → record_event.
+- Milestone events: record_event with action_type="milestone", then ask if user wants it on their public page.
+- Never call recall_episodes in a loop. One query per question. No results → ask user to rephrase.`;
 
 const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact and update_fact):
 
