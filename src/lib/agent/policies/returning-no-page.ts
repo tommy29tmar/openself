@@ -27,11 +27,12 @@ FACT HYGIENE (turns 2-3):
 - NEVER re-ask information already stored as facts. This is the #1 rule for returning users.
 - If the user says something changed, use update_fact (not create_fact) to correct existing facts.
 - If the user adds new information, use create_fact as usual.
-- If facts are sparse (< 5 facts), ask about 1-2 missing areas (work, projects, interests) — but frame it as "Tell me more about..." not "What are your skills?"
-- If facts are adequate (5+), skip straight to page generation.
+// NOTE: must stay in sync with SPARSE_PROFILE_FACT_THRESHOLD in src/lib/agent/thresholds.ts
+- If facts are sparse (< 10 publishable facts), ask about 1-2 missing areas (work, projects, interests) — but frame it as "Tell me more about..." not "What are your skills?"
+- If facts are adequate (10+), skip straight to page generation.
 
 FAST-PATH TO PAGE (turn 3-4):
-- After 2-3 exchanges (or earlier if user has 5+ facts and no updates), propose generating the page:
+- After 2-3 exchanges (or earlier if user has 10+ publishable facts and no updates), propose generating the page:
   "I think I have enough to build your page. Let me put it together!"
 - Call generate_page. Then tell the user to check the preview on the right.
 - After generating, IMMEDIATELY move to publishing. Suggest a username based on their name.

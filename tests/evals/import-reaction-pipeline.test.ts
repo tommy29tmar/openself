@@ -46,11 +46,20 @@ describe("import reaction pipeline (unit-level)", () => {
     writeImportEvent(s1, 15);
 
     // 2. Create in-memory facts (simulates imported data)
+    // Note: must have >= SPARSE_PROFILE_FACT_THRESHOLD (10) publishable facts so that
+    // has_sparse_profile is NOT triggered and has_recent_import directive can surface.
     const facts = [
       makeFact({ category: "identity", key: "name", value: { name: "Marco" } }),
       makeFact({ category: "experience", key: "exp-1", value: { role: "CTO", company: "Startup", status: "current" } }),
+      makeFact({ category: "experience", key: "exp-2", value: { role: "Engineer", company: "Prev Co", status: "past" } }),
+      makeFact({ category: "experience", key: "exp-3", value: { role: "Intern", company: "Old Co", status: "past" } }),
       makeFact({ category: "education", key: "edu-1", value: { institution: "MIT" } }),
+      makeFact({ category: "education", key: "edu-2", value: { institution: "Harvard" } }),
       makeFact({ category: "skill", key: "sk-1", value: { name: "TypeScript" } }),
+      makeFact({ category: "skill", key: "sk-2", value: { name: "React" } }),
+      makeFact({ category: "skill", key: "sk-3", value: { name: "Node.js" } }),
+      makeFact({ category: "skill", key: "sk-4", value: { name: "PostgreSQL" } }),
+      makeFact({ category: "interest", key: "int-1", value: { name: "Open Source" } }),
     ];
 
     // 3. Detect situations (in-memory, no DB dependency for this check)

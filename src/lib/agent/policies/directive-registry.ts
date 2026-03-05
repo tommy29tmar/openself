@@ -10,6 +10,7 @@ import {
   archivableFactsDirective,
   recentImportDirective,
   pendingSoulProposalsDirective,
+  sparseProfileDirective,
 } from "@/lib/agent/policies/situations";
 import { logEvent } from "@/lib/services/event-service";
 
@@ -26,6 +27,7 @@ export type SituationContextMap = {
   has_name:                    Record<never, never>;
   has_soul:                    Record<never, never>;
   has_pending_soul_proposals:  Pick<SituationContext, "pendingSoulProposals">;
+  has_sparse_profile:          Pick<SituationContext, "thinSections">;
 };
 
 export type DirectiveEntry<S extends Situation> = {
@@ -70,6 +72,7 @@ export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContex
   has_soul:                   [],
   // pendingSoulProposals is optional — build returns "" when empty.
   has_pending_soul_proposals: [],
+  has_sparse_profile: ["thinSections"],
 };
 
 // ── getCtxFor ─────────────────────────────────────────────────────────────────
@@ -117,7 +120,7 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     tieBreak: "has_thin_sections",
     // active_fresh included: policy now has HONEST ASSESSMENT RULE allowing thin-section feedback when asked
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
-    incompatibleWith: ["has_archivable_facts"],
+    incompatibleWith: ["has_archivable_facts", "has_sparse_profile"],
     build: (ctx) => thinSectionsDirective(ctx.thinSections),
   },
   has_stale_facts: {
@@ -139,14 +142,14 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     tieBreak: "has_archivable_facts",
     // Only meaningful when page is stale and there's accumulated clutter
     eligibleStates: ["active_stale"],
-    incompatibleWith: ["has_thin_sections"],
+    incompatibleWith: ["has_thin_sections", "has_sparse_profile"],
     build: (ctx) => archivableFactsDirective(ctx.archivableFacts),
   },
   has_recent_import: {
-    priority: 1,
+    priority: 2,          // was 1; renumbered so sparse (p1) wins when both situations are active
     tieBreak: "has_recent_import",
     eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
-    incompatibleWith: [],
+    incompatibleWith: ["has_sparse_profile"],
     // importGapReport may be undefined when has_recent_import comes from detectSituations
     // (connector facts). Guard: skip directive if report not available.
     build: (ctx) => ctx.importGapReport ? recentImportDirective(ctx.importGapReport) : "",
@@ -168,6 +171,13 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     incompatibleWith: [],
     build: (ctx) => pendingSoulProposalsDirective(ctx.pendingSoulProposals ?? []),
   },
+  has_sparse_profile: {
+    priority: 1,
+    tieBreak: "has_sparse_profile",
+    eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
+    incompatibleWith: ["has_archivable_facts", "has_recent_import", "has_thin_sections"],  // symmetric; sparse (p1) wins all
+    build: (ctx) => sparseProfileDirective(ctx.thinSections),
+  },
 };
 
 function resolveIncompatibilities(
@@ -185,6 +195,14 @@ function resolveIncompatibilities(
 
       const winnerPriority = DIRECTIVE_POLICY[s].priority;
       const loserPriority = DIRECTIVE_POLICY[incompatible].priority;
+
+      if (winnerPriority > loserPriority) {
+        // Priority inversion: s (the alleged winner) actually has LOWER priority than the incompatible.
+        // This is a policy misconfiguration — validateDirectivePolicy should have caught this.
+        throw new DirectiveConflictError(
+          `[directive-registry] Priority inversion: ${s}(p=${winnerPriority}) lists ${incompatible}(p=${loserPriority}) as incompatible but ${incompatible} has higher priority — policy bug.`,
+        );
+      }
 
       // s wins (lower priority number = higher importance)
       const msg =

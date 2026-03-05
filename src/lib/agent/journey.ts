@@ -22,6 +22,7 @@ import type { AuthInfo } from "@/lib/agent/context";
 import { AUTH_MESSAGE_LIMIT } from "@/lib/constants";
 import { detectArchetypeFromSignals, refineArchetype, ARCHETYPE_STRATEGIES, type Archetype } from "@/lib/agent/archetypes";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
+import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +45,8 @@ export type Situation =
   | "has_soul"
   | "has_archivable_facts"
   | "has_recent_import"
-  | "has_pending_soul_proposals";
+  | "has_pending_soul_proposals"
+  | "has_sparse_profile";
 
 export type ExpertiseLevel = "novice" | "familiar" | "expert";
 
@@ -335,6 +337,9 @@ export function detectSituations(
 
   // Thin sections
   const publishable = opts?.publishableFacts ?? filterPublishableFacts(facts);
+  if (publishable.length < SPARSE_PROFILE_FACT_THRESHOLD) {
+    situations.push("has_sparse_profile");
+  }
   for (const sectionType of Object.keys(SECTION_FACT_CATEGORIES)) {
     const level = classifySectionRichness(publishable, sectionType);
     if (level === "thin" || level === "empty") {
