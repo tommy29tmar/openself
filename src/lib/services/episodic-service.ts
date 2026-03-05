@@ -1,6 +1,9 @@
 // src/lib/services/episodic-service.ts
 import { randomUUID } from "crypto";
 import { sqlite } from "@/lib/db";
+import { logEvent } from "@/lib/services/event-service";
+import { validateFactValue } from "@/lib/services/fact-validation";
+import { initialVisibility } from "@/lib/visibility/policy";
 
 export type EpisodicEventRow = {
   id: string; ownerKey: string; sessionId: string; sourceMessageId: string | null;
@@ -20,6 +23,11 @@ export type EpisodicProposalRow = {
   id: string; ownerKey: string; actionType: string; patternSummary: string;
   eventCount: number; lastEventAtUnix: number; status: string; expiresAt: string;
   resolvedAt: string | null; rejectionCooldownUntil: string | null; createdAt: string | null;
+};
+
+type AcceptProposalResult = {
+  factId: string;
+  factKey: string;
 };
 
 // --- Event CRUD ---
@@ -169,6 +177,8 @@ export function archiveOldEvents(ownerKey: string, cutoffUnix: number): number {
 
 const PROPOSAL_TTL_DAYS = 30;
 const REJECTION_COOLDOWN_DAYS = 90;
+const ACCEPTED_PATTERN_CATEGORY = "activity";
+const ACCEPTED_PATTERN_FREQUENCY = "regularly";
 
 export function insertEpisodicProposal(input: {
   ownerKey: string; actionType: string; patternSummary: string;
@@ -220,6 +230,115 @@ export function resolveEpisodicProposal(id: string, ownerKey: string, accept: bo
   return result.changes === 1;
 }
 
+export function acceptEpisodicProposalAsActivity(
+  id: string,
+  ownerKey: string,
+  sessionId: string,
+  profileId: string = sessionId,
+): AcceptProposalResult | null {
+  const now = new Date().toISOString();
+  const visibility = initialVisibility({
+    mode: "onboarding",
+    category: ACCEPTED_PATTERN_CATEGORY,
+    confidence: 1.0,
+  });
+
+  const result = sqlite.transaction(() => {
+    const proposal = sqlite.prepare(`
+      SELECT action_type, pattern_summary
+      FROM episodic_pattern_proposals
+      WHERE id = ? AND owner_key = ? AND status = 'pending'
+        AND julianday(expires_at) >= julianday('now')
+    `).get(id, ownerKey) as { action_type: string; pattern_summary: string } | undefined;
+
+    if (!proposal) return null;
+
+    const factKey = `habit_${proposal.action_type}`;
+    const factValue = buildAcceptedActivityValue(proposal.action_type, proposal.pattern_summary);
+    validateFactValue(ACCEPTED_PATTERN_CATEGORY, factKey, factValue);
+
+    const claim = sqlite.prepare(`
+      UPDATE episodic_pattern_proposals
+      SET status = 'accepted', resolved_at = datetime('now'), rejection_cooldown_until = NULL
+      WHERE id = ? AND owner_key = ? AND status = 'pending'
+        AND julianday(expires_at) >= julianday('now')
+    `).run(id, ownerKey);
+
+    if (claim.changes !== 1) return null;
+
+    const existing = sqlite.prepare(`
+      SELECT id, sort_order
+      FROM facts
+      WHERE session_id = ? AND category = ? AND key = ?
+    `).get(sessionId, ACCEPTED_PATTERN_CATEGORY, factKey) as
+      | { id: string; sort_order: number | null }
+      | undefined;
+
+    const maxSortRow = sqlite.prepare(`
+      SELECT MAX(sort_order) as max_sort
+      FROM facts
+      WHERE session_id = ? AND category = ? AND archived_at IS NULL
+    `).get(sessionId, ACCEPTED_PATTERN_CATEGORY) as { max_sort: number | null } | undefined;
+
+    const factId = existing?.id ?? randomUUID();
+    const sortOrder = existing?.sort_order ?? ((maxSortRow?.max_sort ?? -1) + 1);
+
+    sqlite.prepare(`
+      INSERT INTO facts
+        (id, session_id, profile_id, category, key, value, source, confidence, visibility,
+         created_at, updated_at, sort_order, archived_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+      ON CONFLICT(session_id, category, key) DO UPDATE SET
+        value = excluded.value,
+        source = excluded.source,
+        confidence = excluded.confidence,
+        profile_id = excluded.profile_id,
+        visibility = CASE
+          WHEN facts.visibility = 'private' THEN excluded.visibility
+          ELSE facts.visibility
+        END,
+        updated_at = excluded.updated_at,
+        archived_at = NULL
+    `).run(
+      factId,
+      sessionId,
+      profileId,
+      ACCEPTED_PATTERN_CATEGORY,
+      factKey,
+      JSON.stringify(factValue),
+      "chat",
+      1.0,
+      visibility,
+      now,
+      now,
+      sortOrder,
+    );
+
+    return { factId, factKey };
+  })();
+
+  if (!result) return null;
+
+  try {
+    logEvent({
+      eventType: "fact_created",
+      actor: "assistant",
+      payload: {
+        category: ACCEPTED_PATTERN_CATEGORY,
+        key: result.factKey,
+        normalization: "known",
+        rawCategory: ACCEPTED_PATTERN_CATEGORY,
+      },
+      entityType: "fact",
+      entityId: result.factId,
+    });
+  } catch {
+    // Audit failure must not roll back an accepted proposal.
+  }
+
+  return result;
+}
+
 export function isActionTypeOnCooldown(ownerKey: string, actionType: string): boolean {
   const row = sqlite.prepare(`
     SELECT rejection_cooldown_until FROM episodic_pattern_proposals
@@ -255,4 +374,22 @@ function toProposalRow(r: any): EpisodicProposalRow {
     expiresAt: r.expires_at, resolvedAt: r.resolved_at,
     rejectionCooldownUntil: r.rejection_cooldown_until, createdAt: r.created_at,
   };
+}
+
+function buildAcceptedActivityValue(actionType: string, patternSummary: string): Record<string, unknown> {
+  const value: Record<string, unknown> = {
+    name: humanizeActionType(actionType),
+    frequency: ACCEPTED_PATTERN_FREQUENCY,
+    description: patternSummary,
+  };
+  if (actionType === "workout") value.activityType = "sport";
+  return value;
+}
+
+function humanizeActionType(actionType: string): string {
+  return actionType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

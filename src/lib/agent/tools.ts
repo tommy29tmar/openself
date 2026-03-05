@@ -29,7 +29,7 @@ import { proposeSoulChange, reviewProposal, getActiveSoul, type SoulOverlay } fr
 import { resolveConflict } from "@/lib/services/conflict-service";
 import {
   insertEvent, queryEvents, countEventsByType, countKeywordEvents,
-  resolveEpisodicProposal, getEpisodicProposalById,
+  resolveEpisodicProposal, getEpisodicProposalById, acceptEpisodicProposalAsActivity,
 } from "@/lib/services/episodic-service";
 import { enqueueJob } from "@/lib/worker/index";
 import { FactValidationError } from "@/lib/services/fact-validation";
@@ -1147,7 +1147,7 @@ Do NOT call in a loop.`,
 
   confirm_episodic_pattern: tool({
     description: `Accept or reject a pending episodic pattern proposal from the Dream Cycle.
-On accept: habit fact created FIRST (atomic order), then proposal marked accepted.`,
+	On accept: proposal claim, activity fact write, and draft recomposition stay consistent.`,
     parameters: z.object({
       proposalId: z.string(),
       accept: z.boolean(),
@@ -1161,24 +1161,27 @@ On accept: habit fact created FIRST (atomic order), then proposal marked accepte
         if (proposal.status !== "pending") {
           return { success: false, error: "Proposal already resolved" };
         }
+        let factId: string | undefined;
+        let recomposeOk = true;
         if (accept) {
-          if (new Date(proposal.expiresAt).getTime() < Date.now()) {
-            return { success: false, error: "Proposal has expired" };
-          }
-          await createFact(
-            {
-              category: "about",
-              key: `habit_${proposal.actionType}`,
-              value: { summary: proposal.patternSummary, actionType: proposal.actionType },
-            },
+          const accepted = acceptEpisodicProposalAsActivity(
+            proposalId,
+            effectiveOwnerKey,
             sessionId,
+            effectiveOwnerKey,
           );
+          if (!accepted) {
+            return { success: false, error: "Proposal not found, already resolved, expired, or owner mismatch" };
+          }
+          factId = accepted.factId;
+          try { recomposeAfterMutation(); } catch { recomposeOk = false; }
+        } else {
+          const ok = resolveEpisodicProposal(proposalId, effectiveOwnerKey, accept);
+          if (!ok) return { success: false, error: "Proposal not found, already resolved, expired, or owner mismatch" };
         }
-        const ok = resolveEpisodicProposal(proposalId, effectiveOwnerKey, accept);
-        if (!ok) return { success: false, error: "Proposal not found, already resolved, expired, or owner mismatch" };
         if (ownerKey) logTrustAction(effectiveOwnerKey, "confirm_episodic_pattern",
           accept ? "Accepted" : "Rejected", proposalId);
-        return { success: true, proposalId, accepted: accept };
+        return { success: true, proposalId, accepted: accept, factId, recomposeOk };
       } catch (err) {
         return { success: false, error: String(err) };
       }

@@ -569,7 +569,9 @@ export const episodicPatternProposals = sqliteTable(
     createdAt: text("created_at").default(sql`(datetime('now'))`),
   },
   (table) => [
-    index("idx_episodic_proposals_owner").on(table.ownerKey, table.status),
+    index("idx_episodic_proposals_owner")
+      .on(table.ownerKey, table.status)
+      .where(sql`${table.status} = 'pending'`),
     uniqueIndex("uq_episodic_proposals_active")
       .on(table.ownerKey, table.actionType)
       .where(sql`${table.status} IN ('pending', 'accepted')`),

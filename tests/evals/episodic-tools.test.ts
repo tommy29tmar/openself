@@ -108,21 +108,35 @@ describe("recall_episodes tool", () => {
 });
 
 describe("confirm_episodic_pattern tool", () => {
-  it("accepts proposal, marks accepted, creates habit fact with object value", async () => {
+  it("accepts proposal, marks accepted, creates activity fact, and recomposes draft", async () => {
     const { insertEpisodicProposal } = await import("@/lib/services/episodic-service");
-    const id = insertEpisodicProposal({
-      ownerKey: "owner1", actionType: "workout", patternSummary: "runs 3x/week", eventCount: 5, lastEventAtUnix: 9999,
-    });
-    const tools = await makeTools();
-    const result = await (tools.confirm_episodic_pattern as any).execute({ proposalId: id, accept: true }, { messages: [] });
-    expect(result.success).toBe(true);
-    const propRow = sqlite.prepare("SELECT status FROM episodic_pattern_proposals WHERE id = ?").get(id) as any;
-    expect(propRow.status).toBe("accepted");
-    const factRow = sqlite.prepare("SELECT value FROM facts WHERE key = 'habit_workout'").get() as any;
-    expect(factRow).toBeTruthy();
-    const v = JSON.parse(factRow.value);
-    expect(v.actionType).toBe("workout");
-    expect(v.summary).toContain("runs");
+    const { getDraft } = await import("@/lib/services/page-service");
+    const prevExtended = process.env.EXTENDED_SECTIONS;
+    process.env.EXTENDED_SECTIONS = "true";
+    try {
+      const id = insertEpisodicProposal({
+        ownerKey: "owner1", actionType: "workout", patternSummary: "runs 3x/week", eventCount: 5, lastEventAtUnix: 9999,
+      });
+      const tools = await makeTools();
+      const result = await (tools.confirm_episodic_pattern as any).execute({ proposalId: id, accept: true }, { messages: [] });
+      expect(result.success).toBe(true);
+      expect(result.recomposeOk).toBe(true);
+      const propRow = sqlite.prepare("SELECT status FROM episodic_pattern_proposals WHERE id = ?").get(id) as any;
+      expect(propRow.status).toBe("accepted");
+      const factRow = sqlite.prepare("SELECT category, value FROM facts WHERE key = 'habit_workout'").get() as any;
+      expect(factRow).toBeTruthy();
+      expect(factRow.category).toBe("activity");
+      const v = JSON.parse(factRow.value);
+      expect(v.name).toBe("Workout");
+      expect(v.description).toContain("runs");
+      expect(v.frequency).toBe("regularly");
+
+      const draft = getDraft("sess1");
+      const activities = draft?.config.sections.find((section) => section.type === "activities");
+      expect(activities).toBeTruthy();
+    } finally {
+      process.env.EXTENDED_SECTIONS = prevExtended;
+    }
   });
 
   it("reject does not create a fact", async () => {
@@ -143,7 +157,7 @@ describe("confirm_episodic_pattern tool", () => {
     expect(propRow.status).toBe("pending");
   });
 
-  it("R8-1: expired proposal returns failure (expiry pre-check before createFact)", async () => {
+  it("R8-1: expired proposal returns failure without creating a fact", async () => {
     const { insertEpisodicProposal } = await import("@/lib/services/episodic-service");
     const id = insertEpisodicProposal({ ownerKey: "owner1", actionType: "workout", patternSummary: "runs", eventCount: 5, lastEventAtUnix: 9999 });
     sqlite.prepare("UPDATE episodic_pattern_proposals SET expires_at = ? WHERE id = ?")
