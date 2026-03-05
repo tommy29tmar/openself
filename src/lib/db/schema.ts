@@ -521,3 +521,55 @@ export const sectionCopyProposals = sqliteTable("section_copy_proposals", {
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   reviewedAt: text("reviewed_at"),
 });
+
+// -- Episodic Events (Tier 4 — Life Logging)
+export const episodicEvents = sqliteTable(
+  "episodic_events",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    sessionId: text("session_id").notNull(),
+    sourceMessageId: text("source_message_id"),
+    deviceId: text("device_id"),
+    eventAtUnix: integer("event_at_unix").notNull(),
+    eventAtHuman: text("event_at_human").notNull(),
+    actionType: text("action_type").notNull(),
+    narrativeSummary: text("narrative_summary").notNull(),
+    rawInput: text("raw_input"),
+    entities: text("entities").default("[]"),
+    visibility: text("visibility").notNull().default("private"),
+    confidence: real("confidence").notNull().default(1.0),
+    supersededBy: text("superseded_by"),
+    archived: integer("archived").notNull().default(0),
+    archivedAt: text("archived_at"),
+    createdAt: text("created_at").default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("idx_episodic_owner_time").on(table.ownerKey, table.eventAtUnix),
+    index("idx_episodic_session").on(table.sessionId),
+  ],
+);
+
+// -- Episodic Pattern Proposals (Dream Cycle output)
+export const episodicPatternProposals = sqliteTable(
+  "episodic_pattern_proposals",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    actionType: text("action_type").notNull(),
+    patternSummary: text("pattern_summary").notNull(),
+    eventCount: integer("event_count").notNull().default(0),
+    lastEventAtUnix: integer("last_event_at_unix").notNull(),
+    status: text("status").notNull().default("pending"),
+    expiresAt: text("expires_at").notNull(),
+    resolvedAt: text("resolved_at"),
+    rejectionCooldownUntil: text("rejection_cooldown_until"),
+    createdAt: text("created_at").default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("idx_episodic_proposals_owner").on(table.ownerKey, table.status),
+    uniqueIndex("uq_episodic_proposals_active")
+      .on(table.ownerKey, table.actionType)
+      .where(sql`${table.status} IN ('pending', 'accepted')`),
+  ],
+);
