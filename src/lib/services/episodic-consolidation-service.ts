@@ -1,6 +1,6 @@
 // src/lib/services/episodic-consolidation-service.ts
 import { sqlite } from "@/lib/db";
-import { insertEpisodicProposal, isActionTypeOnCooldown, archiveOldEvents } from "@/lib/services/episodic-service";
+import { insertEpisodicProposal, isActionTypeOnCooldown } from "@/lib/services/episodic-service";
 import { generateText } from "ai";
 import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";

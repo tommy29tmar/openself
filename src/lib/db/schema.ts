@@ -545,7 +545,9 @@ export const episodicEvents = sqliteTable(
     createdAt: text("created_at").default(sql`(datetime('now'))`),
   },
   (table) => [
-    index("idx_episodic_owner_time").on(table.ownerKey, table.eventAtUnix),
+    index("idx_episodic_owner_time")
+      .on(table.ownerKey, table.eventAtUnix)
+      .where(sql`${table.supersededBy} IS NULL AND ${table.archived} = 0`),
     index("idx_episodic_session").on(table.sessionId),
   ],
 );
