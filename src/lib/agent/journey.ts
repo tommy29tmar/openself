@@ -316,7 +316,7 @@ export function getOrDetectJourneyState(
 
 /**
  * Explicitly transition the pinned journey state.
- * Called by tools (generate_page, request_publish) on milestone events.
+ * Called by tools/publish flows on milestone events.
  */
 export function updateJourneyStatePin(
   anchorSessionId: string,

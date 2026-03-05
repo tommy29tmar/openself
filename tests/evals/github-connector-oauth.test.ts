@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 
 // --- Mocks ---
 
-const mockResolveOwnerScope = vi.fn();
+const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockCreateConnector = vi.fn();
 const mockEnqueueJob = vi.fn();
 
@@ -24,8 +24,9 @@ vi.mock("arctic", () => {
   };
 });
 
-vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
+vi.mock("@/lib/connectors/route-auth", () => ({
+  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+    mockResolveAuthenticatedConnectorScope(...args),
 }));
 
 vi.mock("@/lib/connectors/connector-service", () => ({
@@ -68,7 +69,7 @@ describe("GET /api/connectors/github/connect", () => {
   });
 
   it("returns 403 when no session", async () => {
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(null);
 
     const { GET } = await import("@/app/api/connectors/github/connect/route");
     const req = new NextRequest(new Request("http://localhost/api/connectors/github/connect"));
@@ -80,7 +81,7 @@ describe("GET /api/connectors/github/connect", () => {
   });
 
   it("returns 404 when GitHub OAuth env vars not configured", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     delete process.env.GITHUB_CLIENT_ID;
     delete process.env.GITHUB_CLIENT_SECRET;
 
@@ -94,7 +95,7 @@ describe("GET /api/connectors/github/connect", () => {
   });
 
   it("returns 404 when NEXT_PUBLIC_BASE_URL not set", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     delete process.env.NEXT_PUBLIC_BASE_URL;
 
     const { GET } = await import("@/app/api/connectors/github/connect/route");
@@ -107,7 +108,7 @@ describe("GET /api/connectors/github/connect", () => {
   });
 
   it("redirects to GitHub with read:user scope and connector callback URL", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/connectors/github/connect/route");
     const req = new NextRequest(new Request("http://localhost/api/connectors/github/connect"));
@@ -119,7 +120,7 @@ describe("GET /api/connectors/github/connect", () => {
   });
 
   it("sets gh_connector_state cookie on redirect", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/connectors/github/connect/route");
     const req = new NextRequest(new Request("http://localhost/api/connectors/github/connect"));
@@ -145,7 +146,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("redirects to /builder?error=auth_required when no session", async () => {
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(null);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -160,7 +161,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("redirects to /builder?error=invalid_state when state mismatch", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -177,7 +178,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("redirects to /builder?error=invalid_state when code is missing", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -193,7 +194,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("redirects to /builder?error=invalid_state when stored state cookie is missing", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -207,7 +208,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("exchanges code, creates connector, and enqueues sync job on success", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -228,7 +229,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("redirects to /builder?connector=github_connected on success", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -245,7 +246,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("clears gh_connector_state cookie on success", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");
     const req = new NextRequest(
@@ -262,7 +263,7 @@ describe("GET /api/auth/github/callback/connector", () => {
   });
 
   it("redirects to /builder?error=github_connect_failed on token exchange error", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockValidateAuthorizationCode.mockRejectedValueOnce(new Error("Token exchange failed"));
 
     const { GET } = await import("@/app/api/auth/github/callback/connector/route");

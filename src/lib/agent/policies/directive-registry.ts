@@ -122,8 +122,9 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
   has_thin_sections: {
     priority: 3,
     tieBreak: "has_thin_sections",
-    // active_fresh included: policy now has HONEST ASSESSMENT RULE allowing thin-section feedback when asked
-    eligibleStates: ["returning_no_page", "draft_ready", "active_fresh", "active_stale"],
+    // active_fresh excluded: the quick-update policy should stay reactive.
+    // Honest assessment for explicit feedback requests is handled by activeFreshPolicy itself.
+    eligibleStates: ["returning_no_page", "draft_ready", "active_stale"],
     incompatibleWith: ["has_archivable_facts", "has_sparse_profile"],
     build: (ctx) => thinSectionsDirective(ctx.thinSections),
   },

@@ -35,7 +35,11 @@ const handlers: Record<string, JobHandler> = {
 
   memory_summary: async (payload) => {
     const ownerKey = payload.ownerKey as string;
-    const messageKeys = (payload.messageKeys as string[]) ?? [ownerKey];
+    const scope = resolveOwnerScopeForWorker(ownerKey);
+    const payloadKeys = Array.isArray(payload.messageKeys)
+      ? payload.messageKeys.filter((k): k is string => typeof k === "string" && k.length > 0)
+      : [];
+    const messageKeys = Array.from(new Set([...scope.knowledgeReadKeys, ...payloadKeys]));
     await generateSummary(ownerKey, messageKeys);
   },
 
@@ -265,10 +269,10 @@ export function enqueueJob(
   jobType: string,
   payload: Record<string, unknown>,
   runAfter?: Date,
-): string {
+): string | null {
   const id = randomUUID();
 
-  db.insert(jobs)
+  const result = db.insert(jobs)
     .values({
       id,
       jobType,
@@ -280,5 +284,5 @@ export function enqueueJob(
     .onConflictDoNothing() // dedup via unique index on (job_type, ownerKey) WHERE queued/running
     .run();
 
-  return id;
+  return result.changes === 1 ? id : null;
 }

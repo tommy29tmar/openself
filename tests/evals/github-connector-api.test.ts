@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
-const mockResolveOwnerScope = vi.fn();
+const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
 const mockEnqueueJob = vi.fn();
 
-vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
+vi.mock("@/lib/connectors/route-auth", () => ({
+  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+    mockResolveAuthenticatedConnectorScope(...args),
 }));
 
 vi.mock("@/lib/connectors/connector-service", () => ({
@@ -51,7 +52,7 @@ describe("POST /api/connectors/github/sync", () => {
   });
 
   it("returns 403 when not authenticated", async () => {
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(null);
 
     const { POST } = await import("@/app/api/connectors/github/sync/route");
     const req = new Request("http://localhost/api/connectors/github/sync", { method: "POST" });
@@ -63,7 +64,7 @@ describe("POST /api/connectors/github/sync", () => {
   });
 
   it("returns 404 when no connected GitHub connector", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([]);
 
     const { POST } = await import("@/app/api/connectors/github/sync/route");
@@ -76,7 +77,7 @@ describe("POST /api/connectors/github/sync", () => {
   });
 
   it("returns 200 and enqueues sync job when GitHub is connected", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([
       { id: "c1", connectorType: "github", status: "connected", enabled: true },
     ]);
@@ -92,7 +93,7 @@ describe("POST /api/connectors/github/sync", () => {
   });
 
   it("only matches 'connected' status — not 'error', 'disconnected', or 'paused'", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
 
     for (const status of ["error", "disconnected", "paused"]) {
       mockGetConnectorStatus.mockReturnValue([
@@ -111,7 +112,7 @@ describe("POST /api/connectors/github/sync", () => {
   });
 
   it("returns 409 ALREADY_SYNCING when a sync job is pending", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([
       { id: "c1", connectorType: "github", status: "connected", enabled: true },
     ]);
@@ -129,7 +130,7 @@ describe("POST /api/connectors/github/sync", () => {
   });
 
   it("returns 429 RATE_LIMITED when synced too recently", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([
       { id: "c1", connectorType: "github", status: "connected", enabled: true, lastSync: new Date().toISOString() },
     ]);

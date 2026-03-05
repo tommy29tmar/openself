@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
-import { resolveOwnerScope } from "@/lib/auth/session";
-import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { disconnectConnector, getConnectorById } from "@/lib/connectors/connector-service";
 import { connectorError } from "@/lib/connectors/api-errors";
+import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const scope = resolveOwnerScope(req);
-
-  if (isMultiUserEnabled() && !scope) {
+  const scope = resolveAuthenticatedConnectorScope(req);
+  if (!scope) {
     return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }
 
   const { id } = await params;
-  const ownerKey = scope?.cognitiveOwnerKey ?? "__default__";
+  const ownerKey = scope.cognitiveOwnerKey;
 
   try {
     // Verify connector exists and belongs to this owner

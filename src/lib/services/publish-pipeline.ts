@@ -27,6 +27,7 @@ import {
   projectPublishableConfig,
 } from "@/lib/services/page-projection";
 import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
+import { updateJourneyStatePin } from "@/lib/agent/journey";
 
 export type PublishMode = "register" | "publish";
 
@@ -36,6 +37,10 @@ export type PrepareAndPublishOptions = {
   expectedHash?: string;
   /** If set, claim profile.username inside the publish transaction (atomic). */
   claimProfileId?: string;
+  /** Cognitive/profile-scoped owner key for personalization + profile-aware projection. */
+  ownerKey?: string;
+  /** Legacy fact-table read scope across anchor + rotated sessions. */
+  readKeys?: string[];
 };
 
 export type PublishResult = {
@@ -61,10 +66,11 @@ export async function prepareAndPublish(
   sessionId: string,
   opts: PrepareAndPublishOptions,
 ): Promise<PublishResult> {
-  const { mode, expectedHash } = opts;
+  const { mode, expectedHash, ownerKey, readKeys } = opts;
+  const factOwnerKey = ownerKey ?? sessionId;
 
   // Step A: Validate — use shared filter
-  const facts = getActiveFacts(sessionId);
+  const facts = getActiveFacts(factOwnerKey, readKeys);
   if (facts.length === 0) {
     throw new PublishError("No facts to publish", "NO_FACTS", 400);
   }
@@ -107,7 +113,7 @@ export async function prepareAndPublish(
     : undefined;
 
   const session = getSession(sessionId);
-  const profileId = session?.profileId ?? sessionId;
+  const profileId = ownerKey ?? session?.profileId ?? sessionId;
 
   const canonicalConfig = projectPublishableConfig(
     facts,
@@ -177,8 +183,12 @@ export async function prepareAndPublish(
   }
 
   // Merge personalized copy (hash-guarded, stale → deterministic fallback)
-  const ownerKey = sessionId;
-  const personalizedConfig = mergeActiveSectionCopy(canonicalConfig, ownerKey, factLang);
+  const personalizedConfig = mergeActiveSectionCopy(
+    canonicalConfig,
+    profileId,
+    factLang,
+    readKeys,
+  );
 
   // Step C: Translate (async, OUTSIDE transaction — LLM call can't be in SQLite txn)
   const renderedConfig = normalizeConfigForWrite(
@@ -194,7 +204,7 @@ export async function prepareAndPublish(
     // Promote all proposed publishable facts to public
     for (const fact of publishable) {
       if (fact.visibility === "proposed") {
-        setFactVisibility(fact.id, "public", "user", sessionId);
+        setFactVisibility(fact.id, "public", "user", sessionId, readKeys);
       }
     }
 
@@ -217,6 +227,10 @@ export async function prepareAndPublish(
     }
     throw err;
   }
+
+  // A successful publish is always an active_fresh milestone, in both single-user
+  // and multi-user flows (register + publish both funnel through this pipeline).
+  updateJourneyStatePin(sessionId, "active_fresh");
 
   return {
     success: true,

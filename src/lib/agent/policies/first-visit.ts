@@ -7,6 +7,8 @@
  * - Phase C: Generate + publish (turns 7-8) — build page, propose publish
  */
 
+import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
+
 export function firstVisitPolicy(language: string): string {
   return `MODE: FIRST VISIT (ONBOARDING)
 You are meeting this person for the first time. Your goal is to learn enough about them to build a beautiful personal page within ~8 conversational turns.
@@ -34,7 +36,7 @@ Rules:
 - BRIDGE SENTENCES are mandatory between clusters: "Bello! E al di fuori del lavoro, cosa ti appassiona?"
 - Ask exactly ONE question per turn. Do not stack questions.
 - Record EVERY piece of information as a fact immediately via create_fact.
-- Minimum gate: aim for at least 6 distinct facts before Phase C. If fewer after 2 clusters, start a 3rd cluster.
+- Minimum gate: aim for at least ${SPARSE_PROFILE_FACT_THRESHOLD} distinct publishable facts before Phase C. If fewer after 2 clusters, start a 3rd cluster and keep collecting concrete details.
 
 PHASE C — Generate + publish (when Phase B is complete):
 Phase C starts as soon as: 3 clusters are done, OR the 8-exchange cap is reached, OR the user seems done early with good signal.

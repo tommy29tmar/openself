@@ -94,7 +94,13 @@ vi.mock("@/lib/services/session-service", () => ({
   getSession: vi.fn(() => null),
 }));
 
+vi.mock("@/lib/agent/journey", () => ({
+  updateJourneyStatePin: vi.fn(),
+}));
+
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
+import { updateJourneyStatePin } from "@/lib/agent/journey";
+import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
 import {
   getDraft,
   upsertDraft,
@@ -210,7 +216,43 @@ describe("prepareAndPublish", () => {
     // Only the proposed fact should be promoted
     expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
     expect(mockSetFactVisibility).toHaveBeenCalledWith(
-      facts[0].id, "public", "user", "session-1",
+      facts[0].id, "public", "user", "session-1", undefined,
+    );
+  });
+
+  it("uses multi-session fact scope and cognitive owner when provided", async () => {
+    const facts = [
+      makeFact({ category: "identity", key: "name", visibility: "proposed" }),
+    ];
+    const readKeys = ["session-anchor", "session-rotated"];
+    mockGetActiveFacts.mockReturnValue(facts);
+    vi.mocked(getDraft).mockReturnValue({
+      config: makeConfig(),
+      username: "testuser",
+      status: "draft",
+      configHash: "hash-abc",
+      updatedAt: "2026-01-01T12:00:00Z",
+    });
+
+    await prepareAndPublish("testuser", "session-anchor", {
+      mode: "publish",
+      ownerKey: "profile-1",
+      readKeys,
+    });
+
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("profile-1", readKeys);
+    expect(vi.mocked(mergeActiveSectionCopy)).toHaveBeenCalledWith(
+      expect.objectContaining({ username: "testuser" }),
+      "profile-1",
+      "en",
+      readKeys,
+    );
+    expect(mockSetFactVisibility).toHaveBeenCalledWith(
+      facts[0].id,
+      "public",
+      "user",
+      "session-anchor",
+      readKeys,
     );
   });
 
@@ -241,6 +283,7 @@ describe("prepareAndPublish", () => {
 
     expect(result.success).toBe(true);
     expect(upsertDraft).toHaveBeenCalled();
+    expect(updateJourneyStatePin).toHaveBeenCalledWith("session-1", "active_fresh");
   });
 
   it("preserves surface/voice/light from existing draft metadata", async () => {
@@ -391,7 +434,7 @@ describe("prepareAndPublish", () => {
     // Only the skill fact should be promoted (compensation is sensitive, excluded by filterPublishableFacts)
     expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
     expect(mockSetFactVisibility).toHaveBeenCalledWith(
-      facts[1].id, "public", "user", "session-1",
+      facts[1].id, "public", "user", "session-1", undefined,
     );
   });
 });

@@ -33,6 +33,13 @@ vi.mock("@/lib/services/conflict-service", () => ({
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn(() => []),
 }));
+vi.mock("@/lib/services/session-metadata", () => ({
+  getSessionMeta: vi.fn(() => ({})),
+  mergeSessionMeta: vi.fn(),
+}));
+vi.mock("@/lib/connectors/magic-paste", () => ({
+  detectConnectorUrls: vi.fn(() => []),
+}));
 vi.mock("@/lib/agent/prompts", () => ({
   buildSystemPrompt: vi.fn(() => "BOOTSTRAP_PROMPT"),
 }));
@@ -50,6 +57,7 @@ import { getActiveMemories } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
 import { buildSystemPrompt } from "@/lib/agent/prompts";
+import { getSessionMeta } from "@/lib/services/session-metadata";
 
 const SCOPE: OwnerScope = {
   cognitiveOwnerKey: "cog-1",
@@ -68,6 +76,8 @@ beforeEach(() => {
   vi.mocked(getActiveMemories).mockReturnValue([]);
   vi.mocked(getActiveSoul).mockReturnValue(null);
   vi.mocked(getOpenConflicts).mockReturnValue([]);
+  vi.mocked(getSessionMeta).mockReturnValue({});
+  vi.mocked(buildSystemPrompt).mockReturnValue("BOOTSTRAP_PROMPT");
 });
 
 // ---------------------------------------------------------------------------
@@ -232,6 +242,27 @@ describe("post-assembly guard", () => {
     const result = assembleContext(SCOPE, "en", []);
     const totalTokens = estimateTokens(result.systemPrompt);
     expect(totalTokens).toBeLessThanOrEqual(7500);
+  });
+
+  it("shrinks oversized static blocks when pending operations blow past total budget", () => {
+    vi.mocked(buildSystemPrompt).mockReturnValue("BASE_PROMPT");
+    vi.mocked(getSessionMeta).mockReturnValue({
+      pendingOperations: {
+        timestamp: new Date().toISOString(),
+        journal: Array.from({ length: 400 }, (_, i) => ({
+          toolName: `tool_${i}`,
+          summary: "x".repeat(1200),
+          success: true,
+        })),
+        finishReason: "step_exhaustion",
+      },
+    });
+
+    const result = assembleContext(SCOPE, "en", [{ role: "user", content: "resume" }]);
+
+    expect(result.systemPrompt).toContain("INCOMPLETE_OPERATION");
+    expect(result.systemPrompt).toContain("...");
+    expect(estimateTokens(result.systemPrompt)).toBeLessThanOrEqual(65000);
   });
 });
 

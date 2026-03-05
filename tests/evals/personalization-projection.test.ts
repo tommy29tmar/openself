@@ -257,6 +257,31 @@ describe("mergeActiveSectionCopy", () => {
     expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner-abc", "it");
   });
 
+  it("uses readKeys for fact hash checks while keeping ownerKey for state lookups", () => {
+    mockGetAllActiveCopies.mockReturnValue([
+      {
+        id: 1,
+        ownerKey: "profile-1",
+        sectionType: "bio",
+        language: "en",
+        personalizedContent: JSON.stringify({ description: "Personalized bio." }),
+        factsHash: "mock-facts-hash",
+        soulHash: "mock-soul-hash",
+        approvedAt: null,
+        source: "live",
+      },
+    ]);
+
+    const config = makeConfig([makeSection("bio", { description: "Original." })]);
+    const readKeys = ["session-anchor", "session-rotated"];
+
+    mergeActiveSectionCopy(config, "profile-1", "en", readKeys);
+
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("profile-1", "en");
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("profile-1", readKeys);
+    expect(mockGetActiveSoul).toHaveBeenCalledWith("profile-1");
+  });
+
   it("handles sections not present in copies gracefully", () => {
     mockGetAllActiveCopies.mockReturnValue([
       {

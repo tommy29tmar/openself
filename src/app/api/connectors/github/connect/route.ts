@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { GitHub, generateState } from "arctic";
-import { resolveOwnerScope } from "@/lib/auth/session";
 import { connectorError } from "@/lib/connectors/api-errors";
+import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
 
 function getConnectorGitHubClient(): GitHub | null {
   const clientId = process.env.GITHUB_CLIENT_ID;
@@ -26,7 +26,7 @@ function getConnectorGitHubClient(): GitHub | null {
  * Requires authentication.
  */
 export async function GET(req: NextRequest) {
-  const scope = resolveOwnerScope(req);
+  const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
     return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }

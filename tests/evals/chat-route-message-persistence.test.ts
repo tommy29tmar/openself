@@ -219,4 +219,28 @@ describe("chat route assistant message persistence", () => {
       }),
     );
   });
+
+  it("sanitizes unsupported success claims when no write tool ran", async () => {
+    mockAssistantText = "Salvato. Ora lo vedi in anteprima.";
+    mockJournal = [
+      {
+        toolName: "search_facts",
+        timestamp: "2026-03-05T21:16:30.000Z",
+        durationMs: 12,
+        success: true,
+        summary: "searched \"bio\" (1 results)",
+      },
+    ];
+
+    const { POST } = await import("@/app/api/chat/route");
+    await POST(makeRequest());
+
+    const assistantInsert = insertedRows.find((row) => row.role === "assistant");
+    expect(assistantInsert).toEqual(
+      expect.objectContaining({
+        content: "Non l'ho ancora eseguito. Se vuoi, lo faccio adesso.",
+        toolCalls: mockJournal,
+      }),
+    );
+  });
 });

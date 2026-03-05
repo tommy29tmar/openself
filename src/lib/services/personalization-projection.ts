@@ -24,14 +24,16 @@ import { getActiveSoul } from "@/lib/services/soul-service";
  * Non-personalizable sections and stale copies are left untouched.
  *
  * @param canonical - The canonical PageConfig from projectCanonicalConfig()
- * @param ownerKey - The owner's cognitive key
+ * @param ownerKey - The owner's cognitive/profile key for section_copy_state + soul lookups
  * @param language - The target language code
+ * @param readKeys - Optional legacy fact-table session scope for multi-session profiles
  * @returns A new PageConfig with personalised content merged where valid
  */
 export function mergeActiveSectionCopy(
   canonical: PageConfig,
   ownerKey: string,
   language: string,
+  readKeys?: string[],
 ): PageConfig {
   // 1. Fetch all active copies for this owner + language
   const copies = getAllActiveCopies(ownerKey, language);
@@ -43,7 +45,7 @@ export function mergeActiveSectionCopy(
   const copyMap = new Map(copies.map((c) => [c.sectionType, c]));
 
   // 3. Compute current hashes for comparison
-  const allFacts = getActiveFacts(ownerKey);
+  const allFacts = getActiveFacts(ownerKey, readKeys);
   const publishableFacts = filterPublishableFacts(allFacts);
 
   const soul = getActiveSoul(ownerKey);

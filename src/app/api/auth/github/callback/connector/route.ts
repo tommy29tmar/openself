@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { GitHub } from "arctic";
-import { resolveOwnerScope } from "@/lib/auth/session";
 import { createConnector } from "@/lib/connectors/connector-service";
 import { enqueueJob } from "@/lib/worker";
+import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
 
 function getConnectorGitHubClient(): GitHub | null {
   const clientId = process.env.GITHUB_CLIENT_ID;
@@ -24,7 +24,7 @@ function getConnectorGitHubClient(): GitHub | null {
  * via createConnector(), and enqueues an initial sync job.
  */
 export async function GET(req: NextRequest) {
-  const scope = resolveOwnerScope(req);
+  const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
     return NextResponse.redirect(new URL("/builder?error=auth_required", req.url));
   }

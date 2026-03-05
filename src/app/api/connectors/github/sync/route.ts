@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { resolveOwnerScope } from "@/lib/auth/session";
 import { getConnectorStatus } from "@/lib/connectors/connector-service";
 import { hasPendingJob, isSyncRateLimited } from "@/lib/connectors/idempotency";
 import { enqueueJob } from "@/lib/worker";
 import { connectorError } from "@/lib/connectors/api-errors";
+import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
 
 export async function POST(req: NextRequest) {
-  const scope = resolveOwnerScope(req);
+  const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
     return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }

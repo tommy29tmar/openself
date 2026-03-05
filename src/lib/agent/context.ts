@@ -92,6 +92,11 @@ export type ContextResult = {
   mode: PromptMode;
 };
 
+type PromptBlock = {
+  name: string;
+  content: string;
+};
+
 /**
  * Context profile per journey state.
  * Controls which blocks are injected and their budgets.
@@ -194,6 +199,17 @@ function truncateToTokenBudget(text: string, budget: number): string {
   const maxChars = budget * 4; // inverse of estimateTokens
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars - 3) + "...";
+}
+
+function shrinkBlockContent(content: string): string {
+  const currentLen = content.length;
+  if (currentLen <= 64) return "";
+
+  const newLen = Math.floor(currentLen * 0.8);
+  const truncated = content.slice(0, newLen);
+  return truncated.length > 3
+    ? `${truncated.slice(0, -3)}...`
+    : "";
 }
 
 /**
@@ -354,16 +370,18 @@ export function assembleContext(
   if (conflictsBlock) mutableParts.push(`\n\n---\n\nPENDING CONFLICTS:\n${conflictsBlock}`);
   if (pageStateBlock) mutableParts.push(`\n\n---\n\nPAGE STATE:\n${pageStateBlock}`);
 
-  // --- Static parts: non-truncatable blocks (always preserved during budget overflow) ---
-  const staticParts: string[] = [];
+  // --- Static parts: preserved preferentially, but shrinkable as a last resort ---
+  const staticBlocks: PromptBlock[] = [];
 
   // Auth context for steady-state publishing guidance
   if (mode === "steady_state" && authInfo?.authenticated && authInfo.username) {
-    staticParts.push(
-      `\n\n---\n\nUSER AUTH: Authenticated as "${authInfo.username}". Published page: /${authInfo.username}.\n` +
-      `Use request_publish with username "${authInfo.username}" — do NOT ask for a username.\n` +
-      `The user can also publish from the navigation bar.`,
-    );
+    staticBlocks.push({
+      name: "auth",
+      content:
+        `\n\n---\n\nUSER AUTH: Authenticated as "${authInfo.username}". Published page: /${authInfo.username}.\n` +
+        `Use request_publish with username "${authInfo.username}" — do NOT ask for a username.\n` +
+        `The user can also publish from the navigation bar.`,
+    });
   }
 
   // Archetype-weighted exploration priorities — conditional on profile.richness
@@ -387,7 +405,7 @@ export function assembleContext(
         (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
       );
       const explorationBlock = `ARCHETYPE: ${archetype}\nEXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
-      staticParts.push(`\n\n---\n\n${explorationBlock}`);
+      staticBlocks.push({ name: "exploration", content: `\n\n---\n\n${explorationBlock}` });
     }
   } else if (mode === "steady_state") {
     // Steady state: richness + layout intelligence (conditional)
@@ -405,7 +423,7 @@ export function assembleContext(
           (x, i) => `${i + 1}. ${x.category}: ${x.richness}`,
         );
         const explorationBlock = `EXPLORATION PRIORITIES (${archetype} profile):\n${priorityLines.join("\n")}`;
-        staticParts.push(`\n\n---\n\n${explorationBlock}`);
+        staticBlocks.push({ name: "exploration", content: `\n\n---\n\n${explorationBlock}` });
       }
     }
 
@@ -415,7 +433,7 @@ Profile archetype: ${archetype}
 Section priority: ${strategy.sectionPriority.join(" → ")}
 
 Before proposing a reorder, explain reasoning and ask for confirmation.`;
-      staticParts.push(`\n\n---\n\n${layoutIntelligence}`);
+      staticBlocks.push({ name: "layout", content: `\n\n---\n\n${layoutIntelligence}` });
     }
   }
 
@@ -450,9 +468,10 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
             const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
               .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)
               .join("\n");
-            staticParts.push(
-              `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
-            );
+            staticBlocks.push({
+              name: "pendingOps",
+              content: `\n\n---\n\nINCOMPLETE_OPERATION (previous turn hit step limit):\n${summaries}\nResume where you left off — do NOT repeat completed steps.`,
+            });
           }
         }
       }
@@ -468,14 +487,14 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
       const allIssues = [...warnings, ...infos];
       const directive = coherenceIssuesDirective(allIssues);
       if (directive) {
-        staticParts.push(`\n\n---\n\n${directive}`);
+        staticBlocks.push({ name: "coherence", content: `\n\n---\n\n${directive}` });
       }
     } catch { /* best-effort */ }
   }
 
   // --- Message quota warning: nudge agent to suggest registration ---
   if (quotaInfo && quotaInfo.remaining <= 3) {
-    staticParts.push(`\n\n---\n\nMESSAGE QUOTA (anonymous user):
+    staticBlocks.push({ name: "quota", content: `\n\n---\n\nMESSAGE QUOTA (anonymous user):
 Remaining messages: ${quotaInfo.remaining}/${quotaInfo.limit}.
 
 This applies to anonymous users only — authenticated users have their own quota managed by the UI.
@@ -488,7 +507,7 @@ Wait for a NATURAL PAUSE before mentioning registration. Natural pauses:
 When the moment is right, weave in ONE casual sentence — max:
 "By the way — you're almost out of messages. Want to grab a username to keep going?"
 Suggest a username based on their name if known (e.g. "marco-rossi" for Marco Rossi).
-Do NOT add this if you're mid-explanation or mid-topic.`);
+Do NOT add this if you're mid-explanation or mid-topic.` });
   }
 
   // --- Magic paste: detect connector URLs from the latest user message ---
@@ -497,16 +516,18 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
     ? `\nDETECTED SOURCE URLS: ${detectedConnectors.map(d => `${d.connectorId} (${d.url})`).join(", ")}. If relevant, suggest the user connect it as a Source via the Sources panel.`
     : "";
   if (magicPasteHint) {
-    staticParts.push(`\n\n---\n\n${magicPasteHint}`);
+    staticBlocks.push({ name: "magicPaste", content: `\n\n---\n\n${magicPasteHint}` });
   }
 
-  const staticSuffix = staticParts.join("");
+  const renderStaticSuffix = () => staticBlocks.map((block) => block.content).join("");
+  let staticSuffix = renderStaticSuffix();
   let systemPrompt = mutableParts.join("") + staticSuffix;
 
   // --- Post-assembly guard: iteratively truncate if over total budget ---
   let totalTokens = estimateTokens(systemPrompt);
   if (totalTokens > BUDGET.total) {
-    // Only mutable blocks are shrunk; static blocks (auth, quota, magic paste, etc.) are always preserved.
+    // Shrink mutable blocks first. If they are exhausted and we are still over budget,
+    // shrink static blocks as a last resort. This guarantees the final prompt respects BUDGET.total.
     const blocks = [
       { name: "facts", content: factsBlock, budget: BUDGET.facts },
       { name: "soul", content: soulBlock, budget: BUDGET.soul },
@@ -517,25 +538,21 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
     ];
 
     let iterations = 0;
-    while (totalTokens > BUDGET.total && iterations < 10) {
-      // Find the largest block
-      let largest = blocks[0];
-      for (const b of blocks) {
-        if (estimateTokens(b.content) > estimateTokens(largest.content)) {
-          largest = b;
+    while (totalTokens > BUDGET.total && iterations < 20) {
+      const mutableCandidates = blocks.filter((b) => b.content.length > 0);
+      const staticCandidates = staticBlocks.filter((b) => b.content.length > 0);
+      const candidates = mutableCandidates.length > 0 ? mutableCandidates : staticCandidates;
+      if (candidates.length === 0) break;
+
+      let largest = candidates[0];
+      for (const candidate of candidates.slice(1)) {
+        if (estimateTokens(candidate.content) > estimateTokens(largest.content)) {
+          largest = candidate;
         }
       }
+      largest.content = shrinkBlockContent(largest.content);
 
-      // Truncate it by 20%
-      const currentLen = largest.content.length;
-      if (currentLen === 0) break;
-      const newLen = Math.floor(currentLen * 0.8);
-      largest.content = largest.content.slice(0, newLen);
-      if (largest.content.length > 3) {
-        largest.content = largest.content.slice(0, -3) + "...";
-      }
-
-      // Rebuild mutable parts only; always append staticSuffix
+      // Rebuild mutable parts; append the current static suffix.
       const parts = [basePrompt];
       for (const b of blocks) {
         if (b.content) {
@@ -554,9 +571,14 @@ Do NOT add this if you're mid-explanation or mid-topic.`);
           parts.push(`\n\n---\n\n${label}${b.content}`);
         }
       }
+      staticSuffix = renderStaticSuffix();
       systemPrompt = parts.join("") + staticSuffix;
       totalTokens = estimateTokens(systemPrompt);
       iterations++;
+    }
+
+    if (totalTokens > BUDGET.total) {
+      systemPrompt = truncateToTokenBudget(systemPrompt, BUDGET.total);
     }
   }
 

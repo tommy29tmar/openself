@@ -133,6 +133,10 @@ vi.mock("@/lib/services/session-service", () => ({
   getSession: vi.fn(() => null),
 }));
 
+vi.mock("@/lib/agent/journey", () => ({
+  updateJourneyStatePin: vi.fn(),
+}));
+
 import { prepareAndPublish } from "@/lib/services/publish-pipeline";
 
 describe("publish pipeline personalization integration", () => {
@@ -151,19 +155,26 @@ describe("publish pipeline personalization integration", () => {
     };
 
     mockMergeActiveSectionCopy.mockReturnValueOnce(personalizedConfig);
+    const ownerKey = "profile-1";
+    const readKeys = ["session-anchor", "session-rotated"];
 
-    const result = await prepareAndPublish("test", "session1", {
+    const result = await prepareAndPublish("test", "session-anchor", {
       mode: "publish",
+      ownerKey,
+      readKeys,
     });
 
     expect(result.success).toBe(true);
 
-    // mergeActiveSectionCopy should be called with the canonical config, session ownerKey, and factLang
+    expect(mockGetActiveFacts).toHaveBeenCalledWith(ownerKey, readKeys);
+
+    // mergeActiveSectionCopy should use the cognitive owner key, not the anchor session
     expect(mockMergeActiveSectionCopy).toHaveBeenCalledTimes(1);
     expect(mockMergeActiveSectionCopy).toHaveBeenCalledWith(
       expect.objectContaining({ username: "test" }),
-      "session1",  // ownerKey = sessionId
-      "en",         // factLang
+      ownerKey,
+      "en",
+      readKeys,
     );
 
     // translatePageContent should receive the personalized config, not the canonical one

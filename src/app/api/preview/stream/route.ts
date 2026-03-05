@@ -84,12 +84,16 @@ export async function GET(req: Request) {
           );
 
           // Merge personalized copy (hash-guarded, stale → deterministic fallback)
-          const ownerKey = writeSessionId;
-          const personalizedConfig = mergeActiveSectionCopy(previewConfig, ownerKey, factLang);
+          const ownerKey = scope?.cognitiveOwnerKey ?? writeSessionId;
+          const personalizedConfig = mergeActiveSectionCopy(
+            previewConfig,
+            ownerKey,
+            factLang,
+            readKeys,
+          );
 
-          // previewHash: detects ALL changes (including incomplete sections)
-          // Use ORIGINAL previewConfig for hash computation (publish path does its own merge)
-          const previewHash = computeConfigHash(previewConfig);
+          // previewHash: detects ALL changes, including personalized copy updates
+          const previewHash = computeConfigHash(personalizedConfig);
           // publishableHash: matches publish pipeline for hash guard
           const publishableHash = computeConfigHash(publishableFromCanonical(previewConfig));
 

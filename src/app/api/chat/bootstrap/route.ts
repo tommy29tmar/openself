@@ -44,7 +44,10 @@ export async function GET(req: Request) {
   // Resolve auth for blocked detection
   const chatAuthCtx = multiUser ? getAuthContext(req) : null;
   const authInfo = chatAuthCtx
-    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
+    ? {
+        authenticated: !!(chatAuthCtx.userId || chatAuthCtx.username),
+        username: chatAuthCtx.username ?? null,
+      }
     : undefined;
 
   // Extract language from query string (default: "en")

@@ -40,12 +40,17 @@ export function getLane(sectionType: string): Lane {
 }
 
 // All lanes: left-aligned from the same 48px horizontal padding (matching prototype).
+// On md+, use extra left padding instead of margin so the lane never overflows the viewport.
 // max-width applied via inline style to correctly use CSS calc() with custom properties.
 const LANE_CLASSES: Record<Lane, string> = {
-  hero: "w-full px-6 md:px-12 md:ml-[8%]",
-  reading: "w-full px-6 md:px-12 md:ml-[8%]",
-  bleed: "w-full px-6 md:px-12 md:ml-[8%]",
+  hero: "w-full px-6 md:pr-12 md:pl-[calc(48px+8%)]",
+  reading: "w-full px-6 md:pr-12 md:pl-[calc(48px+8%)]",
+  bleed: "w-full px-6 md:pr-12 md:pl-[calc(48px+8%)]",
 };
+
+export function getLaneClass(lane: Lane): string {
+  return LANE_CLASSES[lane];
+}
 
 // Max-width includes 96px (2×48px) for the horizontal padding,
 // so the content area equals reading-max / reading-max*1.35.
@@ -67,7 +72,7 @@ export function MonolithLayout({ slots, renderSection, className }: LayoutCompon
           <div key={slot.id} className="w-full">
             {sections.map((section) => {
               const lane = getLane(section.type);
-              const laneClass = LANE_CLASSES[lane];
+              const laneClass = getLaneClass(lane);
               const isHeroOrFooter = section.type === "hero" || section.type === "footer";
 
               return (

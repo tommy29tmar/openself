@@ -8,6 +8,7 @@ import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai
 import { recordUsage, checkBudget } from "@/lib/services/usage-service";
 import { enqueueJob } from "@/lib/worker/index";
 import { getSessionMeta, type JournalEntry } from "@/lib/services/session-metadata";
+import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 
 type SummaryRow = {
   id: string;
@@ -28,6 +29,21 @@ export function getSummary(ownerKey: string): string | null {
     .where(eq(conversationSummaries.ownerKey, ownerKey))
     .get();
   return row?.summary ?? null;
+}
+
+export function expandSummaryMessageKeys(ownerKey: string, messageKeys: string[]): string[] {
+  const scopeKeys = resolveOwnerScopeForWorker(ownerKey).knowledgeReadKeys;
+  const merged = new Set<string>();
+
+  for (const key of scopeKeys) {
+    if (typeof key === "string" && key.length > 0) merged.add(key);
+  }
+  for (const key of messageKeys) {
+    if (typeof key === "string" && key.length > 0) merged.add(key);
+  }
+  if (merged.size === 0) merged.add(ownerKey);
+
+  return Array.from(merged);
 }
 
 /**
@@ -117,7 +133,8 @@ export async function generateSummary(
   const budget = checkBudget();
   if (!budget.allowed) return false;
 
-  const unsummarized = getUnsummarizedMessages(ownerKey, messageKeys);
+  const effectiveMessageKeys = expandSummaryMessageKeys(ownerKey, messageKeys);
+  const unsummarized = getUnsummarizedMessages(ownerKey, effectiveMessageKeys);
   if (unsummarized.length < 5) return false; // not enough to summarize
 
   // Get existing summary for merge
@@ -159,7 +176,7 @@ Keep the summary concise (under 500 words). Write in third person.`;
 
   // Circuit F1: read journal from session metadata and build digest
   const journalEntries: JournalEntry[] = [];
-  for (const sessionKey of messageKeys) {
+  for (const sessionKey of effectiveMessageKeys) {
     const meta = getSessionMeta(sessionKey);
     if (meta?.journal && Array.isArray(meta.journal)) {
       journalEntries.push(...(meta.journal as JournalEntry[]));
@@ -249,7 +266,8 @@ Keep the summary concise (under 500 words). Write in third person.`;
 }
 
 /**
- * Enqueue a summary job for the worker. Dedup via job_type+payload.
+ * Enqueue a summary job for the worker. Dedup is job_type+ownerKey;
+ * the worker/service expands session keys at execution time.
  */
 export function enqueueSummaryJob(ownerKey: string, messageKeys?: string[]): void {
   try {

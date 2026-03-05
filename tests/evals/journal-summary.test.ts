@@ -41,6 +41,16 @@ vi.mock("@/lib/services/session-metadata", () => ({
   getSessionMeta: (...args: any[]) => mockGetSessionMeta(...args),
 }));
 
+const mockResolveOwnerScopeForWorker = vi.fn(() => ({
+  cognitiveOwnerKey: "owner-1",
+  knowledgeReadKeys: [],
+  knowledgePrimaryKey: "owner-1",
+  currentSessionId: "owner-1",
+}));
+vi.mock("@/lib/auth/session", () => ({
+  resolveOwnerScopeForWorker: (...args: any[]) => mockResolveOwnerScopeForWorker(...args),
+}));
+
 // Mock DB for summary service
 vi.mock("@/lib/db", () => ({
   db: {
@@ -69,7 +79,12 @@ vi.mock("@/lib/db/schema", () => ({
   conversationSummaries: { ownerKey: "ownerKey", summary: "summary" },
 }));
 
-import { buildJournalDigest, enqueueSummaryJob, generateSummary } from "@/lib/services/summary-service";
+import {
+  buildJournalDigest,
+  enqueueSummaryJob,
+  expandSummaryMessageKeys,
+  generateSummary,
+} from "@/lib/services/summary-service";
 import { generateText } from "ai";
 import type { JournalEntry } from "@/lib/services/session-metadata";
 
@@ -77,6 +92,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockCheckBudget.mockReturnValue({ allowed: true });
   mockGetSessionMeta.mockReturnValue({});
+  mockResolveOwnerScopeForWorker.mockReturnValue({
+    cognitiveOwnerKey: "owner-1",
+    knowledgeReadKeys: [],
+    knowledgePrimaryKey: "owner-1",
+    currentSessionId: "owner-1",
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -145,6 +166,31 @@ describe("enqueueSummaryJob data flow", () => {
       ownerKey: "owner-1",
       messageKeys: ["owner-1"],
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// expandSummaryMessageKeys
+// ---------------------------------------------------------------------------
+
+describe("expandSummaryMessageKeys", () => {
+  it("merges worker scope keys with payload keys and deduplicates", () => {
+    mockResolveOwnerScopeForWorker.mockReturnValue({
+      cognitiveOwnerKey: "owner-1",
+      knowledgeReadKeys: ["sess-1", "sess-2"],
+      knowledgePrimaryKey: "sess-1",
+      currentSessionId: "sess-1",
+    });
+
+    expect(expandSummaryMessageKeys("owner-1", ["sess-2", "sess-3"])).toEqual([
+      "sess-1",
+      "sess-2",
+      "sess-3",
+    ]);
+  });
+
+  it("falls back to ownerKey when both sources are empty", () => {
+    expect(expandSummaryMessageKeys("owner-1", [])).toEqual(["owner-1"]);
   });
 });
 
@@ -262,6 +308,41 @@ describe("generateSummary journal integration", () => {
     expect(result).toBe(true);
 
     expect(vi.mocked(generateText)).toHaveBeenCalled();
+    const callArgs = vi.mocked(generateText).mock.calls[0][0] as any;
+    expect(callArgs.prompt).toContain("create_fact: 2x");
+  });
+
+  it("expands payload keys with current owner scope before reading session metadata", async () => {
+    await setupGenerateSummaryMocks([
+      { id: "m1", role: "user", content: "a", createdAt: "t1" },
+      { id: "m2", role: "assistant", content: "b", createdAt: "t2" },
+      { id: "m3", role: "user", content: "c", createdAt: "t3" },
+      { id: "m4", role: "assistant", content: "d", createdAt: "t4" },
+      { id: "m5", role: "user", content: "e", createdAt: "t5" },
+    ]);
+
+    mockResolveOwnerScopeForWorker.mockReturnValue({
+      cognitiveOwnerKey: "owner-1",
+      knowledgeReadKeys: ["sess-1", "sess-2"],
+      knowledgePrimaryKey: "sess-1",
+      currentSessionId: "sess-1",
+    });
+    mockGetSessionMeta.mockImplementation((sessionKey: string) => {
+      if (sessionKey === "sess-1") {
+        return { journal: [{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }] };
+      }
+      if (sessionKey === "sess-2") {
+        return { journal: [{ toolName: "create_fact", timestamp: "t2", durationMs: 10, success: true }] };
+      }
+      return {};
+    });
+
+    const result = await generateSummary("owner-1", ["sess-1"]);
+    expect(result).toBe(true);
+
+    expect(mockGetSessionMeta).toHaveBeenCalledWith("sess-1");
+    expect(mockGetSessionMeta).toHaveBeenCalledWith("sess-2");
+
     const callArgs = vi.mocked(generateText).mock.calls[0][0] as any;
     expect(callArgs.prompt).toContain("create_fact: 2x");
   });

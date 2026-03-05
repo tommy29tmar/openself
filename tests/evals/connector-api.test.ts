@@ -2,18 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
-const mockResolveOwnerScope = vi.fn();
-const mockIsMultiUserEnabled = vi.fn().mockReturnValue(true);
+const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
 const mockDisconnectConnector = vi.fn();
 const mockGetConnectorById = vi.fn().mockReturnValue(null);
 
-vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
-}));
-
-vi.mock("@/lib/services/session-service", () => ({
-  isMultiUserEnabled: () => mockIsMultiUserEnabled(),
+vi.mock("@/lib/connectors/route-auth", () => ({
+  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+    mockResolveAuthenticatedConnectorScope(...args),
 }));
 
 vi.mock("@/lib/connectors/connector-service", () => ({
@@ -44,11 +40,10 @@ const ownerScope = {
 describe("GET /api/connectors/status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIsMultiUserEnabled.mockReturnValue(true);
   });
 
   it("returns 403 when multi-user and no auth", async () => {
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(null);
 
     const { GET } = await import("@/app/api/connectors/status/route");
     const res = await GET(new Request("http://localhost/api/connectors/status"));
@@ -58,7 +53,7 @@ describe("GET /api/connectors/status", () => {
   });
 
   it("returns connector list for authenticated user", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([
       { id: "c1", connectorType: "github", status: "connected", enabled: true },
     ]);
@@ -73,8 +68,7 @@ describe("GET /api/connectors/status", () => {
   });
 
   it("returns empty array in single-user mode", async () => {
-    mockIsMultiUserEnabled.mockReturnValue(false);
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorStatus.mockReturnValue([]);
 
     const { GET } = await import("@/app/api/connectors/status/route");
@@ -88,11 +82,10 @@ describe("GET /api/connectors/status", () => {
 describe("POST /api/connectors/[id]/disconnect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIsMultiUserEnabled.mockReturnValue(true);
   });
 
   it("returns 403 when multi-user and no auth", async () => {
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(null);
 
     const { POST } = await import("@/app/api/connectors/[id]/disconnect/route");
     const res = await POST(
@@ -103,7 +96,7 @@ describe("POST /api/connectors/[id]/disconnect", () => {
   });
 
   it("returns 404 when connector does not exist", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorById.mockReturnValue(null);
 
     const { POST } = await import("@/app/api/connectors/[id]/disconnect/route");
@@ -117,7 +110,7 @@ describe("POST /api/connectors/[id]/disconnect", () => {
   });
 
   it("returns 403 when connector belongs to different owner", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorById.mockReturnValue({
       id: "c-other",
       ownerKey: "other-owner",
@@ -136,7 +129,7 @@ describe("POST /api/connectors/[id]/disconnect", () => {
   });
 
   it("returns 200 when connector belongs to caller", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetConnectorById.mockReturnValue({
       id: "c1",
       ownerKey: "owner-1",

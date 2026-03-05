@@ -136,6 +136,27 @@ describe("GET /api/chat/bootstrap", () => {
     );
   });
 
+  it("treats legacy username-only sessions as authenticated in multi-user mode", async () => {
+    const { getAuthContext } = await import("@/lib/auth/session");
+    vi.mocked(isMultiUserEnabled).mockReturnValue(true);
+    vi.mocked(getAuthContext).mockReturnValue({
+      sessionId: "sess-x",
+      profileId: "sess-x",
+      userId: null,
+      username: "legacyuser",
+    });
+
+    const req = new Request("http://localhost:3000/api/chat/bootstrap?language=en");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(assembleBootstrapPayload)).toHaveBeenCalledWith(
+      expect.any(Object),
+      "en",
+      expect.objectContaining({ authenticated: true, username: "legacyuser" }),
+    );
+  });
+
   it("returns correct Content-Type header", async () => {
     const req = new Request("http://localhost:3000/api/chat/bootstrap");
     const res = await GET(req);

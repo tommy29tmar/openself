@@ -89,13 +89,7 @@ Prioritize facts that seem most likely to have changed (job roles, projects, cur
 Use update_fact if the user confirms a change, delete_fact if something is no longer relevant."
 `;
 
-exports[`snapshot matrix > [active_fresh] + [has_thin_sections] 1`] = `
-"SITUATION DIRECTIVES:
-THIN SECTIONS: The following page sections need more content: education, projects.
-When the conversation naturally allows, guide the user toward topics that would fill these sections.
-Pick the 1-2 most relevant thin sections based on conversation context — don't list all of them at once.
-Frame questions naturally, not as "I need data for your skills section.""
-`;
+exports[`snapshot matrix > [active_fresh] + [has_thin_sections] 1`] = `""`;
 
 exports[`snapshot matrix > [active_stale] + [has_archivable_facts] 1`] = `
 "SITUATION DIRECTIVES:

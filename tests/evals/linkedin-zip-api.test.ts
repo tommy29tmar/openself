@@ -2,10 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
-const mockResolveOwnerScope = vi.fn();
+const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockGetAuthContext = vi.fn();
+vi.mock("@/lib/connectors/route-auth", () => ({
+  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+    mockResolveAuthenticatedConnectorScope(...args),
+}));
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
   getAuthContext: (...args: unknown[]) => mockGetAuthContext(...args),
 }));
 
@@ -59,7 +62,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("returns 403 when no auth", async () => {
-    mockResolveOwnerScope.mockReturnValue(null);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(null);
 
     const { POST } = await import(
       "@/app/api/connectors/linkedin-zip/import/route"
@@ -72,7 +75,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("returns 400 when no file uploaded", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
 
     const { POST } = await import(
@@ -86,7 +89,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("returns 400 when file is not a ZIP", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
 
     const file = new File(["hello"], "readme.txt", {
@@ -104,7 +107,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("returns 200 with report for valid ZIP upload", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
 
     const file = new File([new Uint8Array(100)], "export.zip", {
@@ -133,7 +136,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("uses authCtx.username when available", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "bob" });
 
     const file = new File([new Uint8Array(50)], "data.zip", {
@@ -153,8 +156,8 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
     );
   });
 
-  it("falls back to __default__ when no authCtx", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+  it("falls back to draft when no authCtx", async () => {
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue(null);
 
     const file = new File([new Uint8Array(50)], "data.zip", {
@@ -169,13 +172,13 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
     expect(mockImportLinkedInZip).toHaveBeenCalledWith(
       expect.any(Buffer),
       ownerScope,
-      "__default__",
+      "draft",
       "en",
     );
   });
 
   it("uses stored factLanguage from preferences", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
     mockGetFactLanguage.mockReturnValue("it");
 
@@ -197,7 +200,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("falls back to en when getFactLanguage returns null", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
     mockGetFactLanguage.mockReturnValue(null);
 
@@ -219,7 +222,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("returns 500 when importLinkedInZip throws", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
     mockImportLinkedInZip.mockRejectedValue(new Error("corrupt data"));
 
@@ -239,7 +242,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("accepts file with .zip extension even without application/zip mime", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
 
     // File with .zip extension but octet-stream type
@@ -257,7 +260,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("accepts file with application/zip mime even without .zip extension", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
 
     // File without .zip extension but with correct mime type
@@ -275,7 +278,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
   });
 
   it("writes import event flag on successful import", async () => {
-    mockResolveOwnerScope.mockReturnValue(ownerScope);
+    mockResolveAuthenticatedConnectorScope.mockReturnValue(ownerScope);
     mockGetAuthContext.mockReturnValue({ username: "alice" });
 
     const file = new File([new Uint8Array(100)], "export.zip", {

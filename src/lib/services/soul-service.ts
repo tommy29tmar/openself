@@ -60,49 +60,48 @@ function compileSoul(overlay: SoulOverlay): string {
   return parts.join("\n");
 }
 
+function applySoulOverlay(ownerKey: string, overlay: SoulOverlay): SoulProfile {
+  const current = sqlite
+    .prepare(
+      "SELECT id, version FROM soul_profiles WHERE owner_key = ? AND is_active = 1",
+    )
+    .get(ownerKey) as { id: string; version: number } | undefined;
+
+  const newVersion = (current?.version ?? 0) + 1;
+  const compiled = compileSoul(overlay);
+  const now = new Date().toISOString();
+  const newId = randomUUID();
+
+  if (current) {
+    sqlite
+      .prepare("UPDATE soul_profiles SET is_active = 0, updated_at = ? WHERE id = ?")
+      .run(now, current.id);
+  }
+
+  sqlite
+    .prepare(
+      `INSERT INTO soul_profiles(id, owner_key, version, overlay, compiled, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+    )
+    .run(newId, ownerKey, newVersion, JSON.stringify(overlay), compiled, now, now);
+
+  return {
+    id: newId,
+    ownerKey,
+    version: newVersion,
+    overlay,
+    compiled,
+    isActive: 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 /**
  * Create or update the soul overlay. Creates new version (old deactivated).
  */
 export function updateSoulOverlay(ownerKey: string, overlay: SoulOverlay): SoulProfile {
-  return sqlite.transaction(() => {
-    // Get current version
-    const current = sqlite
-      .prepare(
-        "SELECT id, version FROM soul_profiles WHERE owner_key = ? AND is_active = 1",
-      )
-      .get(ownerKey) as { id: string; version: number } | undefined;
-
-    const newVersion = (current?.version ?? 0) + 1;
-    const compiled = compileSoul(overlay);
-    const now = new Date().toISOString();
-    const newId = randomUUID();
-
-    // Deactivate old
-    if (current) {
-      sqlite
-        .prepare("UPDATE soul_profiles SET is_active = 0, updated_at = ? WHERE id = ?")
-        .run(now, current.id);
-    }
-
-    // Create new
-    sqlite
-      .prepare(
-        `INSERT INTO soul_profiles(id, owner_key, version, overlay, compiled, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
-      )
-      .run(newId, ownerKey, newVersion, JSON.stringify(overlay), compiled, now, now);
-
-    return {
-      id: newId,
-      ownerKey,
-      version: newVersion,
-      overlay,
-      compiled,
-      isActive: 1,
-      createdAt: now,
-      updatedAt: now,
-    };
-  })();
+  return sqlite.transaction(() => applySoulOverlay(ownerKey, overlay))();
 }
 
 /**
@@ -168,40 +167,45 @@ export function reviewProposal(
   ownerKey: string,
   accept: boolean,
 ): { success: boolean; error?: string } {
-  const now = new Date().toISOString();
-  const newStatus = accept ? "accepted" : "rejected";
-
-  // Idempotent: only update if still pending
-  const result = sqlite
-    .prepare(
-      "UPDATE soul_change_proposals SET status = ?, resolved_at = ? WHERE id = ? AND owner_key = ? AND status = 'pending'",
-    )
-    .run(newStatus, now, proposalId, ownerKey);
-
-  if (result.changes !== 1) {
-    return { success: false, error: "Proposal not found or already resolved" };
-  }
-
-  if (accept) {
-    // Apply the overlay
+  return sqlite.transaction(() => {
     const proposal = db
       .select()
       .from(soulChangeProposals)
-      .where(eq(soulChangeProposals.id, proposalId))
+      .where(
+        and(
+          eq(soulChangeProposals.id, proposalId),
+          eq(soulChangeProposals.ownerKey, ownerKey),
+        ),
+      )
       .get();
 
-    if (proposal) {
+    if (!proposal) {
+      return { success: false, error: "Proposal not found" };
+    }
+
+    const now = new Date().toISOString();
+    const newStatus = accept ? "accepted" : "rejected";
+    const result = sqlite
+      .prepare(
+        "UPDATE soul_change_proposals SET status = ?, resolved_at = ? WHERE id = ? AND owner_key = ? AND status = 'pending'",
+      )
+      .run(newStatus, now, proposalId, ownerKey);
+
+    if (result.changes !== 1) {
+      return { success: false, error: "Proposal not found or already resolved" };
+    }
+
+    if (accept) {
       const overlay = proposal.proposedOverlay as SoulOverlay;
-      // Merge with existing soul
       const current = getActiveSoul(ownerKey);
       const merged = current
         ? { ...(current.overlay as SoulOverlay), ...overlay }
         : overlay;
-      updateSoulOverlay(ownerKey, merged);
+      applySoulOverlay(ownerKey, merged);
     }
-  }
 
-  return { success: true };
+    return { success: true };
+  })();
 }
 
 /**

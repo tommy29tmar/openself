@@ -39,6 +39,15 @@ describe("prompt contracts", () => {
     expect(outputContract).toMatch(/recomposeOk.*false/i);
   });
 
+  it("OUTPUT_CONTRACT bans standalone completion claims without a write tool", () => {
+    const outputContractMatch = src.match(/OUTPUT_CONTRACT\s*=\s*`([\s\S]*?)`/);
+    expect(outputContractMatch).not.toBeNull();
+    const outputContract = outputContractMatch![1];
+
+    expect(outputContract).toMatch(/did not call a write tool/i);
+    expect(outputContract).toMatch(/Aggiunto|Salvato|Updated|Added|Done|Fatto/i);
+  });
+
   it("experience facts must be created immediately even without dates", () => {
     // The old rule that prevented creating experience facts without dates must be gone
     expect(src).not.toMatch(/only create experience facts with dates/i);

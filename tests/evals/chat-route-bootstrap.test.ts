@@ -94,7 +94,12 @@ vi.mock("@/lib/agent/tool-filter", () => ({
 
 vi.mock("@/lib/db", () => ({
   db: { insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })) },
-  sqlite: { prepare: vi.fn(() => ({ run: vi.fn(), get: vi.fn(() => ({ count: 0 })) })) },
+  sqlite: {
+    prepare: vi.fn(() => ({
+      run: vi.fn(() => ({ changes: 1 })),
+      get: vi.fn(() => ({ count: 0 })),
+    })),
+  },
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -124,6 +129,8 @@ vi.mock("@/lib/services/kb-service", () => ({
 
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { assembleContext } from "@/lib/agent/context";
+import { isMultiUserEnabled } from "@/lib/services/session-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -159,6 +166,41 @@ describe("POST /api/chat bootstrap wiring", () => {
       expect.objectContaining({ journeyState: "first_visit" }), // bootstrap payload
       expect.objectContaining({ facts: [], soul: null }),        // bootstrap data
       undefined,            // quotaInfo: single-user mode, no quota tracking
+    );
+  });
+
+  it("passes authenticated=true for legacy username-only sessions in multi-user mode", async () => {
+    vi.mocked(isMultiUserEnabled).mockReturnValue(true);
+    vi.mocked(getAuthContext).mockReturnValue({
+      sessionId: "sess-a",
+      profileId: "sess-a",
+      userId: null,
+      username: "legacyuser",
+    });
+
+    const { POST } = await import("@/app/api/chat/route");
+    const req = new Request("http://localhost:3000/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] }),
+    });
+
+    await POST(req);
+
+    expect(assembleBootstrapPayload).toHaveBeenCalledWith(
+      expect.any(Object),
+      "en",
+      expect.objectContaining({ authenticated: true, username: "legacyuser" }),
+      "hello",
+    );
+    expect(assembleContext).toHaveBeenCalledWith(
+      expect.any(Object),
+      "en",
+      expect.any(Array),
+      expect.objectContaining({ authenticated: true, username: "legacyuser" }),
+      expect.any(Object),
+      expect.any(Object),
+      undefined,
     );
   });
 });

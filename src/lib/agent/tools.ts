@@ -38,7 +38,7 @@ import { getLayoutTemplate, resolveLayoutTemplate } from "@/lib/layout/registry"
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
 import { groupSectionsBySlot } from "@/lib/layout/group-slots";
-import { toSlotAssignments } from "@/lib/layout/validate-adapter";
+import { toSlotAssignments, canFullyValidateSection } from "@/lib/layout/validate-adapter";
 import { validateLayoutComposition } from "@/lib/layout/quality";
 import { buildWidgetMap, getBestWidget, getWidgetById } from "@/lib/layout/widgets";
 import { isSectionComplete } from "@/lib/page-config/section-completeness";
@@ -55,9 +55,94 @@ import { mergeSessionMeta, getSessionMeta } from "@/lib/services/session-metadat
 import type { JournalEntry } from "@/lib/services/session-metadata";
 import { hashValue, type PendingConfirmation } from "@/lib/services/confirmation-service";
 
-export function createAgentTools(sessionLanguage: string = "en", sessionId: string = "__default__", ownerKey?: string, requestId?: string, readKeys?: string[], mode?: string) {
+function evaluateLayoutPublishability(config: PageConfig): {
+  valid: boolean;
+  issues: string[];
+} {
+  const resolvedTemplate = resolveLayoutTemplate(config);
+  const allSectionsValidatable = config.sections.every((section) =>
+    canFullyValidateSection(section),
+  );
+
+  const sectionsForValidation = allSectionsValidatable
+    ? config.sections
+    : assignSlotsFromFacts(
+        resolvedTemplate,
+        config.sections,
+        undefined,
+        { repair: false },
+      ).sections;
+
+  const conversion = toSlotAssignments(sectionsForValidation);
+  const layoutIssues = [
+    ...conversion.skipped.map(
+      (section) => `${section.sectionId} (${section.reason})`,
+    ),
+  ];
+
+  if (conversion.skipped.length === 0) {
+    const widgetMap = buildWidgetMap();
+    const layoutResult = validateLayoutComposition(
+      resolvedTemplate,
+      conversion.assignments,
+      widgetMap,
+    );
+    layoutIssues.push(
+      ...layoutResult.all
+        .filter((issue) => issue.severity === "error")
+        .map((issue) => issue.message),
+    );
+  }
+
+  return {
+    valid: layoutIssues.length === 0,
+    issues: layoutIssues,
+  };
+}
+
+export function createAgentTools(
+  sessionLanguage: string = "en",
+  sessionId: string = "__default__",
+  ownerKey?: string,
+  requestId?: string,
+  readKeys?: string[],
+  mode?: string,
+  authInfo?: { authenticated?: boolean; username?: string | null },
+) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
   const operationJournal: JournalEntry[] = [];
+  const publishAuth = {
+    authenticated: !!authInfo?.authenticated,
+    username: authInfo?.username ?? null,
+  };
+
+  async function validatePublishUsername(requestedUsername: string) {
+    const effectiveUsername = publishAuth.username ?? requestedUsername;
+
+    if (!effectiveUsername || effectiveUsername.length === 0) {
+      return {
+        effectiveUsername,
+        validation: {
+          ok: false as const,
+          code: "USERNAME_INVALID",
+          message: "Username is required.",
+        },
+      };
+    }
+
+    if (isMultiUserEnabled() && !publishAuth.username) {
+      const { validateUsernameAvailability } = await import("@/lib/services/username-validation");
+      return {
+        effectiveUsername,
+        validation: validateUsernameAvailability(effectiveUsername),
+      };
+    }
+
+    return {
+      effectiveUsername,
+      validation: validateUsernameFormat(effectiveUsername),
+    };
+  }
 
   // --- Layer 2+3: Cross-turn pending confirmations with TTL ---
   const TTL_MS = 5 * 60 * 1000;
@@ -959,32 +1044,28 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
           return { success: false, error: "No draft page to publish. Generate a page first." };
         }
 
-        // Username format validation (belt-and-suspenders with publish_preflight)
-        if (!username || username.length === 0) {
-          return { success: false, error: "Username is required for publishing." };
-        }
-        const usernameCheck = validateUsernameFormat(username);
+        const { effectiveUsername, validation: usernameCheck } =
+          await validatePublishUsername(username);
         if (!usernameCheck.ok) {
           return { success: false, error: usernameCheck.message };
         }
 
         // Mark the existing draft as pending approval — no recomposition,
         // so manual changes (theme, section order, content edits) are preserved.
-        requestPublish(username, sessionId);
-        updateJourneyStatePin(sessionId, "active_fresh");
+        requestPublish(effectiveUsername, sessionId);
 
         logEvent({
           eventType: "page_publish_requested",
           actor: "assistant",
           payload: {
-            username,
+            username: effectiveUsername,
             sectionCount: draft.config.sections.length,
           },
         });
         return {
           success: true,
           message: "Page is ready for review. The user will see a publish button.",
-          username,
+          username: effectiveUsername,
           sections: draft.config.sections.map((s) => s.type),
         };
       } catch (error) {
@@ -1443,16 +1524,19 @@ Do NOT call in a loop.`,
           return {
             readyToPublish: false,
             summary: "No draft found. Generate a page first.",
-            gates: { hasDraft: false, hasAuth: false, hasUsername: false },
-            quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
+            gates: { hasDraft: false, hasAuth: false, hasUsername: false, hasValidLayout: false },
+            quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true, layoutIssues: [] as string[] },
             info: { sectionCount: 0, factCount: 0 },
           };
         }
 
         // 2. Gate checks
         const multiUser = isMultiUserEnabled();
-        const hasAuth = !multiUser || !!ownerKey;
-        const usernameValidation = username.length > 0 ? validateUsernameFormat(username) : { ok: false, message: "Username is required" };
+        const hasAuth = !multiUser || publishAuth.authenticated;
+        const {
+          validation: usernameValidation,
+          effectiveUsername,
+        } = await validatePublishUsername(username);
         const hasUsername = usernameValidation.ok;
 
         // 3. Quality checks
@@ -1465,6 +1549,7 @@ Do NOT call in a loop.`,
         const incompleteSections = config.sections
           .filter((s: any) => !isSectionComplete(s))
           .map((s: any) => s.type);
+        const layoutReadiness = evaluateLayoutPublishability(config);
 
         // Thin sections from richness
         const thinSections = Object.keys(SECTION_FACT_CATEGORIES)
@@ -1475,8 +1560,16 @@ Do NOT call in a loop.`,
           (f: any) => f.category === "contact" && f.visibility !== "private",
         );
 
-        const gates = { hasDraft: true, hasAuth, hasUsername };
+        const gates = {
+          hasDraft: true,
+          hasAuth,
+          hasUsername,
+          hasValidLayout: layoutReadiness.valid,
+        };
         const readyToPublish = Object.values(gates).every(Boolean);
+        const gateFailures = Object.entries(gates)
+          .filter(([, value]) => !value)
+          .map(([key]) => key);
 
         return {
           readyToPublish,
@@ -1486,15 +1579,17 @@ Do NOT call in a loop.`,
             proposedFacts: proposedCount,
             thinSections,
             missingContact: !hasContact,
+            layoutIssues: layoutReadiness.issues,
           },
           info: {
             sectionCount: config.sections.length,
             factCount: allFacts.length,
           },
+          username: effectiveUsername,
           ...(!hasUsername && !usernameValidation.ok ? { usernameIssue: usernameValidation.message } : {}),
           summary: readyToPublish
             ? `Page ready to publish with ${config.sections.length} sections.`
-            : `Cannot publish: ${Object.entries(gates).filter(([, v]) => !v).map(([k]) => k).join(", ")}.${!hasUsername && usernameValidation.message ? ` Username: ${usernameValidation.message}` : ""}`,
+            : `Cannot publish: ${gateFailures.join(", ")}.${!hasUsername && usernameValidation.message ? ` Username: ${usernameValidation.message}` : ""}${!layoutReadiness.valid && layoutReadiness.issues.length > 0 ? ` Layout: ${layoutReadiness.issues.slice(0, 2).join("; ")}` : ""}`,
         };
       } catch (error) {
         logEvent({
@@ -1505,8 +1600,8 @@ Do NOT call in a loop.`,
         return {
           readyToPublish: false,
           summary: `Preflight error: ${String(error)}`,
-          gates: { hasDraft: false, hasAuth: false, hasUsername: false },
-          quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true },
+          gates: { hasDraft: false, hasAuth: false, hasUsername: false, hasValidLayout: false },
+          quality: { incompleteSections: [] as string[], proposedFacts: 0, thinSections: [] as string[], missingContact: true, layoutIssues: [] as string[] },
           info: { sectionCount: 0, factCount: 0 },
         };
       }

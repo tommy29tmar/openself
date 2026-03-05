@@ -27,6 +27,10 @@ import { analyzeImportGaps, type ImportGapReport } from "@/lib/connectors/import
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { STEP_EXHAUSTION_FALLBACK } from "@/lib/agent/step-exhaustion-fallback";
 import { stringifyToolArgsForRepair, stripMarkdownCodeFences } from "@/lib/agent/tool-call-repair";
+import {
+  createUnbackedActionClaimTransform,
+  sanitizeUnbackedActionClaim,
+} from "@/lib/agent/action-claim-guard";
 
 /**
  * Per-profile message quota for authenticated users.
@@ -130,13 +134,16 @@ export async function POST(req: Request) {
 
   // Resolve auth for context injection
   const chatAuthCtx = multiUser ? getAuthContext(req) : null;
+  const authInfoForBootstrap = chatAuthCtx
+    ? {
+        authenticated: !!(chatAuthCtx.userId || chatAuthCtx.username),
+        username: chatAuthCtx.username ?? null,
+      }
+    : undefined;
 
   // --- Journey Intelligence: assemble bootstrap payload ---
   // Must run BEFORE quota enforcement so the message count read by bootstrap
   // reflects the pre-increment state (avoids false "blocked" on the Nth message).
-  const authInfoForBootstrap = chatAuthCtx
-    ? { authenticated: !!chatAuthCtx.userId, username: chatAuthCtx.username ?? null }
-    : undefined;
   // Extract last user message for archetype signal detection
   const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
   const lastUserMessageText = lastUserMsg
@@ -148,8 +155,7 @@ export async function POST(req: Request) {
   const { payload: bootstrap, data: bootstrapData } = assembleBootstrapPayload(effectiveScope, sessionLanguage, authInfoForBootstrap, lastUserMessageText ?? undefined);
 
   // Quota enforcement
-  const isAuthenticated =
-    multiUser && effectiveScope.cognitiveOwnerKey !== effectiveScope.currentSessionId;
+  const isAuthenticated = multiUser && !!authInfoForBootstrap?.authenticated;
 
   const extraHeaders: Record<string, string> = {};
   let quotaInfo: { remaining: number; limit: number } | undefined;
@@ -293,7 +299,15 @@ export async function POST(req: Request) {
 
   try {
     const model = getModelForTier("standard");
-    const { tools: agentTools, getJournal } = createAgentTools(sessionLanguage, writeSessionId, effectiveScope.cognitiveOwnerKey, requestId, effectiveScope.knowledgeReadKeys, mode);
+    const { tools: agentTools, getJournal } = createAgentTools(
+      sessionLanguage,
+      writeSessionId,
+      effectiveScope.cognitiveOwnerKey,
+      requestId,
+      effectiveScope.knowledgeReadKeys,
+      mode,
+      authInfoForBootstrap,
+    );
     const tools = filterToolsByJourneyState(agentTools, bootstrap.journeyState);
     const result = streamText({
       model,
@@ -301,6 +315,7 @@ export async function POST(req: Request) {
       messages: safeMessages,
       tools,
       maxSteps: MAX_STEPS,
+      experimental_transform: createUnbackedActionClaimTransform(sessionLanguage),
       providerOptions: {
         google: { thinkingConfig: { thinkingBudget: 0 } },
       },
@@ -343,14 +358,17 @@ export async function POST(req: Request) {
       onFinish: async ({ text, usage, finishReason }) => {
         const journal = getJournal();
         const persistedToolCalls = journal.length > 0 ? journal : null;
+        const safeText = text
+          ? sanitizeUnbackedActionClaim(text, journal, sessionLanguage)
+          : text;
 
-        if (text) {
+        if (safeText) {
           db.insert(messagesTable)
             .values({
               id: randomUUID(),
               sessionId: messageSessionId,
               role: "assistant",
-              content: text,
+              content: safeText,
               toolCalls: persistedToolCalls,
             })
             .run();
@@ -387,7 +405,7 @@ export async function POST(req: Request) {
 
         // No text from model (step exhaustion OR Gemini finishing after tool calls with no follow-up):
         // save a synthetic assistant message so the client can recover by refreshing from DB
-        if (!text || !text.trim()) {
+        if (!safeText || !safeText.trim()) {
           try {
             const syntheticText =
               STEP_EXHAUSTION_FALLBACK[bootstrap?.journeyState ?? "active_fresh"]?.[sessionLanguage]

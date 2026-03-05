@@ -68,8 +68,13 @@ export async function GET(req: Request) {
   );
 
   // Merge personalized copy (hash-guarded, stale → deterministic fallback)
-  const ownerKey = primaryKey;
-  const personalizedConfig = mergeActiveSectionCopy(previewConfig, ownerKey, factLang);
+  const ownerKey = scope?.cognitiveOwnerKey ?? primaryKey;
+  const personalizedConfig = mergeActiveSectionCopy(
+    previewConfig,
+    ownerKey,
+    factLang,
+    readKeys,
+  );
 
   // Publishable hash: matches publish-pipeline expectation
   // Use ORIGINAL previewConfig for hash computation (publish path does its own merge)

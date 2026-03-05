@@ -1,22 +1,23 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
+import { getAuthContext } from "@/lib/auth/session";
 import { importLinkedInZip } from "@/lib/connectors/linkedin-zip/import";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { acquireImportLock, releaseImportLock } from "@/lib/connectors/idempotency";
 import { connectorError } from "@/lib/connectors/api-errors";
 import { writeImportEvent } from "@/lib/connectors/import-event";
+import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
 
 const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
 
 export async function POST(req: NextRequest) {
-  const scope = resolveOwnerScope(req);
+  const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
     return connectorError("AUTH_REQUIRED", "Authentication required.", 403, false);
   }
 
   const authCtx = getAuthContext(req);
-  const username = authCtx?.username ?? "__default__";
+  const username = authCtx?.username ?? "draft";
   const ownerKey = scope.cognitiveOwnerKey;
 
   const contentLength = parseInt(req.headers.get("content-length") ?? "0");

@@ -1,12 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted mocks ──────────────────────────────────────────
-const { mockGetDraft, mockGetActiveFacts, mockIsMultiUserEnabled, mockValidateUsernameFormat, mockRequestPublish } = vi.hoisted(() => ({
+const {
+  mockGetDraft,
+  mockGetActiveFacts,
+  mockIsMultiUserEnabled,
+  mockValidateUsernameFormat,
+  mockValidateUsernameAvailability,
+  mockRequestPublish,
+  mockUpdateJourneyStatePin,
+  mockValidateLayoutComposition,
+  mockToSlotAssignments,
+  mockCanFullyValidateSection,
+  mockBuildWidgetMap,
+} = vi.hoisted(() => ({
   mockGetDraft: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockIsMultiUserEnabled: vi.fn(() => false),
   mockValidateUsernameFormat: vi.fn(() => ({ ok: true })),
+  mockValidateUsernameAvailability: vi.fn(() => ({ ok: true })),
   mockRequestPublish: vi.fn(),
+  mockUpdateJourneyStatePin: vi.fn(),
+  mockValidateLayoutComposition: vi.fn(() => ({ all: [], errors: [], warnings: [] })),
+  mockToSlotAssignments: vi.fn(() => ({ assignments: [], skipped: [] })),
+  mockCanFullyValidateSection: vi.fn(() => true),
+  mockBuildWidgetMap: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/services/page-service", () => ({
@@ -39,6 +57,10 @@ vi.mock("@/lib/services/confirmation-service", () => ({
 
 vi.mock("@/lib/services/session-service", () => ({
   isMultiUserEnabled: mockIsMultiUserEnabled,
+}));
+
+vi.mock("@/lib/agent/journey", () => ({
+  updateJourneyStatePin: mockUpdateJourneyStatePin,
 }));
 
 vi.mock("@/lib/services/event-service", () => ({
@@ -90,6 +112,21 @@ vi.mock("@/lib/layout/assign-slots", () => ({
   assignSlotsFromFacts: vi.fn((_t: any, sections: any) => ({ sections, issues: [] })),
 }));
 
+vi.mock("@/lib/layout/quality", () => ({
+  validateLayoutComposition: mockValidateLayoutComposition,
+}));
+
+vi.mock("@/lib/layout/validate-adapter", () => ({
+  toSlotAssignments: mockToSlotAssignments,
+  canFullyValidateSection: mockCanFullyValidateSection,
+}));
+
+vi.mock("@/lib/layout/widgets", () => ({
+  buildWidgetMap: mockBuildWidgetMap,
+  getBestWidget: vi.fn(() => ({ id: "widget-default" })),
+  getWidgetById: vi.fn(() => null),
+}));
+
 vi.mock("@/lib/layout/lock-policy", () => ({
   extractLocks: vi.fn(() => ({})),
 }));
@@ -134,6 +171,10 @@ vi.mock("@/lib/page-config/schema", () => ({
 
 vi.mock("@/lib/page-config/usernames", () => ({
   validateUsernameFormat: mockValidateUsernameFormat,
+}));
+
+vi.mock("@/lib/services/username-validation", () => ({
+  validateUsernameAvailability: mockValidateUsernameAvailability,
 }));
 
 vi.mock("ai", () => ({
@@ -184,6 +225,10 @@ describe("publish_preflight tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockValidateLayoutComposition.mockReturnValue({ all: [], errors: [], warnings: [] });
+    mockToSlotAssignments.mockReturnValue({ assignments: [], skipped: [] });
+    mockCanFullyValidateSection.mockReturnValue(true);
+    mockBuildWidgetMap.mockReturnValue({});
     tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
   });
 
@@ -223,6 +268,7 @@ describe("publish_preflight tool", () => {
     expect(result.readyToPublish).toBe(true);
     expect(result.gates.hasDraft).toBe(true);
     expect(result.gates.hasUsername).toBe(true);
+    expect(result.gates.hasValidLayout).toBe(true);
   });
 
   it("returns readyToPublish=false when username is empty", async () => {
@@ -237,6 +283,29 @@ describe("publish_preflight tool", () => {
 
     expect(result.readyToPublish).toBe(false);
     expect(result.gates.hasUsername).toBe(false);
+  });
+
+  it("returns readyToPublish=false for anonymous multi-user sessions even when ownerKey exists", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+    mockGetActiveFacts.mockReturnValue([makeFact()]);
+    mockIsMultiUserEnabled.mockReturnValue(true);
+    tools = createAgentTools(
+      "en",
+      "session-1",
+      "owner-1",
+      "req-1",
+      ["session-1"],
+      undefined,
+      { authenticated: false, username: null },
+    ).tools;
+
+    const result = await tools.publish_preflight.execute(
+      { username: "testuser" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.readyToPublish).toBe(false);
+    expect(result.gates.hasAuth).toBe(false);
   });
 
   it("reports incomplete sections in quality.incompleteSections", async () => {
@@ -339,6 +408,34 @@ describe("publish_preflight tool", () => {
     expect(result.summary).toContain("Username");
   });
 
+  it("returns readyToPublish=false when layout validation fails", async () => {
+    mockGetDraft.mockReturnValue(makeDraft());
+    mockGetActiveFacts.mockReturnValue([makeFact()]);
+    mockIsMultiUserEnabled.mockReturnValue(false);
+    mockValidateLayoutComposition.mockReturnValue({
+      all: [
+        {
+          slotId: "main",
+          issue: "missing_required",
+          severity: "error",
+          message: "Required slot 'main' is empty.",
+        },
+      ],
+      errors: [],
+      warnings: [],
+    });
+
+    const result = await tools.publish_preflight.execute(
+      { username: "testuser" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as any },
+    );
+
+    expect(result.readyToPublish).toBe(false);
+    expect(result.gates.hasValidLayout).toBe(false);
+    expect(result.quality.layoutIssues).toContain("Required slot 'main' is empty.");
+    expect(result.summary).toContain("hasValidLayout");
+  });
+
   it("returns section and fact counts in info", async () => {
     mockGetDraft.mockReturnValue(makeDraft());
     mockGetActiveFacts.mockReturnValue([
@@ -363,6 +460,10 @@ describe("request_publish username guard", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockValidateLayoutComposition.mockReturnValue({ all: [], errors: [], warnings: [] });
+    mockToSlotAssignments.mockReturnValue({ assignments: [], skipped: [] });
+    mockCanFullyValidateSection.mockReturnValue(true);
+    mockBuildWidgetMap.mockReturnValue({});
     tools = createAgentTools("en", "session-1", "owner-1", "req-1", ["session-1"]).tools;
   });
 
@@ -418,5 +519,6 @@ describe("request_publish username guard", () => {
 
     expect(result.success).toBe(true);
     expect(mockRequestPublish).toHaveBeenCalledWith("testuser", "session-1");
+    expect(mockUpdateJourneyStatePin).not.toHaveBeenCalled();
   });
 });

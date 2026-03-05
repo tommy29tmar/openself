@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSessionIdFromRequest, getAuthContext, createSessionCookie } from "@/lib/auth/session";
+import {
+  getSessionIdFromRequest,
+  getAuthContext,
+  createSessionCookie,
+  resolveOwnerScope,
+} from "@/lib/auth/session";
 import {
   isMultiUserEnabled,
   getSession,
@@ -37,6 +42,7 @@ export async function POST(req: Request) {
   }
 
   const sessionId = getSessionIdFromRequest(req);
+  const scope = isMultiUserEnabled() ? resolveOwnerScope(req) : null;
 
   if (isMultiUserEnabled()) {
     if (!sessionId || !getSession(sessionId)) {
@@ -81,6 +87,9 @@ export async function POST(req: Request) {
 
     const authCtx = getAuthContext(req);
     const profileId = authCtx?.profileId ?? sessionId;
+    const publishPrimaryKey = scope?.knowledgePrimaryKey ?? sessionId;
+    const publishOwnerKey = scope?.cognitiveOwnerKey ?? profileId;
+    const publishReadKeys = scope?.knowledgeReadKeys;
 
     if (AUTH_V2) {
       // -- AUTH_V2: require email + password --
@@ -182,9 +191,11 @@ export async function POST(req: Request) {
       }
 
       // Step 4: Publish (username claim happens inside pipeline via claimProfileId)
-      const result = await prepareAndPublish(username, sessionId, {
+      const result = await prepareAndPublish(username, publishPrimaryKey, {
         mode: "register",
         claimProfileId: profileId,
+        ownerKey: publishOwnerKey,
+        readKeys: publishReadKeys,
       });
 
       // Step 5: Register username on session only AFTER publish succeeds
@@ -222,7 +233,11 @@ export async function POST(req: Request) {
       console.warn("[register] AUTH_V2 disabled — no user/profile records");
 
       // Publish first — registerUsername only on success
-      const result = await prepareAndPublish(username, sessionId, { mode: "register" });
+      const result = await prepareAndPublish(username, publishPrimaryKey, {
+        mode: "register",
+        ownerKey: publishOwnerKey,
+        readKeys: publishReadKeys,
+      });
 
       registerUsername(sessionId, username);
 

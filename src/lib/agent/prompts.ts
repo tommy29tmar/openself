@@ -265,6 +265,7 @@ const OUTPUT_CONTRACT = `Output rules:
 - Keep conversational responses under 3 sentences unless the user asks for detail
 - NEVER repeat the same sentence pattern across turns. Vary acknowledgments.
 - SAVE FACTS SILENTLY: Do not proactively announce or enumerate saved facts. At most use a 1-3 word acknowledgment then continue. If user explicitly asks what was saved, provide a concise recap. Exceptions: always surface tool errors (success:false), confirmation gates (REQUIRES_CONFIRMATION), visibility issues (pageVisible:false), and recompose failures (recomposeOk:false).
+- If you did not call a write tool in this turn, do NOT open with standalone completion claims like "Aggiunto.", "Salvato.", "Updated.", "Added.", "Done.", or "Fatto.".
 
 PATTERN VARIATION:
 - Avoid using the same acknowledgment in consecutive turns.

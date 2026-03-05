@@ -2,7 +2,7 @@
  * Tests for Sub-Phase 4: Soul Service — profiles, overlays, proposals, expiry.
  * Uses real DB (SQLite + auto-migrations on import).
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   getActiveSoul,
   updateSoulOverlay,
@@ -114,6 +114,36 @@ describe("Soul Service", () => {
       .prepare("SELECT status FROM soul_change_proposals WHERE id = ?")
       .get(proposal.id) as { status: string };
     expect(row.status).toBe("accepted");
+  });
+
+  it("reviewProposal accept rolls back proposal status if soul update fails", () => {
+    const key = ownerKey();
+    const soulBefore = updateSoulOverlay(key, { voice: "calm", tone: "warm" });
+    const proposal = proposeSoulChange(key, { tone: "energetic" }, "shift tone");
+    const originalPrepare = sqlite.prepare.bind(sqlite);
+    const prepareSpy = vi.spyOn(sqlite, "prepare").mockImplementation((sql: string) => {
+      if (sql.includes("INSERT INTO soul_profiles")) {
+        throw new Error("forced soul insert failure");
+      }
+      return originalPrepare(sql);
+    });
+
+    try {
+      expect(() => reviewProposal(proposal.id, key, true)).toThrow("forced soul insert failure");
+    } finally {
+      prepareSpy.mockRestore();
+    }
+
+    const proposalRow = sqlite
+      .prepare("SELECT status, resolved_at FROM soul_change_proposals WHERE id = ?")
+      .get(proposal.id) as { status: string; resolved_at: string | null };
+    expect(proposalRow.status).toBe("pending");
+    expect(proposalRow.resolved_at).toBeNull();
+
+    const soulAfter = getActiveSoul(key);
+    expect(soulAfter).not.toBeNull();
+    expect(soulAfter!.id).toBe(soulBefore.id);
+    expect(soulAfter!.overlay).toEqual(soulBefore.overlay);
   });
 
   // 8. reviewProposal reject: marks rejected, no soul change

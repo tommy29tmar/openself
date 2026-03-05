@@ -57,12 +57,25 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate: alphanumeric + hyphens, 1-39 chars
-    if (!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(username)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid username. Use lowercase letters, numbers, and hyphens.", code: "USERNAME_INVALID" },
-        { status: 400 },
-      );
+    if (effectiveUsername) {
+      // Existing usernames are already owned by this profile; keep only the
+      // historical format guard here.
+      if (!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(username)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid username. Use lowercase letters, numbers, and hyphens.", code: "USERNAME_INVALID" },
+          { status: 400 },
+        );
+      }
+    } else {
+      const { validateUsernameAvailability } = await import("@/lib/services/username-validation");
+      const validation = validateUsernameAvailability(username);
+      if (!validation.ok) {
+        const status = validation.code === "USERNAME_TAKEN" ? 409 : 400;
+        return NextResponse.json(
+          { success: false, error: validation.message, code: validation.code },
+          { status },
+        );
+      }
     }
 
     // If authenticated user has no username yet, claim it atomically with publish
@@ -74,6 +87,8 @@ export async function POST(req: Request) {
       mode: "publish",
       expectedHash: typeof expectedHash === "string" ? expectedHash : undefined,
       claimProfileId,
+      ownerKey: scope?.cognitiveOwnerKey,
+      readKeys: scope?.knowledgeReadKeys,
     });
 
     logEvent({
