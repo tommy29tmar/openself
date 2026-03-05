@@ -1039,7 +1039,10 @@ export function createAgentTools(sessionLanguage: string = "en", sessionId: stri
     execute: async ({ proposalId, accept }) => {
       try {
         const result = reviewProposal(proposalId, effectiveOwnerKey, accept);
-        if (!result.success) return { success: false, error: result.error };
+        if (!result.success) {
+          logEvent({ eventType: "tool_call", actor: "assistant", payload: { requestId, tool: "review_soul_proposal", proposalId, accept, success: false, error: result.error } });
+          return { success: false, error: result.error };
+        }
         logEvent({ eventType: "tool_call", actor: "assistant", payload: { requestId, tool: "review_soul_proposal", proposalId, accept } });
         return {
           success: true,

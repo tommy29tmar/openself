@@ -134,15 +134,13 @@ vi.mock("@/lib/services/section-personalizer", () => ({
 vi.mock("@/lib/services/personalization-impact", () => ({
   detectImpactedSections: vi.fn(() => []),
 }));
-vi.mock("@/lib/agent/journey", () => ({
-  assembleBootstrapPayload: vi.fn(() => ({ payload: { situations: [], pendingProposalCount: 0, thinSections: [], staleFacts: [] }, mode: "onboarding" })),
-  updateJourneyStatePin: vi.fn(),
-  detectJourneyState: vi.fn(() => "first_visit"),
-  detectSituations: vi.fn(() => []),
-  detectExpertiseLevel: vi.fn(() => "novice"),
-  daysBetween: vi.fn(() => 0),
-  getDistinctSessionCount: vi.fn(() => 0),
-}));
+vi.mock("@/lib/agent/journey", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/agent/journey")>();
+  return {
+    ...actual,
+    updateJourneyStatePin: vi.fn(),
+  };
+});
 vi.mock("@/lib/services/coherence-check", () => ({
   checkPageCoherence: vi.fn(() => ({ issues: [] })),
 }));
@@ -245,17 +243,6 @@ describe("assembleBootstrapPayload — post-Circuit-A patching", () => {
     vi.mocked(getPendingProposals).mockReturnValue([
       { id: "p1", proposedOverlay: { voice: "direct" }, reason: "test", status: "pending", createdAt: new Date().toISOString() } as any,
     ]);
-    // Override the journey mock to call through to the real implementation for this test group
-    vi.mocked(assembleBootstrapPayload).mockReturnValueOnce({
-      payload: {
-        situations: ["has_pending_soul_proposals"],
-        pendingSoulProposals: [{ id: "p1", overlay: { voice: "direct" }, reason: "test" }],
-        pendingProposalCount: 0,
-        thinSections: [],
-        staleFacts: [],
-      } as any,
-      data: {} as any,
-    });
     const result = assembleBootstrapPayload(mockScope, "en");
     expect(result.payload.situations).toContain("has_pending_soul_proposals");
     expect(result.payload.pendingSoulProposals).toHaveLength(1);
@@ -263,15 +250,7 @@ describe("assembleBootstrapPayload — post-Circuit-A patching", () => {
   });
 
   it("omits field and situation when no proposals", () => {
-    vi.mocked(assembleBootstrapPayload).mockReturnValueOnce({
-      payload: {
-        situations: [],
-        pendingProposalCount: 0,
-        thinSections: [],
-        staleFacts: [],
-      } as any,
-      data: {} as any,
-    });
+    // getPendingProposals already returns [] via beforeEach
     const result = assembleBootstrapPayload(mockScope, "en");
     expect(result.payload.situations).not.toContain("has_pending_soul_proposals");
     expect(result.payload.pendingSoulProposals).toBeUndefined();
