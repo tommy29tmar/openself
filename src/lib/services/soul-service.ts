@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db, sqlite } from "@/lib/db";
 import { soulProfiles, soulChangeProposals } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -154,6 +154,7 @@ export function getPendingProposals(ownerKey: string): SoulProposal[] {
         eq(soulChangeProposals.status, "pending"),
       ),
     )
+    .orderBy(asc(soulChangeProposals.createdAt), asc(soulChangeProposals.id))
     .all() as SoulProposal[];
 }
 
