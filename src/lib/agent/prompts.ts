@@ -285,6 +285,7 @@ export function buildSystemPrompt(
     openConflicts: bootstrap.openConflicts ?? [],
     archivableFacts: bootstrap.archivableFacts ?? [],
     importGapReport: bootstrap.importGapReport,
+    pendingSoulProposals: bootstrap.pendingSoulProposals ?? [],
   };
 
   const situationDirectives = getSituationDirectives(

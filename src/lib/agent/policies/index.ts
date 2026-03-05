@@ -19,6 +19,7 @@ export type SituationContext = {
   openConflicts: string[];
   archivableFacts: string[];
   importGapReport?: ImportGapReport;
+  pendingSoulProposals?: Array<{ id: string; overlay: Record<string, unknown>; reason: string }>;
 };
 
 // ---------------------------------------------------------------------------

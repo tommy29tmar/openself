@@ -20,6 +20,20 @@ Do not push — just mention it naturally if the conversation allows.
 The user can review proposals via the proposal banner in the builder."
 `;
 
+exports[`snapshot matrix > [active_fresh] + [has_pending_soul_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING SOUL PROPOSAL (id: sp-1):
+I previously noticed patterns in how you express yourself and proposed an update to your style profile:
+  tone: direct
+  communicationStyle: concise
+Reason: Auto-suggested from archetype
+
+Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
+If the user agrees, call review_soul_proposal with accept: true.
+If the user disagrees, call review_soul_proposal with accept: false.
+Do NOT pressure the user. If they seem uninterested, let it go."
+`;
+
 exports[`snapshot matrix > [active_fresh] + [has_recent_import] 1`] = `
 "SITUATION DIRECTIVES:
 --- BEGIN IMPORT CONTEXT ---
@@ -87,6 +101,20 @@ Do not push — just mention it naturally if the conversation allows.
 The user can review proposals via the proposal banner in the builder."
 `;
 
+exports[`snapshot matrix > [active_stale] + [has_pending_soul_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING SOUL PROPOSAL (id: sp-1):
+I previously noticed patterns in how you express yourself and proposed an update to your style profile:
+  tone: direct
+  communicationStyle: concise
+Reason: Auto-suggested from archetype
+
+Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
+If the user agrees, call review_soul_proposal with accept: true.
+If the user disagrees, call review_soul_proposal with accept: false.
+Do NOT pressure the user. If they seem uninterested, let it go."
+`;
+
 exports[`snapshot matrix > [active_stale] + [has_recent_import] 1`] = `
 "SITUATION DIRECTIVES:
 --- BEGIN IMPORT CONTEXT ---
@@ -142,6 +170,8 @@ exports[`snapshot matrix > [blocked] + [has_open_conflicts] 1`] = `""`;
 
 exports[`snapshot matrix > [blocked] + [has_pending_proposals] 1`] = `""`;
 
+exports[`snapshot matrix > [blocked] + [has_pending_soul_proposals] 1`] = `""`;
+
 exports[`snapshot matrix > [blocked] + [has_recent_import] 1`] = `""`;
 
 exports[`snapshot matrix > [blocked] + [has_soul] 1`] = `""`;
@@ -168,6 +198,20 @@ PENDING PROPOSALS: You have 1 content proposal waiting for user review in sectio
 When appropriate, mention to the user that there are suggestions ready for review.
 Do not push — just mention it naturally if the conversation allows.
 The user can review proposals via the proposal banner in the builder."
+`;
+
+exports[`snapshot matrix > [draft_ready] + [has_pending_soul_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING SOUL PROPOSAL (id: sp-1):
+I previously noticed patterns in how you express yourself and proposed an update to your style profile:
+  tone: direct
+  communicationStyle: concise
+Reason: Auto-suggested from archetype
+
+Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
+If the user agrees, call review_soul_proposal with accept: true.
+If the user disagrees, call review_soul_proposal with accept: false.
+Do NOT pressure the user. If they seem uninterested, let it go."
 `;
 
 exports[`snapshot matrix > [draft_ready] + [has_recent_import] 1`] = `
@@ -219,6 +263,20 @@ exports[`snapshot matrix > [first_visit] + [has_open_conflicts] 1`] = `""`;
 
 exports[`snapshot matrix > [first_visit] + [has_pending_proposals] 1`] = `""`;
 
+exports[`snapshot matrix > [first_visit] + [has_pending_soul_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING SOUL PROPOSAL (id: sp-1):
+I previously noticed patterns in how you express yourself and proposed an update to your style profile:
+  tone: direct
+  communicationStyle: concise
+Reason: Auto-suggested from archetype
+
+Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
+If the user agrees, call review_soul_proposal with accept: true.
+If the user disagrees, call review_soul_proposal with accept: false.
+Do NOT pressure the user. If they seem uninterested, let it go."
+`;
+
 exports[`snapshot matrix > [first_visit] + [has_recent_import] 1`] = `""`;
 
 exports[`snapshot matrix > [first_visit] + [has_soul] 1`] = `""`;
@@ -245,6 +303,20 @@ PENDING PROPOSALS: You have 1 content proposal waiting for user review in sectio
 When appropriate, mention to the user that there are suggestions ready for review.
 Do not push — just mention it naturally if the conversation allows.
 The user can review proposals via the proposal banner in the builder."
+`;
+
+exports[`snapshot matrix > [returning_no_page] + [has_pending_soul_proposals] 1`] = `
+"SITUATION DIRECTIVES:
+PENDING SOUL PROPOSAL (id: sp-1):
+I previously noticed patterns in how you express yourself and proposed an update to your style profile:
+  tone: direct
+  communicationStyle: concise
+Reason: Auto-suggested from archetype
+
+Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
+If the user agrees, call review_soul_proposal with accept: true.
+If the user disagrees, call review_soul_proposal with accept: false.
+Do NOT pressure the user. If they seem uninterested, let it go."
 `;
 
 exports[`snapshot matrix > [returning_no_page] + [has_recent_import] 1`] = `

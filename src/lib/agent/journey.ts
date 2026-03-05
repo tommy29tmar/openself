@@ -43,7 +43,8 @@ export type Situation =
   | "has_name"
   | "has_soul"
   | "has_archivable_facts"
-  | "has_recent_import";
+  | "has_recent_import"
+  | "has_pending_soul_proposals";
 
 export type ExpertiseLevel = "novice" | "familiar" | "expert";
 
@@ -63,6 +64,7 @@ export interface BootstrapPayload {
   conversationContext: string | null;
   archetype: Archetype;
   importGapReport?: import("@/lib/connectors/import-gap-analyzer").ImportGapReport;
+  pendingSoulProposals?: Array<{ id: string; overlay: Record<string, unknown>; reason: string }>;
 }
 
 /**
@@ -546,8 +548,8 @@ export function assembleBootstrapPayload(
   // Guard against duplicates: assembleBootstrapPayload runs every message (R7-S6).
   const { blocked: soulCooldownActive } = getSoulProposalCooldownStatus(ownerKey);
   if (!soul && !soulCooldownActive && archetype !== "generalist") {
-    const pendingSoulProposals = getPendingProposals(ownerKey);
-    if (pendingSoulProposals.length === 0) {
+    const existingSoulProposals = getPendingProposals(ownerKey);
+    if (existingSoulProposals.length === 0) {
       const strategy = ARCHETYPE_STRATEGIES[archetype];
       try {
         proposeSoulChange(ownerKey, {
@@ -556,6 +558,12 @@ export function assembleBootstrapPayload(
         }, `Auto-suggested from detected archetype: ${archetype}`);
       } catch { /* best-effort: don't block bootstrap */ }
     }
+  }
+
+  // Post-Circuit-A: detect pending soul proposals and surface as a situation
+  const pendingSoulProposals = getPendingProposals(ownerKey);
+  if (pendingSoulProposals.length > 0 && !situations.includes("has_pending_soul_proposals")) {
+    situations.push("has_pending_soul_proposals");
   }
 
   return {
@@ -574,6 +582,15 @@ export function assembleBootstrapPayload(
       language,
       conversationContext,
       archetype,
+      ...(pendingSoulProposals.length > 0 ? {
+        pendingSoulProposals: pendingSoulProposals.map(p => ({
+          id: p.id,
+          overlay: (p.proposedOverlay && typeof p.proposedOverlay === "object" && !Array.isArray(p.proposedOverlay))
+            ? p.proposedOverlay as Record<string, unknown>
+            : {},
+          reason: p.reason ?? "",
+        })),
+      } : {}),
     },
     data: {
       facts,

@@ -9,6 +9,7 @@ import {
   openConflictsDirective,
   archivableFactsDirective,
   recentImportDirective,
+  pendingSoulProposalsDirective,
 } from "@/lib/agent/policies/situations";
 import { logEvent } from "@/lib/services/event-service";
 
@@ -16,14 +17,15 @@ import { logEvent } from "@/lib/services/event-service";
 // Each Situation maps to ONLY the SituationContext fields it is allowed to use.
 // Accessing ctx.staleFacts inside a has_thin_sections build() is a compile error.
 export type SituationContextMap = {
-  has_pending_proposals: Pick<SituationContext, "pendingProposalCount" | "pendingProposalSections">;
-  has_thin_sections:     Pick<SituationContext, "thinSections">;
-  has_stale_facts:       Pick<SituationContext, "staleFacts">;
-  has_open_conflicts:    Pick<SituationContext, "openConflicts">;
-  has_archivable_facts:  Pick<SituationContext, "archivableFacts">;
-  has_recent_import:     Pick<SituationContext, "importGapReport">;
-  has_name:              Record<never, never>;
-  has_soul:              Record<never, never>;
+  has_pending_proposals:       Pick<SituationContext, "pendingProposalCount" | "pendingProposalSections">;
+  has_thin_sections:           Pick<SituationContext, "thinSections">;
+  has_stale_facts:             Pick<SituationContext, "staleFacts">;
+  has_open_conflicts:          Pick<SituationContext, "openConflicts">;
+  has_archivable_facts:        Pick<SituationContext, "archivableFacts">;
+  has_recent_import:           Pick<SituationContext, "importGapReport">;
+  has_name:                    Record<never, never>;
+  has_soul:                    Record<never, never>;
+  has_pending_soul_proposals:  Pick<SituationContext, "pendingSoulProposals">;
 };
 
 export type DirectiveEntry<S extends Situation> = {
@@ -56,16 +58,18 @@ export class DirectiveConflictError extends Error {
 // Runtime validation: which context keys each situation requires.
 // Used by getCtxFor() to validate before build().
 export const SITUATION_REQUIRED_KEYS: { [S in Situation]: (keyof SituationContext)[] } = {
-  has_pending_proposals: ["pendingProposalCount", "pendingProposalSections"],
-  has_thin_sections:     ["thinSections"],
-  has_stale_facts:       ["staleFacts"],
-  has_open_conflicts:    ["openConflicts"],
-  has_archivable_facts:  ["archivableFacts"],
+  has_pending_proposals:      ["pendingProposalCount", "pendingProposalSections"],
+  has_thin_sections:          ["thinSections"],
+  has_stale_facts:            ["staleFacts"],
+  has_open_conflicts:         ["openConflicts"],
+  has_archivable_facts:       ["archivableFacts"],
   // importGapReport is NOT required — has_recent_import can be set from connector facts
   // even when route.ts hasn't yet resolved the gap report. Build returns "" when missing.
-  has_recent_import:     [],
-  has_name:              [],
-  has_soul:              [],
+  has_recent_import:          [],
+  has_name:                   [],
+  has_soul:                   [],
+  // pendingSoulProposals is optional — build returns "" when empty.
+  has_pending_soul_proposals: [],
 };
 
 // ── getCtxFor ─────────────────────────────────────────────────────────────────
@@ -156,6 +160,14 @@ export const DIRECTIVE_POLICY: DirectivePolicy = {
     priority: 99, tieBreak: "has_soul", eligibleStates: [], incompatibleWith: [],
     build: () => "",
   },
+  has_pending_soul_proposals: {
+    priority: 2,
+    tieBreak: "has_pending_soul_proposals",
+    // first_visit included: state can persist many turns; proposals must surface promptly
+    eligibleStates: ["first_visit", "returning_no_page", "draft_ready", "active_fresh", "active_stale"],
+    incompatibleWith: [],
+    build: (ctx) => pendingSoulProposalsDirective(ctx.pendingSoulProposals ?? []),
+  },
 };
 
 function resolveIncompatibilities(
@@ -209,9 +221,6 @@ export function getSituationDirectives(
   journeyState: JourneyState,
   context: SituationContext,
 ): string {
-  // Guard by construction: first_visit never receives situation directives
-  if (journeyState === "first_visit") return "";
-
   const eligible = situations
     .filter(s => DIRECTIVE_POLICY[s].eligibleStates.includes(journeyState))
     .sort((a, b) => {

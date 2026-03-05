@@ -93,6 +93,55 @@ function sanitize(text: string, maxLen = 100): string {
   return text.replace(/[\x00-\x1f\x7f]/g, "").slice(0, maxLen);
 }
 
+/**
+ * Sanitize user/model-derived text to a safe string:
+ * 1. Collapse CR, LF, TAB → space
+ * 2. Strip remaining non-printable control chars (U+0000–U+001F and U+007F)
+ * 3. Cap at maxLen
+ * Applied only to overlay keys, overlay values, and reason. NOT to template text.
+ */
+function sanitizeForPrompt(value: string, maxLen = 100): string {
+  return value
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/[\x00-\x1F\x7F]/g, "")
+    .slice(0, maxLen);
+}
+
+const MAX_OVERLAY_KEYS = 5;
+
+export function pendingSoulProposalsDirective(
+  proposals: Array<{ id: string; overlay: Record<string, unknown>; reason: string }>,
+): string {
+  if (proposals.length === 0) return "";
+  const first = proposals[0];
+  const safeOverlay =
+    first.overlay && typeof first.overlay === "object" && !Array.isArray(first.overlay)
+      ? first.overlay
+      : {};
+  const allEntries = Object.entries(safeOverlay);
+  const renderedEntries = allEntries.slice(0, MAX_OVERLAY_KEYS);
+  const omitted = allEntries.length - renderedEntries.length;
+  const overlayLines = renderedEntries
+    .map(([k, v]) => {
+      const safeKey = sanitizeForPrompt(String(k), 30);
+      const rawVal = Array.isArray(v) ? (v as unknown[]).map(String).join(", ") : String(v ?? "");
+      const safeVal = sanitizeForPrompt(rawVal, 120);
+      return `  ${safeKey}: ${safeVal}`;
+    })
+    .join("\n");
+  const omittedNote = omitted > 0 ? `\n  (${omitted} more omitted)` : "";
+  const safeReason = sanitizeForPrompt(first.reason ?? "", 200);
+  return `PENDING SOUL PROPOSAL (id: ${first.id}):
+I previously noticed patterns in how you express yourself and proposed an update to your style profile:
+${overlayLines || "  (no details available)"}${omittedNote}
+${safeReason ? `Reason: ${safeReason}` : ""}
+
+Bring this up naturally in conversation — e.g., "I noticed something about how you communicate and wanted to check with you...".
+If the user agrees, call review_soul_proposal with accept: true.
+If the user disagrees, call review_soul_proposal with accept: false.
+Do NOT pressure the user. If they seem uninterested, let it go.`;
+}
+
 export function recentImportDirective(report: ImportGapReport): string {
   const s = report.summary;
   const role = s.currentRole ? sanitize(s.currentRole) : "not specified";

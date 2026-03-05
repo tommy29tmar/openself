@@ -17,6 +17,13 @@ import type { Situation, JourneyState } from "@/lib/agent/journey";
 const ALL_SITUATIONS: Situation[] = [
   "has_pending_proposals", "has_thin_sections", "has_stale_facts",
   "has_open_conflicts", "has_archivable_facts", "has_recent_import",
+  "has_name", "has_soul", "has_pending_soul_proposals",
+];
+
+// Situations that are NOT eligible for first_visit (eligibleStates does not include it)
+const FIRST_VISIT_INELIGIBLE: Situation[] = [
+  "has_pending_proposals", "has_thin_sections", "has_stale_facts",
+  "has_open_conflicts", "has_archivable_facts", "has_recent_import",
   "has_name", "has_soul",
 ];
 
@@ -32,17 +39,24 @@ const mockCtx: SituationContext = {
     summary: { currentRole: "Engineer at Acme" },
     gaps: [],
   } as any,
+  pendingSoulProposals: [
+    { id: "sp-1", overlay: { tone: "direct", communicationStyle: "concise" }, reason: "Auto-suggested from archetype" },
+  ],
 };
 
-// ── Guard by construction ────────────────────────────────────────────────────
-describe("first_visit guard", () => {
-  it("always returns empty string regardless of situations", () => {
-    for (const s of ALL_SITUATIONS) {
+// ── Eligibility filtering by journeyState ────────────────────────────────────
+describe("first_visit eligibility", () => {
+  it("returns empty string for non-eligible situations in first_visit", () => {
+    for (const s of FIRST_VISIT_INELIGIBLE) {
       expect(getSituationDirectives([s], "first_visit", mockCtx)).toBe("");
     }
   });
   it("returns empty for empty situations array", () => {
     expect(getSituationDirectives([], "first_visit", mockCtx)).toBe("");
+  });
+  it("has_pending_soul_proposals IS eligible in first_visit and produces a directive", () => {
+    const result = getSituationDirectives(["has_pending_soul_proposals"], "first_visit", mockCtx);
+    expect(result).toContain("PENDING SOUL PROPOSAL");
   });
 });
 
