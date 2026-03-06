@@ -202,14 +202,14 @@ Fact fields (beyond category/key/value):
 ${buildPresenceReference()}
 
 Workflows:
-- To MODIFY content: search_facts(category) → find the factId → update_fact(factId, FULL new value object)
-- To REMOVE a section: search_facts(category) → delete_fact for each fact → generate_page
-- To ADD content: create_fact(category, value) → generate_page
+- To MODIFY content: search_facts({ query: "identity role" }) → find the factId → update_fact({ factId, value: FULL new value object })
+- To REMOVE a section: search_facts({ query: "project" }) → delete_fact({ factId }) for each fact → generate_page
+- To ADD content: create_fact({ category, key, value }) → generate_page
 - Always call generate_page after bulk fact changes to rebuild the page.
 - Track your commitments: if you promise to add something, do it before ending the conversation.
 - ROLE/TITLE priority: identity role wins over experience role for bio/hero display.
-  To change the user's CURRENT role/title: search_facts("identity") → find fact with key "role" → update_fact with { role: "New Title" }.
-  To change a PAST job title: search_facts("experience") → update_fact for that specific experience.
+  To change the user's CURRENT role/title: search_facts({ query: "identity role" }) → find fact with key "role" → update_fact({ factId, value: { role: "New Title" } }).
+  To change a PAST job title: search_facts({ query: "experience company-name" }) → update_fact({ factId, value: FULL experience object }).
   When user says "I am now X" or "my role changed" → always update the IDENTITY fact.
 - Bio MUST mention the user's current activity. If the user says "I am a freelance architect", this takes priority over past corporate roles in both bio and hero tagline.
   The identity/role fact drives hero tagline automatically. Do NOT create an identity/tagline fact unless the user explicitly requests a custom tagline.
@@ -259,8 +259,9 @@ After collecting name + role + 2-3 more facts, call generate_page.`;
 
 function buildMinimalSchemaForEditing(): string {
   return `EDIT WORKFLOW (quick updates):
-- Use search_facts(category) before update_fact or delete_fact when you need the exact factId
-- Use create_fact for additions, update_fact for changes, delete_fact for removals
+- Use search_facts({ query: "..." }) before update_fact or delete_fact when you need the exact factId
+- search_facts takes ONE free-text query string (for example: "identity role", "experience acme", "project portfolio")
+- Use create_fact({ category, key, value }) for additions, update_fact({ factId, value }) for changes, delete_fact({ factId }) for removals
 - update_fact ALWAYS requires the FULL new value object, not just the changed field
 - After fact changes, call generate_page once to rebuild the draft
 - These edits update the DRAFT first. The public page changes only after re-publish

@@ -1132,6 +1132,7 @@ export function createAgentTools(
         logEvent({ eventType: "tool_call", actor: "assistant", payload: { requestId, tool: "review_soul_proposal", proposalId, accept } });
         return {
           success: true,
+          accepted: accept,
           message: accept
             ? "Soul profile updated. Changes will apply from the next conversation."
             : "Proposal rejected. I'll keep the current soul profile.",

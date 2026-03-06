@@ -274,6 +274,7 @@ export async function POST(req: Request) {
     bootstrap,
     bootstrapData,
     quotaInfo,
+    messageSessionId,
   );
 
   // Role whitelist: AI SDK expects only these roles
@@ -381,7 +382,7 @@ export async function POST(req: Request) {
           recordUsage(provider, modelId, inputTokens, outputTokens);
         }
 
-        // Persist operation journal + detect step exhaustion
+        // Persist operation journal + detect step exhaustion on the active conversation.
         if (journal.length > 0) {
           const metaUpdate: Record<string, unknown> = { journal };
           if (finishReason === "tool-calls") {
@@ -395,12 +396,12 @@ export async function POST(req: Request) {
             // Successful completion: clear any stale pendingOperations from previous turns
             metaUpdate.pendingOperations = null;
           }
-          try { mergeSessionMeta(writeSessionId, metaUpdate); } catch (e) {
+          try { mergeSessionMeta(messageSessionId, metaUpdate); } catch (e) {
             console.warn("[chat] journal persistence failed:", e);
           }
         } else {
           // No tool calls this turn — still clear any stale pendingOps
-          try { mergeSessionMeta(writeSessionId, { pendingOperations: null }); } catch { /* best-effort */ }
+          try { mergeSessionMeta(messageSessionId, { pendingOperations: null }); } catch { /* best-effort */ }
         }
 
         // No text from model (step exhaustion OR Gemini finishing after tool calls with no follow-up):

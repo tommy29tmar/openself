@@ -248,6 +248,7 @@ export function assembleContext(
   bootstrap?: BootstrapPayload,
   bootstrapData?: BootstrapData,
   quotaInfo?: { remaining: number; limit: number },
+  conversationSessionId?: string,
 ): ContextResult {
   // Use bootstrap journeyState when available, fall back to detectMode()
   const mode: PromptMode = bootstrap
@@ -438,24 +439,23 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
   }
 
   // --- Resume injection: incomplete operation from previous turn ---
-  // Use anchor session (knowledgePrimaryKey) — route.ts writes journal/pendingOps
-  // to writeSessionId which equals knowledgePrimaryKey. Reading from currentSessionId
-  // would miss data in multi-session authenticated setups.
+  // Pending operations are conversation-scoped, not profile-anchor scoped.
   const PENDING_OPS_TTL_MS = 60 * 60 * 1000; // 1 hour
   const anchorSessionId = scope.knowledgePrimaryKey;
+  const pendingOpsSessionId = conversationSessionId ?? anchorSessionId;
 
   // Declare latestUserMessage here so the pending ops gate can use it
   const latestUserMessage = [...clientMessages].reverse().find(m => m.role === "user")?.content ?? "";
 
-  if (anchorSessionId) {
+  if (pendingOpsSessionId) {
     try {
-      const meta = getSessionMeta(anchorSessionId);
+      const meta = getSessionMeta(pendingOpsSessionId);
       const pending = meta.pendingOperations as { timestamp: string; journal: unknown[]; finishReason: string } | undefined;
       if (pending?.timestamp) {
         const age = Date.now() - new Date(pending.timestamp).getTime();
         if (age >= PENDING_OPS_TTL_MS) {
           // Stale — clean up
-          mergeSessionMeta(anchorSessionId, { pendingOperations: undefined });
+          mergeSessionMeta(pendingOpsSessionId, { pendingOperations: undefined });
         } else if (pending.journal?.length > 0) {
           // Gate: if user sent a new request, clear pending ops — don't resume
           const isNewRequest = latestUserMessage
@@ -463,7 +463,7 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
             : false;
 
           if (isNewRequest) {
-            mergeSessionMeta(anchorSessionId, { pendingOperations: null });
+            mergeSessionMeta(pendingOpsSessionId, { pendingOperations: null });
           } else {
             const summaries = (pending.journal as Array<{ toolName: string; summary?: string; success: boolean }>)
               .map(j => `- ${j.toolName}: ${j.summary ?? (j.success ? "ok" : "failed")}`)

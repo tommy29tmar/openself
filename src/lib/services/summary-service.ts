@@ -7,7 +7,7 @@ import { generateText } from "ai";
 import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
 import { recordUsage, checkBudget } from "@/lib/services/usage-service";
 import { enqueueJob } from "@/lib/worker/index";
-import { getSessionMeta, type JournalEntry } from "@/lib/services/session-metadata";
+import { type JournalEntry } from "@/lib/services/session-metadata";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 
 type SummaryRow = {
@@ -52,7 +52,7 @@ export function expandSummaryMessageKeys(ownerKey: string, messageKeys: string[]
 function getUnsummarizedMessages(
   ownerKey: string,
   messageKeys: string[],
-): Array<{ id: string; role: string; content: string; createdAt: string | null }> {
+): Array<{ id: string; role: string; content: string; createdAt: string | null; toolCalls: unknown }> {
   if (messageKeys.length === 0) return [];
 
   // Get current cursor
@@ -72,6 +72,7 @@ function getUnsummarizedMessages(
         role: messages.role,
         content: messages.content,
         createdAt: messages.createdAt,
+        toolCalls: messages.toolCalls,
       })
       .from(messages)
       .where(inArray(messages.sessionId, messageKeys))
@@ -86,6 +87,7 @@ function getUnsummarizedMessages(
       role: messages.role,
       content: messages.content,
       createdAt: messages.createdAt,
+      toolCalls: messages.toolCalls,
     })
     .from(messages)
     .where(
@@ -102,6 +104,19 @@ function getUnsummarizedMessages(
     )
     .orderBy(asc(messages.createdAt), asc(messages.id))
     .all();
+}
+
+function extractJournalEntries(toolCalls: unknown): JournalEntry[] {
+  if (!Array.isArray(toolCalls)) return [];
+
+  return toolCalls.filter((entry): entry is JournalEntry => {
+    if (!entry || typeof entry !== "object") return false;
+    const candidate = entry as Record<string, unknown>;
+    return typeof candidate.toolName === "string"
+      && typeof candidate.timestamp === "string"
+      && typeof candidate.durationMs === "number"
+      && typeof candidate.success === "boolean";
+  });
 }
 
 /**
@@ -174,14 +189,9 @@ Write a concise summary focusing on:
 
 Keep the summary concise (under 500 words). Write in third person.`;
 
-  // Circuit F1: read journal from session metadata and build digest
-  const journalEntries: JournalEntry[] = [];
-  for (const sessionKey of effectiveMessageKeys) {
-    const meta = getSessionMeta(sessionKey);
-    if (meta?.journal && Array.isArray(meta.journal)) {
-      journalEntries.push(...(meta.journal as JournalEntry[]));
-    }
-  }
+  // Use persisted assistant tool calls from the unsummarized window so summaries
+  // reflect only the current slice and don't inherit stale session metadata.
+  const journalEntries = unsummarized.flatMap((message) => extractJournalEntries(message.toolCalls));
   const journalDigest = buildJournalDigest(journalEntries);
   const fullPrompt = journalDigest ? `${prompt}\n\n${journalDigest}` : prompt;
 

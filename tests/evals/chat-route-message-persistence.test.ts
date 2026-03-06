@@ -243,4 +243,42 @@ describe("chat route assistant message persistence", () => {
       }),
     );
   });
+
+  it("stores pending operations on the active session instead of the profile anchor", async () => {
+    const { resolveOwnerScope } = await import("@/lib/auth/session");
+    const { isMultiUserEnabled } = await import("@/lib/services/session-service");
+    const { mergeSessionMeta } = await import("@/lib/services/session-metadata");
+
+    vi.mocked(isMultiUserEnabled).mockReturnValue(true);
+    vi.mocked(resolveOwnerScope).mockReturnValue({
+      cognitiveOwnerKey: "profile-1",
+      knowledgeReadKeys: ["sess-anchor", "sess-current"],
+      knowledgePrimaryKey: "sess-anchor",
+      currentSessionId: "sess-current",
+    });
+    mockFinishReason = "tool-calls";
+    mockJournal = [
+      {
+        toolName: "generate_page",
+        timestamp: "2026-03-05T21:16:02.278Z",
+        durationMs: 120,
+        success: true,
+        summary: "composed page",
+      },
+    ];
+
+    const { POST } = await import("@/app/api/chat/route");
+    await POST(makeRequest());
+
+    expect(mergeSessionMeta).toHaveBeenCalledWith(
+      "sess-current",
+      expect.objectContaining({
+        journal: mockJournal,
+        pendingOperations: expect.objectContaining({
+          journal: mockJournal,
+          finishReason: "step_exhaustion",
+        }),
+      }),
+    );
+  });
 });

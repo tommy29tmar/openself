@@ -46,11 +46,26 @@ describe("action claim guard", () => {
         { toolName: "create_fact", success: true },
       ]),
     ).toBe(true);
+
+    expect(
+      hasSuccessfulMutationToolCall([
+        { toolName: "request_publish", success: true },
+        { toolName: "propose_soul_change", success: true },
+      ]),
+    ).toBe(false);
+
+    expect(
+      hasSuccessfulMutationToolCall([
+        { toolName: "review_soul_proposal", success: true, args: { accept: true } },
+      ]),
+    ).toBe(true);
   });
 
   it("detects risky Italian and English completion claims", () => {
     expect(looksLikeUnbackedActionClaim("Salvato. Ora lo vedi in anteprima.")).toBe(true);
     expect(looksLikeUnbackedActionClaim("I've updated it.")).toBe(true);
+    expect(looksLikeUnbackedActionClaim("Ok, aggiunto.")).toBe(true);
+    expect(looksLikeUnbackedActionClaim("Certo, updated.")).toBe(true);
     expect(looksLikeUnbackedActionClaim("Lo controllo e poi ti dico.")).toBe(false);
   });
 
@@ -58,6 +73,14 @@ describe("action claim guard", () => {
     expect(
       sanitizeUnbackedActionClaim(
         "Salvato. Ora lo vedi in anteprima.",
+        [{ toolName: "search_facts", success: true }],
+        "it",
+      ),
+    ).toBe("Non l'ho ancora eseguito. Se vuoi, lo faccio adesso.");
+
+    expect(
+      sanitizeUnbackedActionClaim(
+        "Ok, aggiunto.",
         [{ toolName: "search_facts", success: true }],
         "it",
       ),
@@ -93,6 +116,18 @@ describe("action claim guard", () => {
     expect(output).toEqual([
       { type: "tool-result", toolName: "create_fact", result: { success: true } },
       { type: "text-delta", textDelta: "Salvato. Ora lo vedi in anteprima." },
+    ]);
+  });
+
+  it("stream transform still rewrites publish claims after request_publish because the page is not live yet", async () => {
+    const output = await collect([
+      { type: "tool-result", toolName: "request_publish", result: { success: true } },
+      { type: "text-delta", textDelta: "Pubblicato. Ora e live." },
+    ]);
+
+    expect(output).toEqual([
+      { type: "tool-result", toolName: "request_publish", result: { success: true } },
+      { type: "text-delta", textDelta: "Non l'ho ancora eseguito. Se vuoi, lo faccio adesso." },
     ]);
   });
 });

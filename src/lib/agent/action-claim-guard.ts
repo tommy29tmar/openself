@@ -1,6 +1,7 @@
 type JournalEntry = {
   toolName: string;
   success: boolean;
+  args?: Record<string, unknown>;
 };
 
 type GuardStreamPart =
@@ -8,7 +9,7 @@ type GuardStreamPart =
   | { type: "tool-result"; toolName: string; result: unknown }
   | { type: string; [key: string]: unknown };
 
-const MUTATING_TOOL_NAMES = new Set([
+const COMPLETION_CLAIM_BACKING_TOOL_NAMES = new Set([
   "create_fact",
   "batch_facts",
   "update_fact",
@@ -17,20 +18,17 @@ const MUTATING_TOOL_NAMES = new Set([
   "reorder_sections",
   "move_section",
   "generate_page",
-  "request_publish",
-  "propose_soul_change",
-  "review_soul_proposal",
   "record_event",
-  "confirm_episodic_pattern",
-  "save_memory",
   "set_layout",
-  "propose_lock",
   "resolve_conflict",
   "set_fact_visibility",
   "archive_fact",
   "unarchive_fact",
   "reorder_items",
 ]);
+
+const LEADING_FILLER_PREFIX =
+  /^(?:(?:ok(?:ay)?|certo|va bene|allora|sure|alright|great|perfetto|bene)\s*[,.:;!?-–—]*\s*)+/i;
 
 const DIRECT_ACTION_CLAIM_PREFIXES = [
   /^(?:aggiunt[oaie]|salvat[oaie]|aggiornat[oaie]|rimoss[oaie]|cancellat[oaie]|eliminat[oaie]|pubblicat[oaie]|rigenerat[oaie]|fatto)\b/i,
@@ -52,7 +50,33 @@ function normalize(text: string): string {
   return text
     .trimStart()
     .replaceAll("’", "'")
+    .replace(LEADING_FILLER_PREFIX, "")
     .toLowerCase();
+}
+
+function didToolActuallyCompleteAction(
+  toolName: string,
+  success: boolean,
+  opts?: {
+    args?: Record<string, unknown>;
+    result?: Record<string, unknown> | null;
+  },
+): boolean {
+  if (!success) return false;
+
+  switch (toolName) {
+    case "request_publish":
+    case "propose_soul_change":
+    case "propose_lock":
+    case "save_memory":
+      return false;
+    case "review_soul_proposal":
+      return opts?.args?.accept === true || opts?.result?.accepted === true;
+    case "confirm_episodic_pattern":
+      return opts?.args?.accept === true || opts?.result?.accepted === true;
+    default:
+      return COMPLETION_CLAIM_BACKING_TOOL_NAMES.has(toolName);
+  }
 }
 
 function classifyClaimPrefix(text: string): "wait" | "safe" | "risky" {
@@ -72,14 +96,20 @@ function classifyClaimPrefix(text: string): "wait" | "safe" | "risky" {
 
 function isSuccessfulMutationToolResult(part: GuardStreamPart): boolean {
   if (part.type !== "tool-result") return false;
-  if (!MUTATING_TOOL_NAMES.has(part.toolName)) return false;
-
-  const result = part.result as { success?: boolean } | null | undefined;
-  return result?.success !== false;
+  const result = part.result as Record<string, unknown> | null | undefined;
+  return didToolActuallyCompleteAction(
+    part.toolName,
+    result?.success === true,
+    { result },
+  );
 }
 
 export function hasSuccessfulMutationToolCall(journal: JournalEntry[]): boolean {
-  return journal.some((entry) => entry.success && MUTATING_TOOL_NAMES.has(entry.toolName));
+  return journal.some((entry) =>
+    didToolActuallyCompleteAction(entry.toolName, entry.success, {
+      args: entry.args,
+    }),
+  );
 }
 
 export function looksLikeUnbackedActionClaim(text: string): boolean {

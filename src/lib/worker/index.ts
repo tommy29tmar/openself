@@ -23,14 +23,37 @@ type JobRow = typeof jobs.$inferSelect;
 
 type JobHandler = (payload: Record<string, unknown>) => void | Promise<void>;
 
+function getPageJobContext(payload: Record<string, unknown>) {
+  const username = payload.username as string;
+  const language = (payload.language as string) ?? "en";
+  const legacySessionId = (payload.sessionId as string) ?? "__default__";
+  const ownerKey = typeof payload.ownerKey === "string" && payload.ownerKey.length > 0
+    ? payload.ownerKey
+    : legacySessionId;
+  const scope = resolveOwnerScopeForWorker(ownerKey);
+  const payloadReadKeys = Array.isArray(payload.readKeys)
+    ? payload.readKeys.filter((key): key is string => typeof key === "string" && key.length > 0)
+    : [];
+  const readKeys = payloadReadKeys.length > 0 ? payloadReadKeys : scope.knowledgeReadKeys;
+  const draftSessionId = typeof payload.ownerKey === "string" && payload.ownerKey.length > 0
+    ? scope.knowledgePrimaryKey
+    : legacySessionId;
+
+  return {
+    username,
+    language,
+    readKeys,
+    draftSessionId,
+    profileId: scope.cognitiveOwnerKey,
+  };
+}
+
 const handlers: Record<string, JobHandler> = {
   page_synthesis: (payload) => {
-    const username = payload.username as string;
-    const language = (payload.language as string) ?? "en";
-    const sessionId = (payload.sessionId as string) ?? "__default__";
-    const facts = getActiveFacts(sessionId);
-    const config = composeOptimisticPage(facts, username, language);
-    upsertDraft(username, config, sessionId);
+    const { username, language, readKeys, draftSessionId, profileId } = getPageJobContext(payload);
+    const facts = getActiveFacts(profileId, readKeys);
+    const config = composeOptimisticPage(facts, username, language, undefined, undefined, profileId);
+    upsertDraft(username, config, draftSessionId, profileId);
   },
 
   memory_summary: async (payload) => {
@@ -62,12 +85,10 @@ const handlers: Record<string, JobHandler> = {
   connector_sync: handleConnectorSync,
 
   page_regen: (payload) => {
-    const username = payload.username as string;
-    const language = (payload.language as string) ?? "en";
-    const sessionId = (payload.sessionId as string) ?? "__default__";
-    const facts = getActiveFacts(sessionId);
-    const config = composeOptimisticPage(facts, username, language);
-    upsertDraft(username, config, sessionId);
+    const { username, language, readKeys, draftSessionId, profileId } = getPageJobContext(payload);
+    const facts = getActiveFacts(profileId, readKeys);
+    const config = composeOptimisticPage(facts, username, language, undefined, undefined, profileId);
+    upsertDraft(username, config, draftSessionId, profileId);
   },
 
   taxonomy_review: () => {

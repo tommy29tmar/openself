@@ -55,4 +55,12 @@ describe("prompt contracts", () => {
     expect(src).toMatch(/experience.*without dates|without dates.*experience/i);
     expect(src).toMatch(/start.*null|null.*start/i);
   });
+
+  it("workflow examples use current tool signatures", () => {
+    expect(src).not.toContain("search_facts(category)");
+    expect(src).not.toContain('search_facts("identity")');
+    expect(src).not.toContain("create_fact(category, value)");
+    expect(src).toContain('search_facts({ query: "identity role" })');
+    expect(src).toContain("create_fact({ category, key, value })");
+  });
 });

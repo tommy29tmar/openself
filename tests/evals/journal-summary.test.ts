@@ -36,11 +36,6 @@ vi.mock("@/lib/worker/index", () => ({
   enqueueJob: (...args: any[]) => mockEnqueueJob(...args),
 }));
 
-const mockGetSessionMeta = vi.fn(() => ({}));
-vi.mock("@/lib/services/session-metadata", () => ({
-  getSessionMeta: (...args: any[]) => mockGetSessionMeta(...args),
-}));
-
 const mockResolveOwnerScopeForWorker = vi.fn(() => ({
   cognitiveOwnerKey: "owner-1",
   knowledgeReadKeys: [],
@@ -75,7 +70,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/lib/db/schema", () => ({
-  messages: { sessionId: "sessionId", createdAt: "createdAt", id: "id", role: "role", content: "content" },
+  messages: { sessionId: "sessionId", createdAt: "createdAt", id: "id", role: "role", content: "content", toolCalls: "toolCalls" },
   conversationSummaries: { ownerKey: "ownerKey", summary: "summary" },
 }));
 
@@ -91,7 +86,6 @@ import type { JournalEntry } from "@/lib/services/session-metadata";
 beforeEach(() => {
   vi.clearAllMocks();
   mockCheckBudget.mockReturnValue({ allowed: true });
-  mockGetSessionMeta.mockReturnValue({});
   mockResolveOwnerScopeForWorker.mockReturnValue({
     cognitiveOwnerKey: "owner-1",
     knowledgeReadKeys: [],
@@ -199,7 +193,7 @@ describe("expandSummaryMessageKeys", () => {
 // ---------------------------------------------------------------------------
 
 // Helper: set up DB mocks for generateSummary to succeed end-to-end
-async function setupGenerateSummaryMocks(messageRows: Array<{ id: string; role: string; content: string; createdAt: string }>) {
+async function setupGenerateSummaryMocks(messageRows: Array<{ id: string; role: string; content: string; createdAt: string; toolCalls?: unknown }>) {
   const { db, sqlite } = await import("@/lib/db");
 
   // Track calls to disambiguate first cursor SELECT (getUnsummarizedMessages)
@@ -242,18 +236,27 @@ describe("generateSummary journal integration", () => {
   it("includes journal digest in LLM prompt when journal entries exist", async () => {
     await setupGenerateSummaryMocks([
       { id: "m1", role: "user", content: "Update my bio", createdAt: "2026-01-01T00:00:00Z" },
-      { id: "m2", role: "assistant", content: "Done!", createdAt: "2026-01-01T00:00:01Z" },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "Done!",
+        createdAt: "2026-01-01T00:00:01Z",
+        toolCalls: [
+          { toolName: "create_fact", timestamp: "2026-01-01T00:00:00Z", durationMs: 10, success: true },
+        ],
+      },
       { id: "m3", role: "user", content: "Add skills", createdAt: "2026-01-01T00:00:02Z" },
-      { id: "m4", role: "assistant", content: "Added", createdAt: "2026-01-01T00:00:03Z" },
+      {
+        id: "m4",
+        role: "assistant",
+        content: "Added",
+        createdAt: "2026-01-01T00:00:03Z",
+        toolCalls: [
+          { toolName: "generate_page", timestamp: "2026-01-01T00:00:01Z", durationMs: 100, success: true },
+        ],
+      },
       { id: "m5", role: "user", content: "Thanks", createdAt: "2026-01-01T00:00:04Z" },
     ]);
-
-    mockGetSessionMeta.mockReturnValue({
-      journal: [
-        { toolName: "create_fact", timestamp: "2026-01-01T00:00:00Z", durationMs: 10, success: true },
-        { toolName: "generate_page", timestamp: "2026-01-01T00:00:01Z", durationMs: 100, success: true },
-      ],
-    });
 
     const result = await generateSummary("owner-1", ["sess-1"]);
     expect(result).toBe(true);
@@ -274,8 +277,6 @@ describe("generateSummary journal integration", () => {
       { id: "m5", role: "user", content: "Ok", createdAt: "2026-01-01T00:00:04Z" },
     ]);
 
-    mockGetSessionMeta.mockReturnValue({}); // no journal
-
     const result = await generateSummary("owner-1", ["sess-1"]);
     expect(result).toBe(true);
 
@@ -286,23 +287,24 @@ describe("generateSummary journal integration", () => {
 
   it("aggregates journal entries from multiple session keys", async () => {
     await setupGenerateSummaryMocks([
-      { id: "m1", role: "user", content: "a", createdAt: "t1" },
-      { id: "m2", role: "assistant", content: "b", createdAt: "t2" },
-      { id: "m3", role: "user", content: "c", createdAt: "t3" },
-      { id: "m4", role: "assistant", content: "d", createdAt: "t4" },
-      { id: "m5", role: "user", content: "e", createdAt: "t5" },
+      {
+        id: "m1",
+        role: "assistant",
+        content: "a",
+        createdAt: "t1",
+        toolCalls: [{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }],
+      },
+      { id: "m2", role: "user", content: "b", createdAt: "t2" },
+      {
+        id: "m3",
+        role: "assistant",
+        content: "c",
+        createdAt: "t3",
+        toolCalls: [{ toolName: "create_fact", timestamp: "t2", durationMs: 10, success: true }],
+      },
+      { id: "m4", role: "user", content: "d", createdAt: "t4" },
+      { id: "m5", role: "assistant", content: "e", createdAt: "t5" },
     ]);
-
-    // Two sessions, each with journal entries
-    mockGetSessionMeta.mockImplementation((sessionKey: string) => {
-      if (sessionKey === "sess-1") {
-        return { journal: [{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }] };
-      }
-      if (sessionKey === "sess-2") {
-        return { journal: [{ toolName: "create_fact", timestamp: "t2", durationMs: 10, success: true }] };
-      }
-      return {};
-    });
 
     const result = await generateSummary("owner-1", ["sess-1", "sess-2"]);
     expect(result).toBe(true);
@@ -312,10 +314,16 @@ describe("generateSummary journal integration", () => {
     expect(callArgs.prompt).toContain("create_fact: 2x");
   });
 
-  it("expands payload keys with current owner scope before reading session metadata", async () => {
+  it("ignores stale session metadata and only uses toolCalls from unsummarized messages", async () => {
     await setupGenerateSummaryMocks([
       { id: "m1", role: "user", content: "a", createdAt: "t1" },
-      { id: "m2", role: "assistant", content: "b", createdAt: "t2" },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "b",
+        createdAt: "t2",
+        toolCalls: [{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }],
+      },
       { id: "m3", role: "user", content: "c", createdAt: "t3" },
       { id: "m4", role: "assistant", content: "d", createdAt: "t4" },
       { id: "m5", role: "user", content: "e", createdAt: "t5" },
@@ -327,23 +335,11 @@ describe("generateSummary journal integration", () => {
       knowledgePrimaryKey: "sess-1",
       currentSessionId: "sess-1",
     });
-    mockGetSessionMeta.mockImplementation((sessionKey: string) => {
-      if (sessionKey === "sess-1") {
-        return { journal: [{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }] };
-      }
-      if (sessionKey === "sess-2") {
-        return { journal: [{ toolName: "create_fact", timestamp: "t2", durationMs: 10, success: true }] };
-      }
-      return {};
-    });
 
     const result = await generateSummary("owner-1", ["sess-1"]);
     expect(result).toBe(true);
 
-    expect(mockGetSessionMeta).toHaveBeenCalledWith("sess-1");
-    expect(mockGetSessionMeta).toHaveBeenCalledWith("sess-2");
-
     const callArgs = vi.mocked(generateText).mock.calls[0][0] as any;
-    expect(callArgs.prompt).toContain("create_fact: 2x");
+    expect(callArgs.prompt).toContain("create_fact: 1x");
   });
 });

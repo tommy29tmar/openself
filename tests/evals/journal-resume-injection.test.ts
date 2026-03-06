@@ -56,6 +56,13 @@ const SCOPE: OwnerScope = {
   currentSessionId: "sess-a",
 };
 
+const ROTATED_SCOPE: OwnerScope = {
+  cognitiveOwnerKey: "cog-1",
+  knowledgeReadKeys: ["sess-a", "sess-b"],
+  knowledgePrimaryKey: "sess-a",
+  currentSessionId: "sess-b",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Clear session meta
@@ -130,5 +137,31 @@ describe("journal resume injection", () => {
     ]);
 
     expect(systemPrompt).not.toContain("INCOMPLETE_OPERATION");
+  });
+
+  it("reads and clears pending operations from the active conversation session when provided", () => {
+    mockSessionMeta["sess-b"] = {
+      pendingOperations: {
+        timestamp: new Date().toISOString(),
+        journal: [
+          { toolName: "create_fact", summary: "skill/rust", success: true },
+        ],
+        finishReason: "step_exhaustion",
+      },
+    };
+
+    const { systemPrompt } = assembleContext(
+      ROTATED_SCOPE,
+      "en",
+      [{ role: "user", content: "continue" }],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "sess-b",
+    );
+
+    expect(systemPrompt).toContain("create_fact: skill/rust");
+    expect(mergeSessionMeta).not.toHaveBeenCalledWith("sess-a", expect.anything());
   });
 });

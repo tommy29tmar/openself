@@ -209,6 +209,8 @@ describe("buildSystemPrompt", () => {
         { schemaMode: "minimal" },
       );
       expect(result).toContain("EDIT WORKFLOW (quick updates):");
+      expect(result).toContain('search_facts({ query: "..." })');
+      expect(result).toContain("create_fact({ category, key, value })");
       expect(result).toContain("update_fact ALWAYS requires the FULL new value object");
       expect(result).not.toContain("After collecting name + role + 2-3 more facts");
     });
