@@ -22,6 +22,10 @@ export async function POST(
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
-  rejectProposal(proposalId);
+  const result = rejectProposal(proposalId, auth.profileId);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 404 });
+  }
+
   return NextResponse.json({ ok: true });
 }

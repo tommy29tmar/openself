@@ -257,6 +257,40 @@ function buildMinimalSchemaForOnboarding(): string {
 After collecting name + role + 2-3 more facts, call generate_page.`;
 }
 
+function buildMinimalSchemaForEditing(): string {
+  return `EDIT WORKFLOW (quick updates):
+- Use search_facts(category) before update_fact or delete_fact when you need the exact factId
+- Use create_fact for additions, update_fact for changes, delete_fact for removals
+- update_fact ALWAYS requires the FULL new value object, not just the changed field
+- After fact changes, call generate_page once to rebuild the draft
+- These edits update the DRAFT first. The public page changes only after re-publish
+
+COMMON VALUE SHAPES:
+- identity: {full?, role?, city?, tagline?}
+- experience: {role, company, start?: "YYYY-MM"|null, end?: "YYYY-MM"|null, status: "current"|"past"}
+- education: {institution, degree?, field?, period?}
+- skill: {name, level?: "beginner"|"intermediate"|"advanced"|"expert"}
+- interest: {name, detail?}
+- activity: {name, activityType?, frequency?, description?}
+- project: {name, description?, url?, status?: "active"|"completed"}
+- language: {language, proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"}
+- contact: {type: "email"|"phone"|"location"|"website", value: "..."}
+When the user asks for a concrete change and you already have enough info, execute it in this turn instead of only describing the plan.`;
+}
+
+function buildMinimalSchemaReference(
+  journeyState: BootstrapPayload["journeyState"],
+): string {
+  switch (journeyState) {
+    case "draft_ready":
+    case "active_fresh":
+    case "active_stale":
+      return buildMinimalSchemaForEditing();
+    default:
+      return buildMinimalSchemaForOnboarding();
+  }
+}
+
 const OUTPUT_CONTRACT = `Output rules:
 - Respond in natural language to the user
 - Tool calls happen silently — the user should not see JSON or technical details
@@ -316,7 +350,7 @@ export function buildSystemPrompt(
     effectiveSchemaMode === "full"
       ? [FACT_SCHEMA_REFERENCE, DATA_MODEL_REFERENCE]
       : effectiveSchemaMode === "minimal"
-        ? [buildMinimalSchemaForOnboarding()]
+        ? [buildMinimalSchemaReference(bootstrap.journeyState)]
         : [];
 
   const blocks = [

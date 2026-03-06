@@ -202,6 +202,27 @@ describe("buildSystemPrompt", () => {
     });
   });
 
+  describe("minimal schema variants", () => {
+    it("uses edit-oriented minimal schema for active_fresh", () => {
+      const result = buildSystemPrompt(
+        makeBootstrap({ journeyState: "active_fresh" }),
+        { schemaMode: "minimal" },
+      );
+      expect(result).toContain("EDIT WORKFLOW (quick updates):");
+      expect(result).toContain("update_fact ALWAYS requires the FULL new value object");
+      expect(result).not.toContain("After collecting name + role + 2-3 more facts");
+    });
+
+    it("uses onboarding minimal schema for first_visit", () => {
+      const result = buildSystemPrompt(
+        makeBootstrap({ journeyState: "first_visit" }),
+        { schemaMode: "minimal" },
+      );
+      expect(result).toContain("After collecting name + role + 2-3 more facts");
+      expect(result).not.toContain("EDIT WORKFLOW (quick updates):");
+    });
+  });
+
   describe("language passthrough", () => {
     it("passes language to journey policy", () => {
       const result = buildSystemPrompt(makeBootstrap({ language: "it" }));

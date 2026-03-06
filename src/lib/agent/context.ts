@@ -157,7 +157,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     pageState: { include: true, budget: 1500 },
     richness: { include: true },
     layoutIntelligence: { include: true },
-    schemaMode: "none",
+    schemaMode: "minimal",
   },
   active_stale: {
     facts: { include: true, budget: 17000 },
@@ -168,7 +168,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     pageState: { include: true, budget: 1500 },
     richness: { include: true },
     layoutIntelligence: { include: false },
-    schemaMode: "none",
+    schemaMode: "minimal",
   },
   blocked: {
     facts: { include: false, budget: 0 },

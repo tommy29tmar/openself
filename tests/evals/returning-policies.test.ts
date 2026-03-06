@@ -177,6 +177,10 @@ describe("draftReadyPolicy", () => {
     it("says regenerate immediately when the user explicitly asks", () => {
       expect(policyEn).toMatch(/explicitly asks to regenerate|rebuild immediately/i);
     });
+
+    it("requires executing concrete edits in the same turn", () => {
+      expect(policyEn).toMatch(/concrete add\/update\/remove.*this turn|do not stop at .*I'll add it/i);
+    });
   });
 
   describe("banned patterns", () => {
@@ -262,6 +266,10 @@ describe("activeFreshPolicy", () => {
 
     it("references search_facts", () => {
       expect(policyEn).toContain("search_facts");
+    });
+
+    it("requires executing concrete edits in the same turn", () => {
+      expect(policyEn).toMatch(/concrete.*add\/update\/remove.*this turn|do not just say you'll do it/i);
     });
   });
 
@@ -354,6 +362,10 @@ describe("activeStalePolicy", () => {
 
     it("limits fact-gathering to max 6 exchanges", () => {
       expect(policyEn).toMatch(/6\s*exchange|max.*6|exchange\s*6/i);
+    });
+
+    it("requires executing concrete edits in the same turn", () => {
+      expect(policyEn).toMatch(/concrete.*add\/update\/remove.*this turn|do not just answer with the plan/i);
     });
   });
 

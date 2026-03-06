@@ -74,9 +74,9 @@ describe("proposal API contracts", () => {
     expect(result.error).toBe("PROPOSAL_NOT_FOUND");
   });
 
-  it("rejectProposal returns void", () => {
-    mockRejectProposal.mockReturnValue(undefined);
-    expect(mockRejectProposal(1)).toBeUndefined();
+  it("rejectProposal returns ok on success", () => {
+    mockRejectProposal.mockReturnValue({ ok: true });
+    expect(mockRejectProposal(1)).toEqual({ ok: true });
   });
 
   it("markStaleProposals returns count of stale proposals", () => {

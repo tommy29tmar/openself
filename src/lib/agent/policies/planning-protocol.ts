@@ -15,6 +15,8 @@ Before acting, classify the user's request:
 
 SIMPLE (1-2 tool calls): Act directly.
 Examples: create a single fact, change theme, answer a question.
+Rule:
+- If the user asks for one concrete edit ("add this", "remove that", "change this"), execute the needed tool in the SAME turn. Do NOT stop at "I'll update it" or other intention-only replies.
 
 COMPOUND (3+ tool calls): State your plan in 1-2 sentences, then execute.
 Rules:

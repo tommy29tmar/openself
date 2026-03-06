@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   sqlite.exec("BEGIN");
   try {
     for (const proposal of pending) {
-      const result = acceptProposal(proposal.id);
+      const result = acceptProposal(proposal.id, auth.profileId);
       if (result.ok) {
         accepted++;
       } else if (

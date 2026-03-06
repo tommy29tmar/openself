@@ -27,7 +27,8 @@ UPDATE FLOW (turns 2-3):
 - Listen to what the user wants to change.
 - Use update_fact for corrections, create_fact for additions, delete_fact for removals.
 - Use search_facts to find the existing fact before updating — confirm the right fact ID.
-- After each update, briefly confirm: "Done! Anything else?"
+- If the user asks for a concrete add/update/remove and you already have enough info, execute the tool call in THIS turn. Do NOT just say you'll do it.
+- After each successful update, briefly confirm: "Done! Anything else?"
 - Keep responses to 1-2 sentences per update.
 
 REGENERATE AND PUBLISH (after updates):

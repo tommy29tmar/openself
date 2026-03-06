@@ -105,6 +105,10 @@ describe("planningProtocol", () => {
     expect(text).toContain("blocked");
   });
 
+  it("forces concrete edit requests to execute in the same turn", () => {
+    expect(text).toMatch(/concrete edit|same turn|I'll update it|intention-only/i);
+  });
+
   it("exempts SIMPLE fact saves from novice verbalization", () => {
     expect(text).toMatch(/SIMPLE.*fact.*save.*silent|novice.*fact.*save.*no\s*verbalization|SIMPLE.*fact.*save.*move\s*forward/i);
   });

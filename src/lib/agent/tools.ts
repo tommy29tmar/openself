@@ -1167,7 +1167,11 @@ After recording a "milestone" event, ask if user wants it added to their public 
           eventAtUnix, eventAtHuman, actionType,
           narrativeSummary: summary, entities: entities ?? [],
         });
-        if (ownerKey) logTrustAction(effectiveOwnerKey, "record_event", `Recorded ${actionType}`, eventId);
+        if (ownerKey) {
+          logTrustAction(effectiveOwnerKey, "record_event", `Recorded ${actionType}`, {
+            entityId: eventId,
+          });
+        }
         try { enqueueJob("consolidate_episodes", { ownerKey: effectiveOwnerKey }); }
         catch (err) {
           console.warn("[record_event] enqueueJob unexpected error:", String(err));
@@ -1260,8 +1264,14 @@ Do NOT call in a loop.`,
           const ok = resolveEpisodicProposal(proposalId, effectiveOwnerKey, accept);
           if (!ok) return { success: false, error: "Proposal not found, already resolved, expired, or owner mismatch" };
         }
-        if (ownerKey) logTrustAction(effectiveOwnerKey, "confirm_episodic_pattern",
-          accept ? "Accepted" : "Rejected", proposalId);
+        if (ownerKey) {
+          logTrustAction(
+            effectiveOwnerKey,
+            "confirm_episodic_pattern",
+            accept ? "Accepted" : "Rejected",
+            { entityId: proposalId },
+          );
+        }
         return { success: true, proposalId, accepted: accept, factId, recomposeOk };
       } catch (err) {
         return { success: false, error: String(err) };

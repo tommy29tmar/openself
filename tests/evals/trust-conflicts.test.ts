@@ -239,6 +239,52 @@ describe("Fact Conflicts", () => {
     expect(b).toBeUndefined();
   });
 
+  it("reverseTrustAction restores facts after merge resolution", () => {
+    const owner = `conflict-merge-${randomUUID()}`;
+    const factAId = `fa-merge-${randomUUID()}`;
+    const factBId = `fb-merge-${randomUUID()}`;
+    const sessionId = `sess-${randomUUID()}`;
+
+    sqlite
+      .prepare("INSERT INTO sessions(id, invite_code) VALUES(?, 'test')")
+      .run(sessionId);
+    sqlite
+      .prepare(
+        "INSERT INTO facts(id, session_id, category, key, value) VALUES(?, ?, 'test', 'keyA-merge', ?)",
+      )
+      .run(factAId, sessionId, '{"label":"alpha"}');
+    sqlite
+      .prepare(
+        "INSERT INTO facts(id, session_id, category, key, value) VALUES(?, ?, 'test', 'keyB-merge', ?)",
+      )
+      .run(factBId, sessionId, '{"label":"beta"}');
+
+    const c = createConflict(owner, factAId, factBId, "test", "merge-key", "chat", "connector");
+    expect(c).not.toBeNull();
+
+    const result = resolveConflict(c!.id, owner, "merge", { label: "merged" });
+    expect(result.success).toBe(true);
+
+    const ledgerEntry = getTrustLedger(owner).find((entry) => entry.entityId === c!.id);
+    expect(ledgerEntry).toBeTruthy();
+    expect(reverseTrustAction(ledgerEntry!.id, owner)).toBe(true);
+
+    const conflictRow = sqlite
+      .prepare("SELECT status, resolution FROM fact_conflicts WHERE id = ?")
+      .get(c!.id) as { status: string; resolution: string | null };
+    expect(conflictRow.status).toBe("open");
+    expect(conflictRow.resolution).toBeNull();
+
+    const factA = sqlite
+      .prepare("SELECT value FROM facts WHERE id = ?")
+      .get(factAId) as { value: string };
+    const factB = sqlite
+      .prepare("SELECT value FROM facts WHERE id = ?")
+      .get(factBId) as { value: string };
+    expect(factA.value).toBe('{"label":"alpha"}');
+    expect(factB.value).toBe('{"label":"beta"}');
+  });
+
   it("resolveConflict on already-resolved conflict returns error", () => {
     const owner = `conflict-dup-${randomUUID()}`;
     const factAId = `fa-dup-${randomUUID()}`;

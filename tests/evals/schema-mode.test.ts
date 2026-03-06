@@ -23,6 +23,8 @@ function makeBootstrap(journeyState: string): BootstrapPayload {
 const FULL_SCHEMA_MARKER = "| experience |";
 // minimal schema contains "experience:" in a different format
 const MINIMAL_SCHEMA_MARKER = "experience: {role, company";
+const EDIT_SCHEMA_MARKER = "EDIT WORKFLOW (quick updates):";
+const ONBOARDING_MARKER = "After collecting name + role + 2-3 more facts, call generate_page.";
 
 describe("schemaMode per journey state", () => {
   it("first_visit: injects minimal schema, not full", () => {
@@ -40,17 +42,23 @@ describe("schemaMode per journey state", () => {
     const prompt = buildSystemPrompt(makeBootstrap("draft_ready"), { schemaMode: "minimal" });
     expect(prompt).toContain(MINIMAL_SCHEMA_MARKER);
     expect(prompt).not.toContain(FULL_SCHEMA_MARKER);
+    expect(prompt).toContain(EDIT_SCHEMA_MARKER);
+    expect(prompt).not.toContain(ONBOARDING_MARKER);
   });
 
-  it("active_fresh: injects no schema", () => {
-    const prompt = buildSystemPrompt(makeBootstrap("active_fresh"), { schemaMode: "none" });
+  it("active_fresh: injects minimal edit schema", () => {
+    const prompt = buildSystemPrompt(makeBootstrap("active_fresh"), { schemaMode: "minimal" });
+    expect(prompt).toContain(MINIMAL_SCHEMA_MARKER);
     expect(prompt).not.toContain(FULL_SCHEMA_MARKER);
+    expect(prompt).toContain(EDIT_SCHEMA_MARKER);
+    expect(prompt).not.toContain(ONBOARDING_MARKER);
   });
 
-  it("active_stale: injects no schema (returning users don't need model explanation)", () => {
-    const prompt = buildSystemPrompt(makeBootstrap("active_stale"), { schemaMode: "none" });
+  it("active_stale: injects minimal edit schema", () => {
+    const prompt = buildSystemPrompt(makeBootstrap("active_stale"), { schemaMode: "minimal" });
     expect(prompt).not.toContain(FULL_SCHEMA_MARKER);
-    expect(prompt).not.toContain(MINIMAL_SCHEMA_MARKER);
-    expect(prompt).not.toContain("call generate_page");
+    expect(prompt).toContain(MINIMAL_SCHEMA_MARKER);
+    expect(prompt).toContain(EDIT_SCHEMA_MARKER);
+    expect(prompt).not.toContain(ONBOARDING_MARKER);
   });
 });

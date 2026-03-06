@@ -110,12 +110,23 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
     /**
      * Get a single proposal by ID.
      */
-    getProposal(id: number): ProposalRow | null {
-      const row = db
-        .select()
-        .from(sectionCopyProposals)
-        .where(eq(sectionCopyProposals.id, id))
-        .get();
+    getProposal(id: number, ownerKey?: string): ProposalRow | null {
+      const row = ownerKey
+        ? db
+            .select()
+            .from(sectionCopyProposals)
+            .where(
+              and(
+                eq(sectionCopyProposals.id, id),
+                eq(sectionCopyProposals.ownerKey, ownerKey),
+              ),
+            )
+            .get()
+        : db
+            .select()
+            .from(sectionCopyProposals)
+            .where(eq(sectionCopyProposals.id, id))
+            .get();
 
       return row ? rowToProposal(row) : null;
     },
@@ -127,8 +138,8 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
      *
      * On success, upserts the proposed content into section_copy_state.
      */
-    acceptProposal(id: number): { ok: boolean; error?: string } {
-      const proposal = svc.getProposal(id);
+    acceptProposal(id: number, ownerKey?: string): { ok: boolean; error?: string } {
+      const proposal = svc.getProposal(id, ownerKey);
       if (!proposal || proposal.status !== "pending") {
         return { ok: false, error: "PROPOSAL_NOT_FOUND" };
       }
@@ -153,7 +164,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
         proposal.factsHash !== currentFactsHash ||
         proposal.soulHash !== currentSoulHash
       ) {
-        svc.markStale(id);
+        svc.markStale(id, proposal.ownerKey);
         return { ok: false, error: "STALE_PROPOSAL" };
       }
 
@@ -176,7 +187,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
             .personalizedContent as string,
         );
         if (currentStateHash !== proposal.baselineStateHash) {
-          svc.markStale(id);
+          svc.markStale(id, proposal.ownerKey);
           return { ok: false, error: "STATE_CHANGED" };
         }
       }
@@ -210,7 +221,12 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
 
       db.update(sectionCopyProposals)
         .set({ status: "accepted", reviewedAt: new Date().toISOString() })
-        .where(eq(sectionCopyProposals.id, id))
+        .where(
+          and(
+            eq(sectionCopyProposals.id, id),
+            eq(sectionCopyProposals.ownerKey, proposal.ownerKey),
+          ),
+        )
         .run();
 
       return { ok: true };
@@ -219,21 +235,50 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
     /**
      * Reject a proposal — marks as rejected with timestamp.
      */
-    rejectProposal(id: number): void {
-      db.update(sectionCopyProposals)
+    rejectProposal(id: number, ownerKey?: string): { ok: boolean; error?: string } {
+      const result = ownerKey
+        ? db.update(sectionCopyProposals)
+            .set({ status: "rejected", reviewedAt: new Date().toISOString() })
+            .where(
+              and(
+                eq(sectionCopyProposals.id, id),
+                eq(sectionCopyProposals.ownerKey, ownerKey),
+                eq(sectionCopyProposals.status, "pending"),
+              ),
+            )
+            .run()
+        : db.update(sectionCopyProposals)
         .set({ status: "rejected", reviewedAt: new Date().toISOString() })
-        .where(eq(sectionCopyProposals.id, id))
+        .where(
+          and(
+            eq(sectionCopyProposals.id, id),
+            eq(sectionCopyProposals.status, "pending"),
+          ),
+        )
         .run();
+
+      if (result.changes !== 1) {
+        return { ok: false, error: "PROPOSAL_NOT_FOUND" };
+      }
+
+      return { ok: true };
     },
 
     /**
      * Mark a single proposal as stale.
      */
-    markStale(id: number): void {
-      db.update(sectionCopyProposals)
+    markStale(id: number, ownerKey?: string): void {
+      const query = db.update(sectionCopyProposals)
         .set({ status: "stale" })
-        .where(eq(sectionCopyProposals.id, id))
-        .run();
+        .where(
+          ownerKey
+            ? and(
+                eq(sectionCopyProposals.id, id),
+                eq(sectionCopyProposals.ownerKey, ownerKey),
+              )
+            : eq(sectionCopyProposals.id, id),
+        );
+      query.run();
     },
 
     /**

@@ -293,6 +293,18 @@ describe("acceptProposal", () => {
     const result = svc.acceptProposal(row.id);
     expect(result).toEqual({ ok: false, error: "PROPOSAL_NOT_FOUND" });
   });
+
+  it("returns PROPOSAL_NOT_FOUND when owner scope does not match", () => {
+    const svc = createProposalService(testDb as any);
+    svc.createProposal(makeProposal({ ownerKey: "owner-a" }));
+
+    const row = testSqlite
+      .prepare("SELECT id FROM section_copy_proposals LIMIT 1")
+      .get() as { id: number };
+
+    const result = svc.acceptProposal(row.id, "owner-b");
+    expect(result).toEqual({ ok: false, error: "PROPOSAL_NOT_FOUND" });
+  });
 });
 
 describe("rejectProposal", () => {
@@ -304,11 +316,26 @@ describe("rejectProposal", () => {
       .prepare("SELECT id FROM section_copy_proposals LIMIT 1")
       .get() as { id: number };
 
-    svc.rejectProposal(row.id);
+    expect(svc.rejectProposal(row.id)).toEqual({ ok: true });
 
     const proposal = svc.getProposal(row.id);
     expect(proposal!.status).toBe("rejected");
     expect(proposal!.reviewedAt).toBeTruthy();
+  });
+
+  it("returns PROPOSAL_NOT_FOUND when owner scope does not match", () => {
+    const svc = createProposalService(testDb as any);
+    svc.createProposal(makeProposal({ ownerKey: "owner-a" }));
+
+    const row = testSqlite
+      .prepare("SELECT id FROM section_copy_proposals LIMIT 1")
+      .get() as { id: number };
+
+    const result = svc.rejectProposal(row.id, "owner-b");
+    expect(result).toEqual({ ok: false, error: "PROPOSAL_NOT_FOUND" });
+
+    const proposal = svc.getProposal(row.id);
+    expect(proposal!.status).toBe("pending");
   });
 });
 

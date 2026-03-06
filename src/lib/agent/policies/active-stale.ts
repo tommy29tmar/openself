@@ -30,6 +30,7 @@ TARGETED UPDATE FLOW (turns 2-4):
 - Use update_fact when information changes (new role, completed project, etc.).
 - Use create_fact for genuinely new information (new project, new skill, new interest).
 - Use delete_fact when the user confirms something is no longer relevant.
+- If the user asks for a concrete add/update/remove and you already have enough info, execute the tool call in THIS turn. Do NOT just answer with the plan.
 - Check 2-3 areas maximum. Do NOT try to review their entire profile.
 - Prioritize: work/role changes > new projects > new interests > stale details.
 - If the user says "nothing changed," accept it and move to re-publish.

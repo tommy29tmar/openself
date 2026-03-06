@@ -27,6 +27,34 @@ export type ConflictRow = {
   resolvedAt: string | null;
 };
 
+type ConflictResolution = "keep_a" | "keep_b" | "merge" | "dismissed";
+type FactSnapshot = typeof facts.$inferSelect;
+type ConflictReverseOp =
+  | { action: "restore"; factId: string; previousValue: unknown }
+  | {
+      action: "recreate";
+      factId: string;
+      previousFact: Record<string, unknown>;
+    };
+
+function getFactSnapshot(factId: string): FactSnapshot | undefined {
+  return db
+    .select()
+    .from(facts)
+    .where(eq(facts.id, factId))
+    .get() as FactSnapshot | undefined;
+}
+
+function buildRecreateOp(fact: FactSnapshot | undefined): ConflictReverseOp | null {
+  if (!fact) return null;
+  const { id, ...rest } = fact;
+  return {
+    action: "recreate",
+    factId: id,
+    previousFact: rest as Record<string, unknown>,
+  };
+}
+
 /**
  * Get open conflicts for an owner.
  */
@@ -104,60 +132,88 @@ export function createConflict(
 export function resolveConflict(
   conflictId: string,
   ownerKey: string,
-  resolution: "keep_a" | "keep_b" | "merge" | "dismissed",
+  resolution: ConflictResolution,
   mergedValue?: Record<string, unknown>,
 ): { success: boolean; error?: string } {
-  const conflict = db
-    .select()
-    .from(factConflicts)
-    .where(
-      and(
-        eq(factConflicts.id, conflictId),
-        eq(factConflicts.ownerKey, ownerKey),
-        eq(factConflicts.status, "open"),
-      ),
-    )
-    .get() as ConflictRow | undefined;
-
-  if (!conflict) {
-    return { success: false, error: "Conflict not found or already resolved" };
+  if (resolution === "merge" && !mergedValue) {
+    return { success: false, error: "mergedValue is required for merge resolution" };
   }
 
-  const now = new Date().toISOString();
+  return sqlite.transaction(() => {
+    const conflict = db
+      .select()
+      .from(factConflicts)
+      .where(
+        and(
+          eq(factConflicts.id, conflictId),
+          eq(factConflicts.ownerKey, ownerKey),
+          eq(factConflicts.status, "open"),
+        ),
+      )
+      .get() as ConflictRow | undefined;
 
-  // Apply resolution
-  if (resolution === "keep_a" && conflict.factBId) {
-    // Delete fact B
-    sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factBId);
-  } else if (resolution === "keep_b") {
-    // Delete fact A
-    sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factAId);
-  } else if (resolution === "merge" && mergedValue) {
-    // Update fact A with merged value, delete fact B
-    sqlite
-      .prepare("UPDATE facts SET value = ?, updated_at = ? WHERE id = ?")
-      .run(JSON.stringify(mergedValue), now, conflict.factAId);
-    if (conflict.factBId) {
-      sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factBId);
+    if (!conflict) {
+      return { success: false, error: "Conflict not found or already resolved" };
     }
-  }
 
-  // Mark resolved
-  sqlite
-    .prepare(
-      "UPDATE fact_conflicts SET status = ?, resolution = ?, resolved_at = ? WHERE id = ?",
-    )
-    .run(resolution === "dismissed" ? "dismissed" : "resolved", resolution, now, conflictId);
+    const now = new Date().toISOString();
+    const reverseOps: ConflictReverseOp[] = [];
+    const factA = getFactSnapshot(conflict.factAId);
+    const factB = conflict.factBId ? getFactSnapshot(conflict.factBId) : undefined;
 
-  // Trust ledger entry
-  logTrustAction(ownerKey, "conflict_resolved", `Resolved conflict: ${resolution}`, {
-    entityId: conflictId,
-    details: { resolution, category: conflict.category, key: conflict.key },
-    undoPayload: {
-      action: "reopen_conflict",
-      conflictId,
-    },
-  });
+    // Apply resolution and capture the inverse operation for trust-ledger undo.
+    if (resolution === "keep_a" && conflict.factBId) {
+      const recreateFactB = buildRecreateOp(factB);
+      if (recreateFactB) reverseOps.push(recreateFactB);
+      sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factBId);
+    } else if (resolution === "keep_b") {
+      const recreateFactA = buildRecreateOp(factA);
+      if (recreateFactA) reverseOps.push(recreateFactA);
+      sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factAId);
+    } else if (resolution === "merge" && mergedValue) {
+      if (factA) {
+        reverseOps.push({
+          action: "restore",
+          factId: factA.id,
+          previousValue: factA.value,
+        });
+      }
+      sqlite
+        .prepare("UPDATE facts SET value = ?, updated_at = ? WHERE id = ?")
+        .run(JSON.stringify(mergedValue), now, conflict.factAId);
+      if (conflict.factBId) {
+        const recreateFactB = buildRecreateOp(factB);
+        if (recreateFactB) reverseOps.push(recreateFactB);
+        sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factBId);
+      }
+    }
 
-  return { success: true };
+    sqlite
+      .prepare(
+        "UPDATE fact_conflicts SET status = ?, resolution = ?, resolved_at = ? WHERE id = ?",
+      )
+      .run(
+        resolution === "dismissed" ? "dismissed" : "resolved",
+        resolution,
+        now,
+        conflictId,
+      );
+
+    logTrustAction(
+      ownerKey,
+      "conflict_resolved",
+      `Resolved conflict: ${resolution}`,
+      {
+        entityId: conflictId,
+        details: { resolution, category: conflict.category, key: conflict.key },
+        undoPayload: {
+          action: "undo_conflict_resolution",
+          conflictId,
+          reverseOps,
+        },
+      },
+    );
+
+    return { success: true };
+  })();
 }

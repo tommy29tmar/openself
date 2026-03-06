@@ -23,9 +23,10 @@ export async function POST(
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
-  const result = acceptProposal(proposalId);
+  const result = acceptProposal(proposalId, auth.profileId);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 409 });
+    const status = result.error === "PROPOSAL_NOT_FOUND" ? 404 : 409;
+    return NextResponse.json({ error: result.error }, { status });
   }
 
   return NextResponse.json({ ok: true });

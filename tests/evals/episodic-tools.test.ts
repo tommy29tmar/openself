@@ -7,6 +7,7 @@ beforeEach(() => {
   sqlite.exec("DELETE FROM episodic_pattern_proposals");
   sqlite.exec("DELETE FROM jobs WHERE job_type = 'consolidate_episodes'");
   sqlite.exec("DELETE FROM facts WHERE key LIKE 'habit_%'");
+  sqlite.exec("DELETE FROM trust_ledger");
   sqlite.exec("INSERT INTO episodic_events_fts(episodic_events_fts) VALUES('delete-all')");
   // Ensure session exists for createFact FK constraint (facts.session_id → sessions.id)
   sqlite.exec("INSERT OR IGNORE INTO sessions(id, invite_code) VALUES ('sess1', 'test')");
@@ -29,6 +30,10 @@ describe("record_event tool", () => {
     expect(result.eventId).toBeTruthy();
     const row = sqlite.prepare("SELECT * FROM episodic_events WHERE id = ?").get(result.eventId) as any;
     expect(row.action_type).toBe("workout");
+    const trustRow = sqlite
+      .prepare("SELECT entity_id FROM trust_ledger WHERE action_type = 'record_event' ORDER BY created_at DESC LIMIT 1")
+      .get() as any;
+    expect(trustRow.entity_id).toBe(result.eventId);
   });
 
   it("enqueues consolidate_episodes job", async () => {
@@ -134,6 +139,10 @@ describe("confirm_episodic_pattern tool", () => {
       const draft = getDraft("sess1");
       const activities = draft?.config.sections.find((section) => section.type === "activities");
       expect(activities).toBeTruthy();
+      const trustRow = sqlite
+        .prepare("SELECT entity_id FROM trust_ledger WHERE action_type = 'confirm_episodic_pattern' ORDER BY created_at DESC LIMIT 1")
+        .get() as any;
+      expect(trustRow.entity_id).toBe(id);
     } finally {
       process.env.EXTENDED_SECTIONS = prevExtended;
     }

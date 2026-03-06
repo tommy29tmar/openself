@@ -132,7 +132,7 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveMemories).not.toHaveBeenCalled();
   });
 
-  it("active_fresh: includes all blocks with schema reference off", () => {
+  it("active_fresh: includes all blocks with minimal edit schema", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("active_fresh"));
 
     // All queries are called
@@ -142,10 +142,25 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveMemories).toHaveBeenCalled();
     expect(mockGetOpenConflicts).toHaveBeenCalled();
 
-    // Schema reference is off for active states
+    // Active update states get the minimal edit schema
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ schemaMode: "none" }),
+      expect.objectContaining({ schemaMode: "minimal" }),
+    );
+  });
+
+  it("active_stale: includes all blocks with minimal edit schema", () => {
+    assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("active_stale"));
+
+    expect(mockGetActiveFacts).toHaveBeenCalled();
+    expect(mockGetActiveSoul).toHaveBeenCalled();
+    expect(mockGetSummary).toHaveBeenCalled();
+    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetOpenConflicts).toHaveBeenCalled();
+
+    expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ schemaMode: "minimal" }),
     );
   });
 

@@ -22,6 +22,13 @@ type UndoPayload = {
   [key: string]: unknown;
 };
 
+type FactReverseOp = {
+  action: "delete" | "restore" | "recreate";
+  factId?: string;
+  previousValue?: unknown;
+  previousFact?: Record<string, unknown>;
+};
+
 /**
  * Log a trust action. Must include undo_payload at write time for reversibility.
  */
@@ -68,6 +75,40 @@ export function getTrustLedger(ownerKey: string, limit: number = 20): TrustEntry
     .all() as TrustEntry[];
 }
 
+function applyFactReverseOps(reverseOps: FactReverseOp[]): void {
+  for (const op of reverseOps) {
+    if (!op.factId) continue;
+
+    switch (op.action) {
+      case "delete":
+        db.delete(factsTable).where(eq(factsTable.id, op.factId)).run();
+        break;
+      case "restore":
+        db.update(factsTable)
+          .set({
+            value: op.previousValue as typeof factsTable.$inferInsert.value,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(factsTable.id, op.factId))
+          .run();
+        break;
+      case "recreate":
+        if (!op.previousFact) break;
+        if (!op.previousFact.category || !op.previousFact.key || op.previousFact.value === undefined) {
+          break;
+        }
+        db.insert(factsTable)
+          .values({
+            id: op.factId,
+            ...(op.previousFact as typeof factsTable.$inferInsert),
+          })
+          .onConflictDoNothing()
+          .run();
+        break;
+    }
+  }
+}
+
 /**
  * Execute an undo action based on its payload.
  */
@@ -93,10 +134,20 @@ function executeUndo(payload: UndoPayload, ownerKey: string): void {
       if (payload.conflictId) {
         sqlite
           .prepare(
-            "UPDATE fact_conflicts SET status = 'open', resolved_at = NULL WHERE id = ? AND owner_key = ?",
+            "UPDATE fact_conflicts SET status = 'open', resolution = NULL, resolved_at = NULL WHERE id = ? AND owner_key = ?",
           )
           .run(payload.conflictId, ownerKey);
       }
+      break;
+    case "undo_conflict_resolution":
+      if (payload.conflictId) {
+        sqlite
+          .prepare(
+            "UPDATE fact_conflicts SET status = 'open', resolution = NULL, resolved_at = NULL WHERE id = ? AND owner_key = ?",
+          )
+          .run(payload.conflictId, ownerKey);
+      }
+      applyFactReverseOps((payload.reverseOps ?? []) as FactReverseOp[]);
       break;
     case "unarchive_fact":
       // Undo an archive — caller must trigger recomposeAfterMutation() after
@@ -112,38 +163,7 @@ function executeUndo(payload: UndoPayload, ownerKey: string): void {
       //   update → { action: "restore", factId, previousValue }
       //   delete → { action: "recreate", factId, previousFact }
       // NOTE (R7-C2): caller must trigger recomposeAfterMutation() after
-      const reverseOps = (payload.reverseOps ?? []) as Array<{
-        action: "delete" | "restore" | "recreate";
-        factId?: string;
-        previousValue?: unknown;
-        previousFact?: Record<string, unknown>;
-      }>;
-      for (const op of reverseOps) {
-        if (!op.factId) continue; // skip malformed ops
-        switch (op.action) {
-          case "delete":
-            db.delete(factsTable).where(eq(factsTable.id, op.factId!)).run();
-            break;
-          case "restore":
-            db.update(factsTable)
-              .set({ value: op.previousValue as string, updatedAt: new Date().toISOString() })
-              .where(eq(factsTable.id, op.factId!))
-              .run();
-            break;
-          case "recreate":
-            if (op.previousFact) {
-              const pf = op.previousFact;
-              // Guard: required fields must be present for a valid fact row
-              if (pf.category && pf.key && pf.value !== undefined) {
-                db.insert(factsTable)
-                  .values({ id: op.factId, ...pf } as typeof factsTable.$inferInsert)
-                  .onConflictDoNothing()
-                  .run();
-              }
-            }
-            break;
-        }
-      }
+      applyFactReverseOps((payload.reverseOps ?? []) as FactReverseOp[]);
       break;
     }
     default:
