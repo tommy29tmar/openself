@@ -20,6 +20,8 @@ const {
   mockMarkStaleProposals,
   mockCleanupExpiredCache,
   mockComputeHash,
+  mockGetPreferences,
+  mockResolveOwnerScopeForWorker,
 } = vi.hoisted(() => ({
   mockDbInsert: vi.fn(),
   mockGetHeartbeatConfig: vi.fn(),
@@ -36,6 +38,8 @@ const {
   mockMarkStaleProposals: vi.fn(),
   mockCleanupExpiredCache: vi.fn(),
   mockComputeHash: vi.fn(),
+  mockGetPreferences: vi.fn(),
+  mockResolveOwnerScopeForWorker: vi.fn(),
 }));
 
 mockDbInsert.mockImplementation(() => ({
@@ -88,6 +92,31 @@ vi.mock("@/lib/services/section-cache-service", () => ({
 vi.mock("@/lib/services/personalization-hashing", () => ({
   computeHash: mockComputeHash,
 }));
+vi.mock("@/lib/services/preferences-service", () => ({
+  getPreferences: mockGetPreferences,
+}));
+vi.mock("@/lib/auth/session", () => ({
+  resolveOwnerScopeForWorker: mockResolveOwnerScopeForWorker,
+}));
+vi.mock("@/lib/services/session-metadata", () => ({
+  mergeSessionMeta: vi.fn(),
+  getRecentJournalEntries: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/page-service", () => ({
+  getDraft: vi.fn(() => null),
+}));
+vi.mock("@/lib/services/kb-service", () => ({
+  getActiveFacts: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/coherence-check", () => ({
+  checkPageCoherence: vi.fn(async () => []),
+}));
+vi.mock("@/lib/services/journal-patterns", () => ({
+  detectJournalPatterns: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/memory-service", () => ({
+  saveMemory: vi.fn(() => null),
+}));
 
 // ── Import under test (after all mocks) ─────────────────────────────────────
 
@@ -95,12 +124,12 @@ import { handleHeartbeatDeep } from "@/lib/worker/heartbeat";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeActiveCopy(sectionType: string, content: string) {
+function makeActiveCopy(sectionType: string, content: string, language = "it") {
   return {
     id: 1,
     ownerKey: "owner1",
     sectionType,
-    language: "en",
+    language,
     personalizedContent: content,
     factsHash: "fh-abc",
     soulHash: "sh-xyz",
@@ -132,6 +161,13 @@ beforeEach(() => {
   mockCheckOwnerBudget.mockReturnValue({ allowed: true });
   mockExpireStaleProposals.mockReturnValue(0);
   mockGetAllActiveCopies.mockReturnValue([]);
+  mockGetPreferences.mockReturnValue({ language: "it", factLanguage: "en" });
+  mockResolveOwnerScopeForWorker.mockReturnValue({
+    cognitiveOwnerKey: "owner1",
+    knowledgeReadKeys: ["sess-a"],
+    knowledgePrimaryKey: "sess-a",
+    currentSessionId: "sess-a",
+  });
   mockGetActiveSoul.mockReturnValue(null);
   mockAnalyzeConformity.mockResolvedValue([]);
   mockGenerateRewrite.mockResolvedValue(null);
@@ -149,7 +185,7 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
 
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "en");
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "it");
     expect(mockGetActiveSoul).toHaveBeenCalledWith("owner1");
     expect(mockAnalyzeConformity).toHaveBeenCalledWith(
       copies,
@@ -187,7 +223,7 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
       expect.objectContaining({
         ownerKey: "owner1",
         sectionType: "bio",
-        language: "en",
+        language: "it",
         currentContent: "A formal developer bio",
         proposedContent: JSON.stringify({ description: "Rewritten bio text" }),
         issueType: "tone_drift",
@@ -328,6 +364,16 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
 
     expect(mockGenerateRewrite).not.toHaveBeenCalled();
     expect(mockCreateProposal).not.toHaveBeenCalled();
+  });
+
+  it("falls back to fact language when preferred language is unset", async () => {
+    mockGetPreferences.mockReturnValue({ language: null, factLanguage: "de" });
+    mockGetAllActiveCopies.mockReturnValue([makeActiveCopy("bio", "text", "de")]);
+    mockGetActiveSoul.mockReturnValue({ compiled: "Tone" });
+
+    await handleHeartbeatDeep({ ownerKey: "owner1" });
+
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "de");
   });
 
   it("reports action_taken when conformity proposals are created", async () => {

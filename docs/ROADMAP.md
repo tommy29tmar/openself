@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-03-03
+Last updated: 2026-03-06
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -224,7 +224,7 @@ All sub-phases complete:
 - Layout Template Engine + Architect Layout Refactoring ✅
 - NEXT-16 Sprints 1-5 (Journey Intelligence → Conversation Polish) ✅
 
-Final stats: 2110 automated tests, 174 test files, 24 DB migrations.
+Final stats: 2579 automated tests, 222 test files, 28 DB migrations.
 
 #### NEXT-7: Additional themes — bold, elegant, hacker (Deferred to Phase 2)
 

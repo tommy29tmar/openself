@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OpenSelf Architecture Map</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ 
+      startOnLoad: true, 
+      theme: 'dark',
+      flowchart: {
+        nodeSpacing: 50,
+        rankSpacing: 90,
+        curve: 'basis',
+        padding: 20
+      }
+    });
+  </script>
+  <style>
+    body { 
+        background-color: #1a1a2e; 
+        color: #e0e0e0; 
+        display: flex; 
+        justify-content: center; 
+        padding: 2rem; 
+        font-family: 'Inter', -apple-system, sans-serif; 
+        margin: 0;
+    }
+    .container {
+        max-width: 1400px;
+        width: 100%;
+        background: #16213e;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    h1 {
+        text-align: center;
+        color: #fff;
+        margin-bottom: 2rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+    }
+    .mermaid { 
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>OPENSELF SYSTEM ARCHITECTURE</h1>
+    <div class="mermaid">
+graph TB
+    %% STILI PIU' PULITI E MINIMALISTI
+    classDef ui fill:#2d3436,stroke:#636e72,stroke-width:1px,color:#fff,rx:8px,ry:8px
+    classDef core fill:#0984e3,stroke:#74b9ff,stroke-width:2px,color:#fff,rx:8px,ry:8px
+    classDef data fill:#6c5ce7,stroke:#a29bfe,stroke-width:2px,color:#fff,rx:8px,ry:8px
+    classDef worker fill:#d63031,stroke:#ff7675,stroke-width:1px,color:#fff,rx:8px,ry:8px
+    classDef engine fill:#00b894,stroke:#55efc4,stroke-width:2px,color:#fff,rx:8px,ry:8px
+    classDef group fill:none,stroke:#4a69bd,stroke-width:2px,stroke-dasharray: 5 5,color:#a29bfe
+
+    %% GRUPPO 1: INTERFACCIA E INPUT
+    subgraph INPUT ["1. Interaction Layer (The Interface)"]
+        direction LR
+        User((User))
+        Chat[Chat UI\n& Voice]:::ui
+        Connectors[External Connectors\nGitHub, Strava, etc.]:::ui
+    end
+
+    %% GRUPPO 2: IL CERVELLO
+    subgraph BRAIN ["2. Cognitive Core (The Agent)"]
+        direction TB
+        Orchestrator[Agent Orchestrator\nConstraints-by-Construction]:::core
+        LLM{LLM Engine}:::core
+        Tools[Tool Calling Engine\n25+ Actions]:::core
+    end
+
+    %% GRUPPO 3: LA MEMORIA (4 TIERS)
+    subgraph MEMORY ["3. Memory System (The Knowledge)"]
+        direction LR
+        subgraph Tiers [Tiers]
+            direction TB
+            T1[(Tier 1: Chat History\n20 turns)]:::data
+            T2[(Tier 2: Summaries\nRolling Context)]:::data
+            T3[(Tier 3: KB & Soul\nFacts, Preferences)]:::data
+            T4[(Tier 4: Episodic\nLife Journal)]:::data
+        end
+        Trust[Trust Ledger\nAudit & Undo]:::data
+    end
+
+    %% GRUPPO 4: BACKGROUND WORKERS
+    subgraph SUBCONSCIOUS ["4. Background Processing (The Subconscious)"]
+        direction TB
+        SessionCompaction[Session Compaction\nDistills chat to memory]:::worker
+        DreamCycle[Dream Cycle\nFinds patterns in journal]:::worker
+        Heartbeat[Heartbeat\nAudit, Cache, Proposals]:::worker
+    end
+
+    %% GRUPPO 5: RENDERING
+    subgraph OUTPUT ["5. Page Engine (The Expression)"]
+        direction TB
+        Base[Deterministic Skeleton\nFacts -> Schema]:::engine
+        Hybrid[Hybrid Compiler\nPersonalizes with Soul]:::engine
+        Config([Page Config JSON]):::engine
+        Renderer[React Renderer\nLive SSE Stream]:::engine
+    end
+
+    %% CONNESSIONI PRINCIPALI (Flusso semplificato)
+    User <--> Chat
+    Chat <--> Orchestrator
+    Connectors -->|Raw Data| T3
+    
+    Orchestrator --> LLM
+    LLM --> Tools
+    
+    Tools -->|Read/Write| MEMORY
+    Orchestrator -.->|Semantic Search| T3
+    
+    %% Flusso Subconscio
+    T1 -.->|Trigger| SessionCompaction
+    SessionCompaction -.->|Updates| T2
+    SessionCompaction -.->|Updates| T3
+    
+    T4 -.->|Trigger| DreamCycle
+    DreamCycle -.->|Proposes Facts| T3
+    
+    Heartbeat -.->|Maintains| MEMORY
+    
+    %% Flusso Rendering
+    T3 -->|Feeds| Base
+    Base --> Hybrid
+    Hybrid --> Config
+    Config --> Renderer
+    Renderer -->|Real-time Preview| Chat
+    
+    %% Applico la classe ai sottografi per pulire visivamente
+    class INPUT,BRAIN,MEMORY,SUBCONSCIOUS,OUTPUT group
+    </div>
+  </div>
+</body>
+</html>

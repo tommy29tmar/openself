@@ -6,7 +6,8 @@ export type SessionMeta = Record<string, unknown>;
 
 /**
  * Single operation journal entry. Recorded per tool call in createAgentTools (Task 13).
- * Stored in sessions.metadata.journal (array). Read by Tasks 21, 22.
+ * Persisted canonically on assistant messages.toolCalls; sessions.metadata.journal is only
+ * a best-effort operational buffer for the active conversation turn.
  */
 export type JournalEntry = {
   toolName: string;
@@ -49,29 +50,44 @@ export function mergeSessionMeta(sessionId: string, partial: Record<string, unkn
 }
 
 /**
- * Aggregate journal entries from the N most recent sessions for the given owner.
- * Reads sessions.metadata.journal for each session, flattens into a single array.
+ * Aggregate tool-call journal entries from the N most recent sessions for the given owner.
+ * Reads canonical assistant message `tool_calls` rows, not sessions.metadata.journal.
  *
  * Matches on profile_id (auth users) or id (anon/single-user) to cover both cases.
  */
 export function getRecentJournalEntries(ownerKey: string, sessionCount: number): JournalEntry[] {
-  const rows = sqlite.prepare(`
-    SELECT metadata FROM sessions
+  const sessionRows = sqlite.prepare(`
+    SELECT id FROM sessions
     WHERE (profile_id = ? OR id = ?)
-    AND metadata IS NOT NULL
     ORDER BY created_at DESC
     LIMIT ?
-  `).all(ownerKey, ownerKey, sessionCount) as Array<{ metadata: string }>;
+  `).all(ownerKey, ownerKey, sessionCount) as Array<{ id: string }>;
+
+  const sessionIds = sessionRows
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  if (sessionIds.length === 0) return [];
+
+  const placeholders = sessionIds.map(() => "?").join(",");
+  const messageRows = sqlite.prepare(`
+    SELECT tool_calls
+    FROM messages
+    WHERE session_id IN (${placeholders})
+      AND tool_calls IS NOT NULL
+    ORDER BY created_at ASC, id ASC
+  `).all(...sessionIds) as Array<{ tool_calls: string | null }>;
 
   const entries: JournalEntry[] = [];
-  for (const row of rows) {
+  for (const row of messageRows) {
+    if (!row.tool_calls) continue;
     try {
-      const meta = JSON.parse(row.metadata);
-      if (Array.isArray(meta.journal)) {
-        entries.push(...meta.journal);
+      const toolCalls = JSON.parse(row.tool_calls);
+      if (Array.isArray(toolCalls)) {
+        entries.push(...toolCalls);
       }
     } catch {
-      // Skip malformed metadata
+      // Skip malformed toolCalls payloads
     }
   }
   return entries;

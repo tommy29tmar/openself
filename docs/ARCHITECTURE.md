@@ -351,13 +351,13 @@ calls `buildSystemPrompt()` with `first_visit` defaults.
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries. Includes: REGISTER (always informal — tu/du/vous non-formal, overridable by explicit user preference), OPENING BANS (list of banned filler openers such as "Certamente!", "Of course!"), EMOJI POLICY (only if user uses first, max 1/msg), LANGUAGE HANDLING (switch seamlessly without mentioning), RESPONSE LENGTH rules (1–2 sentences for confirmations, 3–5 max for explanations)
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
 3. **Tool policy** — 25 tools (see Section 4.3), when to call, required arguments, retry/error behavior
-4. **Fact schema reference** — Controlled by `schemaMode: "full" | "minimal" | "none"` (per journey state). `full` injects ~1800 tokens (complete category→value shape table). `minimal` injects ~300 tokens via `buildMinimalSchemaForOnboarding()`. `none` injects nothing. Per-state assignment: `first_visit=minimal`, `returning_no_page=full`, `draft_ready=none`, `active_fresh=none`, `active_stale=minimal`, `blocked=none`. Estimated ~1500–1800 token savings per turn in none/minimal states.
+4. **Fact schema reference** — Controlled by `schemaMode: "full" | "minimal" | "none"` (per journey state). `full` injects ~1800 tokens (complete category→value shape table). `minimal` injects ~300 tokens via `buildMinimalSchemaForOnboarding()` (first_visit) or `buildMinimalSchemaForEditing()` (active states — edit workflow with object-notation tool signatures and common value shapes). `none` injects nothing. Per-state assignment: `first_visit=minimal`, `returning_no_page=full`, `draft_ready=minimal`, `active_fresh=minimal`, `active_stale=minimal`, `blocked=none`. Estimated ~1500–1800 token savings per turn in none/minimal states.
 4a. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
 5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation. Includes PATTERN VARIATION block: no same acknowledgment on consecutive turns, don't always close with a question, no 3 consecutive turns opening the same way, never start two consecutive messages with the same word.
 6. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4)
 7. **Situation directives** — Contextual instructions based on detected situations (optional, only when situations are active)
 8. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
-9. **Turn management rules** — 5 rules (R1-R5) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length (see Section 4.2.5)
+9. **Turn management rules** — 6 rules (R1-R6) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length, clarification expiry (record new info immediately, max 1 follow-up, optional details don't block page generation) (see Section 4.2.5)
 10. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence (see Section 4.2.5)
 11. **Action awareness** — Explain-before-act policy classifying tools as high-impact (set_layout, set_theme, update_page_style, reorder_sections, generate_page in steady_state → explain and confirm before executing) or low-impact (fact CRUD, visibility, memory, soul → execute silently). Modulated by expertise calibration level.
 12. **Undo awareness** — Graceful reversal handling: detection keywords (EN + IT), 4-step response pattern (IDENTIFY → EXPLAIN → PROPOSE → ACT), reversal scope per tool, critical rules (never regenerate entire page as first reaction, ask specifics for vague complaints).
@@ -375,10 +375,10 @@ Dynamic context blocks are then appended by `assembleContext()`:
 - **Pending conflicts** — Open fact contradictions awaiting resolution, 1500 token budget
 - **Page state** — Current draft layout/presence/sections (steady-state profiles only), 1500 token budget
 
-**Static blocks** (never truncated — always preserved):
+**Static blocks** (shrinkable as last resort — see §4.2.2):
 - **Auth context** — Authenticated username + publish guidance (steady_state only)
 - **Exploration priorities** — Archetype-weighted section richness + layout intelligence
-- **Pending operations** — Incomplete operation from previous turn (resume injection)
+- **Pending operations** — Incomplete operation from previous turn (resume injection). Session-scoped: reads/writes to `conversationSessionId` (active conversation), not the profile anchor, so multi-session users don't cross-pollinate pending state
 - **Coherence issues** — Active coherence warnings/infos (circuit D1, steady_state only)
 - **Message quota warning** — Nudge to register when ≤3 anonymous messages remain
 - **Magic paste hint** — Detected connector URLs from latest user message
@@ -405,12 +405,15 @@ Per-block allocation (mutable — shrinkable):
   Page state:          1500 tokens max (steady-state profiles only)
 
 Recent turns:         22000 tokens max (last 20, reduce if over)
-Static blocks:        not counted against mutable budget; always preserved
+Static blocks:        shrinkable as last resort (PromptBlock type, 20 iterations)
 ```
 
-Post-assembly guard: if total exceeds 65000, iteratively truncate the largest
-**mutable** block by 20% until under budget. Static blocks (auth, exploration,
-pending ops, coherence, quota, magic paste) are **never** truncated.
+Post-assembly guard: if total exceeds 65000, iteratively shrink the largest block (up to
+20 iterations). Mutable blocks are shrunk first; static blocks (auth, exploration,
+pending ops, coherence, quota, magic paste) are shrunk only as a last resort when no
+mutable blocks remain. Static blocks use `PromptBlock` type (`{ name, content }`) and
+`shrinkBlockContent()` (trim to 80% + "...", or empty if ≤64 chars). Final safety:
+`truncateToTokenBudget()` if still over after all iterations.
 
 **Profile archetype detection** (steady_state only):
 `detectArchetype()` (`src/lib/agent/context.ts`) classifies the user's profile from facts:
@@ -457,7 +460,7 @@ system prompt, mode selection, and UI behavior.
 | `returning_no_page` | Has facts or prior sessions, but no draft/published |
 | `first_visit` | No facts, no messages, no draft, no published page |
 
-**Situations** — additive flags detected from current data:
+**Situations** — 11 additive flags detected from current data:
 
 - `has_pending_proposals` — unapplied section copy proposals exist
 - `has_thin_sections` — at least one section classified as thin/empty
@@ -594,35 +597,41 @@ and cognitive state. The user sees a natural conversation. Under the hood, the a
 performing structured actions:
 
 ```
-Available tools (17):
+Available tools (25):
 
 Knowledge Base management:
-  create_fact(category, key, value, confidence?)     # Learn something new
-  update_fact(factId, value)                          # Update existing knowledge (value REQUIRED)
-  delete_fact(factId)                                 # Remove outdated info
-  search_facts(query)                                 # Search the KB
-  set_fact_visibility(factId, visibility)             # Change fact visibility (proposed/private only)
+  create_fact({ category, key, value, confidence? })          # Learn something new
+  batch_facts({ facts[] })                                    # Create multiple facts atomically
+  update_fact({ factId, value })                              # Update existing knowledge (FULL value object REQUIRED)
+  delete_fact({ factId })                                     # Remove outdated info
+  search_facts({ query })                                     # Free-text search the KB
+  set_fact_visibility({ factId, visibility })                 # Change fact visibility (proposed/private only)
+  archive_fact({ factId })                                    # Soft-archive a fact
+  unarchive_fact({ factId })                                  # Restore archived fact
+  reorder_items({ sectionType, factIds })                     # Reorder items within a section
 
 Page management:
-  update_page_style(username, surface?, voice?, light?, layoutTemplate?)  # Modify page presence/layout metadata
-  set_theme(username, surface?, voice?, light?)       # Change presence (surface/voice/light axes)
-  set_layout(username, layoutTemplate)                # Change layout template
-  reorder_sections(username, sectionOrder)            # Rearrange page sections
-  generate_page(username, language?)                  # Full page synthesis from facts
-  inspect_page_state(username)                        # Structured view of page layout/sections/warnings
-  publish_preflight(username)                         # Pre-publish gate + quality checks
-  request_publish(username)                           # Request publish approval (validates username)
-  propose_lock(sectionId, lockPosition?, ...)         # Propose locking a section
+  update_page_style({ username, surface?, voice?, light?, layoutTemplate? })  # Modify page presence/layout metadata
+  set_theme({ username, surface?, voice?, light? })           # Change presence (surface/voice/light axes)
+  set_layout({ username, layoutTemplate })                    # Change layout template (lenient validation)
+  reorder_sections({ username, sectionOrder })                # Rearrange page sections
+  move_section({ username, sectionType, position })           # Move a section to a specific position
+  generate_page({ username, language? })                      # Full page synthesis from facts
+  inspect_page_state({ username })                            # Structured view of page layout/sections/warnings
+  publish_preflight({ username })                             # Pre-publish gate + quality + layout checks
+  request_publish({ username })                               # Request publish approval (async username validation)
+  propose_lock({ sectionId, lockPosition?, ... })             # Propose locking a section
 
 Cognitive management:
-  save_memory(content, memoryType?, category?)        # Save agent observation (Tier 3)
-  propose_soul_change(overlay, reason?)               # Propose identity profile update
-  resolve_conflict(conflictId, resolution, mergedValue?)  # Resolve a fact contradiction
+  save_memory({ content, memoryType?, category? })            # Save agent observation (Tier 3)
+  propose_soul_change({ overlay, reason? })                   # Propose identity profile update
+  review_soul_proposal({ proposalId, accept })                # Accept/reject pending soul proposal
+  resolve_conflict({ conflictId, resolution, mergedValue? })  # Resolve a fact contradiction
 
 Episodic memory:
-  record_event(actionType, eventAtHuman, summary, ...)  # Log a user activity event
-  recall_episodes(timeframe, actionType?, keywords?)    # Query past events with FTS5 search
-  confirm_episodic_pattern(proposalId, accept)          # Accept/reject Dream Cycle pattern proposal
+  record_event({ actionType, eventAtHuman, summary, ... })    # Log a user activity event
+  recall_episodes({ timeframe, actionType?, keywords? })      # Query past events with FTS5 search
+  confirm_episodic_pattern({ proposalId, accept })            # Accept/reject Dream Cycle pattern proposal
 ```
 
 **Example of what happens in a single exchange:**
@@ -679,11 +688,49 @@ missing draft) never mask the successful fact operation.
 `resolveLayoutAlias()` in `contracts.ts`. Case-insensitive, supports user-facing names
 ("The Monolith", "Cinematic", "The Curator", "The Architect") and legacy aliases
 (`"bento"` → `"architect"`, `"sidebar"` → `"curator"`, `"vertical"` → `"monolith"`).
-Unknown values pass through trimmed for error messages.
+Unknown values pass through trimmed for error messages. Layout validation is **lenient**:
+`missing_required` errors are ignored on `set_layout` and `/api/draft/style`, allowing
+layout switches even with incomplete sections.
+
+**Action Claim Guard** (`src/lib/agent/action-claim-guard.ts`):
+A stream-level transform that detects and rewrites unbacked completion claims — text that
+implies the agent performed an action (e.g., "Salvato.", "Added.", "Done.") when no
+corresponding write tool actually succeeded in the current turn.
+
+- `COMPLETION_CLAIM_BACKING_TOOL_NAMES`: Set of tools that actually complete actions
+  (fact CRUD, generate_page, set_layout, record_event, resolve_conflict, etc.).
+  Proposal-only tools (`request_publish`, `propose_soul_change`, `propose_lock`,
+  `save_memory`) are explicitly excluded — they don't back completion claims.
+- `didToolActuallyCompleteAction(toolName, success, opts?)`: Nuanced per-tool check.
+  `review_soul_proposal` and `confirm_episodic_pattern` back claims only when
+  `accept === true` (checked via args or result).
+- `LEADING_FILLER_PREFIX`: Strips casual openers ("Ok,", "Certo,", "Va bene,",
+  "Sure,") before claim detection so "Ok, aggiunto." is still caught.
+- `createUnbackedActionClaimTransform(lang)`: `experimental_transform` for `streamText()`.
+  Buffers text deltas, checks against journal of tool results in the same stream.
+  If a risky claim has no backing tool call, rewrites to fallback: "Non l'ho ancora
+  eseguito. Se vuoi, lo faccio adesso." (IT) / "I haven't done that yet." (EN).
+- `sanitizeUnbackedActionClaim(text, journal, lang)`: Synchronous variant for message
+  persistence — ensures stored assistant text is also honest.
+
+**Immediate execution directives:** Active-state policies (`active-fresh`, `active-stale`,
+`draft-ready`) include an explicit rule: "If the user asks for a concrete add/update/remove
+and you already have enough info, execute the tool call in THIS turn. Do NOT just say you'll
+do it." The planning protocol classifies single concrete edits as SIMPLE (immediate execution).
+
+**Tool call persistence:** Assistant messages now persist the `toolCalls` array (operation
+journal) alongside text content in the messages table, enabling chat replay, summary
+generation from message-level data, and auditing.
+
+`sessions.metadata.journal` is now only an operational buffer for the active turn
+(resume/step-exhaustion state). Long-lived consumers such as summaries and heartbeat
+journal-pattern analysis must read canonical message-level `toolCalls`, not session metadata.
 
 Key files:
-- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas, role/title priority)
-- `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback in `streamText()`
+- `src/lib/agent/prompts.ts` — `FACT_SCHEMA_REFERENCE` (category→value table), `DATA_MODEL_REFERENCE` (bio composition, workflows, schemas, role/title priority), `buildMinimalSchemaForEditing()` (edit workflow for active states)
+- `src/app/api/chat/route.ts` — `CoreMessage` typing, `experimental_repairToolCall` callback, `experimental_transform` (action claim guard) in `streamText()`
+- `src/lib/agent/action-claim-guard.ts` — Stream-level unbacked action claim transform
+- `src/lib/agent/tool-call-repair.ts` — `stringifyToolArgsForRepair()`, `stripMarkdownCodeFences()`
 - `src/lib/layout/contracts.ts` — `resolveLayoutAlias()`, `LAYOUT_TEMPLATES`
 
 ### 4.4 Heartbeat (Periodic Self-Reflection)
@@ -717,6 +764,11 @@ heartbeat_deep (weekly):
   6. Stale proposal cleanup — mark proposals as stale when underlying state changed
   7. Cache TTL cleanup — remove expired section_copy_cache entries (>30 days)
 ```
+
+**Language-aware conformity:** Deep-heartbeat conformity checks run against the owner's
+preferred page language (fallback: fact language, then `en`). This keeps
+`section_copy_state` lookup and generated proposals aligned with the active localized copy,
+instead of assuming English.
 
 **Per-owner daily budget (DST-safe):**
 
@@ -990,6 +1042,29 @@ have multiple sessions.
 **Session backfill:** When a user registers or logs in via OAuth, all existing sessions
 for that profile are backfilled with the `profile_id`, enabling cross-session reads.
 
+**Multi-session awareness:** The `ownerKey` and `readKeys` are now threaded end-to-end
+through the publish pipeline (`prepareAndPublish`), preview endpoints, worker page jobs
+(`getPageJobContext` helper), and summary service (`expandSummaryMessageKeys`). This
+ensures all pipelines read facts from the full session scope (not just one session) and
+write drafts to the anchor session. Pending operations are **conversation-scoped** —
+stored on `conversationSessionId` (the active chat session), not the profile anchor, so
+multiple browser sessions don't cross-pollinate pending state.
+
+**Connector route auth:** `resolveAuthenticatedConnectorScope()` in
+`src/lib/connectors/route-auth.ts` provides unified auth for all connector API routes.
+In multi-user mode, it validates `userId` or `username` before returning the scope.
+Returns `null` for unauthenticated requests (route returns 401/403).
+
+**Worker-side scope resolution:** `resolveOwnerScopeForWorker(ownerKey)` constructs an
+`OwnerScope` for background jobs (heartbeat, summary, page synthesis, consolidation).
+Workers receive `ownerKey` in the job payload and use this function to derive the full
+scope (read keys, anchor session, etc.) for multi-session-aware processing.
+
+**Profile-scoped media auth:** Profile-owned routes such as avatar upload/delete must follow
+the same rule in multi-user mode: a bare session scope is not enough. They require a real
+authenticated identity (`userId` or legacy `username`) so writes cannot fall back to the
+shared `__default__` profile bucket.
+
 **Username resolution:** `getAuthContext()` resolves the username through a two-step
 lookup: `session.username` (legacy) → `profiles.username` (auth v2). This is necessary
 because `createAuthSession` does not write username to the sessions table (UNIQUE
@@ -1055,6 +1130,13 @@ the higher-precedence value wins automatically without creating a conflict.
 2. **User API**: `POST /api/conflicts/:id/resolve` — user resolves via UI
 3. **Auto-expire**: unresolved conflicts are dismissed after 7 days (heartbeat_deep cleanup)
 
+**Transactional resolution with reverse ops:** `resolveConflict()` wraps the entire
+operation in a SQLite transaction. Before any fact mutation, it snapshots both facts via
+`getFactSnapshot()`. The trust ledger entry includes `undo_payload.reverseOps[]` with
+typed operations (`restore` — revert value, `recreate` — reinstate deleted fact,
+`delete` — remove a fact). This enables full bidirectional undo via
+`undo_conflict_resolution` in the trust ledger (see Section 4.5.5).
+
 **System prompt injection:** Open conflicts are injected into the system prompt (block 10,
 200 token budget) so the agent can proactively address contradictions in conversation.
 
@@ -1072,10 +1154,17 @@ description, undo_payload, reversed_at, created_at
 - `soul_accepted`, `soul_rejected`
 - `conflict_resolved`, `conflict_dismissed`
 - `fact_created`, `fact_updated`, `fact_deleted`
+- `record_event`, `confirm_episodic_pattern`
 
 **Reversibility:** Any trust ledger entry can be reversed via `reverseTrustAction()`, which
 uses transactional CAS (compare-and-swap) to prevent double-undo and partial commits. The
 `undo_payload` contains the exact state needed to restore the previous condition.
+
+**Fact reverse operations:** `applyFactReverseOps(reverseOps[])` handles three operation
+types: `delete` (remove fact), `restore` (update value to previous state), `recreate`
+(reinstate deleted fact with full previous data). Used by both `undo_fact_mutations` and
+`undo_conflict_resolution` cases. Conflict resolution captures snapshots before mutations
+and stores typed reverse ops in the trust ledger for complete bidirectional undo.
 
 **API:**
 - `GET /api/trust-ledger` — List recent trust actions (filterable by action_type)
@@ -1963,7 +2052,7 @@ A two-phase LLM process runs during `heartbeat_deep`:
 - `src/lib/services/personalizer-schemas.ts` — `PERSONALIZABLE_FIELDS`, Zod schemas, `MAX_WORDS`
 - `src/lib/services/section-richness.ts` — `classifySectionRichness()` classifier
 - `src/lib/services/conformity-analyzer.ts` — `analyzeConformity()`, `generateRewrite()`
-- `src/lib/services/proposal-service.ts` — Proposal CRUD, staleness detection, accept/reject
+- `src/lib/services/proposal-service.ts` — Proposal CRUD, staleness detection, accept/reject (owner-scoped: `acceptProposal`/`rejectProposal` require `ownerKey` for multi-user isolation)
 - `src/app/api/proposals/` — Proposal API routes (GET, accept, reject, accept-all)
 - `src/components/builder/ProposalBanner.tsx` — Proposal review UI
 - `src/lib/db/personalizer-schema.ts` — Drizzle schema for 3 new tables
@@ -2586,6 +2675,25 @@ If the hash guard fails, none of these steps execute.
 `prepareAndPublish()` returns `{ success: true, username: string, url: string }`.
 Both `/api/publish` and `/api/register` consume this type — callers must not access
 fields outside this contract (e.g., no `regenerated` property exists on the result).
+
+**Multi-session support:** `prepareAndPublish` accepts optional `ownerKey` and `readKeys`
+parameters. Facts are read from the full owner scope (`getActiveFacts(ownerKey, readKeys)`),
+and personalization is applied using the correct profile ID. Journey state pin
+(`updateJourneyStatePin(sessionId, "active_fresh")`) is now applied inside the pipeline
+after publish success, not in `request_publish` — this ensures consistent milestone marking
+regardless of entry point.
+
+**Publish pin invalidation:** When an authenticated user with a pinned pre-publish state
+(`draft_ready`, `returning_no_page`, `first_visit`) has a published page, the pin is
+automatically cleared on the next request via `assembleBootstrapPayload`. The system
+re-detects their state (advancing to `active_fresh`), preventing users from getting stuck
+in pre-publish guidance loops after publishing. Only applies to authenticated users —
+anonymous users keep their pre-publish pin.
+
+**Async username validation:** `request_publish` and `publish_preflight` now use
+`validatePublishUsername()` which performs both format and availability checks in
+multi-user mode. `publish_preflight` also includes a `hasValidLayout` gate and
+`layoutIssues` in its quality report.
 
 **Key files:**
 - `src/lib/services/page-projection.ts` — `filterPublishableFacts`, `projectCanonicalConfig`, `publishableFromCanonical`, `projectPublishableConfig`
@@ -3335,14 +3443,16 @@ Binary assets are not stored as base64 blobs in `facts` or `page.config`.
 - Single-file backup remains true for personal instances
 
 **Avatar upload pipeline (implemented):**
-1. `POST /api/media/avatar` — auth-gated, accepts `FormData` with image file
+1. `POST /api/media/avatar` — auth-gated, accepts `FormData` with image file.
+   In multi-user mode this means authenticated profile identity (`userId` or legacy
+   `username`), not just a valid session cookie.
 2. **Validation:** 2 MB size limit, MIME whitelist (`image/jpeg`, `image/png`, `image/webp`),
    magic bytes detection (`detectMimeFromMagicBytes`) for JPEG/PNG/GIF/WebP
 3. **Processing:** EXIF stripping for JPEG (`stripExifFromJpeg` removes APP1 markers),
    MIME mismatch check (declared vs actual bytes)
 4. **Storage:** delete-before-insert pattern for partial unique index
    (`uniq_media_avatar_per_profile`). One avatar per profile.
-5. `DELETE /api/media/avatar` — removes avatar (auth-gated)
+5. `DELETE /api/media/avatar` — removes avatar (same auth rules)
 6. **Composer wiring:** `profileId` threaded through `projectCanonicalConfig()` →
    `composeOptimisticPage()` → `buildHeroSection()` → `getProfileAvatar()`.
    All new params optional for backward compatibility. Wired into preview, stream,

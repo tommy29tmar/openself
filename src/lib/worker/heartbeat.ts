@@ -21,6 +21,7 @@ import { checkPageCoherence } from "@/lib/services/coherence-check";
 import { mergeSessionMeta, getRecentJournalEntries } from "@/lib/services/session-metadata";
 import { detectJournalPatterns } from "@/lib/services/journal-patterns";
 import { saveMemory } from "@/lib/services/memory-service";
+import { getPreferences } from "@/lib/services/preferences-service";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -75,6 +76,7 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
 
   const startMs = Date.now();
   const config = getHeartbeatConfig(ownerKey);
+  const scope = resolveOwnerScopeForWorker(ownerKey);
 
   // Global budget check
   const globalBudget = checkBudget();
@@ -99,7 +101,9 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
   // Phase 1c: Conformity check
   let conformityActions = 0;
   try {
-    const activeCopies = getAllActiveCopies(ownerKey, "en"); // TODO: get language from preferences
+    const preferences = getPreferences(scope.knowledgePrimaryKey);
+    const personalizationLanguage = preferences.language ?? preferences.factLanguage ?? "en";
+    const activeCopies = getAllActiveCopies(ownerKey, personalizationLanguage);
     const soul = getActiveSoul(ownerKey);
     if (activeCopies.length > 0 && soul?.compiled) {
       const issues = await analyzeConformity(activeCopies, soul.compiled, ownerKey);
@@ -117,7 +121,7 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
             createProposal({
               ownerKey,
               sectionType: issue.sectionType,
-              language: "en",
+              language: personalizationLanguage,
               currentContent: copy.personalizedContent,
               proposedContent: JSON.stringify(rewrite),
               issueType: issue.issueType,
@@ -158,7 +162,6 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
   // Circuit D2: coherence check → session metadata + event log
   let coherenceWarningCount = 0;
   try {
-    const scope = resolveOwnerScopeForWorker(ownerKey);
     const draft = getDraft(scope.knowledgePrimaryKey);
     if (draft?.config) {
       const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;

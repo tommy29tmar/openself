@@ -168,15 +168,41 @@ describe("getRecentJournalEntries", () => {
     vi.clearAllMocks();
   });
 
-  it("aggregates journal entries from multiple sessions", () => {
-    vi.mocked(sqlite.prepare).mockReturnValue({
-      all: vi.fn(() => [
-        { metadata: JSON.stringify({ journal: [{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }] }) },
-        { metadata: JSON.stringify({ journal: [{ toolName: "generate_page", timestamp: "t2", durationMs: 50, success: true }] }) },
-      ]),
-      get: vi.fn(),
-      run: vi.fn(),
-    } as any);
+  function mockRecentJournalQueries(
+    sessionRows: Array<{ id: string }>,
+    messageRows: Array<{ tool_calls: string | null }>,
+  ) {
+    vi.mocked(sqlite.prepare).mockImplementation((sql: string) => {
+      if (sql.includes("SELECT id FROM sessions")) {
+        return {
+          all: vi.fn(() => sessionRows),
+          get: vi.fn(),
+          run: vi.fn(),
+        } as any;
+      }
+      if (sql.includes("SELECT tool_calls")) {
+        return {
+          all: vi.fn(() => messageRows),
+          get: vi.fn(),
+          run: vi.fn(),
+        } as any;
+      }
+      return {
+        all: vi.fn(() => []),
+        get: vi.fn(),
+        run: vi.fn(() => ({ changes: 0 })),
+      } as any;
+    });
+  }
+
+  it("aggregates journal entries from assistant message toolCalls", () => {
+    mockRecentJournalQueries(
+      [{ id: "sess-1" }, { id: "sess-2" }],
+      [
+        { tool_calls: JSON.stringify([{ toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true }]) },
+        { tool_calls: JSON.stringify([{ toolName: "generate_page", timestamp: "t2", durationMs: 50, success: true }]) },
+      ],
+    );
 
     const entries = getRecentJournalEntries("owner-1", 5);
     expect(entries).toHaveLength(2);
@@ -184,29 +210,27 @@ describe("getRecentJournalEntries", () => {
     expect(entries[1].toolName).toBe("generate_page");
   });
 
-  it("skips sessions with no journal", () => {
-    vi.mocked(sqlite.prepare).mockReturnValue({
-      all: vi.fn(() => [
-        { metadata: JSON.stringify({ someOtherKey: true }) },
-        { metadata: JSON.stringify({ journal: [{ toolName: "a", timestamp: "t", durationMs: 1, success: true }] }) },
-      ]),
-      get: vi.fn(),
-      run: vi.fn(),
-    } as any);
+  it("skips messages with no toolCalls payload", () => {
+    mockRecentJournalQueries(
+      [{ id: "sess-1" }],
+      [
+        { tool_calls: null },
+        { tool_calls: JSON.stringify([{ toolName: "a", timestamp: "t", durationMs: 1, success: true }]) },
+      ],
+    );
 
     const entries = getRecentJournalEntries("owner-1", 5);
     expect(entries).toHaveLength(1);
   });
 
-  it("skips malformed metadata gracefully", () => {
-    vi.mocked(sqlite.prepare).mockReturnValue({
-      all: vi.fn(() => [
-        { metadata: "not-json{{{" },
-        { metadata: JSON.stringify({ journal: [{ toolName: "b", timestamp: "t", durationMs: 1, success: true }] }) },
-      ]),
-      get: vi.fn(),
-      run: vi.fn(),
-    } as any);
+  it("skips malformed toolCalls gracefully", () => {
+    mockRecentJournalQueries(
+      [{ id: "sess-1" }],
+      [
+        { tool_calls: "not-json{{{" },
+        { tool_calls: JSON.stringify([{ toolName: "b", timestamp: "t", durationMs: 1, success: true }]) },
+      ],
+    );
 
     const entries = getRecentJournalEntries("owner-1", 5);
     expect(entries).toHaveLength(1);
@@ -214,11 +238,7 @@ describe("getRecentJournalEntries", () => {
   });
 
   it("returns empty when no sessions found", () => {
-    vi.mocked(sqlite.prepare).mockReturnValue({
-      all: vi.fn(() => []),
-      get: vi.fn(),
-      run: vi.fn(),
-    } as any);
+    mockRecentJournalQueries([], []);
 
     const entries = getRecentJournalEntries("owner-1", 5);
     expect(entries).toHaveLength(0);

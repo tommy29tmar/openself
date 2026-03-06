@@ -12,16 +12,24 @@ const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/g
 
 export async function POST(req: Request) {
   // Auth
+  const multiUser = isMultiUserEnabled();
   const scope = resolveOwnerScope(req);
-  if (isMultiUserEnabled() && !scope) {
+  if (multiUser && !scope) {
     return NextResponse.json(
       { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
       { status: 403 },
     );
   }
 
-  const authCtx = getAuthContext(req);
-  const profileId = authCtx?.profileId ?? "__default__";
+  const authCtx = multiUser ? getAuthContext(req) : null;
+  if (multiUser && !authCtx?.userId && !authCtx?.username) {
+    return NextResponse.json(
+      { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
+      { status: 403 },
+    );
+  }
+
+  const profileId = multiUser ? (authCtx?.profileId ?? "__default__") : "__default__";
 
   // Parse FormData
   let formData: FormData;
@@ -98,16 +106,24 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   // Auth
+  const multiUser = isMultiUserEnabled();
   const scope = resolveOwnerScope(req);
-  if (isMultiUserEnabled() && !scope) {
+  if (multiUser && !scope) {
     return NextResponse.json(
       { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
       { status: 403 },
     );
   }
 
-  const authCtx = getAuthContext(req);
-  const profileId = authCtx?.profileId ?? "__default__";
+  const authCtx = multiUser ? getAuthContext(req) : null;
+  if (multiUser && !authCtx?.userId && !authCtx?.username) {
+    return NextResponse.json(
+      { success: false, code: "AUTH_REQUIRED", error: "Authentication required." },
+      { status: 403 },
+    );
+  }
+
+  const profileId = multiUser ? (authCtx?.profileId ?? "__default__") : "__default__";
 
   // Delete avatar for this profile
   db.delete(mediaAssets)

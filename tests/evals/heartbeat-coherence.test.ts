@@ -86,6 +86,11 @@ vi.mock("@/lib/auth/session", () => ({
   resolveOwnerScopeForWorker: (...args: any[]) => mockResolveOwnerScope(...args),
 }));
 
+const mockGetPreferences = vi.fn(() => ({ language: "it", factLanguage: "en" }));
+vi.mock("@/lib/services/preferences-service", () => ({
+  getPreferences: (...args: any[]) => mockGetPreferences(...args),
+}));
+
 const mockGetDraft = vi.fn();
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: (...args: any[]) => mockGetDraft(...args),
@@ -102,8 +107,10 @@ vi.mock("@/lib/services/coherence-check", () => ({
 }));
 
 const mockMergeSessionMeta = vi.fn(() => ({}));
+const mockGetRecentJournalEntries = vi.fn(() => []);
 vi.mock("@/lib/services/session-metadata", () => ({
   mergeSessionMeta: (...args: any[]) => mockMergeSessionMeta(...args),
+  getRecentJournalEntries: (...args: any[]) => mockGetRecentJournalEntries(...args),
 }));
 
 // Mock DB for heartbeat_runs insert
@@ -130,6 +137,8 @@ beforeEach(() => {
   mockGetDraft.mockReturnValue(null);
   mockGetActiveFacts.mockReturnValue([]);
   mockCheckPageCoherence.mockResolvedValue([]);
+  mockGetPreferences.mockReturnValue({ language: "it", factLanguage: "en" });
+  mockGetRecentJournalEntries.mockReturnValue([]);
   mockResolveOwnerScope.mockReturnValue({
     cognitiveOwnerKey: "owner-1",
     knowledgeReadKeys: ["sess-1", "sess-2"],
