@@ -19,6 +19,7 @@ import { isNewTopicSignal } from "@/lib/agent/policies/topic-signal-detector";
 import type { PromptMode } from "./prompts";
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 import type { PageConfig } from "@/lib/page-config/schema";
+import { getFactsReadScope } from "@/lib/agent/facts-read-scope";
 
 /**
  * Sort facts for context injection:
@@ -212,6 +213,15 @@ function shrinkBlockContent(content: string): string {
     : "";
 }
 
+function buildTemporalContextBlock(now = new Date()): string {
+  const isoNow = now.toISOString();
+  return `CURRENT TEMPORAL CONTEXT:
+- Current timestamp: ${isoNow} (UTC)
+- Resolve relative time expressions ("today", "yesterday", "this morning", "last Tuesday") against this timestamp before calling record_event.
+- record_event expects eventAtHuman as an ISO-8601 timestamp.
+- If the day boundary or timezone is ambiguous, ask a short clarification instead of guessing.`;
+}
+
 /**
  * Assemble the full context for a chat turn.
  *
@@ -250,6 +260,8 @@ export function assembleContext(
   quotaInfo?: { remaining: number; limit: number },
   conversationSessionId?: string,
 ): ContextResult {
+  const { factsReadId, factsReadKeys } = getFactsReadScope(scope);
+
   // Use bootstrap journeyState when available, fall back to detectMode()
   const mode: PromptMode = bootstrap
     ? mapJourneyStateToMode(bootstrap.journeyState)
@@ -265,7 +277,7 @@ export function assembleContext(
   let factsBlock = "";
   if (!profile || profile.facts.include) {
     existingFacts = bootstrapData?.facts
-      ?? getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+      ?? getActiveFacts(factsReadId, factsReadKeys);
     const childCountMap = bootstrapData?.childCountMap ?? new Map<string, number>();
     const topFacts = sortFactsForContext(existingFacts, childCountMap, 120);
     factsBlock =
@@ -384,6 +396,11 @@ export function assembleContext(
         `The user can also publish from the navigation bar.`,
     });
   }
+
+  staticBlocks.push({
+    name: "temporalContext",
+    content: `\n\n---\n\n${buildTemporalContextBlock()}`,
+  });
 
   // Archetype-weighted exploration priorities — conditional on profile.richness
   const archetype = bootstrap?.archetype ?? "generalist";

@@ -13,11 +13,11 @@ vi.mock("@/lib/services/page-composer", () => ({
     (facts: FactRow[], username: string) => ({
       version: 1,
       username,
-      theme: "minimal",
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
       style: {
-        colorScheme: "light",
         primaryColor: "#000",
-        fontFamily: "sans",
         layout: "centered",
       },
       sections: [
@@ -38,10 +38,8 @@ function makeFact(overrides: Partial<FactRow> & { category: string; key: string 
     id: `f-${overrides.key}`,
     sessionId: "sess1",
     profileId: "sess1",
-    category: overrides.category,
-    key: overrides.key,
-    value: overrides.value ?? { name: "test" },
-    visibility: overrides.visibility ?? "proposed",
+    value: { name: "test" },
+    visibility: "proposed" as const,
     confidence: 1.0,
     source: "chat",
     createdAt: "2026-01-01T00:00:00Z",
@@ -95,11 +93,11 @@ describe("Preview privacy — projectPublishableConfig", () => {
     ];
 
     const legacyDraftMeta = {
-      theme: "warm",
+      surface: "clay",
+      voice: "signal",
+      light: "day",
       style: {
-        colorScheme: "light" as const,
         primaryColor: "#000",
-        fontFamily: "sans",
         layout: "centered" as const,
       },
       sections: [

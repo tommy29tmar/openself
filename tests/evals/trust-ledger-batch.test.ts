@@ -6,11 +6,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
-const mockDbDelete = vi.fn(() => ({ where: vi.fn(() => ({ run: vi.fn() })) }));
-const mockDbUpdate = vi.fn(() => ({
+const mockDbDelete = vi.fn((..._: any[]) => ({ where: vi.fn(() => ({ run: vi.fn() })) }));
+const mockDbUpdate = vi.fn((..._: any[]) => ({
   set: vi.fn(() => ({ where: vi.fn(() => ({ run: vi.fn() })) })),
 }));
-const mockDbInsert = vi.fn(() => ({
+const mockDbInsert = vi.fn((..._: any[]) => ({
   values: vi.fn(() => ({ onConflictDoNothing: vi.fn(() => ({ run: vi.fn() })) })),
 }));
 

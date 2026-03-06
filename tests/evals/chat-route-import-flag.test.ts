@@ -114,18 +114,18 @@ const mockConsumeImportEvent = vi.fn();
 const mockMarkImportEventConsumed = vi.fn();
 const mockRevertImportEvent = vi.fn();
 vi.mock("@/lib/connectors/import-event", () => ({
-  consumeImportEvent: (...args: unknown[]) => mockConsumeImportEvent(...args),
-  markImportEventConsumed: (...args: unknown[]) => mockMarkImportEventConsumed(...args),
-  revertImportEvent: (...args: unknown[]) => mockRevertImportEvent(...args),
+  consumeImportEvent: (...args: any[]) => mockConsumeImportEvent(...args),
+  markImportEventConsumed: (...args: any[]) => mockMarkImportEventConsumed(...args),
+  revertImportEvent: (...args: any[]) => mockRevertImportEvent(...args),
 }));
 
 // Mock gap analyzer
-const mockAnalyzeImportGaps = vi.fn(() => ({
+const mockAnalyzeImportGaps = vi.fn((..._: any[]) => ({
   summary: { currentRole: "CTO at Startup", pastRoles: 2, educationCount: 1, languageCount: 1, skillCount: 5, certificationCount: 0 },
   gaps: [{ priority: 1, type: "no_interests", description: "No interests found." }],
 }));
 vi.mock("@/lib/connectors/import-gap-analyzer", () => ({
-  analyzeImportGaps: (...args: unknown[]) => mockAnalyzeImportGaps(...args),
+  analyzeImportGaps: (...args: any[]) => mockAnalyzeImportGaps(...args),
 }));
 
 // Mock getActiveFacts (may already be imported by route; mock to return empty)
@@ -201,6 +201,7 @@ describe("POST /api/chat import flag wiring", () => {
       }),                       // bootstrap
       expect.any(Object),       // bootstrapData
       undefined,                // quotaInfo: single-user → no quota tracking
+      expect.any(String),       // conversationSessionId (messageSessionId)
     );
   });
 
@@ -234,6 +235,7 @@ describe("POST /api/chat import flag wiring", () => {
       }),
       expect.any(Object),
       undefined,                // single-user: no quotaInfo
+      expect.any(String),       // conversationSessionId (messageSessionId)
     );
   });
 

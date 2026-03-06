@@ -30,6 +30,9 @@ function makeFact(
     visibility: overrides.visibility ?? "public",
     createdAt: overrides.createdAt ?? "2026-01-01T00:00:00Z",
     updatedAt: overrides.updatedAt ?? "2026-01-01T00:00:00Z",
+    sortOrder: overrides.sortOrder ?? 0,
+    parentFactId: overrides.parentFactId ?? null,
+    archivedAt: overrides.archivedAt ?? null,
   };
 }
 

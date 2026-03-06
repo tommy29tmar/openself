@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock logEvent to capture actor parameter
 const mockLogEvent = vi.fn();
 vi.mock("@/lib/services/event-service", () => ({
-  logEvent: (...args: unknown[]) => mockLogEvent(...args),
+  logEvent: (...args: any[]) => mockLogEvent(...args),
 }));
 
 // Mock DB layer
@@ -31,7 +31,7 @@ const mockSelect = vi.fn().mockReturnValue({
   }),
 });
 vi.mock("@/lib/db", () => ({
-  db: { insert: (...a: unknown[]) => mockInsert(...a), select: (...a: unknown[]) => mockSelect(...a) },
+  db: { insert: (...a: any[]) => mockInsert(...a), select: (...a: any[]) => mockSelect(...a) },
   sqlite: {},
 }));
 vi.mock("@/lib/db/schema", () => ({

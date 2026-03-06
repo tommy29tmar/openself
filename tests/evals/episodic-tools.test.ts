@@ -66,6 +66,38 @@ describe("record_event tool", () => {
     }, { messages: [] });
     expect(result.success).toBe(false);
   });
+
+  it("uses conversation session for episodic provenance and stores the latest user raw input", async () => {
+    const { createAgentTools } = await import("@/lib/agent/tools");
+    const { tools } = createAgentTools(
+      "en",
+      "sess1",
+      "owner1",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "sess-current",
+      "msg-123",
+    );
+
+    const result = await (tools.record_event as any).execute({
+      actionType: "workout",
+      eventAtHuman: "2026-03-05T10:00:00Z",
+      summary: "User ran 5km",
+    }, {
+      messages: [
+        { role: "assistant", content: "What happened?" },
+        { role: "user", content: "Stamattina ho corso 5km al parco" },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    const row = sqlite.prepare("SELECT session_id, source_message_id, raw_input FROM episodic_events WHERE id = ?").get(result.eventId) as any;
+    expect(row.session_id).toBe("sess-current");
+    expect(row.source_message_id).toBe("msg-123");
+    expect(row.raw_input).toBe("Stamattina ho corso 5km al parco");
+  });
 });
 
 describe("recall_episodes tool", () => {

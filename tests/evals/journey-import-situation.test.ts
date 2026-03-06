@@ -68,8 +68,6 @@ import type { FactRow } from "@/lib/services/kb-service";
 function makeFact(overrides: Partial<FactRow> & { category: string; key: string }): FactRow {
   return {
     id: `f-${Math.random().toString(36).slice(2, 8)}`,
-    category: overrides.category,
-    key: overrides.key,
     value: {},
     source: "connector",
     confidence: 1,

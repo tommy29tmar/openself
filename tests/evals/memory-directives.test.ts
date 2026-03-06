@@ -1,6 +1,6 @@
 /**
  * Tests for the memory usage directives.
- * Validates that all three tiers are documented, the golden rule is present,
+ * Validates that all four tiers are documented, the golden rule is present,
  * and cross-tier rules are defined.
  */
 import { describe, it, expect } from "vitest";
@@ -90,13 +90,31 @@ describe("memoryUsageDirectives", () => {
     });
   });
 
+  describe("Tier 4 — Episodic Memory", () => {
+    it("references Tier 4 or episodic memory", () => {
+      expect(directives).toMatch(/tier\s*4|episodic\s*memory/i);
+    });
+
+    it("references record_event for time-bound events", () => {
+      expect(directives).toContain("record_event");
+    });
+
+    it("references recall_episodes for temporal recall", () => {
+      expect(directives).toContain("recall_episodes");
+    });
+
+    it("references confirm_episodic_pattern for promotion decisions", () => {
+      expect(directives).toContain("confirm_episodic_pattern");
+    });
+  });
+
   describe("cross-tier rules", () => {
     it("contains cross-tier rules section", () => {
       expect(directives).toMatch(/cross.?tier/i);
     });
 
-    it("distinguishes WHAT (facts) from HOW (memories)", () => {
-      expect(directives).toMatch(/what.*know.*how.*behave|tier\s*1.*what.*tier\s*3.*how/i);
+    it("distinguishes WHAT (facts) from HOW (memories) and WHEN (episodic)", () => {
+      expect(directives).toMatch(/what.*know.*how.*behave.*when.*happened|tier\s*1.*what.*tier\s*3.*how.*tier\s*4.*when/i);
     });
   });
 });

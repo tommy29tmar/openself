@@ -5,9 +5,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockGetConnectorWithCredentials = vi.fn();
 const mockUpdateConnectorStatus = vi.fn();
 vi.mock("@/lib/connectors/connector-service", () => ({
-  getConnectorWithCredentials: (...args: unknown[]) =>
+  getConnectorWithCredentials: (...args: any[]) =>
     mockGetConnectorWithCredentials(...args),
-  updateConnectorStatus: (...args: unknown[]) =>
+  updateConnectorStatus: (...args: any[]) =>
     mockUpdateConnectorStatus(...args),
 }));
 
@@ -15,7 +15,7 @@ const mockBatchCreateFacts = vi
   .fn()
   .mockResolvedValue({ factsWritten: 5, factsSkipped: 0, errors: [] });
 vi.mock("@/lib/connectors/connector-fact-writer", () => ({
-  batchCreateFacts: (...args: unknown[]) => mockBatchCreateFacts(...args),
+  batchCreateFacts: (...args: any[]) => mockBatchCreateFacts(...args),
 }));
 
 const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
@@ -25,18 +25,18 @@ const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
   currentSessionId: "sess-1",
 });
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScopeForWorker: (...args: unknown[]) =>
+  resolveOwnerScopeForWorker: (...args: any[]) =>
     mockResolveOwnerScopeForWorker(...args),
 }));
 
 const mockGetDraft = vi.fn().mockReturnValue(null);
 vi.mock("@/lib/services/page-service", () => ({
-  getDraft: (...args: unknown[]) => mockGetDraft(...args),
+  getDraft: (...args: any[]) => mockGetDraft(...args),
 }));
 
 const mockGetFactLanguage = vi.fn().mockReturnValue("en");
 vi.mock("@/lib/services/preferences-service", () => ({
-  getFactLanguage: (...args: unknown[]) => mockGetFactLanguage(...args),
+  getFactLanguage: (...args: any[]) => mockGetFactLanguage(...args),
 }));
 
 const mockFetchProfile = vi.fn();
@@ -51,9 +51,9 @@ class MockGitHubAuthError extends Error {
 }
 
 vi.mock("@/lib/connectors/github/client", () => ({
-  fetchProfile: (...args: unknown[]) => mockFetchProfile(...args),
-  fetchRepos: (...args: unknown[]) => mockFetchRepos(...args),
-  fetchRepoLanguages: (...args: unknown[]) => mockFetchRepoLanguages(...args),
+  fetchProfile: (...args: any[]) => mockFetchProfile(...args),
+  fetchRepos: (...args: any[]) => mockFetchRepos(...args),
+  fetchRepoLanguages: (...args: any[]) => mockFetchRepoLanguages(...args),
   GitHubAuthError: MockGitHubAuthError,
 }));
 
@@ -75,8 +75,8 @@ const mockDbUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
 
 vi.mock("@/lib/db", () => ({
   db: {
-    insert: (...args: unknown[]) => mockDbInsert(...args),
-    update: (...args: unknown[]) => mockDbUpdate(...args),
+    insert: (...args: any[]) => mockDbInsert(...args),
+    update: (...args: any[]) => mockDbUpdate(...args),
   },
   sqlite: {},
 }));

@@ -11,6 +11,7 @@ function makeFact(overrides: Record<string, unknown>) {
     value: { name: "Elena" }, visibility: "public" as const,
     confidence: 1, source: "agent" as const,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    sortOrder: 0, parentFactId: null, archivedAt: null,
     ...overrides,
   };
 }

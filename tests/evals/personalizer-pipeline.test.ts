@@ -36,7 +36,7 @@ const {
 
 // Mock AI SDK
 vi.mock("ai", () => ({
-  generateObject: (...args: unknown[]) => mockGenerateObject(...args),
+  generateObject: (...args: any[]) => mockGenerateObject(...args),
 }));
 
 // Mock AI provider
@@ -46,42 +46,42 @@ vi.mock("@/lib/ai/provider", () => ({
 
 // Mock kb-service
 vi.mock("@/lib/services/kb-service", () => ({
-  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
 // Mock soul-service
 vi.mock("@/lib/services/soul-service", () => ({
-  getActiveSoul: (...args: unknown[]) => mockGetActiveSoul(...args),
+  getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
 }));
 
 // Mock section-copy-state-service
 vi.mock("@/lib/services/section-copy-state-service", () => ({
-  getAllActiveCopies: (...args: unknown[]) => mockGetAllActiveCopies(...args),
-  getActiveCopy: (...args: unknown[]) => mockGetActiveCopy(...args),
-  upsertState: (...args: unknown[]) => mockUpsertState(...args),
+  getAllActiveCopies: (...args: any[]) => mockGetAllActiveCopies(...args),
+  getActiveCopy: (...args: any[]) => mockGetActiveCopy(...args),
+  upsertState: (...args: any[]) => mockUpsertState(...args),
 }));
 
 // Mock page-projection
 vi.mock("@/lib/services/page-projection", () => ({
-  filterPublishableFacts: (...args: unknown[]) => mockFilterPublishableFacts(...args),
-  projectCanonicalConfig: (...args: unknown[]) => mockProjectCanonicalConfig(...args),
-  publishableFromCanonical: (...args: unknown[]) => mockPublishableFromCanonical(...args),
+  filterPublishableFacts: (...args: any[]) => mockFilterPublishableFacts(...args),
+  projectCanonicalConfig: (...args: any[]) => mockProjectCanonicalConfig(...args),
+  publishableFromCanonical: (...args: any[]) => mockPublishableFromCanonical(...args),
 }));
 
 // Mock personalization-hashing
 vi.mock("@/lib/services/personalization-hashing", () => ({
-  computeHash: (...args: unknown[]) => mockComputeHash(...args),
-  computeSectionFactsHash: (...args: unknown[]) => mockComputeSectionFactsHash(...args),
+  computeHash: (...args: any[]) => mockComputeHash(...args),
+  computeSectionFactsHash: (...args: any[]) => mockComputeSectionFactsHash(...args),
 }));
 
 // Mock event-service
 vi.mock("@/lib/services/event-service", () => ({
-  logEvent: (...args: unknown[]) => mockLogEvent(...args),
+  logEvent: (...args: any[]) => mockLogEvent(...args),
 }));
 
 // Mock personalization-impact
 vi.mock("@/lib/services/personalization-impact", () => ({
-  detectImpactedSections: (...args: unknown[]) => mockDetectImpactedSections(...args),
+  detectImpactedSections: (...args: any[]) => mockDetectImpactedSections(...args),
 }));
 
 // ── Import modules under test (after all mocks) ──────────────────────────────
@@ -111,6 +111,9 @@ function makeFact(
     visibility: overrides.visibility ?? "public",
     createdAt: overrides.createdAt ?? "2026-01-01T00:00:00Z",
     updatedAt: overrides.updatedAt ?? "2026-01-01T00:00:00Z",
+    sortOrder: overrides.sortOrder ?? 0,
+    parentFactId: overrides.parentFactId ?? null,
+    archivedAt: overrides.archivedAt ?? null,
   };
 }
 
@@ -129,11 +132,11 @@ function makePageConfig(sections: Section[]): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#000000",
-      fontFamily: "sans-serif",
       layout: "centered",
     },
     sections,
@@ -242,7 +245,7 @@ describe("personalizer pipeline (integration)", () => {
 
     // Verify the mocked services were called correctly
     expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "en");
-    expect(mockGetActiveFacts).toHaveBeenCalledWith("owner1");
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("owner1", undefined);
     expect(mockFilterPublishableFacts).toHaveBeenCalledWith(allFacts);
     expect(mockGetActiveSoul).toHaveBeenCalledWith("owner1");
     expect(mockComputeHash).toHaveBeenCalledWith("Warm, creative, and enthusiastic about open source.");

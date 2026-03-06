@@ -14,6 +14,12 @@ vi.mock("@/lib/auth/session", () => ({
   getSessionIdFromRequest: () => "sess-1",
   getAuthContext: () => ({ profileId: "prof-1", userId: null, username: null }),
   createSessionCookie: (id: string) => `session=${id}; Path=/; HttpOnly`,
+  resolveOwnerScope: () => ({
+    cognitiveOwnerKey: "prof-1",
+    knowledgeReadKeys: ["sess-1"],
+    knowledgePrimaryKey: "sess-1",
+    currentSessionId: "sess-1",
+  }),
 }));
 
 vi.mock("@/lib/services/session-service", () => ({

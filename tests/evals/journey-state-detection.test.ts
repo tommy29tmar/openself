@@ -265,7 +265,7 @@ describe("detectJourneyState", () => {
 // ---------------------------------------------------------------------------
 describe("detectSituations", () => {
   const baseFacts = [
-    { id: "f1", category: "identity", key: "name", value: { full: "Alice" }, source: "chat", confidence: 1, visibility: "public", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "f1", category: "identity", key: "name", value: { full: "Alice" }, source: "chat", confidence: 1, visibility: "public", createdAt: new Date().toISOString(),  updatedAt: new Date().toISOString(), sortOrder: 0, parentFactId: null, archivedAt: null },
   ];
 
   it("returns has_name when name fact exists", () => {
@@ -275,7 +275,7 @@ describe("detectSituations", () => {
 
   it("returns has_name when legacy full-name fact exists", () => {
     const legacyFacts = [
-      { id: "f1", category: "identity", key: "full-name", value: { full: "Bob" }, source: "chat", confidence: 1, visibility: "public", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "f1", category: "identity", key: "full-name", value: { full: "Bob" }, source: "chat", confidence: 1, visibility: "public", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), sortOrder: 0, parentFactId: null, archivedAt: null },
     ];
     const result = detectSituations(legacyFacts, "cog-1");
     expect(result).toContain("has_name");
@@ -306,6 +306,9 @@ describe("detectSituations", () => {
       visibility: "public",
       createdAt: oldDate.toISOString(),
       updatedAt: oldDate.toISOString(),
+      sortOrder: 0,
+      parentFactId: null,
+      archivedAt: null,
     };
     const result = detectSituations([staleFact], "cog-1");
     expect(result).toContain("has_stale_facts");
@@ -330,6 +333,7 @@ describe("detectSituations", () => {
       id: `f${i}`, category: "skill", key: `s${i}`, value: {},
       source: "chat", confidence: 1, visibility: "public",
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      sortOrder: 0, parentFactId: null, archivedAt: null,
     }));
     const result = detectSituations([], "cog-1", { publishableFacts: richFacts });
     const unexpected = [
@@ -347,6 +351,7 @@ describe("detectSituations", () => {
       id: `f${i}`, category: "skill", key: `s${i}`, value: {},
       source: "chat", confidence: 1, visibility: "public",
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      sortOrder: 0, parentFactId: null, archivedAt: null,
     }));
     expect(detectSituations([], "cog-1", { publishableFacts: sparseFacts }))
       .toContain("has_sparse_profile");
@@ -357,6 +362,7 @@ describe("detectSituations", () => {
       id: `f${i}`, category: "skill", key: `s${i}`, value: {},
       source: "chat", confidence: 1, visibility: "public",
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      sortOrder: 0, parentFactId: null, archivedAt: null,
     }));
     expect(detectSituations([], "cog-1", { publishableFacts: richFacts }))
       .not.toContain("has_sparse_profile");

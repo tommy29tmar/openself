@@ -21,8 +21,8 @@ const mockCreateFact = vi.fn().mockImplementation(async (input: any) => {
 const mockGetActiveFacts = vi.fn().mockReturnValue([]);
 
 vi.mock("@/lib/services/kb-service", () => ({
-  createFact: (...args: unknown[]) => mockCreateFact(...args),
-  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
+  createFact: (...args: any[]) => mockCreateFact(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
 const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
@@ -33,7 +33,7 @@ const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
 });
 
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScopeForWorker: (...args: unknown[]) =>
+  resolveOwnerScopeForWorker: (...args: any[]) =>
     mockResolveOwnerScopeForWorker(...args),
 }));
 
@@ -44,9 +44,9 @@ const mockUpsertDraft = vi.fn();
 const mockComputeConfigHash = vi.fn().mockReturnValue("new-hash");
 
 vi.mock("@/lib/services/page-service", () => ({
-  getDraft: (...args: unknown[]) => mockGetDraft(...args),
-  upsertDraft: (...args: unknown[]) => mockUpsertDraft(...args),
-  computeConfigHash: (...args: unknown[]) => mockComputeConfigHash(...args),
+  getDraft: (...args: any[]) => mockGetDraft(...args),
+  upsertDraft: (...args: any[]) => mockUpsertDraft(...args),
+  computeConfigHash: (...args: any[]) => mockComputeConfigHash(...args),
 }));
 
 vi.mock("@/lib/services/preferences-service", () => ({
@@ -88,13 +88,13 @@ const mockDisconnectConnector = vi.fn().mockImplementation(() => {
 });
 
 vi.mock("@/lib/connectors/connector-service", () => ({
-  getConnectorWithCredentials: (...args: unknown[]) =>
+  getConnectorWithCredentials: (...args: any[]) =>
     mockGetConnectorWithCredentials(...args),
-  getActiveConnectors: (...args: unknown[]) =>
+  getActiveConnectors: (...args: any[]) =>
     mockGetActiveConnectors(...args),
-  updateConnectorStatus: (...args: unknown[]) =>
+  updateConnectorStatus: (...args: any[]) =>
     mockUpdateConnectorStatus(...args),
-  disconnectConnector: (...args: unknown[]) =>
+  disconnectConnector: (...args: any[]) =>
     mockDisconnectConnector(...args),
   getConnectorStatus: vi.fn(),
   createConnector: vi.fn(),
@@ -118,8 +118,8 @@ const mockDbUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
 
 vi.mock("@/lib/db", () => ({
   db: {
-    insert: (...args: unknown[]) => mockDbInsert(...args),
-    update: (...args: unknown[]) => mockDbUpdate(...args),
+    insert: (...args: any[]) => mockDbInsert(...args),
+    update: (...args: any[]) => mockDbUpdate(...args),
   },
   sqlite: {},
 }));
@@ -135,8 +135,8 @@ vi.mock("@/lib/db/schema", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a: unknown, b: unknown) => ({ field: a, value: b })),
-  and: vi.fn((...args: unknown[]) => args),
-  inArray: vi.fn((...args: unknown[]) => args),
+  and: vi.fn((...args: any[]) => args),
+  inArray: vi.fn((...args: any[]) => args),
 }));
 
 // ── Mock fetch for GitHub API ───────────────────────────────────────

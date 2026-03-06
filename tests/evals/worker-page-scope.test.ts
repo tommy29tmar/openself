@@ -9,14 +9,14 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-          all: (...args: unknown[]) => mockSelectAll(...args),
+          all: (...args: any[]) => mockSelectAll(...args),
         })),
       })),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
         where: vi.fn(() => ({
-          run: (...args: unknown[]) => mockUpdateRun(...args),
+          run: (...args: any[]) => mockUpdateRun(...args),
         })),
       })),
     })),
@@ -24,7 +24,7 @@ vi.mock("@/lib/db", () => ({
   },
   sqlite: {
     prepare: vi.fn(() => ({
-      run: (...args: unknown[]) => mockSqlRun(...args),
+      run: (...args: any[]) => mockSqlRun(...args),
     })),
   },
 }));

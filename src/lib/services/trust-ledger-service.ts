@@ -97,10 +97,12 @@ function applyFactReverseOps(reverseOps: FactReverseOp[]): void {
         if (!op.previousFact.category || !op.previousFact.key || op.previousFact.value === undefined) {
           break;
         }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id: _prevId, ...prevFactData } = op.previousFact as typeof factsTable.$inferInsert;
         db.insert(factsTable)
           .values({
             id: op.factId,
-            ...(op.previousFact as typeof factsTable.$inferInsert),
+            ...prevFactData,
           })
           .onConflictDoNothing()
           .run();

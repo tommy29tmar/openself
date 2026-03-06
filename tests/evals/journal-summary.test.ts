@@ -24,21 +24,21 @@ vi.mock("@/lib/ai/provider", () => ({
   getProviderForTier: vi.fn(() => "mock-provider"),
 }));
 
-const mockCheckBudget = vi.fn(() => ({ allowed: true }));
-const mockRecordUsage = vi.fn();
+const mockCheckBudget = vi.fn((..._: any[]) => ({ allowed: true }));
+const mockRecordUsage = vi.fn((..._: any[]) => {});
 vi.mock("@/lib/services/usage-service", () => ({
   checkBudget: (...args: any[]) => mockCheckBudget(...args),
   recordUsage: (...args: any[]) => mockRecordUsage(...args),
 }));
 
-const mockEnqueueJob = vi.fn();
+const mockEnqueueJob = vi.fn((..._: any[]) => {});
 vi.mock("@/lib/worker/index", () => ({
   enqueueJob: (...args: any[]) => mockEnqueueJob(...args),
 }));
 
-const mockResolveOwnerScopeForWorker = vi.fn(() => ({
+const mockResolveOwnerScopeForWorker = vi.fn((..._: any[]) => ({
   cognitiveOwnerKey: "owner-1",
-  knowledgeReadKeys: [],
+  knowledgeReadKeys: [] as string[],
   knowledgePrimaryKey: "owner-1",
   currentSessionId: "owner-1",
 }));
@@ -218,7 +218,7 @@ async function setupGenerateSummaryMocks(messageRows: Array<{ id: string; role: 
       run: vi.fn(() => ({ changes: 1 })),
     } as any;
   });
-  vi.mocked(sqlite.transaction).mockImplementation((fn: any) => () => fn());
+  (vi.mocked(sqlite.transaction) as any).mockImplementation((fn: any) => () => fn());
 
   vi.mocked(db.select).mockReturnValue({
     from: vi.fn(() => ({

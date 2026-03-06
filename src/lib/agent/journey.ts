@@ -24,6 +24,7 @@ import { detectArchetypeFromSignals, refineArchetype, ARCHETYPE_STRATEGIES, type
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
 import { getPendingEpisodicProposals } from "@/lib/services/episodic-service";
+import { getFactsReadScope } from "@/lib/agent/facts-read-scope";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -448,10 +449,11 @@ export function assembleBootstrapPayload(
 ): { payload: BootstrapPayload; data: BootstrapData } {
   const readKeys = scope.knowledgeReadKeys;
   const ownerKey = scope.cognitiveOwnerKey;
+  const { factsReadId, factsReadKeys } = getFactsReadScope(scope);
 
   const journeyState = getOrDetectJourneyState(scope, authInfo);
 
-  const facts = getActiveFacts(scope.knowledgePrimaryKey, readKeys);
+  const facts = getActiveFacts(factsReadId, factsReadKeys);
 
   // Pre-compute shared data (used by both detectSituations and payload fields)
   const pendingProposalCount = createProposalService().getPendingProposals(ownerKey).length;

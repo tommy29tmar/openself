@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 
 // --- Mocks ---
 
 const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockGetAuthContext = vi.fn();
 vi.mock("@/lib/connectors/route-auth", () => ({
-  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+  resolveAuthenticatedConnectorScope: (...args: any[]) =>
     mockResolveAuthenticatedConnectorScope(...args),
 }));
 vi.mock("@/lib/auth/session", () => ({
-  getAuthContext: (...args: unknown[]) => mockGetAuthContext(...args),
+  getAuthContext: (...args: any[]) => mockGetAuthContext(...args),
 }));
 
 const mockImportLinkedInZip = vi.fn().mockResolvedValue({
@@ -18,19 +19,19 @@ const mockImportLinkedInZip = vi.fn().mockResolvedValue({
   errors: [],
 });
 vi.mock("@/lib/connectors/linkedin-zip/import", () => ({
-  importLinkedInZip: (...args: unknown[]) => mockImportLinkedInZip(...args),
+  importLinkedInZip: (...args: any[]) => mockImportLinkedInZip(...args),
 }));
 
 const mockGetFactLanguage = vi.fn().mockReturnValue("en");
 vi.mock("@/lib/services/preferences-service", () => ({
-  getFactLanguage: (...args: unknown[]) => mockGetFactLanguage(...args),
+  getFactLanguage: (...args: any[]) => mockGetFactLanguage(...args),
 }));
 
 vi.mock("@/lib/db", () => ({ db: {}, sqlite: {} }));
 
 const mockWriteImportEvent = vi.fn();
 vi.mock("@/lib/connectors/import-event", () => ({
-  writeImportEvent: (...args: unknown[]) => mockWriteImportEvent(...args),
+  writeImportEvent: (...args: any[]) => mockWriteImportEvent(...args),
 }));
 
 const ownerScope = {
@@ -40,11 +41,11 @@ const ownerScope = {
   currentSessionId: "sess-1",
 };
 
-function createUploadRequest(file?: File): Request {
+function createUploadRequest(file?: File): NextRequest {
   const formData = new FormData();
   if (file) formData.append("file", file);
 
-  return new Request("http://localhost/api/connectors/linkedin-zip/import", {
+  return new NextRequest("http://localhost/api/connectors/linkedin-zip/import", {
     method: "POST",
     body: formData,
   });

@@ -57,11 +57,11 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -180,14 +180,14 @@ describe("page-service integration (real SQLite)", () => {
       expect(draft).not.toBeNull();
       expect(draft!.username).toBe("alice");
       expect(draft!.status).toBe("draft");
-      expect(draft!.config.theme).toBe("minimal");
+      expect(draft!.config.surface).toBe("canvas");
     });
 
     it("updates an existing draft", () => {
       upsertDraft("alice", makeConfig());
-      upsertDraft("alice", makeConfig({ theme: "warm" }));
+      upsertDraft("alice", makeConfig({ surface: "clay" }));
       const draft = getDraft();
-      expect(draft!.config.theme).toBe("warm");
+      expect(draft!.config.surface).toBe("clay");
     });
   });
 
@@ -202,7 +202,7 @@ describe("page-service integration (real SQLite)", () => {
       confirmPublish("alice");
       const published = getPublishedPage("alice");
       expect(published).not.toBeNull();
-      expect(published!.theme).toBe("minimal");
+      expect(published!.surface).toBe("canvas");
     });
   });
 
@@ -273,16 +273,16 @@ describe("page-service integration (real SQLite)", () => {
       requestPublish("alice");
       confirmPublish("alice");
 
-      // Edit draft with different theme
-      upsertDraft("alice", makeConfig({ username: "alice", theme: "warm" }));
+      // Edit draft with different surface
+      upsertDraft("alice", makeConfig({ username: "alice", surface: "clay" }));
 
-      // Published should still have "minimal"
+      // Published should still have "canvas"
       const published = getPublishedPage("alice");
-      expect(published!.theme).toBe("minimal");
+      expect(published!.surface).toBe("canvas");
 
-      // Draft should have "warm"
+      // Draft should have "clay"
       const draft = getDraft();
-      expect(draft!.config.theme).toBe("warm");
+      expect(draft!.config.surface).toBe("clay");
     });
   });
 

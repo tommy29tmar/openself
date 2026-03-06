@@ -11,11 +11,11 @@ function makeConfig(overrides: Partial<PageConfig> = {}): PageConfig {
   return {
     version: 1,
     username: "test",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#000",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [],
@@ -72,13 +72,13 @@ describe("resolveLayoutTemplate", () => {
   });
 
   it("returns vertical even when style.layout is split", () => {
-    const config = makeConfig({ style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "split" } });
+    const config = makeConfig({ style: { primaryColor: "#000", layout: "split" } });
     const t = resolveLayoutTemplate(config);
     expect(t.id).toBe("monolith");
   });
 
   it("returns vertical even when style.layout is stack", () => {
-    const config = makeConfig({ style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "stack" } });
+    const config = makeConfig({ style: { primaryColor: "#000", layout: "stack" } });
     const t = resolveLayoutTemplate(config);
     expect(t.id).toBe("monolith");
   });
@@ -100,7 +100,7 @@ describe("resolveLayoutTemplate", () => {
     // Ensure that style.layout values like "split" and "stack"
     // do NOT map to curator-left or any other template
     for (const layout of ["centered", "split", "stack"] as const) {
-      const config = makeConfig({ style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout } });
+      const config = makeConfig({ style: { primaryColor: "#000", layout } });
       const t = resolveLayoutTemplate(config);
       expect(t.id).toBe("monolith");
     }

@@ -27,7 +27,7 @@ export type ConflictRow = {
   resolvedAt: string | null;
 };
 
-type ConflictResolution = "keep_a" | "keep_b" | "merge" | "dismissed";
+export type ConflictResolution = "keep_a" | "keep_b" | "merge" | "dismissed";
 type FactSnapshot = typeof facts.$inferSelect;
 type ConflictReverseOp =
   | { action: "restore"; factId: string; previousValue: unknown }

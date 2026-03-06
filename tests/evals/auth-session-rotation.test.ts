@@ -124,11 +124,11 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -273,12 +273,12 @@ describe("Draft/style finds draft via anchor after rotation", () => {
     expect(draft).toBeTruthy();
 
     // Apply style change
-    const config = { ...draft.config, theme: "warm" as const };
+    const config = { ...draft.config, surface: "clay" };
     upsertDraftByKey(draft.username, config as PageConfig, anchor);
 
     // Verify
     const updated = getDraftByKey(anchor)!;
-    expect(updated.config.theme).toBe("warm");
+    expect(updated.config.surface).toBe("clay");
   });
 });
 

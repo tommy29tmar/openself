@@ -11,11 +11,11 @@ const SCOPE = {
 const CANONICAL_CONFIG: PageConfig = {
   version: 1,
   username: "alice",
-  theme: "minimal",
+  surface: "canvas",
+  voice: "signal",
+  light: "day",
   style: {
-    colorScheme: "light",
     primaryColor: "#111111",
-    fontFamily: "sans-serif",
     layout: "centered",
   },
   sections: [
@@ -42,12 +42,12 @@ const SECOND_PERSONALIZED: PageConfig = {
 
 let mergeCallCount = 0;
 
-const mockMergeActiveSectionCopy = vi.fn(() => {
+const mockMergeActiveSectionCopy = vi.fn((..._: any[]) => {
   mergeCallCount += 1;
   return mergeCallCount === 1 ? FIRST_PERSONALIZED : SECOND_PERSONALIZED;
 });
 
-const mockComputeConfigHash = vi.fn((config: unknown) => JSON.stringify(config));
+const mockComputeConfigHash = vi.fn((..._: any[]) => JSON.stringify(_[0]));
 
 vi.mock("@/lib/auth/session", () => ({
   resolveOwnerScope: () => SCOPE,
@@ -65,7 +65,7 @@ vi.mock("@/lib/services/page-service", () => ({
     configHash: null,
     updatedAt: null,
   }),
-  computeConfigHash: (...args: unknown[]) => mockComputeConfigHash(...args),
+  computeConfigHash: (...args: any[]) => mockComputeConfigHash(...args),
 }));
 
 vi.mock("@/lib/services/kb-service", () => ({
@@ -96,7 +96,7 @@ vi.mock("@/lib/services/page-projection", () => ({
 }));
 
 vi.mock("@/lib/services/personalization-projection", () => ({
-  mergeActiveSectionCopy: (...args: unknown[]) => mockMergeActiveSectionCopy(...args),
+  mergeActiveSectionCopy: (...args: any[]) => mockMergeActiveSectionCopy(...args),
 }));
 
 const { GET } = await import("@/app/api/preview/stream/route");

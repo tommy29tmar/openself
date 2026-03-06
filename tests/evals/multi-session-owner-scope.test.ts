@@ -11,11 +11,11 @@ const SCOPE = {
 const BASE_CONFIG: PageConfig = {
   version: 1,
   username: "alice",
-  theme: "minimal",
+  surface: "canvas",
+  voice: "signal",
+  light: "day",
   style: {
-    colorScheme: "light",
     primaryColor: "#111111",
-    fontFamily: "sans-serif",
     layout: "centered",
   },
   sections: [
@@ -32,8 +32,8 @@ let mockDraft: {
   updatedAt: string | null;
 } | null = null;
 
-const mockMergeActiveSectionCopy = vi.fn((config: PageConfig) => config);
-const mockPrepareAndPublish = vi.fn(async () => ({
+const mockMergeActiveSectionCopy = vi.fn((..._: any[]) => _[0] as PageConfig);
+const mockPrepareAndPublish = vi.fn(async (..._: any[]) => ({
   success: true as const,
   username: "alice",
   url: "/alice",
@@ -86,11 +86,11 @@ vi.mock("@/lib/services/page-projection", () => ({
 }));
 
 vi.mock("@/lib/services/personalization-projection", () => ({
-  mergeActiveSectionCopy: (...args: unknown[]) => mockMergeActiveSectionCopy(...args),
+  mergeActiveSectionCopy: (...args: any[]) => mockMergeActiveSectionCopy(...args),
 }));
 
 vi.mock("@/lib/services/publish-pipeline", () => ({
-  prepareAndPublish: (...args: unknown[]) => mockPrepareAndPublish(...args),
+  prepareAndPublish: (...args: any[]) => mockPrepareAndPublish(...args),
   PublishError: class PublishError extends Error {
     code: string;
     httpStatus: number;

@@ -13,6 +13,9 @@ function makeFact(overrides: Partial<FactRow> & Pick<FactRow, "category" | "key"
     visibility: "public",
     createdAt: "2026-01-01",
     updatedAt: "2026-01-01",
+    sortOrder: 0,
+    parentFactId: null,
+    archivedAt: null,
   };
 }
 

@@ -5,8 +5,8 @@ const mockGetAuthContext = vi.fn();
 const mockIsMultiUserEnabled = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
-  getAuthContext: (...args: unknown[]) => mockGetAuthContext(...args),
+  resolveOwnerScope: (...args: any[]) => mockResolveOwnerScope(...args),
+  getAuthContext: (...args: any[]) => mockGetAuthContext(...args),
 }));
 
 vi.mock("@/lib/services/session-service", () => ({

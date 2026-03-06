@@ -6,11 +6,11 @@ const mockRejectProposal = vi.fn();
 const mockMarkStaleProposals = vi.fn();
 
 vi.mock("@/lib/services/proposal-service", () => ({
-  getPendingProposals: (...args: unknown[]) =>
+  getPendingProposals: (...args: any[]) =>
     mockGetPendingProposals(...args),
-  acceptProposal: (...args: unknown[]) => mockAcceptProposal(...args),
-  rejectProposal: (...args: unknown[]) => mockRejectProposal(...args),
-  markStaleProposals: (...args: unknown[]) =>
+  acceptProposal: (...args: any[]) => mockAcceptProposal(...args),
+  rejectProposal: (...args: any[]) => mockRejectProposal(...args),
+  markStaleProposals: (...args: any[]) =>
     mockMarkStaleProposals(...args),
 }));
 

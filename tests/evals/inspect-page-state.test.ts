@@ -215,7 +215,7 @@ describe("inspect_page_state tool", () => {
       { toolCallId: "test", messages: [], abortSignal: undefined as any },
     );
 
-    expect(result.error).toBe("No draft found");
+    expect((result as any).error).toBe("No draft found");
   });
 
   it("returns layout information", async () => {
@@ -228,9 +228,10 @@ describe("inspect_page_state tool", () => {
 
     expect(result.layout).toBeDefined();
     expect(result.layout.template).toBe("monolith");
-    expect(result.layout.surface).toBe("canvas");
-    expect(result.layout.voice).toBe("signal");
-    expect(result.layout.light).toBe("day");
+    const layout = result.layout as { template: string; surface: string; voice: string; light: string; style: unknown };
+    expect(layout.surface).toBe("canvas");
+    expect(layout.voice).toBe("signal");
+    expect(layout.light).toBe("day");
   });
 
   it("returns per-section details with slot assignment", async () => {
@@ -244,14 +245,14 @@ describe("inspect_page_state tool", () => {
     expect(result.sections).toHaveLength(4);
 
     const heroSection = result.sections.find((s: any) => s.type === "hero");
-    expect(heroSection.slot).toBe("hero");
-    expect(heroSection.complete).toBe(true);
+    expect(heroSection!.slot).toBe("hero");
+    expect(heroSection!.complete).toBe(true);
 
     const bioSection = result.sections.find((s: any) => s.type === "bio");
-    expect(bioSection.slot).toBe("main");
+    expect(bioSection!.slot).toBe("main");
 
     const skillsSection = result.sections.find((s: any) => s.type === "skills");
-    expect(skillsSection.widget).toBe("skills-chips");
+    expect(skillsSection!.widget).toBe("skills-chips");
   });
 
   it("reports locked sections", async () => {
@@ -265,7 +266,7 @@ describe("inspect_page_state tool", () => {
     );
 
     const bioSection = result.sections.find((s: any) => s.type === "bio");
-    expect(bioSection.locked).toBe(true);
+    expect(bioSection!.locked).toBe(true);
   });
 
   it("reports completeness and richness per section", async () => {
@@ -283,8 +284,8 @@ describe("inspect_page_state tool", () => {
     );
 
     const skillsSection = result.sections.find((s: any) => s.type === "skills");
-    expect(skillsSection.complete).toBe(false);
-    expect(skillsSection.richness).toBe("thin");
+    expect(skillsSection!.complete).toBe(false);
+    expect(skillsSection!.richness).toBe("thin");
   });
 
   it("returns available slots from the template", async () => {

@@ -283,10 +283,12 @@ export async function POST(req: Request) {
 
   // Persist the latest user message
   const lastMessage = messages[messages.length - 1];
+  let latestUserMessageId: string | undefined;
   if (lastMessage?.role === "user") {
+    latestUserMessageId = randomUUID();
     db.insert(messagesTable)
       .values({
-        id: randomUUID(),
+        id: latestUserMessageId,
         sessionId: messageSessionId,
         role: "user",
         content: lastMessage.content,
@@ -308,6 +310,8 @@ export async function POST(req: Request) {
       effectiveScope.knowledgeReadKeys,
       mode,
       authInfoForBootstrap,
+      messageSessionId,
+      latestUserMessageId,
     );
     const tools = filterToolsByJourneyState(agentTools, bootstrap.journeyState);
     const result = streamText({
@@ -316,7 +320,8 @@ export async function POST(req: Request) {
       messages: safeMessages,
       tools,
       maxSteps: MAX_STEPS,
-      experimental_transform: createUnbackedActionClaimTransform(sessionLanguage),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      experimental_transform: createUnbackedActionClaimTransform(sessionLanguage) as any,
       providerOptions: {
         google: { thinkingConfig: { thinkingBudget: 0 } },
       },

@@ -19,44 +19,44 @@ vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => "mock-model"),
 }));
 
-const mockCheckBudget = vi.fn(() => ({ allowed: true }));
+const mockCheckBudget = vi.fn((..._: any[]) => ({ allowed: true }));
 vi.mock("@/lib/services/usage-service", () => ({
   checkBudget: (...args: any[]) => mockCheckBudget(...args),
 }));
 
-const mockGetHeartbeatConfig = vi.fn(() => ({
+const mockGetHeartbeatConfig = vi.fn((..._: any[]) => ({
   timezone: "UTC",
   lightMaxPerDay: 1,
   deepMaxPerWeek: 1,
 }));
-const mockComputeOwnerDay = vi.fn(() => "2026-03-01");
-const mockCheckOwnerBudget = vi.fn(() => ({ allowed: true }));
+const mockComputeOwnerDay = vi.fn((..._: any[]) => "2026-03-01");
+const mockCheckOwnerBudget = vi.fn((..._: any[]) => ({ allowed: true }));
 vi.mock("@/lib/services/heartbeat-config-service", () => ({
   getHeartbeatConfig: (...args: any[]) => mockGetHeartbeatConfig(...args),
   computeOwnerDay: (...args: any[]) => mockComputeOwnerDay(...args),
   checkOwnerBudget: (...args: any[]) => mockCheckOwnerBudget(...args),
 }));
 
-const mockExpireStaleProposals = vi.fn(() => 0);
-const mockGetActiveSoul = vi.fn(() => ({ compiled: "Tone: professional" }));
+const mockExpireStaleProposals = vi.fn((..._: any[]) => 0);
+const mockGetActiveSoul = vi.fn((..._: any[]) => ({ compiled: "Tone: professional" }));
 vi.mock("@/lib/services/soul-service", () => ({
   expireStaleProposals: (...args: any[]) => mockExpireStaleProposals(...args),
   getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
 }));
 
-const mockLogEvent = vi.fn();
+const mockLogEvent = vi.fn((..._: any[]) => {});
 vi.mock("@/lib/services/event-service", () => ({
   logEvent: (...args: any[]) => mockLogEvent(...args),
 }));
 
-const mockAnalyzeConformity = vi.fn(async () => []);
-const mockGenerateRewrite = vi.fn(async () => null);
+const mockAnalyzeConformity = vi.fn(async (..._: any[]) => []);
+const mockGenerateRewrite = vi.fn(async (..._: any[]) => null);
 vi.mock("@/lib/services/conformity-analyzer", () => ({
   analyzeConformity: (...args: any[]) => mockAnalyzeConformity(...args),
   generateRewrite: (...args: any[]) => mockGenerateRewrite(...args),
 }));
 
-const mockGetAllActiveCopies = vi.fn(() => []);
+const mockGetAllActiveCopies = vi.fn((..._: any[]) => []);
 vi.mock("@/lib/services/section-copy-state-service", () => ({
   getAllActiveCopies: (...args: any[]) => mockGetAllActiveCopies(...args),
 }));
@@ -65,8 +65,8 @@ vi.mock("@/lib/services/section-cache-service", () => ({
   cleanupExpiredCache: vi.fn(),
 }));
 
-const mockCreateProposal = vi.fn();
-const mockMarkStaleProposals = vi.fn();
+const mockCreateProposal = vi.fn((..._: any[]) => {});
+const mockMarkStaleProposals = vi.fn((..._: any[]) => {});
 vi.mock("@/lib/services/proposal-service", () => ({
   createProposal: (...args: any[]) => mockCreateProposal(...args),
   markStaleProposals: (...args: any[]) => mockMarkStaleProposals(...args),
@@ -76,7 +76,7 @@ vi.mock("@/lib/services/personalization-hashing", () => ({
   computeHash: vi.fn(() => "hash"),
 }));
 
-const mockResolveOwnerScope = vi.fn(() => ({
+const mockResolveOwnerScope = vi.fn((..._: any[]) => ({
   cognitiveOwnerKey: "owner-1",
   knowledgeReadKeys: ["sess-1", "sess-2"],
   knowledgePrimaryKey: "sess-1",
@@ -86,28 +86,28 @@ vi.mock("@/lib/auth/session", () => ({
   resolveOwnerScopeForWorker: (...args: any[]) => mockResolveOwnerScope(...args),
 }));
 
-const mockGetPreferences = vi.fn(() => ({ language: "it", factLanguage: "en" }));
+const mockGetPreferences = vi.fn((..._: any[]) => ({ language: "it", factLanguage: "en" }));
 vi.mock("@/lib/services/preferences-service", () => ({
   getPreferences: (...args: any[]) => mockGetPreferences(...args),
 }));
 
-const mockGetDraft = vi.fn();
+const mockGetDraft = vi.fn((..._: any[]) => null as any);
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: (...args: any[]) => mockGetDraft(...args),
 }));
 
-const mockGetActiveFacts = vi.fn(() => []);
+const mockGetActiveFacts = vi.fn((..._: any[]) => []);
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
-const mockCheckPageCoherence = vi.fn(async () => []);
+const mockCheckPageCoherence = vi.fn(async (..._: any[]) => [] as any[]);
 vi.mock("@/lib/services/coherence-check", () => ({
   checkPageCoherence: (...args: any[]) => mockCheckPageCoherence(...args),
 }));
 
-const mockMergeSessionMeta = vi.fn(() => ({}));
-const mockGetRecentJournalEntries = vi.fn(() => []);
+const mockMergeSessionMeta = vi.fn((..._: any[]) => ({}));
+const mockGetRecentJournalEntries = vi.fn((..._: any[]) => []);
 vi.mock("@/lib/services/session-metadata", () => ({
   mergeSessionMeta: (...args: any[]) => mockMergeSessionMeta(...args),
   getRecentJournalEntries: (...args: any[]) => mockGetRecentJournalEntries(...args),

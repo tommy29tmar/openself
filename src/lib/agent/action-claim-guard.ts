@@ -96,9 +96,10 @@ function classifyClaimPrefix(text: string): "wait" | "safe" | "risky" {
 
 function isSuccessfulMutationToolResult(part: GuardStreamPart): boolean {
   if (part.type !== "tool-result") return false;
-  const result = part.result as Record<string, unknown> | null | undefined;
+  const tr = part as { toolName: string; result: unknown };
+  const result = tr.result as Record<string, unknown> | null | undefined;
   return didToolActuallyCompleteAction(
-    part.toolName,
+    tr.toolName,
     result?.success === true,
     { result },
   );
@@ -166,14 +167,16 @@ export function createUnbackedActionClaimTransform(language: string) {
           return;
         }
 
+        const textPart = part as { type: "text-delta"; textDelta: string };
+
         if (sawSuccessfulMutation) {
           controller.enqueue(part);
           return;
         }
 
         if (!decided) {
-          bufferedParts.push(part);
-          bufferedText += part.textDelta;
+          bufferedParts.push(textPart);
+          bufferedText += textPart.textDelta;
 
           const prefixState = classifyClaimPrefix(bufferedText);
           if (prefixState === "wait") {
@@ -191,8 +194,8 @@ export function createUnbackedActionClaimTransform(language: string) {
         }
 
         if (bufferingRiskyPrefix) {
-          bufferedParts.push(part);
-          bufferedText += part.textDelta;
+          bufferedParts.push(textPart);
+          bufferedText += textPart.textDelta;
           return;
         }
 

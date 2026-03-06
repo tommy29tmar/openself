@@ -10,32 +10,32 @@ const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
 });
 
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScopeForWorker: (...args: unknown[]) => mockResolveOwnerScopeForWorker(...args),
+  resolveOwnerScopeForWorker: (...args: any[]) => mockResolveOwnerScopeForWorker(...args),
 }));
 
 const mockGetActiveConnectors = vi.fn().mockReturnValue([]);
 const mockUpdateConnectorStatus = vi.fn();
 
 vi.mock("@/lib/connectors/connector-service", () => ({
-  getActiveConnectors: (...args: unknown[]) => mockGetActiveConnectors(...args),
-  updateConnectorStatus: (...args: unknown[]) => mockUpdateConnectorStatus(...args),
+  getActiveConnectors: (...args: any[]) => mockGetActiveConnectors(...args),
+  updateConnectorStatus: (...args: any[]) => mockUpdateConnectorStatus(...args),
 }));
 
 const mockGetConnector = vi.fn().mockReturnValue(undefined);
 
 vi.mock("@/lib/connectors/registry", () => ({
-  getConnector: (...args: unknown[]) => mockGetConnector(...args),
+  getConnector: (...args: any[]) => mockGetConnector(...args),
 }));
 
 // Mock sync_log insert — capture values for assertion
 const mockSyncLogValues = vi.fn().mockReturnValue({ run: vi.fn() });
 const mockInsertSyncLog = vi.fn().mockReturnValue({
-  values: (...args: unknown[]) => mockSyncLogValues(...args),
+  values: (...args: any[]) => mockSyncLogValues(...args),
 });
 
 vi.mock("@/lib/db", () => ({
   db: {
-    insert: (...args: unknown[]) => mockInsertSyncLog(...args),
+    insert: (...args: any[]) => mockInsertSyncLog(...args),
   },
   sqlite: {},
 }));

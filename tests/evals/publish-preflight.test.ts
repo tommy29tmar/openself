@@ -17,11 +17,11 @@ const {
   mockGetDraft: vi.fn(),
   mockGetActiveFacts: vi.fn(),
   mockIsMultiUserEnabled: vi.fn(() => false),
-  mockValidateUsernameFormat: vi.fn(() => ({ ok: true })),
+  mockValidateUsernameFormat: vi.fn(() => ({ ok: true }) as any),
   mockValidateUsernameAvailability: vi.fn(() => ({ ok: true })),
   mockRequestPublish: vi.fn(),
   mockUpdateJourneyStatePin: vi.fn(),
-  mockValidateLayoutComposition: vi.fn(() => ({ all: [], errors: [], warnings: [] })),
+  mockValidateLayoutComposition: vi.fn(() => ({ all: [] as any[], errors: [] as any[], warnings: [] as any[] })),
   mockToSlotAssignments: vi.fn(() => ({ assignments: [], skipped: [] })),
   mockCanFullyValidateSection: vi.fn(() => true),
   mockBuildWidgetMap: vi.fn(() => ({})),
@@ -395,7 +395,7 @@ describe("publish_preflight tool", () => {
     mockGetDraft.mockReturnValue(makeDraft());
     mockGetActiveFacts.mockReturnValue([makeFact()]);
     mockIsMultiUserEnabled.mockReturnValue(false);
-    mockValidateUsernameFormat.mockReturnValue({ ok: false, message: "Username must be 3-30 characters" });
+    mockValidateUsernameFormat.mockReturnValue({ ok: false, code: "invalid_length", message: "Username must be 3-30 characters" });
 
     const result = await tools.publish_preflight.execute(
       { username: "ab" },
@@ -404,7 +404,7 @@ describe("publish_preflight tool", () => {
 
     expect(result.readyToPublish).toBe(false);
     expect(result.gates.hasUsername).toBe(false);
-    expect(result.usernameIssue).toBe("Username must be 3-30 characters");
+    expect((result as any).usernameIssue).toBe("Username must be 3-30 characters");
     expect(result.summary).toContain("Username");
   });
 

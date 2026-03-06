@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const assembleContextMock = vi.fn();
 
 vi.mock("@/lib/agent/context", () => ({
-  assembleContext: (...args: unknown[]) => assembleContextMock(...args),
+  assembleContext: (...args: any[]) => assembleContextMock(...args),
 }));
 
 // --- Mock all other dependencies used by the chat route ---

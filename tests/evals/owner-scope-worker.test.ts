@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSqlitePrepare = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {},
-  sqlite: { prepare: (...args: unknown[]) => mockSqlitePrepare(...args) },
+  sqlite: { prepare: (...args: any[]) => mockSqlitePrepare(...args) },
 }));
 
 vi.mock("@/lib/services/session-service", () => ({

@@ -4,34 +4,34 @@ import type { PageConfig, Section } from "@/lib/page-config/schema";
 // Mock state service
 const mockGetAllActiveCopies = vi.fn();
 vi.mock("@/lib/services/section-copy-state-service", () => ({
-  getAllActiveCopies: (...args: unknown[]) => mockGetAllActiveCopies(...args),
+  getAllActiveCopies: (...args: any[]) => mockGetAllActiveCopies(...args),
 }));
 
 // Mock hashing — return predictable values
 const mockComputeSectionFactsHash = vi.fn().mockReturnValue("mock-facts-hash");
 const mockComputeHash = vi.fn().mockReturnValue("mock-soul-hash");
 vi.mock("@/lib/services/personalization-hashing", () => ({
-  computeSectionFactsHash: (...args: unknown[]) => mockComputeSectionFactsHash(...args),
-  computeHash: (...args: unknown[]) => mockComputeHash(...args),
+  computeSectionFactsHash: (...args: any[]) => mockComputeSectionFactsHash(...args),
+  computeHash: (...args: any[]) => mockComputeHash(...args),
   SECTION_FACT_CATEGORIES: { bio: ["identity"], skills: ["skill"], hero: ["identity"] },
 }));
 
 // Mock KB service
 const mockGetActiveFacts = vi.fn().mockReturnValue([]);
 vi.mock("@/lib/services/kb-service", () => ({
-  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
 // Mock projection
 const mockFilterPublishableFacts = vi.fn().mockReturnValue([]);
 vi.mock("@/lib/services/page-projection", () => ({
-  filterPublishableFacts: (...args: unknown[]) => mockFilterPublishableFacts(...args),
+  filterPublishableFacts: (...args: any[]) => mockFilterPublishableFacts(...args),
 }));
 
 // Mock soul service
 const mockGetActiveSoul = vi.fn().mockReturnValue({ compiled: "mock-soul" });
 vi.mock("@/lib/services/soul-service", () => ({
-  getActiveSoul: (...args: unknown[]) => mockGetActiveSoul(...args),
+  getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
 }));
 
 import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
@@ -40,11 +40,11 @@ function makeConfig(sections: Section[]): PageConfig {
   return {
     version: 1,
     username: "testuser",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#000",
-      fontFamily: "sans-serif",
       layout: "centered",
     },
     sections,
@@ -368,12 +368,12 @@ describe("mergeActiveSectionCopy", () => {
     mockGetAllActiveCopies.mockReturnValue([]);
 
     const config = makeConfig([makeSection("bio", { description: "Bio." })]);
-    config.theme = "warm";
+    config.surface = "clay";
     config.layoutTemplate = "curator";
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
-    expect(result.theme).toBe("warm");
+    expect(result.surface).toBe("clay");
     expect(result.layoutTemplate).toBe("curator");
     expect(result.username).toBe("testuser");
     expect(result.version).toBe(1);

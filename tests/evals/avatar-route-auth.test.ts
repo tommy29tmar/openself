@@ -8,27 +8,27 @@ const mockProcessAvatarImage = vi.fn();
 const mockDeleteRun = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
-  getAuthContext: (...args: unknown[]) => mockGetAuthContext(...args),
+  resolveOwnerScope: (...args: any[]) => mockResolveOwnerScope(...args),
+  getAuthContext: (...args: any[]) => mockGetAuthContext(...args),
 }));
 
 vi.mock("@/lib/services/session-service", () => ({
-  isMultiUserEnabled: (...args: unknown[]) => mockIsMultiUserEnabled(...args),
+  isMultiUserEnabled: (...args: any[]) => mockIsMultiUserEnabled(...args),
 }));
 
 vi.mock("@/lib/services/media-service", () => ({
-  uploadAvatar: (...args: unknown[]) => mockUploadAvatar(...args),
+  uploadAvatar: (...args: any[]) => mockUploadAvatar(...args),
 }));
 
 vi.mock("@/lib/services/image-utils", () => ({
-  processAvatarImage: (...args: unknown[]) => mockProcessAvatarImage(...args),
+  processAvatarImage: (...args: any[]) => mockProcessAvatarImage(...args),
 }));
 
 vi.mock("@/lib/db", () => ({
   db: {
     delete: vi.fn(() => ({
       where: vi.fn(() => ({
-        run: (...args: unknown[]) => mockDeleteRun(...args),
+        run: (...args: any[]) => mockDeleteRun(...args),
       })),
     })),
   },

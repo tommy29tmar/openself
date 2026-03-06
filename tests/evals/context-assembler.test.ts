@@ -190,6 +190,21 @@ describe("assembleContext", () => {
     expect(result.systemPrompt).toContain("[c1]");
   });
 
+  it("injects current temporal context for episodic memory routing", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-03-06T10:15:30.000Z"));
+
+      const result = assembleContext(SCOPE, "en", []);
+
+      expect(result.systemPrompt).toContain("CURRENT TEMPORAL CONTEXT:");
+      expect(result.systemPrompt).toContain("2026-03-06T10:15:30.000Z");
+      expect(result.systemPrompt).toContain("record_event expects eventAtHuman as an ISO-8601 timestamp");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("truncates oversized facts block to budget", () => {
     // Generate 200 facts with large values so top-120 (cap) still exceed 17000-token budget.
     // 120 facts × ~730 chars each ≈ 87600 chars ≈ 21900 tokens > 17000
@@ -328,8 +343,10 @@ describe("assembleContext with bootstrap", () => {
       thinSections: [],
       staleFacts: [],
       openConflicts: [],
+      archivableFacts: [],
       language: "en",
       conversationContext: null,
+      archetype: "generalist" as const,
     };
 
     const result = assembleContext(
@@ -358,8 +375,10 @@ describe("assembleContext with bootstrap", () => {
       thinSections: [],
       staleFacts: [],
       openConflicts: [],
+      archivableFacts: [],
       language: "en",
       conversationContext: null,
+      archetype: "generalist" as const,
     };
 
     const result = assembleContext(
@@ -385,8 +404,10 @@ describe("assembleContext with bootstrap", () => {
       thinSections: [],
       staleFacts: [],
       openConflicts: [],
+      archivableFacts: [],
       language: "en",
       conversationContext: null,
+      archetype: "generalist" as const,
     };
 
     const result = assembleContext(
@@ -412,8 +433,10 @@ describe("assembleContext with bootstrap", () => {
       thinSections: [],
       staleFacts: [],
       openConflicts: [],
+      archivableFacts: [],
       language: "en",
       conversationContext: null,
+      archetype: "generalist" as const,
     };
 
     const result = assembleContext(
@@ -454,8 +477,10 @@ describe("assembleContext with bootstrap", () => {
       thinSections: [] as string[],
       staleFacts: [] as string[],
       openConflicts: [] as string[],
+      archivableFacts: [] as string[],
       language: "en",
       conversationContext: null,
+      archetype: "generalist" as const,
     };
 
     const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);

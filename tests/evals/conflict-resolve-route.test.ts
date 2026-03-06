@@ -5,15 +5,15 @@ const mockIsMultiUserEnabled = vi.fn();
 const mockResolveConflict = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScope: (...args: unknown[]) => mockResolveOwnerScope(...args),
+  resolveOwnerScope: (...args: any[]) => mockResolveOwnerScope(...args),
 }));
 
 vi.mock("@/lib/services/session-service", () => ({
-  isMultiUserEnabled: (...args: unknown[]) => mockIsMultiUserEnabled(...args),
+  isMultiUserEnabled: (...args: any[]) => mockIsMultiUserEnabled(...args),
 }));
 
 vi.mock("@/lib/services/conflict-service", () => ({
-  resolveConflict: (...args: unknown[]) => mockResolveConflict(...args),
+  resolveConflict: (...args: any[]) => mockResolveConflict(...args),
 }));
 
 const { POST } = await import("@/app/api/conflicts/[id]/resolve/route");

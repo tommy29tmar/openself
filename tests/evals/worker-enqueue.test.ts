@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockRun = vi.fn();
 const mockOnConflictDoNothing = vi.fn(() => ({ run: mockRun }));
 const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
-const mockInsert = vi.fn(() => ({ values: mockValues }));
+const mockInsert = vi.fn((..._: any[]) => ({ values: mockValues }));
 
 vi.mock("@/lib/db", () => ({
   db: {
-    insert: (...args: unknown[]) => mockInsert(...args),
+    insert: (...args: any[]) => mockInsert(...args),
     update: vi.fn(),
     select: vi.fn(),
   },

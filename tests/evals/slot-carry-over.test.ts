@@ -112,8 +112,10 @@ describe("slot carry-over via projectCanonicalConfig", () => {
 
     // Simulate a draft that has skills in "curator"
     const draftMeta: DraftMeta = {
-      theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
+      style: { primaryColor: "#111", layout: "centered" },
       layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
@@ -139,8 +141,10 @@ describe("slot carry-over via projectCanonicalConfig", () => {
 
     // curator sidebar slot accepts skills — use that for a valid soft-pin
     const draftMeta: DraftMeta = {
-      theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
+      style: { primaryColor: "#111", layout: "centered" },
       layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },

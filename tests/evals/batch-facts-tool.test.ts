@@ -72,13 +72,13 @@ describe("batch_facts tool", () => {
       { category: "skill", key: `pre-delete-${suffix}`, value: { name: "ToDelete" } },
       { toolCallId: "pre2", messages: [] },
     );
-    createdIds.push(createResult.factId, deleteResult.factId);
+    createdIds.push(createResult.factId!, deleteResult.factId!);
 
     const result = await tool.execute({
       operations: [
         { action: "create" as const, category: "skill", key: `new-${suffix}`, value: { name: "New" } },
-        { action: "update" as const, factId: createResult.factId, value: { name: "Updated" } },
-        { action: "delete" as const, factId: deleteResult.factId },
+        { action: "update" as const, factId: createResult.factId!, value: { name: "Updated" } },
+        { action: "delete" as const, factId: deleteResult.factId! },
       ],
     }, { toolCallId: "test", messages: [] });
 
@@ -88,13 +88,13 @@ describe("batch_facts tool", () => {
     expect(result.deleted).toBe(1);
 
     // Verify update applied
-    const updatedFact = getFactById(createResult.factId, sessionId);
+    const updatedFact = getFactById(createResult.factId!, sessionId);
     expect(updatedFact).not.toBeNull();
     const val = typeof updatedFact!.value === "string" ? JSON.parse(updatedFact!.value) : updatedFact!.value;
     expect(val.name).toBe("Updated");
 
     // Verify deletion
-    const deletedFact = getFactById(deleteResult.factId, sessionId);
+    const deletedFact = getFactById(deleteResult.factId!, sessionId);
     expect(deletedFact).toBeNull();
 
     // Cleanup new fact

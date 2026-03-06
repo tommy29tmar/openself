@@ -224,7 +224,16 @@ All sub-phases complete:
 - Layout Template Engine + Architect Layout Refactoring ✅
 - NEXT-16 Sprints 1-5 (Journey Intelligence → Conversation Polish) ✅
 
-Final stats: 2579 automated tests, 222 test files, 28 DB migrations.
+Final stats: 2593 automated tests, 225 test files, 28 DB migrations.
+
+#### Memory Pipeline Fix (Post Phase 1 — Done)
+
+Fixed the 4-tier memory wiring to the agent runtime:
+1. **Facts read-scope**: unified via `factsReadScope()` helper (`src/lib/agent/facts-read-scope.ts`). When `PROFILE_ID_CANONICAL=true`, Tier 1 reads from `cognitiveOwnerKey` instead of the anchor session
+2. **Temporal context**: `CURRENT TEMPORAL CONTEXT` block injected into agent context so the model has an absolute timestamp for episodic provenance
+3. **Episodic provenance**: `record_event` tool now correctly saves `session_id`, `source_message_id`, and `raw_input` from the conversation session
+4. **Memory directives**: updated to explicitly cover all 4 tiers (facts, summaries, meta-memories, episodic events)
+5. **TypeScript hardening**: all `tsc --noEmit` errors resolved (source + 225 test files)
 
 #### NEXT-7: Additional themes — bold, elegant, hacker (Deferred to Phase 2)
 

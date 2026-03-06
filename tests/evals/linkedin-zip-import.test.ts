@@ -7,7 +7,7 @@ const mockBatchCreateFacts = vi
   .mockResolvedValue({ factsWritten: 5, factsSkipped: 0, errors: [] });
 
 vi.mock("@/lib/connectors/connector-fact-writer", () => ({
-  batchCreateFacts: (...args: unknown[]) => mockBatchCreateFacts(...args),
+  batchCreateFacts: (...args: any[]) => mockBatchCreateFacts(...args),
 }));
 
 // Mock parser — returns rows from content so we can verify which files were parsed
@@ -21,7 +21,7 @@ const mockParseLinkedInCsv = vi.fn().mockImplementation((content: string) => {
 });
 
 vi.mock("@/lib/connectors/linkedin-zip/parser", () => ({
-  parseLinkedInCsv: (...args: unknown[]) => mockParseLinkedInCsv(...args),
+  parseLinkedInCsv: (...args: any[]) => mockParseLinkedInCsv(...args),
 }));
 
 // Mock mappers — each returns a single fact tagged with the mapper name
@@ -47,13 +47,13 @@ const mockMapCertifications = vi.fn().mockReturnValue([
   { category: "achievement", key: "li-cert-aws-0", value: { title: "AWS" } },
 ]);
 vi.mock("@/lib/connectors/linkedin-zip/mapper", () => ({
-  mapProfile: (...args: unknown[]) => mockMapProfile(...args),
-  mapProfileSummary: (...args: unknown[]) => mockMapProfileSummary(...args),
-  mapPositions: (...args: unknown[]) => mockMapPositions(...args),
-  mapEducation: (...args: unknown[]) => mockMapEducation(...args),
-  mapSkills: (...args: unknown[]) => mockMapSkills(...args),
-  mapLanguages: (...args: unknown[]) => mockMapLanguages(...args),
-  mapCertifications: (...args: unknown[]) => mockMapCertifications(...args),
+  mapProfile: (...args: any[]) => mockMapProfile(...args),
+  mapProfileSummary: (...args: any[]) => mockMapProfileSummary(...args),
+  mapPositions: (...args: any[]) => mockMapPositions(...args),
+  mapEducation: (...args: any[]) => mockMapEducation(...args),
+  mapSkills: (...args: any[]) => mockMapSkills(...args),
+  mapLanguages: (...args: any[]) => mockMapLanguages(...args),
+  mapCertifications: (...args: any[]) => mockMapCertifications(...args),
 }));
 
 // --- yauzl-promise mock ---
@@ -84,7 +84,7 @@ function createMockZipReader(
 const mockFromBuffer = vi.fn();
 
 vi.mock("yauzl-promise", () => ({
-  fromBuffer: (...args: unknown[]) => mockFromBuffer(...args),
+  fromBuffer: (...args: any[]) => mockFromBuffer(...args),
 }));
 
 // --- Import SUT after mocks ---

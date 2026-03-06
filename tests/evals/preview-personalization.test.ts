@@ -33,15 +33,19 @@ vi.mock("@/lib/services/page-projection", () => ({
   projectCanonicalConfig: vi.fn().mockReturnValue({
     version: 1,
     username: "test",
-    theme: "minimal",
-    style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
+    style: { primaryColor: "#000", layout: "centered" },
     sections: [],
   }),
   publishableFromCanonical: vi.fn().mockReturnValue({
     version: 1,
     username: "test",
-    theme: "minimal",
-    style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
+    style: { primaryColor: "#000", layout: "centered" },
     sections: [],
   }),
   filterPublishableFacts: mockFilterPublishableFacts,
@@ -60,8 +64,10 @@ describe("mergeActiveSectionCopy importability", () => {
     const config = {
       version: 1,
       username: "test",
-      theme: "minimal",
-      style: { colorScheme: "light" as const, primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" as const },
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
+      style: { primaryColor: "#000", layout: "centered" as const },
       sections: [],
     };
 
@@ -74,8 +80,10 @@ describe("mergeActiveSectionCopy importability", () => {
     const config = {
       version: 1,
       username: "test",
-      theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
+      style: { primaryColor: "#000", layout: "centered" },
       sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
     };
 
@@ -89,8 +97,10 @@ describe("mergeActiveSectionCopy importability", () => {
     const originalConfig = {
       version: 1,
       username: "test",
-      theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
+      style: { primaryColor: "#000", layout: "centered" },
       sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
     };
 

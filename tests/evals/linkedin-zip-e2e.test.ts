@@ -16,7 +16,7 @@ const mockBatchCreateFacts = vi
   });
 
 vi.mock("@/lib/connectors/connector-fact-writer", () => ({
-  batchCreateFacts: (...args: unknown[]) => mockBatchCreateFacts(...args),
+  batchCreateFacts: (...args: any[]) => mockBatchCreateFacts(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ function createMockZipReader(
 const mockFromBuffer = vi.fn();
 
 vi.mock("yauzl-promise", () => ({
-  fromBuffer: (...args: unknown[]) => mockFromBuffer(...args),
+  fromBuffer: (...args: any[]) => mockFromBuffer(...args),
 }));
 
 // ---------------------------------------------------------------------------

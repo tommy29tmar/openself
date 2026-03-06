@@ -108,13 +108,34 @@ export function createAgentTools(
   readKeys?: string[],
   mode?: string,
   authInfo?: { authenticated?: boolean; username?: string | null },
+  provenanceSessionId?: string,
+  provenanceMessageId?: string,
 ) {
   const effectiveOwnerKey = ownerKey ?? sessionId;
+  const eventSessionId = provenanceSessionId ?? sessionId;
   const operationJournal: JournalEntry[] = [];
   const publishAuth = {
     authenticated: !!authInfo?.authenticated,
     username: authInfo?.username ?? null,
   };
+
+  function extractLatestUserText(messages: unknown): string | null {
+    if (!Array.isArray(messages)) return null;
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (!message || typeof message !== "object") continue;
+
+      const candidate = message as { role?: unknown; content?: unknown };
+      if (candidate.role !== "user") continue;
+
+      if (typeof candidate.content === "string" && candidate.content.trim().length > 0) {
+        return candidate.content;
+      }
+    }
+
+    return null;
+  }
 
   async function validatePublishUsername(requestedUsername: string) {
     const effectiveUsername = publishAuth.username ?? requestedUsername;
@@ -1148,6 +1169,7 @@ export function createAgentTools(
     description: `Record a specific event the user experienced at a point in time.
 Use when user describes a past action with a time reference (past-tense verb + when).
 Do NOT use create_fact for episodic inputs — use this tool instead.
+Use the CURRENT TEMPORAL CONTEXT block from the system prompt to resolve relative dates before calling.
 
 ACTION_TYPE taxonomy (best match at 70%+; else new snake_case type):
 workout | meal | social | learning | work | travel | health | milestone | casual
@@ -1159,14 +1181,17 @@ After recording a "milestone" event, ask if user wants it added to their public 
       summary: z.string().describe("LLM-curated 1-2 sentences. Not verbatim user text."),
       entities: z.array(z.string()).optional(),
     }),
-    execute: async ({ actionType, eventAtHuman, summary, entities }) => {
+    execute: async ({ actionType, eventAtHuman, summary, entities }, { messages }) => {
       try {
         const eventAtUnix = Math.floor(new Date(eventAtHuman).getTime() / 1000);
         if (isNaN(eventAtUnix)) return { success: false, error: "Invalid eventAtHuman — must be ISO-8601" };
+        const rawInput = extractLatestUserText(messages);
         const eventId = insertEvent({
-          ownerKey: effectiveOwnerKey, sessionId,
+          ownerKey: effectiveOwnerKey,
+          sessionId: eventSessionId,
+          sourceMessageId: provenanceMessageId,
           eventAtUnix, eventAtHuman, actionType,
-          narrativeSummary: summary, entities: entities ?? [],
+          narrativeSummary: summary, rawInput: rawInput ?? undefined, entities: entities ?? [],
         });
         if (ownerKey) {
           logTrustAction(effectiveOwnerKey, "record_event", `Recorded ${actionType}`, {

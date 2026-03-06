@@ -16,6 +16,9 @@ function makeFact(overrides: Record<string, unknown>) {
     source: "connector" as const,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    sortOrder: 0,
+    parentFactId: null,
+    archivedAt: null,
     ...overrides,
   };
 }

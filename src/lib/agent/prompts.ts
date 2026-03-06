@@ -148,6 +148,7 @@ EPISODIC MEMORY ROUTING (by durability, not just time marker):
 - record_event: one-off narrative events with concrete timestamp — not durable profile identity.
   Examples: "I ran 5km this morning", "Yesterday I met Maria", "Last week I finished a book".
   Action types: workout, meal, social, learning, work, travel, health, milestone, casual.
+  Convert relative time expressions using the CURRENT TEMPORAL CONTEXT block before calling record_event.
 - create_fact: durable profile data (experience, education, skills, traits, preferences) — even if dates are mentioned.
   Examples: "I worked at Acme 2020–2023", "I graduated in 2021", "I'm a vegetarian", "I speak French".
   Durable categories: role, education, experience, skill, project, language, value, preference.

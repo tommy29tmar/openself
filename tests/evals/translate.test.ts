@@ -60,7 +60,7 @@ vi.mock("@/lib/db/schema", () => ({
 // Mock drizzle-orm operators
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((col, val) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
+  and: vi.fn((...args: any[]) => ({ args, op: "and" })),
   sql: {},
 }));
 
@@ -76,11 +76,11 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "draft",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -282,15 +282,16 @@ describe("translatePageContent", () => {
     expect((bio.content as any).text).toContain("ingegnere di software");
   });
 
-  it("preserves theme and style through translation", async () => {
+  it("preserves presence and style through translation", async () => {
     mockGenerateObject.mockResolvedValue({ object: [] } as any);
 
-    const config = makeConfig({ theme: "warm", style: { colorScheme: "dark", primaryColor: "#ff0000", fontFamily: "serif", layout: "centered" } });
+    const config = makeConfig({ surface: "clay", voice: "narrative", light: "night", style: { primaryColor: "#ff0000", layout: "centered" } });
     const result = await translatePageContent(config, "en", "it");
 
-    expect(result.theme).toBe("warm");
-    expect(result.style.colorScheme).toBe("dark");
-    expect(result.style.fontFamily).toBe("serif");
+    expect(result.surface).toBe("clay");
+    expect(result.voice).toBe("narrative");
+    expect(result.light).toBe("night");
+    expect(result.style.primaryColor).toBe("#ff0000");
   });
 
   it("includes target and source language names in the prompt", async () => {
@@ -635,7 +636,7 @@ describe("translatePageContent — source language cache isolation", () => {
       }),
     );
     // Verify the contentHash in the write is a composite (64-char hex, not the raw content hash)
-    const writeCall = mockValues.mock.calls[0][0];
+    const writeCall = (mockValues.mock.calls as any[][])[0][0];
     expect(writeCall.contentHash).toMatch(/^[a-f0-9]{64}$/);
   });
 

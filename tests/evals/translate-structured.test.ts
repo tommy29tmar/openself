@@ -57,7 +57,7 @@ vi.mock("@/lib/db/schema", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((col, val) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
+  and: vi.fn((...args: any[]) => ({ args, op: "and" })),
   sql: {},
 }));
 
@@ -72,11 +72,11 @@ function makeConfig(overrides?: Partial<PageConfig>): PageConfig {
   return {
     version: 1,
     username: "draft",
-    theme: "minimal",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
     style: {
-      colorScheme: "light",
       primaryColor: "#6366f1",
-      fontFamily: "inter",
       layout: "centered",
     },
     sections: [
@@ -148,7 +148,7 @@ describe("translatePageContent — structured output (generateObject)", () => {
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
 
-    const call = mockGenerateObject.mock.calls[0][0];
+    const call = mockGenerateObject.mock.calls[0][0] as any;
     expect(call).toHaveProperty("schema");
     // The schema should be a Zod schema (has _def property)
     expect(call.schema).toBeDefined();

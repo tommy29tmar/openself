@@ -7,16 +7,16 @@ const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
 const mockEnqueueJob = vi.fn();
 
 vi.mock("@/lib/connectors/route-auth", () => ({
-  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+  resolveAuthenticatedConnectorScope: (...args: any[]) =>
     mockResolveAuthenticatedConnectorScope(...args),
 }));
 
 vi.mock("@/lib/connectors/connector-service", () => ({
-  getConnectorStatus: (...args: unknown[]) => mockGetConnectorStatus(...args),
+  getConnectorStatus: (...args: any[]) => mockGetConnectorStatus(...args),
 }));
 
 vi.mock("@/lib/worker", () => ({
-  enqueueJob: (...args: unknown[]) => mockEnqueueJob(...args),
+  enqueueJob: (...args: any[]) => mockEnqueueJob(...args),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -28,8 +28,8 @@ const mockHasPendingJob = vi.fn().mockReturnValue(false);
 const mockIsSyncRateLimited = vi.fn().mockReturnValue(false);
 
 vi.mock("@/lib/connectors/idempotency", () => ({
-  hasPendingJob: (...args: unknown[]) => mockHasPendingJob(...args),
-  isSyncRateLimited: (...args: unknown[]) => mockIsSyncRateLimited(...args),
+  hasPendingJob: (...args: any[]) => mockHasPendingJob(...args),
+  isSyncRateLimited: (...args: any[]) => mockIsSyncRateLimited(...args),
 }));
 
 vi.mock("@/lib/db/schema", () => ({

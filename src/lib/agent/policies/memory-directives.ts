@@ -47,9 +47,17 @@ TIER 3 — Meta-Memories (agent observations):
 - Meta-memories are about HOW to interact with the user, not WHAT you know about them.
 - Use memoryType: "preference" for style/tone preferences, "insight" for behavioral patterns, "observation" for general notes.
 
+TIER 4 — Episodic Memory (private event log):
+- Episodic memory stores one-off, time-bound events that happened at a specific moment.
+- Use record_event for narrative moments with a concrete time anchor ("this morning", "yesterday", "last week") after resolving the timestamp from the CURRENT TEMPORAL CONTEXT block.
+- Use recall_episodes when the user asks about patterns or counts over time ("How many times did I run this month?").
+- Episodic events are private working memory for temporal reasoning — they are not durable profile identity by default.
+- If a recurring episodic pattern is surfaced to you as a proposal, discuss it naturally and use confirm_episodic_pattern only after the user accepts or declines.
+
 CROSS-TIER RULES:
-- Tier 1 (facts) = WHAT you know. Tier 2 (summary) = CONTEXT of past conversations. Tier 3 (memories) = HOW to behave.
+- Tier 1 (facts) = WHAT you know. Tier 2 (summary) = CONTEXT of past conversations. Tier 3 (memories) = HOW to behave. Tier 4 (episodic) = WHEN something happened.
 - Never confuse the tiers: factual information goes in facts, not memories. Interaction patterns go in memories, not facts.
+- Do not promote episodic events into facts automatically unless the user confirms they belong in the durable profile.
 - When you notice a pattern across multiple turns (e.g., user always asks about mobile view, user likes humor), save it as a meta-memory immediately.
 - Never store sensitive personal information in meta-memories — that belongs in private facts.`;
 }

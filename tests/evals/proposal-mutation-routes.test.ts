@@ -7,18 +7,18 @@ const mockRejectProposal = vi.fn();
 const mockSqliteExec = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
-  getAuthContext: (...args: unknown[]) => mockGetAuthContext(...args),
+  getAuthContext: (...args: any[]) => mockGetAuthContext(...args),
 }));
 
 vi.mock("@/lib/services/proposal-service", () => ({
-  getPendingProposals: (...args: unknown[]) => mockGetPendingProposals(...args),
-  acceptProposal: (...args: unknown[]) => mockAcceptProposal(...args),
-  rejectProposal: (...args: unknown[]) => mockRejectProposal(...args),
+  getPendingProposals: (...args: any[]) => mockGetPendingProposals(...args),
+  acceptProposal: (...args: any[]) => mockAcceptProposal(...args),
+  rejectProposal: (...args: any[]) => mockRejectProposal(...args),
 }));
 
 vi.mock("@/lib/db", () => ({
   sqlite: {
-    exec: (...args: unknown[]) => mockSqliteExec(...args),
+    exec: (...args: any[]) => mockSqliteExec(...args),
   },
 }));
 

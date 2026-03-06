@@ -47,6 +47,7 @@ const makeBootstrap = (): BootstrapPayload => ({
   archivableFacts: [],
   language: "en",
   conversationContext: null,
+  archetype: "generalist",
 });
 
 describe("anti-fabrication prompt guards", () => {

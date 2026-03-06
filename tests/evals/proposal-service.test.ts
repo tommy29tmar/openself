@@ -60,26 +60,26 @@ const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
 vi.mock("@/lib/services/personalization-hashing", () => ({
   computeHash: (s: string) =>
     require("crypto").createHash("sha256").update(s).digest("hex"),
-  computeSectionFactsHash: (...args: unknown[]) =>
+  computeSectionFactsHash: (...args: any[]) =>
     mockComputeSectionFactsHash(...args),
   SECTION_FACT_CATEGORIES: { bio: ["identity"] },
 }));
 
 vi.mock("@/lib/services/kb-service", () => ({
-  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
 vi.mock("@/lib/services/page-projection", () => ({
-  filterPublishableFacts: (...args: unknown[]) =>
+  filterPublishableFacts: (...args: any[]) =>
     mockFilterPublishableFacts(...args),
 }));
 
 vi.mock("@/lib/services/soul-service", () => ({
-  getActiveSoul: (...args: unknown[]) => mockGetActiveSoul(...args),
+  getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
-  resolveOwnerScopeForWorker: (...args: unknown[]) =>
+  resolveOwnerScopeForWorker: (...args: any[]) =>
     mockResolveOwnerScopeForWorker(...args),
 }));
 

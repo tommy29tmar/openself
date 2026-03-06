@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
-import { resolveConflict } from "@/lib/services/conflict-service";
+import { resolveConflict, type ConflictResolution } from "@/lib/services/conflict-service";
 
 /**
  * POST /api/conflicts/:id/resolve
@@ -50,7 +50,7 @@ export async function POST(
   }
 
   try {
-    const result = resolveConflict(conflictId, ownerKey, resolution, mergedValue);
+    const result = resolveConflict(conflictId, ownerKey, resolution as ConflictResolution, mergedValue);
 
     if (!result.success) {
       return NextResponse.json(

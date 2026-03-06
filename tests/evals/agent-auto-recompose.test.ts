@@ -147,6 +147,7 @@ describe("auto-recompose after fact mutations", () => {
     });
     // projectCanonicalConfig returns a NEW config (different hash)
     vi.mocked(projectCanonicalConfig).mockReturnValue({
+      version: 1,
       username: "draft",
       surface: "archive",
       voice: "narrative",
@@ -155,7 +156,7 @@ describe("auto-recompose after fact mutations", () => {
       layoutTemplate: "curator",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Elena" } },
-        { id: "bio-1", type: "bio", variant: "full", content: { text: "Updated bio" }, lock: { content: "user" } },
+        { id: "bio-1", type: "bio", variant: "full", content: { text: "Updated bio" }, lock: { content: true, lockedBy: "user", lockedAt: new Date().toISOString() } },
       ],
     });
     vi.mocked(computeConfigHash).mockReturnValue("new-hash");

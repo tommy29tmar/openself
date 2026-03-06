@@ -29,8 +29,8 @@ const mockGetActiveFacts = vi.fn().mockReturnValue([
 ]);
 
 vi.mock("@/lib/services/kb-service", () => ({
-  createFact: (...args: unknown[]) => mockCreateFact(...args),
-  getActiveFacts: (...args: unknown[]) => mockGetActiveFacts(...args),
+  createFact: (...args: any[]) => mockCreateFact(...args),
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
 const mockGetDraft = vi.fn().mockReturnValue(null);
@@ -38,9 +38,9 @@ const mockUpsertDraft = vi.fn();
 const mockComputeConfigHash = vi.fn().mockReturnValue("hash-123");
 
 vi.mock("@/lib/services/page-service", () => ({
-  getDraft: (...args: unknown[]) => mockGetDraft(...args),
-  upsertDraft: (...args: unknown[]) => mockUpsertDraft(...args),
-  computeConfigHash: (...args: unknown[]) => mockComputeConfigHash(...args),
+  getDraft: (...args: any[]) => mockGetDraft(...args),
+  upsertDraft: (...args: any[]) => mockUpsertDraft(...args),
+  computeConfigHash: (...args: any[]) => mockComputeConfigHash(...args),
 }));
 
 vi.mock("@/lib/services/page-projection", () => ({
@@ -55,7 +55,7 @@ vi.mock("@/lib/services/page-projection", () => ({
 const mockGetFactLanguage = vi.fn().mockReturnValue("en");
 
 vi.mock("@/lib/services/preferences-service", () => ({
-  getFactLanguage: (...args: unknown[]) => mockGetFactLanguage(...args),
+  getFactLanguage: (...args: any[]) => mockGetFactLanguage(...args),
 }));
 
 vi.mock("@/lib/flags", () => flagsMock);

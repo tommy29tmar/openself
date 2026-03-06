@@ -12,7 +12,7 @@ let mockAuthCtx:
 let mockValidationResult:
   | { ok: true }
   | { ok: false; code: string; message: string } = { ok: true };
-const mockPrepareAndPublish = vi.fn(async () => ({
+const mockPrepareAndPublish = vi.fn(async (..._: any[]) => ({
   success: true as const,
   username: "alice",
   url: "/alice",
@@ -32,7 +32,7 @@ vi.mock("@/lib/services/username-validation", () => ({
 }));
 
 vi.mock("@/lib/services/publish-pipeline", () => ({
-  prepareAndPublish: (...args: unknown[]) => mockPrepareAndPublish(...args),
+  prepareAndPublish: (...args: any[]) => mockPrepareAndPublish(...args),
   PublishError: class PublishError extends Error {
     code: string;
     httpStatus: number;

@@ -60,12 +60,12 @@ vi.mock("@/lib/layout/registry", () => ({
 }));
 
 vi.mock("@/lib/layout/assign-slots", () => ({
-  assignSlotsFromFacts: (...args: unknown[]) => assignSlotsFromFactsMock(...args),
+  assignSlotsFromFacts: (...args: any[]) => assignSlotsFromFactsMock(...args),
 }));
 
 vi.mock("@/lib/layout/validate-adapter", () => ({
-  canFullyValidateSection: (...args: unknown[]) => canFullyValidateSectionMock(...args),
-  toSlotAssignments: (...args: unknown[]) => toSlotAssignmentsMock(...args),
+  canFullyValidateSection: (...args: any[]) => canFullyValidateSectionMock(...args),
+  toSlotAssignments: (...args: any[]) => toSlotAssignmentsMock(...args),
 }));
 
 vi.mock("@/lib/layout/widgets", () => ({

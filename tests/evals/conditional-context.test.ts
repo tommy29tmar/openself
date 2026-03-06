@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
-const mockGetActiveFacts = vi.fn(() => []);
+const mockGetActiveFacts = vi.fn((..._: any[]) => []);
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
   countFacts: vi.fn(() => 0),
@@ -16,24 +16,24 @@ vi.mock("@/lib/services/page-service", () => ({
   getDraft: vi.fn(() => null),
 }));
 
-const mockGetSummary = vi.fn(() => "A conversation summary");
+const mockGetSummary = vi.fn((..._: any[]) => "A conversation summary");
 vi.mock("@/lib/services/summary-service", () => ({
   getSummary: (...args: any[]) => mockGetSummary(...args),
 }));
 
-const mockGetActiveMemories = vi.fn(() => [
+const mockGetActiveMemories = vi.fn((..._: any[]) => [
   { memoryType: "observation", content: "User likes React" },
 ]);
 vi.mock("@/lib/services/memory-service", () => ({
   getActiveMemories: (...args: any[]) => mockGetActiveMemories(...args),
 }));
 
-const mockGetActiveSoul = vi.fn(() => ({ compiled: "Soul: creative person" }));
+const mockGetActiveSoul = vi.fn((..._: any[]) => ({ compiled: "Soul: creative person" }));
 vi.mock("@/lib/services/soul-service", () => ({
   getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
 }));
 
-const mockGetOpenConflicts = vi.fn(() => []);
+const mockGetOpenConflicts = vi.fn((..._: any[]) => []);
 vi.mock("@/lib/services/conflict-service", () => ({
   getOpenConflicts: (...args: any[]) => mockGetOpenConflicts(...args),
 }));
@@ -42,7 +42,7 @@ vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn(() => []),
 }));
 
-const mockBuildSystemPrompt = vi.fn(() => "BOOTSTRAP_PROMPT");
+const mockBuildSystemPrompt = vi.fn((..._: any[]) => "BOOTSTRAP_PROMPT");
 vi.mock("@/lib/agent/prompts", () => ({
   buildSystemPrompt: (...args: any[]) => mockBuildSystemPrompt(...args),
 }));
@@ -77,6 +77,10 @@ function makeBootstrap(journeyState: string): BootstrapPayload {
     expertiseLevel: "beginner" as any,
     language: "en",
     archetype: "generalist",
+    userName: null,
+    lastSeenDaysAgo: null,
+    publishedUsername: null,
+    conversationContext: null,
     thinSections: [],
     staleFacts: [],
     openConflicts: [],

@@ -8,14 +8,14 @@ const mockDisconnectConnector = vi.fn();
 const mockGetConnectorById = vi.fn().mockReturnValue(null);
 
 vi.mock("@/lib/connectors/route-auth", () => ({
-  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+  resolveAuthenticatedConnectorScope: (...args: any[]) =>
     mockResolveAuthenticatedConnectorScope(...args),
 }));
 
 vi.mock("@/lib/connectors/connector-service", () => ({
-  getConnectorStatus: (...args: unknown[]) => mockGetConnectorStatus(...args),
-  disconnectConnector: (...args: unknown[]) => mockDisconnectConnector(...args),
-  getConnectorById: (...args: unknown[]) => mockGetConnectorById(...args),
+  getConnectorStatus: (...args: any[]) => mockGetConnectorStatus(...args),
+  disconnectConnector: (...args: any[]) => mockDisconnectConnector(...args),
+  getConnectorById: (...args: any[]) => mockGetConnectorById(...args),
 }));
 
 vi.mock("@/lib/db", () => ({

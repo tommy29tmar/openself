@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockPrepare = vi.fn();
 vi.mock("@/lib/db", () => ({
   sqlite: {
-    prepare: (...args: unknown[]) => mockPrepare(...args),
+    prepare: (...args: any[]) => mockPrepare(...args),
   },
   db: {},
 }));

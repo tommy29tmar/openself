@@ -53,10 +53,10 @@ vi.mock("@/lib/db/event-log", () => ({
   logEvent: vi.fn(),
 }));
 vi.mock("@/lib/services/page-composer", () => ({
-  composeOptimisticPage: vi.fn(() => ({ sections: [], theme: "minimal", style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "centered" } })),
+  composeOptimisticPage: vi.fn(() => ({ sections: [], surface: "canvas", voice: "signal", light: "day", style: { primaryColor: "#000", layout: "centered" } })),
 }));
 vi.mock("@/lib/services/page-projection", () => ({
-  projectCanonicalConfig: vi.fn(() => ({ sections: [], theme: "minimal", style: { colorScheme: "light", primaryColor: "#000", fontFamily: "inter", layout: "centered" } })),
+  projectCanonicalConfig: vi.fn(() => ({ sections: [], surface: "canvas", voice: "signal", light: "day", style: { primaryColor: "#000", layout: "centered" } })),
   filterPublishableFacts: vi.fn(() => []),
 }));
 vi.mock("@/lib/ai/translate", () => ({
@@ -67,8 +67,12 @@ import { createAgentTools } from "@/lib/agent/tools";
 
 function makeSidebarLeftDraft(sections: Section[]): PageConfig {
   return {
-    theme: "minimal",
-    style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
+    version: 1,
+    username: "test",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
+    style: { primaryColor: "#111", layout: "centered" },
     layoutTemplate: "curator",
     sections,
   };
@@ -92,7 +96,7 @@ describe("move_section tool", () => {
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
     );
     expect(result.success).toBe(true);
-    expect(result.movedTo).toBe("sidebar");
+    expect((result as any).movedTo).toBe("sidebar");
     // Verify the draft was updated
     const skills = mockDraft.config!.sections.find(s => s.id === "skills-1");
     expect(skills!.slot).toBe("sidebar");
@@ -102,8 +106,12 @@ describe("move_section tool", () => {
     // architect-standard: feature-right is "half", card-1 is "third"
     // skills-list fits wide/half but NOT third → should switch to skills-chips (fits third)
     mockDraft.config = {
-      theme: "minimal",
-      style: { colorScheme: "light", primaryColor: "#111", fontFamily: "inter", layout: "centered" },
+      version: 1,
+      username: "test",
+      surface: "canvas",
+      voice: "signal",
+      light: "day",
+      style: { primaryColor: "#111", layout: "centered" },
       layoutTemplate: "architect",
       sections: [
         { id: "hero-1", type: "hero", variant: "large", content: { name: "Test" }, slot: "hero" },
@@ -117,10 +125,10 @@ describe("move_section tool", () => {
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
     );
     expect(result.success).toBe(true);
-    expect(result.widgetChanged).toBe(true);
-    expect(result.previousWidget).toBe("skills-list");
+    expect((result as any).widgetChanged).toBe(true);
+    expect((result as any).previousWidget).toBe("skills-list");
     // New widget should fit "third"
-    expect(result.newWidget).toBeTruthy();
+    expect((result as any).newWidget).toBeTruthy();
   });
 
   it("returns error when target slot doesn't accept section type", async () => {
@@ -194,7 +202,7 @@ describe("move_section tool", () => {
       { toolCallId: "tc1", messages: [], abortSignal: undefined as any },
     );
     expect(result.success).toBe(true);
-    expect(result.movedTo).toBe("sidebar");
+    expect((result as any).movedTo).toBe("sidebar");
   });
 
   it("non-existent sectionId returns error", async () => {

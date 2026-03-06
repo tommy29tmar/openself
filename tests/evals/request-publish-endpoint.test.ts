@@ -39,8 +39,10 @@ function makeRequest(body: Record<string, unknown>): Request {
 const VALID_CONFIG: PageConfig = {
   version: 1,
   username: "draft",
-  theme: "minimal",
-  style: { colorScheme: "light", primaryColor: "#6366f1", fontFamily: "inter", layout: "centered" },
+  surface: "canvas",
+  voice: "signal",
+  light: "day",
+  style: { primaryColor: "#6366f1", layout: "centered" },
   sections: [
     { id: "hero-1", type: "hero", content: { name: "Test", tagline: "Hi" } },
     { id: "footer-1", type: "footer", content: {} },

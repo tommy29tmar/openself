@@ -20,21 +20,21 @@ vi.mock("arctic", () => {
   }
   return {
     GitHub: MockGitHub,
-    generateState: (...args: unknown[]) => mockGenerateState(...args),
+    generateState: (...args: any[]) => mockGenerateState(...args),
   };
 });
 
 vi.mock("@/lib/connectors/route-auth", () => ({
-  resolveAuthenticatedConnectorScope: (...args: unknown[]) =>
+  resolveAuthenticatedConnectorScope: (...args: any[]) =>
     mockResolveAuthenticatedConnectorScope(...args),
 }));
 
 vi.mock("@/lib/connectors/connector-service", () => ({
-  createConnector: (...args: unknown[]) => mockCreateConnector(...args),
+  createConnector: (...args: any[]) => mockCreateConnector(...args),
 }));
 
 vi.mock("@/lib/worker", () => ({
-  enqueueJob: (...args: unknown[]) => mockEnqueueJob(...args),
+  enqueueJob: (...args: any[]) => mockEnqueueJob(...args),
 }));
 
 vi.mock("@/lib/db", () => ({

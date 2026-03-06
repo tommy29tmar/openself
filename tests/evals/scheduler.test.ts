@@ -498,13 +498,13 @@ describe("runSchedulerTick", () => {
 
     const origPrepare = testSqlite.prepare.bind(testSqlite);
     let callCount = 0;
-    vi.spyOn(testSqlite, "prepare").mockImplementation((sql: string) => {
+    vi.spyOn(testSqlite, "prepare").mockImplementation(((sql: string) => {
       callCount++;
       if (callCount === 1 && sql.includes("heartbeat_config")) {
         throw new Error("Simulated DB error");
       }
       return origPrepare(sql);
-    });
+    }) as any);
 
     await expect(runSchedulerTick()).rejects.toThrow("Simulated DB error");
 

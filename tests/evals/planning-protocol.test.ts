@@ -62,6 +62,7 @@ const makeBootstrap = (overrides?: Partial<BootstrapPayload>): BootstrapPayload 
   archivableFacts: [],
   language: "en",
   conversationContext: null,
+  archetype: "generalist",
   ...overrides,
 });
 
