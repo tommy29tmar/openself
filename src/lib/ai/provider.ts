@@ -3,6 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
+import { withRetry } from "./retry-model";
 
 type Provider = "google" | "openai" | "anthropic" | "ollama";
 
@@ -116,20 +117,26 @@ function resolveModelIdForTier(resolved: ModelTier): string {
 }
 
 function buildModel(provider: Provider, modelId: string): LanguageModel {
+  let base: LanguageModel;
   switch (provider) {
     case "google": {
       const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY;
-      return createGoogleGenerativeAI(apiKey ? { apiKey } : {})(modelId);
+      base = createGoogleGenerativeAI(apiKey ? { apiKey } : {})(modelId);
+      break;
     }
     case "openai":
-      return openai(modelId);
+      base = openai(modelId);
+      break;
     case "anthropic":
-      return anthropic(modelId);
+      base = anthropic(modelId);
+      break;
     case "ollama": {
       const baseURL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
-      return createOpenAI({ baseURL, apiKey: "ollama" })(modelId);
+      base = createOpenAI({ baseURL, apiKey: "ollama" })(modelId);
+      break;
     }
   }
+  return withRetry(base);
 }
 
 export function getModelForTier(tier: ModelTier | LegacyModelTier): LanguageModel {
