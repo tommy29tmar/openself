@@ -46,10 +46,12 @@ testSqlite.exec(`
     confidence REAL DEFAULT 1.0,
     visibility TEXT DEFAULT 'private',
     sort_order INTEGER DEFAULT 0,
+    archived_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(session_id, category, key)
   );
+  CREATE INDEX IF NOT EXISTS idx_facts_profile ON facts(profile_id);
 
   CREATE TABLE heartbeat_config (
     owner_key TEXT PRIMARY KEY,
@@ -110,6 +112,31 @@ vi.mock("@/lib/worker/index", () => ({
   }),
 }));
 
+// ── Mock global housekeeping (tested separately) ────────────────────────────
+
+vi.mock("@/lib/worker/heartbeat", () => ({
+  runGlobalHousekeeping: vi.fn(),
+}));
+
+// ── Mock fact count gate dependencies ───────────────────────────────────────
+
+const mockGetActiveFacts = vi.fn((..._: any[]) => Array.from({ length: 30 }, (_, i) => ({
+  id: `fact-${i}`, category: `cat-${i}`, key: `key-${i}`, value: { v: true },
+})));
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  resolveOwnerScopeForWorker: vi.fn((ownerKey: string) => ({
+    cognitiveOwnerKey: ownerKey,
+    knowledgeReadKeys: [ownerKey],
+    knowledgePrimaryKey: ownerKey,
+    currentSessionId: ownerKey,
+  })),
+}));
+
 // ── Imports (after mocks) ───────────────────────────────────────────────────
 
 import {
@@ -138,6 +165,13 @@ function insertFact(sessionId: string, profileId: string | null, category: strin
     .run(id, sessionId, profileId, category, key, JSON.stringify({ v: true }));
 }
 
+/** Insert N facts for an owner to meet the deep heartbeat gate threshold. */
+function insertManyFacts(sessionId: string, profileId: string | null, count: number) {
+  for (let i = 0; i < count; i++) {
+    insertFact(sessionId, profileId, `cat-${i}`, `key-${i}`);
+  }
+}
+
 function insertConfig(ownerKey: string, timezone = "UTC", enabled = 1) {
   testSqlite
     .prepare("INSERT OR REPLACE INTO heartbeat_config (owner_key, timezone, enabled) VALUES (?, ?, ?)")
@@ -161,7 +195,10 @@ beforeEach(() => {
   testSqlite.exec("DELETE FROM heartbeat_runs");
   testSqlite.exec("DELETE FROM jobs");
   enqueueJobCalls.length = 0;
-  vi.restoreAllMocks();
+  // Reset fact count mock to 30 (above threshold) for deep heartbeat tests
+  mockGetActiveFacts.mockReturnValue(Array.from({ length: 30 }, (_, i) => ({
+    id: `fact-${i}`, category: `cat-${i}`, key: `key-${i}`, value: { v: true },
+  })));
 });
 
 afterAll(() => {
@@ -359,23 +396,40 @@ describe("runSchedulerTick", () => {
 
     expect(enqueueJobCalls).toContainEqual({
       jobType: "heartbeat_light",
-      payload: { ownerKey: "owner-1" },
+      payload: { ownerKey: "owner-1", ownerDay: "2026-02-25" },
     });
     vi.useRealTimers();
   });
 
-  it("enqueues deep on Sunday when hour >= 3 and no run this week", async () => {
+  it("enqueues deep on Sunday when hour >= 3 and no run this week (enough facts)", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T04:00:00Z"));
     insertConfig("owner-1", "UTC");
-    insertFact("session-1", "owner-1", "identity", "name");
+    insertManyFacts("session-1", "owner-1", 30);
 
     await runSchedulerTick();
 
     expect(enqueueJobCalls).toContainEqual({
       jobType: "heartbeat_deep",
-      payload: { ownerKey: "owner-1" },
+      payload: { ownerKey: "owner-1", ownerDay: "2026-03-01" },
     });
+    vi.useRealTimers();
+  });
+
+  it("does NOT enqueue deep on Sunday when fact count is below threshold", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T04:00:00Z"));
+    insertConfig("owner-1", "UTC");
+    insertFact("session-1", "owner-1", "identity", "name");
+    // Override mock to return only 5 facts (below DEEP_HEARTBEAT_MIN_FACTS=25)
+    mockGetActiveFacts.mockReturnValue(Array.from({ length: 5 }, (_, i) => ({
+      id: `fact-${i}`, category: `cat-${i}`, key: `key-${i}`, value: { v: true },
+    })));
+
+    await runSchedulerTick();
+
+    const deepJobs = enqueueJobCalls.filter((c) => c.jobType === "heartbeat_deep");
+    expect(deepJobs).toHaveLength(0);
     vi.useRealTimers();
   });
 
@@ -397,7 +451,7 @@ describe("runSchedulerTick", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T04:00:00Z"));
     insertConfig("owner-1", "UTC");
-    insertFact("session-1", "owner-1", "identity", "name");
+    insertManyFacts("session-1", "owner-1", 30);
     insertRun("owner-1", "deep", "2026-02-25"); // Wednesday of W09
 
     await runSchedulerTick();
@@ -423,7 +477,7 @@ describe("runSchedulerTick", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-02T08:00:00Z"));
     insertConfig("owner-1", "UTC");
-    insertFact("session-1", "owner-1", "identity", "name");
+    insertManyFacts("session-1", "owner-1", 30);
 
     await runSchedulerTick();
 
@@ -436,7 +490,7 @@ describe("runSchedulerTick", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-02T08:00:00Z"));
     insertConfig("owner-1", "UTC");
-    insertFact("session-1", "owner-1", "identity", "name");
+    insertManyFacts("session-1", "owner-1", 30);
     insertRun("owner-1", "deep", "2026-03-01"); // Sunday of W09
 
     await runSchedulerTick();

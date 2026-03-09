@@ -96,7 +96,10 @@ vi.mock("@/lib/services/page-service", () => ({
   getDraft: (...args: any[]) => mockGetDraft(...args),
 }));
 
-const mockGetActiveFacts = vi.fn((..._: any[]) => []);
+// Return enough facts to pass the DEEP_HEARTBEAT_MIN_FACTS gate
+const mockGetActiveFacts = vi.fn((..._: any[]) => Array.from({ length: 30 }, (_, i) => ({
+  id: `fact-${i}`, category: `cat-${i}`, key: `key-${i}`, value: { v: true },
+})));
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
@@ -135,7 +138,10 @@ beforeEach(() => {
   mockExpireStaleProposals.mockReturnValue(0);
   mockGetActiveSoul.mockReturnValue({ compiled: "Tone: professional" });
   mockGetDraft.mockReturnValue(null);
-  mockGetActiveFacts.mockReturnValue([]);
+  // Return enough facts to pass the DEEP_HEARTBEAT_MIN_FACTS gate
+  mockGetActiveFacts.mockReturnValue(Array.from({ length: 30 }, (_, i) => ({
+    id: `fact-${i}`, category: `cat-${i}`, key: `key-${i}`, value: { v: true },
+  })));
   mockCheckPageCoherence.mockResolvedValue([]);
   mockGetPreferences.mockReturnValue({ language: "it", factLanguage: "en" });
   mockGetRecentJournalEntries.mockReturnValue([]);
@@ -222,8 +228,8 @@ describe("deep heartbeat coherence check (Circuit D2)", () => {
     // getDraft called with scope.knowledgePrimaryKey
     expect(mockGetDraft).toHaveBeenCalledWith("sess-1");
 
-    // getActiveFacts called with scope values
-    expect(mockGetActiveFacts).toHaveBeenCalledWith("sess-1", ["sess-1", "sess-2"]);
+    // getActiveFacts called with cognitiveOwnerKey (not knowledgePrimaryKey)
+    expect(mockGetActiveFacts).toHaveBeenCalledWith("owner-1", ["sess-1", "sess-2"]);
   });
 
   it("logs heartbeat_coherence event on warnings", async () => {

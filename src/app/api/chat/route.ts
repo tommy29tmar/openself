@@ -299,6 +299,7 @@ export async function POST(req: Request) {
   const provider = getProviderForTier("standard");
   const modelId = getModelIdForTier("standard");
   const MAX_STEPS = 12; // batch_facts reduces per-turn tool calls; 12 gives headroom for complex turns
+  const THINKING_BUDGET = parseInt(process.env.AI_THINKING_BUDGET ?? "8000", 10) || 0;
 
   try {
     const model = getModelForTier("standard");
@@ -324,6 +325,11 @@ export async function POST(req: Request) {
       experimental_transform: createUnbackedActionClaimTransform(sessionLanguage) as any,
       providerOptions: {
         google: { thinkingConfig: { thinkingBudget: 0 } },
+        ...(THINKING_BUDGET >= 1024 ? {
+          anthropic: {
+            thinking: { type: "enabled" as const, budgetTokens: THINKING_BUDGET },
+          },
+        } : {}),
       },
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         // Fast path: strip markdown code fences that Gemini sometimes wraps around JSON
@@ -361,7 +367,10 @@ export async function POST(req: Request) {
           return null;
         }
       },
-      onFinish: async ({ text, usage, finishReason }) => {
+      onFinish: async ({ text, reasoning, usage, finishReason }) => {
+        if (reasoning) {
+          console.info("[thinking]", { requestId, modelId, reasoning });
+        }
         const journal = getJournal();
         const persistedToolCalls = journal.length > 0 ? journal : null;
         const safeText = text

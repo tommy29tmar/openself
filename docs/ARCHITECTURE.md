@@ -753,25 +753,34 @@ themselves as a runner. A new GitHub repo is signal only if it reflects a skill 
 project the user wants to highlight. The heartbeat does not act on everything — it
 acts on what matters for identity.
 
-**Dual-loop architecture:**
+**Three-tier architecture:**
 
-The heartbeat runs two complementary loops at different cadences:
+The heartbeat runs three complementary tiers at different cadences:
 
 ```
-heartbeat_light (daily):
-  1. KB freshness check — are there stale or contradictory facts?
-  2. Expire stale soul change proposals (>48h pending)
-  3. Quick connector status check (if connectors are active)
+runGlobalHousekeeping (every scheduler tick — once, not per-owner):
+  1. Expire stale soul change proposals (>48h pending)
+  2. Cache TTL cleanup — remove expired section_copy_cache entries (>30 days)
 
-heartbeat_deep (weekly):
-  1. Cross-section coherence review — does the page narrative hold together?
-  2. Conflict cleanup — dismiss old unresolved conflicts (>7 days)
-  3. Soul profile review — are voice/tone still aligned with recent conversations?
-  4. Full KB audit with mission filter applied
-  5. Conformity check — analyze active personalized copies for style drift (Phase 1c)
-  6. Stale proposal cleanup — mark proposals as stale when underlying state changed
-  7. Cache TTL cleanup — remove expired section_copy_cache entries (>30 days)
+heartbeat_light (daily — no LLM, deterministic):
+  1. Conflict cleanup — dismiss old unresolved conflicts (>7 days)
+  2. Stale proposal cleanup — mark proposals as stale when underlying state changed
+  3. Journal pattern analysis — heuristic pattern detection + memory save
+
+heartbeat_deep (weekly — LLM-dependent, gated by minimum fact count):
+  1. Conformity check — analyze active personalized copies for style drift
+  2. Page coherence review — does the page narrative hold together?
 ```
+
+**Deep heartbeat fact gate:** Deep heartbeat only runs for owners with at least
+`DEEP_HEARTBEAT_MIN_FACTS` (25) active facts. The gate is checked both at scheduling
+time (in the scheduler) and at execution time (in the handler), using
+`resolveOwnerScopeForWorker` to get the correct `cognitiveOwnerKey` for fact lookup.
+
+**Deep heartbeat retry-friendly design:** Non-terminal outcomes (`below_threshold`,
+`budget_exceeded`) do NOT record a `heartbeat_runs` row, keeping the weekly scheduling
+window open for retry. Both LLM substeps (conformity + coherence) must complete
+successfully for a run to be recorded; if either fails, no row is written.
 
 **Language-aware conformity:** Deep-heartbeat conformity checks run against the owner's
 preferred page language (fallback: fact language, then `en`). This keeps
@@ -3851,9 +3860,11 @@ Scheduling model:
   inside the worker process (every 15 minutes). Each tick iterates all active owners
   and enqueues due `heartbeat_light` / `heartbeat_deep` jobs based on the owner's
   local timezone.
-- **Light jobs**: enqueued daily when local hour >= 3 and no run recorded for today.
-- **Deep jobs**: enqueued on Sunday when local hour >= 3 and no run this ISO week.
+- **Global housekeeping**: runs once per tick before owner loop (table-wide SQL, no LLM).
+- **Light jobs**: enqueued daily when local hour >= 3 and no run recorded for today (deterministic, no LLM).
+- **Deep jobs**: enqueued on Sunday when local hour >= 3 and no run this ISO week, gated by minimum fact count (LLM-dependent).
 - **Deep recovery**: if Sunday's deep was missed, enqueued on Monday before noon.
+- **ownerDay capture**: scheduler passes `ownerDay` in job payload at enqueue time, ensuring correct day/week recording even when job execution is delayed.
 - **Anti-overlap**: a module-level flag prevents concurrent scheduler ticks.
 - Active owners are discovered via `getActiveOwnerKeys()`: UNION of enabled
   `heartbeat_config` rows and distinct fact owners.

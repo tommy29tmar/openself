@@ -22,83 +22,171 @@ import { mergeSessionMeta, getRecentJournalEntries } from "@/lib/services/sessio
 import { detectJournalPatterns } from "@/lib/services/journal-patterns";
 import { saveMemory } from "@/lib/services/memory-service";
 import { getPreferences } from "@/lib/services/preferences-service";
+import { DEEP_HEARTBEAT_MIN_FACTS } from "@/lib/agent/thresholds";
 
 type HeartbeatPayload = {
   ownerKey: string;
+  /** Owner-local date (YYYY-MM-DD) captured at enqueue time — ensures correct day/week
+   *  even when job execution is delayed past midnight. Falls back to computing at handler start. */
+  ownerDay?: string;
 };
 
 /**
- * Light heartbeat (daily): KB freshness, page staleness, expire proposals.
+ * Global housekeeping — runs once per scheduler tick, not per-owner.
+ * All operations are table-wide, idempotent, zero LLM cost.
+ */
+export function runGlobalHousekeeping(): void {
+  try {
+    const expired = expireStaleProposals(48);
+    if (expired > 0) {
+      logEvent({
+        eventType: "housekeeping",
+        actor: "worker",
+        payload: { action: "expire_proposals", expired },
+      });
+    }
+  } catch (err) {
+    console.error("[housekeeping] Expire proposals failed:", err);
+  }
+
+  try {
+    const cleaned = cleanupExpiredCache(30);
+    if (cleaned > 0) {
+      logEvent({
+        eventType: "housekeeping",
+        actor: "worker",
+        payload: { action: "cache_cleanup", cleaned },
+      });
+    }
+  } catch (err) {
+    console.error("[housekeeping] Cache cleanup failed:", err);
+  }
+}
+
+/**
+ * Light heartbeat (daily): owner-scoped deterministic housekeeping — no LLM, no token cost.
+ *
+ * Global maintenance (expire proposals, cache cleanup) is handled by `runGlobalHousekeeping()`
+ * which runs once per scheduler tick, not per-owner.
+ *
+ * Owner-scoped work:
+ * - Dismiss old conflicts (>7 days)
+ * - Mark stale proposals (hash mismatch)
+ * - Journal pattern analysis (heuristic, no LLM)
  */
 export function handleHeartbeatLight(payload: Record<string, unknown>): void {
-  const { ownerKey } = payload as HeartbeatPayload;
+  const { ownerKey, ownerDay: payloadOwnerDay } = payload as HeartbeatPayload;
   if (!ownerKey) throw new Error("heartbeat_light: missing ownerKey");
 
   const startMs = Date.now();
   const config = getHeartbeatConfig(ownerKey);
+  // Use ownerDay from payload (set at enqueue time) — ensures correct day even if
+  // job execution is delayed. Falls back to computing at handler start.
+  const ownerDay = payloadOwnerDay ?? computeOwnerDay(config.timezone);
 
-  // Global budget check
+  // Global budget check (light is cheap but we still respect global gate)
   const globalBudget = checkBudget();
   if (!globalBudget.allowed) {
-    recordHeartbeatRun(ownerKey, "light", "budget_exceeded", 0, config.timezone, startMs);
+    recordHeartbeatRun(ownerKey, "light", "budget_exceeded", 0, ownerDay, startMs);
     return;
   }
 
   // Per-owner budget check
   const ownerBudget = checkOwnerBudget(ownerKey, "light", config);
   if (!ownerBudget.allowed) {
-    recordHeartbeatRun(ownerKey, "light", "budget_exceeded", 0, config.timezone, startMs);
+    recordHeartbeatRun(ownerKey, "light", "budget_exceeded", 0, ownerDay, startMs);
     return;
   }
 
-  // Expire stale soul proposals
-  const expired = expireStaleProposals(48);
+  // --- Owner-scoped deterministic housekeeping ---
 
-  const outcome = expired > 0 ? "action_taken" : "ok";
-  recordHeartbeatRun(ownerKey, "light", outcome, 0, config.timezone, startMs);
+  // Dismiss conflicts older than 7 days
+  const dismissed = dismissOldConflicts(ownerKey, 7);
 
-  if (expired > 0) {
+  // Mark stale proposals (hash mismatch)
+  try {
+    markStaleProposals(ownerKey);
+  } catch (err) {
+    console.error("[heartbeat-light] Stale proposal cleanup failed:", err);
+  }
+
+  // Journal pattern analysis (heuristic — no LLM)
+  let journalPatternCount = 0;
+  try {
+    const recentJournals = getRecentJournalEntries(ownerKey, 5);
+    const patterns = detectJournalPatterns(recentJournals);
+    for (const pattern of patterns) {
+      const saved = saveMemory(
+        ownerKey,
+        `${pattern.description}. ${pattern.suggestion}`,
+        "pattern",
+        "journal_analysis",
+      );
+      if (saved) journalPatternCount++;
+    }
+    if (journalPatternCount > 0) {
+      logEvent({
+        eventType: "heartbeat_journal_patterns",
+        actor: "worker",
+        payload: { ownerKey, patternsFound: journalPatternCount },
+      });
+    }
+  } catch (err) {
+    console.error("[heartbeat-light] Journal pattern analysis failed:", err);
+  }
+
+  const outcome = dismissed > 0 || journalPatternCount > 0 ? "action_taken" : "ok";
+  recordHeartbeatRun(ownerKey, "light", outcome, 0, ownerDay, startMs);
+
+  if (dismissed > 0) {
     logEvent({
       eventType: "heartbeat_action",
       actor: "worker",
-      payload: { ownerKey, action: "expire_proposals", expired },
+      payload: { ownerKey, action: "dismiss_conflicts", dismissed },
     });
   }
 }
 
 /**
- * Deep heartbeat (weekly): cross-section coherence, soul review, conflict cleanup,
- * conformity analysis, stale proposal cleanup, and cache TTL cleanup.
+ * Deep heartbeat (weekly): LLM-dependent analysis only.
+ *
+ * Only runs for owners with sufficient facts (gated in scheduler).
+ * - Conformity analysis + LLM rewrites (reasoning tier)
+ * - Page coherence check (fast tier)
  */
 export async function handleHeartbeatDeep(payload: Record<string, unknown>): Promise<void> {
-  const { ownerKey } = payload as HeartbeatPayload;
+  const { ownerKey, ownerDay: payloadOwnerDay } = payload as HeartbeatPayload;
   if (!ownerKey) throw new Error("heartbeat_deep: missing ownerKey");
 
   const startMs = Date.now();
   const config = getHeartbeatConfig(ownerKey);
+  // Use ownerDay from payload (set at enqueue time) — ensures correct day/week even if
+  // job execution is delayed past midnight. Falls back to computing at handler start.
+  const ownerDay = payloadOwnerDay ?? computeOwnerDay(config.timezone);
   const scope = resolveOwnerScopeForWorker(ownerKey);
 
-  // Global budget check
+  // Execution-time recheck: owner may have dropped below threshold since scheduling.
+  // Use cognitiveOwnerKey (= profileId in canonical mode) — same as getActiveFacts uses internally.
+  const activeFacts = getActiveFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
+  if (activeFacts.length < DEEP_HEARTBEAT_MIN_FACTS) {
+    // Do NOT record a heartbeat_runs row — allow retry later this week if facts recover
+    return;
+  }
+
+  // Budget checks — do NOT record a run on budget_exceeded so the weekly
+  // scheduling window remains open for retry when budget recovers.
   const globalBudget = checkBudget();
-  if (!globalBudget.allowed) {
-    recordHeartbeatRun(ownerKey, "deep", "budget_exceeded", 0, config.timezone, startMs);
-    return;
-  }
+  if (!globalBudget.allowed) return;
 
-  // Per-owner budget check
   const ownerBudget = checkOwnerBudget(ownerKey, "deep", config);
-  if (!ownerBudget.allowed) {
-    recordHeartbeatRun(ownerKey, "deep", "budget_exceeded", 0, config.timezone, startMs);
-    return;
-  }
+  if (!ownerBudget.allowed) return;
 
-  // Expire stale soul proposals
-  const expired = expireStaleProposals(48);
+  // Track whether at least one LLM substep completed successfully.
+  // If all substeps fail, we don't record a run — allowing retry.
+  let conformityCompleted = false;
+  let coherenceCompleted = false;
 
-  // Dismiss conflicts older than 7 days
-  const dismissed = dismissOldConflicts(ownerKey, 7);
-
-  // Phase 1c: Conformity check
+  // Conformity check (LLM: reasoning tier)
   let conformityActions = 0;
   try {
     const preferences = getPreferences(scope.knowledgePrimaryKey);
@@ -141,33 +229,22 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
         });
       }
     }
+    // Mark completed only after ALL conformity work (analysis + rewrites + proposals) succeeds
+    conformityCompleted = true;
   } catch (err) {
-    console.error("[heartbeat] Conformity check failed:", err);
+    console.error("[heartbeat-deep] Conformity check failed:", err);
   }
 
-  // Phase 1c: Mark stale proposals
-  try {
-    markStaleProposals(ownerKey);
-  } catch (err) {
-    console.error("[heartbeat] Stale proposal cleanup failed:", err);
-  }
-
-  // Phase 1c: Cache TTL cleanup
-  try {
-    cleanupExpiredCache(30);
-  } catch (err) {
-    console.error("[heartbeat] Cache cleanup failed:", err);
-  }
-
-  // Circuit D2: coherence check → session metadata + event log
+  // Coherence check (LLM: fast tier)
   let coherenceWarningCount = 0;
   try {
     const draft = getDraft(scope.knowledgePrimaryKey);
     if (draft?.config) {
       const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;
-      const activeFacts = getActiveFacts(scope.knowledgePrimaryKey, scope.knowledgeReadKeys);
+      const coherenceFacts = getActiveFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
       const soulCompiled = getActiveSoul(ownerKey)?.compiled;
-      const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], activeFacts, soulCompiled);
+      const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], coherenceFacts, soulCompiled);
+
       const warnings = coherenceIssues.filter(i => i.severity === "warning");
       const infos = coherenceIssues.filter(i => i.severity === "info");
 
@@ -187,37 +264,18 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
         });
       }
     }
+    // Mark completed only after ALL coherence work (analysis + metadata storage) succeeds
+    coherenceCompleted = true;
   } catch (err) {
-    console.error("[heartbeat] Coherence check failed:", err);
+    console.error("[heartbeat-deep] Coherence check failed:", err);
   }
 
-  // Circuit F2: journal patterns → meta-memories
-  let journalPatternCount = 0;
-  try {
-    const recentJournals = getRecentJournalEntries(ownerKey, 5);
-    const patterns = detectJournalPatterns(recentJournals);
-    for (const pattern of patterns) {
-      const saved = saveMemory(
-        ownerKey,
-        `${pattern.description}. ${pattern.suggestion}`,
-        "pattern",
-        "journal_analysis",
-      );
-      if (saved) journalPatternCount++;
-    }
-    if (journalPatternCount > 0) {
-      logEvent({
-        eventType: "heartbeat_journal_patterns",
-        actor: "worker",
-        payload: { ownerKey, patternsFound: journalPatternCount },
-      });
-    }
-  } catch (err) {
-    console.error("[heartbeat] Journal pattern analysis failed:", err);
+  // Only record a successful run if both substeps completed (or were trivially skipped).
+  // If either failed, don't record — allows retry within the weekly window.
+  if (conformityCompleted && coherenceCompleted) {
+    const outcome = conformityActions > 0 || coherenceWarningCount > 0 ? "action_taken" : "ok";
+    recordHeartbeatRun(ownerKey, "deep", outcome, 0, ownerDay, startMs);
   }
-
-  const outcome = expired > 0 || dismissed > 0 || conformityActions > 0 || coherenceWarningCount > 0 || journalPatternCount > 0 ? "action_taken" : "ok";
-  recordHeartbeatRun(ownerKey, "deep", outcome, 0, config.timezone, startMs);
 }
 
 function dismissOldConflicts(ownerKey: string, days: number): number {
@@ -235,11 +293,10 @@ function recordHeartbeatRun(
   runType: "light" | "deep",
   outcome: string,
   estimatedCostUsd: number,
-  timezone: string,
+  ownerDay: string,
   startMs: number,
 ): void {
   const durationMs = Date.now() - startMs;
-  const ownerDay = computeOwnerDay(timezone);
 
   db.insert(heartbeatRuns)
     .values({

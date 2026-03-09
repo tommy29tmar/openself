@@ -106,7 +106,13 @@ vi.mock("@/lib/services/page-service", () => ({
   getDraft: vi.fn(() => null),
 }));
 vi.mock("@/lib/services/kb-service", () => ({
-  getActiveFacts: vi.fn(() => []),
+  // Return enough facts to pass the DEEP_HEARTBEAT_MIN_FACTS gate
+  getActiveFacts: vi.fn(() => Array.from({ length: 30 }, (_, i) => ({
+    id: `fact-${i}`,
+    category: `cat-${i}`,
+    key: `key-${i}`,
+    value: { v: true },
+  }))),
 }));
 vi.mock("@/lib/services/coherence-check", () => ({
   checkPageCoherence: vi.fn(async () => []),
@@ -270,19 +276,19 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
     expect(mockAnalyzeConformity).not.toHaveBeenCalled();
   });
 
-  it("calls markStaleProposals", async () => {
+  it("does NOT call markStaleProposals (moved to light heartbeat)", async () => {
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    expect(mockMarkStaleProposals).toHaveBeenCalledWith("owner1");
+    expect(mockMarkStaleProposals).not.toHaveBeenCalled();
   });
 
-  it("calls cleanupExpiredCache with 30 day TTL", async () => {
+  it("does NOT call cleanupExpiredCache (moved to light heartbeat)", async () => {
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    expect(mockCleanupExpiredCache).toHaveBeenCalledWith(30);
+    expect(mockCleanupExpiredCache).not.toHaveBeenCalled();
   });
 
-  it("continues if conformity check throws", async () => {
+  it("continues if conformity check throws but does NOT record run (allows retry)", async () => {
     mockGetAllActiveCopies.mockImplementation(() => {
       throw new Error("DB exploded");
     });
@@ -290,44 +296,21 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
     // Should not throw — errors are caught internally
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    // Stale proposals and cache cleanup should still run
-    expect(mockMarkStaleProposals).toHaveBeenCalledWith("owner1");
-    expect(mockCleanupExpiredCache).toHaveBeenCalledWith(30);
+    // Heartbeat run should NOT be recorded — conformity failed,
+    // so weekly window stays open for retry
+    expect(heartbeatRunValues.length).toBe(0);
   });
 
-  it("continues if analyzeConformity rejects", async () => {
+  it("continues if analyzeConformity rejects but does NOT record run (allows retry)", async () => {
     mockGetAllActiveCopies.mockReturnValue([makeActiveCopy("bio", "text")]);
     mockGetActiveSoul.mockReturnValue({ compiled: "Tone" });
     mockAnalyzeConformity.mockRejectedValue(new Error("LLM timeout"));
 
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    expect(mockMarkStaleProposals).toHaveBeenCalledWith("owner1");
-    expect(mockCleanupExpiredCache).toHaveBeenCalledWith(30);
-  });
-
-  it("continues if cache cleanup throws", async () => {
-    mockCleanupExpiredCache.mockImplementation(() => {
-      throw new Error("Cache cleanup exploded");
-    });
-
-    // Should not throw
-    await handleHeartbeatDeep({ ownerKey: "owner1" });
-
-    // markStaleProposals runs before cache cleanup, so it should have been called
-    expect(mockMarkStaleProposals).toHaveBeenCalledWith("owner1");
-  });
-
-  it("continues if markStaleProposals throws", async () => {
-    mockMarkStaleProposals.mockImplementation(() => {
-      throw new Error("Stale check exploded");
-    });
-
-    // Should not throw
-    await handleHeartbeatDeep({ ownerKey: "owner1" });
-
-    // Cache cleanup runs after, should still be called
-    expect(mockCleanupExpiredCache).toHaveBeenCalledWith(30);
+    // Heartbeat run should NOT be recorded — conformity failed,
+    // so weekly window stays open for retry
+    expect(heartbeatRunValues.length).toBe(0);
   });
 
   it("does not create proposal when generateRewrite returns null", async () => {
