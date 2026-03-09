@@ -34,7 +34,7 @@ describe("firstVisitPolicy", () => {
       expect(phaseCBlock).toMatch(/generate_page/);
       expect(phaseCBlock).toMatch(/request_publish/);
       // Trigger is condition-based, not fixed turn numbers
-      expect(phaseCBlock).toMatch(/2\s*cluster.*done|Phase\s*B.*complete|6-exchange.*cap|6-exchange cap/i);
+      expect(phaseCBlock).toMatch(/3\s*cluster.*done|Phase\s*B.*complete|8-exchange|hard\s*cap/i);
       // Gate: one direct question if name/role missing, then generate regardless
       expect(phaseCBlock).toMatch(/GATE|one.*attempt|one.*direct.*question/i);
       // Critical: register/claim URL instruction must be preserved in Phase C
@@ -71,8 +71,8 @@ describe("firstVisitPolicy", () => {
       expect(policyEn).toMatch(/~2\s*exchange|target.*2\s*exchange/i);
     });
 
-    it("targets 2 primary clusters", () => {
-      expect(policyEn).toMatch(/2\s*(topic\s*)?cluster/i);
+    it("targets 3 topic clusters", () => {
+      expect(policyEn).toMatch(/3\s*(topic\s*)?cluster/i);
     });
 
     it("requires bridge sentences between clusters", () => {
@@ -93,12 +93,8 @@ describe("firstVisitPolicy", () => {
       expect(count).toBeGreaterThanOrEqual(3);
     });
 
-    it("requires exactly one question per turn", () => {
-      expect(policyEn).toMatch(/one\s*question\s*per\s*turn/i);
-    });
-
-    it("hard cap at exchange 6", () => {
-      expect(policyEn).toMatch(/exchange.*6|6.*exchange/i);
+    it("hard cap at exchange 8", () => {
+      expect(policyEn).toMatch(/hard\s*cap.*8|cap.*exchange\s*8/i);
     });
   });
 
@@ -126,18 +122,13 @@ describe("firstVisitPolicy", () => {
   // -------------------------------------------------------------------------
   // Fact recording mandate
   // -------------------------------------------------------------------------
-  describe("fact recording", () => {
-    it("demands EVERY piece of information be recorded as fact", () => {
-      expect(policyEn).toMatch(/every.*piece.*information.*fact/i);
+  describe("fact recording (delegated to TOOL_POLICY)", () => {
+    it("does NOT duplicate the immediate fact recording mandate", () => {
+      expect(policyEn).not.toMatch(/record.*every.*piece.*information.*fact.*immediately/i);
     });
 
-    it("demands IMMEDIATE fact recording via create_fact", () => {
-      expect(policyEn).toMatch(/immediately|immediate/i);
-      expect(policyEn).toContain("create_fact");
-    });
-
-    it("forbids batching or delaying fact recording", () => {
-      expect(policyEn).toMatch(/not\s*(batch|delay)|never.*wait/i);
+    it("does NOT duplicate the batch prohibition", () => {
+      expect(policyEn).not.toMatch(/do not batch or delay/i);
     });
   });
 
@@ -167,13 +158,9 @@ describe("firstVisitPolicy", () => {
   // -------------------------------------------------------------------------
   // Banned patterns
   // -------------------------------------------------------------------------
-  describe("banned patterns", () => {
-    it("explicitly bans 'let me know if you need anything'", () => {
-      expect(policyEn).toMatch(/never.*let me know/i);
-    });
-
-    it("bans passive closings", () => {
-      expect(policyEn).toMatch(/never.*passive|never.*let me know.*anything/i);
+  describe("banned patterns (delegated to shared-rules)", () => {
+    it("does NOT duplicate passive closing bans", () => {
+      expect(policyEn).not.toMatch(/never.*let me know if you need anything/i);
     });
   });
 

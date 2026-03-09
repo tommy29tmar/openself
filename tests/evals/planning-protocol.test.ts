@@ -80,8 +80,13 @@ describe("planningProtocol", () => {
     expect(text).toContain("STRUCTURAL");
   });
 
-  it("mentions batch_facts", () => {
-    expect(text).toContain("batch_facts");
+  it("does NOT mention batch_facts (now in TOOL_POLICY)", () => {
+    expect(text).not.toContain("batch_facts");
+  });
+
+  it("SIMPLE section does NOT use 'SAME turn' or 'THIS turn' phrasing (timing lives in IMMEDIATE_EXECUTION_RULE)", () => {
+    expect(text).not.toMatch(/same\s*turn/i);
+    expect(text).not.toMatch(/this\s*turn/i);
   });
 
   it("mentions search_facts for COMPOUND", () => {
@@ -106,8 +111,8 @@ describe("planningProtocol", () => {
     expect(text).toContain("blocked");
   });
 
-  it("forces concrete edit requests to execute in the same turn", () => {
-    expect(text).toMatch(/concrete edit|same turn|I'll update it|intention-only/i);
+  it("forces concrete edit requests to act immediately", () => {
+    expect(text).toMatch(/concrete edit|act immediately|I'll update it|intention-only/i);
   });
 
   it("exempts SIMPLE fact saves from novice verbalization", () => {

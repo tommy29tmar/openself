@@ -24,7 +24,7 @@ const FULL_SCHEMA_MARKER = "| experience |";
 // minimal schema contains "experience:" in a different format
 const MINIMAL_SCHEMA_MARKER = "experience: {role, company";
 const EDIT_SCHEMA_MARKER = "EDIT WORKFLOW (quick updates):";
-const ONBOARDING_MARKER = "After collecting name + role + 2-3 more facts, call generate_page.";
+const ONBOARDING_MARKER = "After exploring 2-3 topic areas beyond name + role, call generate_page.";
 
 describe("schemaMode per journey state", () => {
   it("first_visit: injects minimal schema, not full", () => {

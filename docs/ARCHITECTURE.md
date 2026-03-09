@@ -350,20 +350,21 @@ calls `buildSystemPrompt()` with `first_visit` defaults.
 
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries. Includes: REGISTER (always informal — tu/du/vous non-formal, overridable by explicit user preference), OPENING BANS (list of banned filler openers such as "Certamente!", "Of course!"), EMOJI POLICY (only if user uses first, max 1/msg), LANGUAGE HANDLING (switch seamlessly without mentioning), RESPONSE LENGTH rules (1–2 sentences for confirmations, 3–5 max for explanations)
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
-3. **Tool policy** — 25 tools (see Section 4.3), when to call, required arguments, retry/error behavior
+3. **Tool policy** — 25 tools (see Section 4.3), when to call, required arguments, retry/error behavior. Includes unified FACT RECORDING block: record facts immediately as encountered, batch_facts for 3+ creates only, individual tool calls for updates/deletes/identity changes (confirmation gates, different failure semantics).
 4. **Fact schema reference** — Controlled by `schemaMode: "full" | "minimal" | "none"` (per journey state). `full` injects ~1800 tokens (complete category→value shape table). `minimal` injects ~300 tokens via `buildMinimalSchemaForOnboarding()` (first_visit) or `buildMinimalSchemaForEditing()` (active states — edit workflow with object-notation tool signatures and common value shapes). `none` injects nothing. Per-state assignment: `first_visit=minimal`, `returning_no_page=full`, `draft_ready=minimal`, `active_fresh=minimal`, `active_stale=minimal`, `blocked=none`. Estimated ~1500–1800 token savings per turn in none/minimal states.
 4a. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
 5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation. Includes PATTERN VARIATION block: no same acknowledgment on consecutive turns, don't always close with a question, no 3 consecutive turns opening the same way, never start two consecutive messages with the same word.
-6. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4)
+6. **Journey policy** — Per-journey-state policy from the policy registry (see Section 4.2.4). Slimmed to contain only state-specific phases/flow/caps; universal behavioral rules delegated to block 10a.
 7. **Situation directives** — Contextual instructions based on detected situations (optional, only when situations are active)
 8. **Expertise calibration** — Verbosity/depth calibration based on user expertise level (novice/familiar/expert)
-9. **Turn management rules** — 6 rules (R1-R6) preventing common agent failures: no consecutive same-area questions, max 6 fact-gathering exchanges, banned passive closings, stall detection/recovery, proportional response length, clarification expiry (record new info immediately, max 1 follow-up, optional details don't block page generation) (see Section 4.2.5)
-10. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence (see Section 4.2.5)
+9. **Turn management rules** — 3 rules (R1/R2/R4) preventing common agent failures: topic exploration with flexible exchange targets (R1), max exchanges before action with default 6 overridable by journey policies (R2), stall detection/recovery (R4). Rules R3 (passive closings), R5 (response length), R6 (clarification expiry) moved to block 10a. (see Section 4.2.5)
+10a. **Shared behavioral rules** (`src/lib/agent/policies/shared-rules.ts`) — NEW. Universal rules applying to ALL 6 journey states with zero conditional branching: one question per turn, banned passive closings, clarification expiry. TS string constants (`IMMEDIATE_EXECUTION_RULE`) are interpolated into specific journey policies for semi-universal rules. Response length calibration remains in CORE_CHARTER (block 1) as single source of truth.
+10. **Memory usage directives** — Strategic 3-tier memory consumption guide: Tier 1 (facts = WHAT), Tier 2 (summary = CONTEXT), Tier 3 (meta-memories = HOW). Golden rule for meta-observation persistence. Cross-references FACT RECORDING in Tool Policy for batch vs. individual guidance. (see Section 4.2.5)
 11. **Action awareness** — Explain-before-act policy classifying tools as high-impact (set_layout, set_theme, update_page_style, reorder_sections, generate_page in steady_state → explain and confirm before executing) or low-impact (fact CRUD, visibility, memory, soul → execute silently). Modulated by expertise calibration level.
 12. **Undo awareness** — Graceful reversal handling: detection keywords (EN + IT), 4-step response pattern (IDENTIFY → EXPLAIN → PROPOSE → ACT), reversal scope per tool, critical rules (never regenerate entire page as first reaction, ask specifics for vague complaints).
 13. **Step exhaustion fallback** — `STEP_EXHAUSTION_FALLBACK` in `src/lib/agent/step-exhaustion-fallback.ts`, journey-state-keyed, 8 languages, R3-compliant (no passive closings). Moved out of `route.ts` because Next.js rejects non-standard route exports.
 
-Token budget guard: journey policy + directives + calibration + turn management + memory directives + action awareness + undo awareness block is capped at 3500 tokens.
+Token budget guard: journey policy + directives + calibration + turn management + shared behavioral rules + memory directives + action awareness + undo awareness block is capped at 3500 tokens.
 
 Dynamic context blocks are then appended by `assembleContext()`:
 
@@ -565,11 +566,18 @@ coherence with `LimitReachedUI`.
 Several fixed prompt blocks are injected into every system prompt regardless of journey state:
 
 **Turn Management Rules** (`src/lib/agent/policies/turn-management.ts`):
-- R1: No consecutive same-area questions (ensures breadth)
-- R2: Max 6 fact-gathering exchanges before proposing action
-- R3: No passive closings (banned phrases list, must end with specific next step)
+- R1: Topic exploration — ~2 exchanges per topic, bridge sentences between clusters, separate EXPLORING vs EDITING modes
+- R2: Max exchanges before action (default: 6, journey policies may override; first_visit defines its own cap of 8)
 - R4: Stall detection and recovery (options → fill-in-the-blank → generate page)
-- R5: Proportional response length (match user message length)
+- R3/R5/R6 moved to `shared-rules.ts` (passive closings, response length, clarification expiry)
+
+**Shared Behavioral Rules** (`src/lib/agent/policies/shared-rules.ts`):
+Universal rules applying to ALL 6 journey states with zero conditional branching:
+- One question per turn (no stacking)
+- Banned passive deferrals (specific phrase list: "let me know if you need anything", "feel free to ask", etc.)
+- Clarification expiry (record new info immediately, max 1 follow-up, optional details don't block)
+- `IMMEDIATE_EXECUTION_RULE` TS constant interpolated into active-fresh, active-stale, draft-ready, returning-no-page
+- Response length calibration NOT here — lives in CORE_CHARTER as single source of truth
 
 **Topic Signal Detector** (`src/lib/agent/policies/topic-signal-detector.ts`):
 `isNewTopicSignal(message, language)` gates `INCOMPLETE_OPERATION` injection. If the user's
@@ -584,7 +592,7 @@ duplicated in 3 places (`returning-no-page.ts`, `planning-protocol.ts`, and inli
 managed in one location.
 
 **Memory Usage Directives** (`src/lib/agent/policies/memory-directives.ts`):
-- Tier 1 (Facts) = WHAT you know — search before asking, record immediately
+- Tier 1 (Facts) = WHAT you know — search before asking, record as encountered (cross-references FACT RECORDING in Tool Policy for batch vs. individual guidance)
 - Tier 2 (Summary) = CONTEXT of past conversations — use for continuity, never recite
 - Tier 3 (Meta-Memories) = HOW to behave — communication patterns, tone preferences
 - Golden rule: call `save_memory` with at least one meta-observation per **significant** session. "Significant" is defined explicitly in the directive with good/bad examples embedded to prevent misapplication.

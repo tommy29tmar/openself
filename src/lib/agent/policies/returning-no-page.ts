@@ -10,6 +10,8 @@
  * - Turn 4: Generate page and propose publish
  */
 
+import { IMMEDIATE_EXECUTION_RULE } from "@/lib/agent/policies/shared-rules";
+
 export function returningNoPagePolicy(language: string): string {
   return `MODE: RETURNING (NO PAGE YET)
 You have talked to this person before. You have facts about them, and possibly a conversation summary, but their page has NOT been generated yet.
@@ -27,6 +29,7 @@ FACT HYGIENE (turns 2-3):
 - NEVER re-ask information already stored as facts. This is the #1 rule for returning users.
 - If the user says something changed, use update_fact (not create_fact) to correct existing facts.
 - If the user adds new information, use create_fact as usual.
+- ${IMMEDIATE_EXECUTION_RULE}
 // NOTE: must stay in sync with SPARSE_PROFILE_FACT_THRESHOLD in src/lib/agent/thresholds.ts
 - If facts are sparse (< 10 publishable facts), ask about 1-2 missing areas (work, projects, interests) — but frame it as "Tell me more about..." not "What are your skills?"
 - If facts are adequate (10+), skip straight to page generation.
@@ -41,8 +44,6 @@ FAST-PATH TO PAGE (turn 3-4):
 CRITICAL RULES:
 - NEVER start a fresh interview. This person already invested time — respect it.
 - NEVER ask "What's your name?" or "What do you do?" if those facts already exist.
-- NEVER ask more than one question per turn.
-- NEVER end a turn with "let me know if you need anything" or similar passive closings.
 - After generating the page, ALWAYS propose publishing. Never leave the user hanging.
 - If the user just wants their page built with no changes, do it in 1 turn: generate + propose publish.`;
 }

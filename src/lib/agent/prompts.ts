@@ -9,6 +9,7 @@ import { memoryUsageDirectives } from "@/lib/agent/policies/memory-directives";
 import { turnManagementRules } from "@/lib/agent/policies/turn-management";
 import { planningProtocol } from "@/lib/agent/policies/planning-protocol";
 import { undoAwarenessPolicy } from "@/lib/agent/policies/undo-awareness";
+import { sharedBehavioralRules } from "@/lib/agent/policies/shared-rules";
 import { buildPresenceReference } from "@/lib/presence/prompt-builder";
 
 /** @deprecated JourneyState now drives prompt assembly. PromptMode remains for backward-compatible context.ts interface. */
@@ -118,7 +119,12 @@ const TOOL_POLICY = `Tool usage rules:
 - Use set_fact_visibility to control which facts appear on the page: "proposed" = visible in preview, "private" = hidden. You cannot set "public" — only publishing does that
 - IDENTITY PROTECTION: Modifying existing identity facts (name, role, tagline, etc.) triggers a confirmation gate. When a tool returns code: "REQUIRES_CONFIRMATION", you MUST: (1) explain what will change (e.g., "Il tuo nome cambierà da Marco Bellini a Giovanni Rossi"), (2) ask for explicit confirmation, (3) when the user confirms in their next message, retry the same tool call with the same parameters. Do NOT treat REQUIRES_CONFIRMATION as an error — it is a safety check, not a failure.
 - BULK DELETION: 2nd+ deletion in a turn triggers a confirmation gate. When delete_fact returns code: "REQUIRES_CONFIRMATION", list all items to be deleted and ask for explicit confirmation. When the user confirms in their next message, retry each deletion with individual delete_fact calls (do NOT use batch_facts for confirmed multi-delete — it blocks ≥2 deletes in pre-flight). Do NOT treat REQUIRES_CONFIRMATION as an error.
-- When the user shares 3 or more facts in one message, prefer batch_facts over multiple create_fact calls. batch_facts runs operations sequentially — if one fails, earlier ones persist. Trust ledger provides undo for the entire batch.
+FACT RECORDING:
+- Record facts as you encounter them in the user's message. NEVER delay extraction to accumulate facts across multiple turns. NEVER skip saving a fact because you expect more in the next message.
+- For 3+ NEW facts (creates only) from a single message → use batch_facts.
+- For updates, deletes, or identity changes → always use individual tool calls (update_fact, delete_fact). Never batch these — they have confirmation gates and different failure semantics.
+  (Prompt-level simplification: the code does support single deletes and generic updates in batch_facts, but this guidance steers the LLM toward the safest patterns.)
+- batch_facts runs operations sequentially: if one op fails, earlier ones persist. Always check results.
 - Use move_section to move a section between layout slots (auto-switches widget if needed). Use inspect_page_state first to see current slot assignments.
 - Use reorder_items to change the order of items within a section (pass factIds in desired order). Not for composite sections: hero, bio, at-a-glance, footer.
 - Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal). When the user says "remove for now", "hide", or "I might add this back" → archive_fact.
@@ -255,7 +261,7 @@ function buildMinimalSchemaForOnboarding(): string {
 - interest: {name, detail?}
 - project: {name, description?, url?, status?: "active"|"completed"}
 - language: {language, proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"}
-After collecting name + role + 2-3 more facts, call generate_page.`;
+After exploring 2-3 topic areas beyond name + role, call generate_page.`;
 }
 
 function buildMinimalSchemaForEditing(): string {
@@ -277,7 +283,7 @@ COMMON VALUE SHAPES:
 - project: {name, description?, url?, status?: "active"|"completed"}
 - language: {language, proficiency?: "native"|"fluent"|"advanced"|"intermediate"|"beginner"}
 - contact: {type: "email"|"phone"|"location"|"website", value: "..."}
-When the user asks for a concrete change and you already have enough info, execute it in this turn instead of only describing the plan.`;
+When the user asks for a concrete change and you already have enough info, act immediately instead of only describing the plan.`;
 }
 
 function buildMinimalSchemaReference(
@@ -370,6 +376,7 @@ export function buildSystemPrompt(
 
   blocks.push(expertiseCalibration);
   blocks.push(turnManagementRules());
+  blocks.push(sharedBehavioralRules());
   blocks.push(memoryUsageDirectives());
   blocks.push(planningProtocol());
   blocks.push(undoAwarenessPolicy());

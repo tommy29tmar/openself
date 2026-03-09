@@ -34,8 +34,9 @@ describe("memoryUsageDirectives", () => {
       expect(directives).toMatch(/name\s*from\s*facts|identity\/name/i);
     });
 
-    it("references create_fact for new info", () => {
-      expect(directives).toContain("create_fact");
+    it("references fact recording for new info (delegated to TOOL_POLICY)", () => {
+      expect(directives).toMatch(/record it as a fact/i);
+      expect(directives).toMatch(/FACT RECORDING/);
     });
 
     it("references update_fact for changes", () => {
@@ -44,6 +45,11 @@ describe("memoryUsageDirectives", () => {
 
     it("references delete_fact for removals", () => {
       expect(directives).toContain("delete_fact");
+    });
+
+    it("does NOT duplicate fact recording mandate (now in TOOL_POLICY)", () => {
+      expect(directives).not.toMatch(/when the user shares new information.*record it immediately/i);
+      expect(directives).not.toMatch(/do not batch or delay/i);
     });
   });
 

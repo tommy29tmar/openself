@@ -50,6 +50,7 @@ vi.mock("@/lib/agent/journey", () => ({
 
 import { estimateTokens, detectMode, assembleContext } from "@/lib/agent/context";
 import type { OwnerScope } from "@/lib/auth/session";
+import type { BootstrapPayload } from "@/lib/agent/journey";
 import { countFacts, getActiveFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
@@ -498,5 +499,54 @@ describe("assembleContext with bootstrap", () => {
       expect.objectContaining({ schemaMode: "minimal" }),
     );
     expect(result.systemPrompt).toContain("BOOTSTRAP_PROMPT");
+  });
+
+  it("injects empty-facts notice for first_visit when no facts exist", () => {
+    vi.mocked(getActiveFacts).mockReturnValue([]);
+
+    const bootstrap: BootstrapPayload = {
+      journeyState: "first_visit",
+      situations: [],
+      expertiseLevel: "novice",
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [] as string[],
+      staleFacts: [] as string[],
+      openConflicts: [] as string[],
+      archivableFacts: [] as string[],
+      language: "en",
+      conversationContext: null,
+      archetype: "generalist" as const,
+    };
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);
+    expect(result.systemPrompt).toContain("No facts recorded yet");
+    expect(result.systemPrompt).toContain("Start extracting information");
+  });
+
+  it("does NOT inject empty-facts notice for non-first_visit states", () => {
+    vi.mocked(getActiveFacts).mockReturnValue([]);
+
+    const bootstrap: BootstrapPayload = {
+      journeyState: "active_fresh",
+      situations: [],
+      expertiseLevel: "novice",
+      userName: "Test User",
+      lastSeenDaysAgo: 1,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [] as string[],
+      staleFacts: [] as string[],
+      openConflicts: [] as string[],
+      archivableFacts: [] as string[],
+      language: "en",
+      conversationContext: null,
+      archetype: "generalist" as const,
+    };
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);
+    expect(result.systemPrompt).not.toContain("No facts recorded yet");
   });
 });

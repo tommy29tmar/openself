@@ -92,22 +92,18 @@ describe("returningNoPagePolicy", () => {
     });
   });
 
-  describe("banned patterns", () => {
-    for (const phrase of UNIVERSAL_BANNED_PHRASES) {
-      it(`bans "${phrase}"`, () => {
-        expect(policyEn.toLowerCase()).toMatch(
-          new RegExp(`never.*${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
-        );
-      });
-    }
-
-    it("bans passive closings", () => {
-      expect(policyEn).toMatch(/never.*passive|never.*let me know/i);
+  describe("banned patterns (delegated to shared-rules)", () => {
+    it("does NOT duplicate passive closing bans locally", () => {
+      expect(policyEn).not.toMatch(/never.*let me know if you need anything/i);
     });
 
-    it("bans fresh interview", () => {
+    it("bans fresh interview (policy-specific)", () => {
       expect(policyEn).toMatch(/never.*fresh\s*interview|never.*start.*interview/i);
     });
+  });
+
+  it("includes immediate execution directive via IMMEDIATE_EXECUTION_RULE", () => {
+    expect(policyEn).toMatch(/concrete.*edit.*this turn|execute.*tool.*this turn|do not.*respond.*only.*plan/i);
   });
 });
 
@@ -170,33 +166,25 @@ describe("draftReadyPolicy", () => {
       expect(policyEn).toMatch(/adding new profile information.*save it and keep moving|do not ignore new information/i);
     });
 
-    it("says optional clarifications must not block progress", () => {
-      expect(policyEn).toMatch(/optional clarifications.*must not block progress|do not hold the page hostage/i);
-    });
-
     it("says regenerate immediately when the user explicitly asks", () => {
       expect(policyEn).toMatch(/explicitly asks to regenerate|rebuild immediately/i);
     });
 
     it("requires executing concrete edits in the same turn", () => {
-      expect(policyEn).toMatch(/concrete add\/update\/remove.*this turn|do not stop at .*I'll add it/i);
+      expect(policyEn).toMatch(/concrete.*edit.*this turn|execute.*tool.*this turn|do not.*respond.*only.*plan/i);
     });
   });
 
-  describe("banned patterns", () => {
-    for (const phrase of UNIVERSAL_BANNED_PHRASES) {
-      it(`bans "${phrase}"`, () => {
-        expect(policyEn.toLowerCase()).toMatch(
-          new RegExp(`never.*${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
-        );
-      });
-    }
+  describe("banned patterns (delegated to shared-rules)", () => {
+    it("does NOT duplicate passive closing bans locally", () => {
+      expect(policyEn).not.toMatch(/never.*let me know if you need anything/i);
+    });
 
-    it("bans reopening the interview", () => {
+    it("bans reopening the interview (policy-specific)", () => {
       expect(policyEn).toMatch(/not.*interview|not.*exploratory|not.*ask.*what.*do/i);
     });
 
-    it("bans proactive section suggestions", () => {
+    it("bans proactive section suggestions (policy-specific)", () => {
       expect(policyEn).toMatch(/not.*add.*section.*proactiv|not.*offer.*add/i);
     });
   });
@@ -242,8 +230,8 @@ describe("activeFreshPolicy", () => {
       expect(policyEn).toMatch(/name\s*from\s*facts|identity\/name/i);
     });
 
-    it("mentions proportional response length", () => {
-      expect(policyEn).toMatch(/proportional|short.*message.*short.*response/i);
+    it("does NOT duplicate response length calibration (canonical source is CORE_CHARTER)", () => {
+      expect(policyEn).not.toMatch(/proportional.*response.*length/i);
     });
   });
 
@@ -269,7 +257,7 @@ describe("activeFreshPolicy", () => {
     });
 
     it("requires executing concrete edits in the same turn", () => {
-      expect(policyEn).toMatch(/concrete.*add\/update\/remove.*this turn|do not just say you'll do it/i);
+      expect(policyEn).toMatch(/concrete.*edit.*this turn|execute.*tool.*this turn|do not.*respond.*only.*plan/i);
     });
   });
 
@@ -283,16 +271,12 @@ describe("activeFreshPolicy", () => {
     });
   });
 
-  describe("banned patterns", () => {
-    for (const phrase of UNIVERSAL_BANNED_PHRASES) {
-      it(`bans "${phrase}"`, () => {
-        expect(policyEn.toLowerCase()).toMatch(
-          new RegExp(`never.*${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
-        );
-      });
-    }
+  describe("banned patterns (delegated to shared-rules)", () => {
+    it("does NOT duplicate passive closing bans locally", () => {
+      expect(policyEn).not.toMatch(/never.*let me know if you need anything/i);
+    });
 
-    it("bans reopening exploration", () => {
+    it("bans reopening exploration (policy-specific)", () => {
       expect(policyEn).toMatch(/not.*reopen.*explor|not.*ask.*tell.*more/i);
     });
   });
@@ -360,12 +344,12 @@ describe("activeStalePolicy", () => {
       expect(policyEn).toContain("delete_fact");
     });
 
-    it("limits fact-gathering to max 6 exchanges", () => {
-      expect(policyEn).toMatch(/6\s*exchange|max.*6|exchange\s*6/i);
+    it("does NOT duplicate max exchanges rule locally (now in turn-management R2)", () => {
+      expect(policyEn).not.toMatch(/max\s*6\s*exchange.*rule/i);
     });
 
     it("requires executing concrete edits in the same turn", () => {
-      expect(policyEn).toMatch(/concrete.*add\/update\/remove.*this turn|do not just answer with the plan/i);
+      expect(policyEn).toMatch(/concrete.*edit.*this turn|execute.*tool.*this turn|do not.*respond.*only.*plan/i);
     });
   });
 
@@ -379,16 +363,12 @@ describe("activeStalePolicy", () => {
     });
   });
 
-  describe("banned patterns", () => {
-    for (const phrase of UNIVERSAL_BANNED_PHRASES) {
-      it(`bans "${phrase}"`, () => {
-        expect(policyEn.toLowerCase()).toMatch(
-          new RegExp(`never.*${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
-        );
-      });
-    }
+  describe("banned patterns (delegated to shared-rules)", () => {
+    it("does NOT duplicate passive closing bans locally", () => {
+      expect(policyEn).not.toMatch(/never.*let me know if you need anything/i);
+    });
 
-    it("forbids re-asking known facts", () => {
+    it("forbids re-asking known facts (policy-specific)", () => {
       expect(policyEn).toMatch(/never.*re-?ask|never.*ask.*name/i);
     });
   });

@@ -1,6 +1,7 @@
 /**
  * Tests for the turn management rules.
- * Validates that all 6 rules (R1-R6) are present with their key directives.
+ * Validates that R1, R2, R4 are present with their key directives.
+ * R3, R5, R6 moved to sharedBehavioralRules — verified absent here.
  */
 import { describe, it, expect } from "vitest";
 import { turnManagementRules } from "@/lib/agent/policies/turn-management";
@@ -18,67 +19,49 @@ describe("turnManagementRules", () => {
       expect(rules).toMatch(/TURN\s*MANAGEMENT/i);
     });
 
-    it("contains all 6 rules (R1 through R6)", () => {
+    it("contains rules R1, R2, and R4", () => {
       expect(rules).toContain("R1");
       expect(rules).toContain("R2");
-      expect(rules).toContain("R3");
       expect(rules).toContain("R4");
-      expect(rules).toContain("R5");
-      expect(rules).toContain("R6");
+    });
+
+    it("does NOT contain removed rules R3, R5, R6", () => {
+      expect(rules).not.toMatch(/^R3\b/m);
+      expect(rules).not.toMatch(/^R5\b/m);
+      expect(rules).not.toMatch(/^R6\b/m);
     });
   });
 
-  describe("R1 — Topic clusters with natural bridges", () => {
-    it("targets ~2 exchanges per cluster in exploration mode", () => {
+  describe("R1 — Topic exploration", () => {
+    it("targets ~2 exchanges per topic in exploration mode", () => {
       expect(rules).toMatch(/~2\s*exchange|target.*2\s*exchange/i);
     });
 
-    it("allows flexible cluster end (short answer) or extension (still developing)", () => {
+    it("allows flexible end (short answer) or extension (still developing)", () => {
       expect(rules).toMatch(/end\s*earlier|extend.*3|still\s*developing/i);
-    });
-
-    it("handles user-volunteered third area briefly (1 exchange, not a full cluster)", () => {
-      expect(rules).toMatch(/user.*volunteers.*new.*area|brief.*1\s*exchange|handle.*briefly/i);
     });
 
     it("requires a bridge sentence when transitioning", () => {
       expect(rules).toMatch(/bridge\s*sentence/i);
     });
 
-    it("explicitly forbids cold topic switches", () => {
-      expect(rules).toMatch(/cold.{0,20}switch|never.*cold.{0,20}topic/i);
-    });
-
-    it("targets 2 primary clusters with R2 hard cap at 6 exchanges", () => {
-      expect(rules).toMatch(/2.*cluster|cluster.*2/i);
-      expect(rules).toMatch(/6\s*exchange|R2/i);
-    });
-
     it("scopes cluster approach to exploration, excludes edit sessions", () => {
-      expect(rules).toMatch(/exploring|onboarding|exploration/i);
-      expect(rules).toMatch(/editing|edit.*session|returning\s*user/i);
+      expect(rules).toMatch(/exploring|exploration/i);
+      expect(rules).toMatch(/editing|edit.*session|returning\s*user|skip/i);
     });
 
-    it("hard cap at 6 exchanges with immediate action", () => {
-      expect(rules).toMatch(/6\s*exchange.*R2|R2.*6\s*exchange/i);
+    it("does NOT hard-code cluster count (now in journey policies)", () => {
+      expect(rules).not.toMatch(/target\s*2\s*(primary\s*)?cluster/i);
     });
-  });
 
-  describe("R2 — gate exception", () => {
-    it("R2 generate_page includes one-question gate exception for missing name/role", () => {
-      expect(rules).toMatch(/exception.*name.*role.*missing|ONE.*direct.*question.*collect|missing.*ask.*ONE|ask.*ONE.*direct.*question/i);
+    it("does NOT hard-code exchange cap (now in journey policies + R2)", () => {
+      expect(rules).not.toMatch(/hard\s*cap.*6\s*exchange/i);
     });
   });
 
-  describe("R4 — low-signal gate reference", () => {
-    it("R4 low-signal fallback includes Phase C gate before generation", () => {
-      expect(rules).toMatch(/Phase\s*C\s*gate|missing.*name.*role.*gate|ask.*one.*direct.*question.*generate/i);
-    });
-  });
-
-  describe("R2 — Max 6 fact-gathering exchanges", () => {
-    it("specifies the 6-exchange limit", () => {
-      expect(rules).toMatch(/6\s*exchange/i);
+  describe("R2 — Max exchanges before action", () => {
+    it("specifies the 6-exchange limit as default", () => {
+      expect(rules).toMatch(/6.*exchange/i);
     });
 
     it("instructs to propose action after limit", () => {
@@ -88,35 +71,20 @@ describe("turnManagementRules", () => {
     it("references generate_page as an action option", () => {
       expect(rules).toContain("generate_page");
     });
+
+    it("explicitly marks 6-exchange as default that journey policies may override", () => {
+      expect(rules).toMatch(/default.*6|journey.*polic.*override|journey.*polic.*precedence/i);
+    });
+
+    it("notes first_visit defines its own cap that takes precedence", () => {
+      expect(rules).toMatch(/first_visit.*own.*cap|first_visit.*precedence/i);
+    });
   });
 
-  describe("R3 — No passive closings", () => {
-    it("lists banned phrases", () => {
-      expect(rules).toMatch(/banned\s*phrases/i);
-    });
-
-    it("bans 'let me know if you need anything'", () => {
-      expect(rules).toMatch(/let me know if you need anything/i);
-    });
-
-    it("bans 'feel free to ask'", () => {
-      expect(rules).toMatch(/feel free to ask/i);
-    });
-
-    it("bans 'don't hesitate to reach out'", () => {
-      expect(rules).toMatch(/don't hesitate to reach out/i);
-    });
-
-    it("bans 'is there anything else'", () => {
-      expect(rules).toMatch(/is there anything else/i);
-    });
-
-    it("bans 'just let me know'", () => {
-      expect(rules).toMatch(/just let me know/i);
-    });
-
-    it("requires specific next step instead", () => {
-      expect(rules).toMatch(/specific\s*next\s*step/i);
+  describe("R3 — removed (now in shared-rules)", () => {
+    it("does NOT contain banned phrases list (moved to sharedBehavioralRules)", () => {
+      expect(rules).not.toMatch(/banned\s*phrases/i);
+      expect(rules).not.toMatch(/let me know if you need anything/i);
     });
   });
 
@@ -138,31 +106,15 @@ describe("turnManagementRules", () => {
     });
   });
 
-  describe("R5 — Proportional response length", () => {
-    it("instructs to match response length to user message length", () => {
-      expect(rules).toMatch(/match.*response.*length|proportional.*response/i);
-    });
-
-    it("gives short-message guidance (1-2 sentences)", () => {
-      expect(rules).toMatch(/1-2\s*sentence/i);
-    });
-
-    it("bans walls of text for short messages", () => {
-      expect(rules).toMatch(/never.*wall.*text|never.*long.*response.*short/i);
+  describe("R5 — removed (now in shared-rules)", () => {
+    it("does NOT contain response length rules (moved to sharedBehavioralRules)", () => {
+      expect(rules).not.toMatch(/proportional.*response/i);
     });
   });
 
-  describe("R6 — Clarifications expire", () => {
-    it("records new explicit information even when clarification is unanswered", () => {
-      expect(rules).toMatch(/record.*new.*information.*immediately|do not ignore it/i);
-    });
-
-    it("limits repeated clarifications", () => {
-      expect(rules).toMatch(/at most one more time|same clarification/i);
-    });
-
-    it("forbids optional clarifications from blocking generation", () => {
-      expect(rules).toMatch(/missing optional.*do not block|do it with what you have/i);
+  describe("R6 — removed (now in shared-rules)", () => {
+    it("does NOT contain clarification rules (moved to sharedBehavioralRules)", () => {
+      expect(rules).not.toMatch(/clarification.*expire/i);
     });
   });
 });

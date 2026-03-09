@@ -25,6 +25,10 @@ vi.mock("@/lib/agent/policies/planning-protocol", () => ({
 vi.mock("@/lib/agent/policies/undo-awareness", () => ({
   undoAwarenessPolicy: vi.fn(() => ""),
 }));
+vi.mock("@/lib/agent/policies/shared-rules", () => ({
+  sharedBehavioralRules: vi.fn(() => ""),
+  IMMEDIATE_EXECUTION_RULE: "",
+}));
 
 import { buildSystemPrompt } from "@/lib/agent/prompts";
 import type { BootstrapPayload } from "@/lib/agent/journey";
@@ -72,10 +76,10 @@ describe("TOOL_POLICY includes new tools", () => {
     expect(prompt).toContain("unarchive_fact");
   });
 
-  it("mentions batch_facts is sequential with trust-ledger undo", () => {
+  it("mentions batch_facts runs sequentially with partial-failure semantics", () => {
     const prompt = buildSystemPrompt(makeBootstrap());
     expect(prompt).toMatch(/batch_facts.*sequential|sequential.*batch_facts/i);
-    expect(prompt).toMatch(/trust.?ledger|undo/i);
+    expect(prompt).toMatch(/one op fails.*earlier.*persist|earlier.*persist/i);
   });
 
   it("mentions identity/tagline pattern for text customization", () => {

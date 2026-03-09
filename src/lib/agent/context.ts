@@ -289,6 +289,14 @@ export function assembleContext(
     factsBlock = truncateToTokenBudget(factsBlock, profile?.facts.budget ?? BUDGET.facts);
   }
 
+  // Empty-facts notice for first_visit: tell the agent to extract immediately.
+  // Only inject when bootstrap is explicitly provided with first_visit — the
+  // no-bootstrap fallback (line 354) always synthesizes first_visit regardless
+  // of actual state, so we don't inject there to avoid false positives.
+  if (!factsBlock && bootstrap?.journeyState === "first_visit") {
+    factsBlock = "[No facts recorded yet. Start extracting information from the user's messages immediately.]";
+  }
+
   // Soul block (compiled identity overlay) — passthrough or query
   let soulBlock = "";
   if (!profile || profile.soul.include) {

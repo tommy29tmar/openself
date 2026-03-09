@@ -22,7 +22,7 @@ PHASE A — Identity (turns 1-2):
   By turn 2, aim to have: name + role. If one is missing, ask for it once more before Phase B. Then proceed regardless — Phase C gate will handle it if still missing.
 
 PHASE B — Cluster exploration (exchanges 3-8):
-Target 3 topic clusters, ~2 exchanges each. Total Phase B budget: ~6 exchanges. Hard cap: exchange 8.
+Target 3 topic clusters, ~2 exchanges each. Hard cap: exchange 8.
 
 Suggested clusters (adapt to what the user opens up about):
 1. Work depth cluster: What do they do day-to-day? → one follow-up (project they're proud of, what drives them, key skills they use).
@@ -34,8 +34,6 @@ Rules:
 - Each cluster ends naturally: short user answer = done, user still expanding = stay 1 more exchange (max 3 per cluster).
 - If user volunteers a fourth area while under the exchange cap, handle it briefly (1 exchange only) before Phase C.
 - BRIDGE SENTENCES are mandatory between clusters: "Bello! E al di fuori del lavoro, cosa ti appassiona?"
-- Ask exactly ONE question per turn. Do not stack questions.
-- Record EVERY piece of information as a fact immediately via create_fact.
 - Minimum gate: aim for at least ${SPARSE_PROFILE_FACT_THRESHOLD} distinct publishable facts before Phase C. If fewer after 2 clusters, start a 3rd cluster and keep collecting concrete details.
 
 PHASE C — Generate + publish (when Phase B is complete):
@@ -61,9 +59,6 @@ Step 3 — Minimal page fallback (after 3 total guided/fill-in attempts with low
   Then generate a minimal page and propose publish.
 
 CRITICAL RULES:
-- Record EVERY piece of information as a fact IMMEDIATELY via create_fact. Do not batch or delay.
-- NEVER end a turn with "let me know if you need anything" or similar passive closings.
-- NEVER ask more than one question per turn.
 - After generating the page, ALWAYS move toward publishing. Never leave the user hanging.
 - If the user seems done at any point, generate the page and propose publish.`;
 }

@@ -51,6 +51,10 @@ vi.mock("@/lib/agent/policies/planning-protocol", () => ({
 vi.mock("@/lib/agent/policies/undo-awareness", () => ({
   undoAwarenessPolicy: vi.fn(() => "UNDO_AWARENESS_POLICY_BLOCK"),
 }));
+vi.mock("@/lib/agent/policies/shared-rules", () => ({
+  sharedBehavioralRules: vi.fn(() => "SHARED_BEHAVIORAL_RULES_BLOCK"),
+  IMMEDIATE_EXECUTION_RULE: "IMMEDIATE_EXECUTION_RULE_MOCK",
+}));
 
 import { buildSystemPrompt } from "@/lib/agent/prompts";
 import type { BootstrapPayload } from "@/lib/agent/journey";
@@ -116,6 +120,13 @@ describe("buildSystemPrompt", () => {
       expect(result).toMatch(/EXPERTISE\s*CALIBRATION|novice/i);
     });
 
+    it("expertise calibration (novice) does NOT use CORE_CHARTER banned words as examples", () => {
+      const result = buildSystemPrompt(makeBootstrap({ expertiseLevel: "novice" }));
+      const bannedExamples = /acknowledgment.*(?:Capito!|Perfetto!)/i;
+      expect(result).not.toMatch(bannedExamples);
+      expect(result).toMatch(/Bene\.|Ricevuto\./);
+    });
+
     it("includes turn management rules block", () => {
       const result = buildSystemPrompt(makeBootstrap());
       expect(result).toContain("TURN_MANAGEMENT_RULES_BLOCK");
@@ -124,6 +135,11 @@ describe("buildSystemPrompt", () => {
     it("includes memory usage directives block", () => {
       const result = buildSystemPrompt(makeBootstrap());
       expect(result).toContain("MEMORY_USAGE_DIRECTIVES_BLOCK");
+    });
+
+    it("includes shared behavioral rules block", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      expect(result).toContain("SHARED_BEHAVIORAL_RULES_BLOCK");
     });
   });
 
@@ -144,12 +160,20 @@ describe("buildSystemPrompt", () => {
       expect(turnIdx).toBeGreaterThan(expertiseIdx);
     });
 
-    it("memory directives come after turn management", () => {
+    it("shared behavioral rules come after turn management", () => {
       const result = buildSystemPrompt(makeBootstrap());
       const turnIdx = result.indexOf("TURN_MANAGEMENT_RULES_BLOCK");
-      const memoryIdx = result.indexOf("MEMORY_USAGE_DIRECTIVES_BLOCK");
+      const sharedIdx = result.indexOf("SHARED_BEHAVIORAL_RULES_BLOCK");
       expect(turnIdx).toBeGreaterThan(-1);
-      expect(memoryIdx).toBeGreaterThan(turnIdx);
+      expect(sharedIdx).toBeGreaterThan(turnIdx);
+    });
+
+    it("shared behavioral rules come before memory directives", () => {
+      const result = buildSystemPrompt(makeBootstrap());
+      const sharedIdx = result.indexOf("SHARED_BEHAVIORAL_RULES_BLOCK");
+      const memoryIdx = result.indexOf("MEMORY_USAGE_DIRECTIVES_BLOCK");
+      expect(sharedIdx).toBeGreaterThan(-1);
+      expect(memoryIdx).toBeGreaterThan(sharedIdx);
     });
   });
 
@@ -213,7 +237,7 @@ describe("buildSystemPrompt", () => {
       expect(result).toContain('search_facts({ query: "..." })');
       expect(result).toContain("create_fact({ category, key, value })");
       expect(result).toContain("update_fact ALWAYS requires the FULL new value object");
-      expect(result).not.toContain("After collecting name + role + 2-3 more facts");
+      expect(result).not.toContain("After exploring 2-3 topic areas beyond name + role");
     });
 
     it("uses onboarding minimal schema for first_visit", () => {
@@ -221,7 +245,7 @@ describe("buildSystemPrompt", () => {
         makeBootstrap({ journeyState: "first_visit" }),
         { schemaMode: "minimal" },
       );
-      expect(result).toContain("After collecting name + role + 2-3 more facts");
+      expect(result).toContain("After exploring 2-3 topic areas beyond name + role");
       expect(result).not.toContain("EDIT WORKFLOW (quick updates):");
     });
   });
@@ -262,16 +286,16 @@ describe("buildSystemPrompt", () => {
       expect(undoIdx).toBeGreaterThan(planIdx);
     });
 
-    it("composition has 12 blocks without situation directives", () => {
+    it("composition has 13 blocks without situation directives", () => {
       const result = buildSystemPrompt(makeBootstrap());
       const parts = result.split("\n\n---\n\n");
       // [CORE_CHARTER, SAFETY, TOOL, FACT_SCHEMA, DATA_MODEL, OUTPUT,
       //  journeyPolicy, expertiseCalibration, turnManagement,
-      //  memoryDirectives, planningProtocol, undoAwareness]
-      expect(parts.length).toBe(12);
+      //  sharedBehavioralRules, memoryDirectives, planningProtocol, undoAwareness]
+      expect(parts.length).toBe(13);
     });
 
-    it("composition has 13 blocks with situation directives", () => {
+    it("composition has 14 blocks with situation directives", () => {
       const result = buildSystemPrompt(
         makeBootstrap({
           journeyState: "active_stale",
@@ -282,8 +306,8 @@ describe("buildSystemPrompt", () => {
       const parts = result.split("\n\n---\n\n");
       // [CORE_CHARTER, SAFETY, TOOL, FACT_SCHEMA, DATA_MODEL, OUTPUT,
       //  journeyPolicy, situationDirectives, expertiseCalibration,
-      //  turnManagement, memoryDirectives, planningProtocol, undoAwareness]
-      expect(parts.length).toBe(13);
+      //  turnManagement, sharedBehavioralRules, memoryDirectives, planningProtocol, undoAwareness]
+      expect(parts.length).toBe(14);
     });
   });
 });

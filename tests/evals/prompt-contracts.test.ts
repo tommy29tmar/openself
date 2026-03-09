@@ -56,6 +56,13 @@ describe("prompt contracts", () => {
     expect(src).toMatch(/start.*null|null.*start/i);
   });
 
+  it("TOOL_POLICY contains unified fact recording rule (single source of truth)", () => {
+    expect(src).toMatch(/FACT RECORDING/);
+    expect(src).toMatch(/NEVER delay.*accumulate.*across.*turns/i);
+    expect(src).toMatch(/3\+.*NEW.*facts.*creates.*only.*batch_facts/i);
+    expect(src).toMatch(/updates.*deletes.*identity.*individual\s*tool/i);
+  });
+
   it("workflow examples use current tool signatures", () => {
     expect(src).not.toContain("search_facts(category)");
     expect(src).not.toContain('search_facts("identity")');
