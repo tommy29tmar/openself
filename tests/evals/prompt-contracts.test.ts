@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
+import { activeFreshPolicy } from "@/lib/agent/policies/active-fresh";
 
 describe("prompt contracts", () => {
   const src = readFileSync("src/lib/agent/prompts.ts", "utf-8");
@@ -69,5 +70,11 @@ describe("prompt contracts", () => {
     expect(src).not.toContain("create_fact(category, value)");
     expect(src).toContain('search_facts({ query: "identity role" })');
     expect(src).toContain("create_fact({ category, key, value })");
+  });
+
+  it("active-fresh policy includes preview-only reminder in update flow", () => {
+    const policy = activeFreshPolicy("en");
+    expect(policy).toMatch(/visible in preview/i);
+    expect(policy).not.toMatch(/^.*"Done! Anything else\?".*$/m);
   });
 });
