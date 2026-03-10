@@ -12,7 +12,6 @@ type GuardStreamPart =
 const COMPLETION_CLAIM_BACKING_TOOL_NAMES = new Set([
   "create_fact",
   "batch_facts",
-  "update_fact",
   "delete_fact",
   "update_page_style",
   "reorder_sections",

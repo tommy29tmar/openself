@@ -6,7 +6,6 @@ const {
   mockGetDraft,
   mockUpsertDraft,
   mockCreateFact,
-  mockUpdateFact,
   mockDeleteFact,
   mockSearchFacts,
   mockSetFactVisibility,
@@ -27,7 +26,6 @@ const {
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
   mockCreateFact: vi.fn(),
-  mockUpdateFact: vi.fn(),
   mockDeleteFact: vi.fn(),
   mockSearchFacts: vi.fn(),
   mockSetFactVisibility: vi.fn(),
@@ -47,12 +45,13 @@ const {
 
 vi.mock("@/lib/services/kb-service", () => ({
   createFact: mockCreateFact,
-  updateFact: mockUpdateFact,
+  updateFact: vi.fn(),
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getActiveFacts: mockGetActiveFacts,
   getFactById: vi.fn(),
   factExistsAcrossReadKeys: vi.fn(() => false),
+  findFactsByOwnerCategoryKey: vi.fn(() => []),
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));
@@ -201,53 +200,8 @@ describe("tool visibility response enrichment", () => {
     });
   });
 
-  describe("update_fact", () => {
-    it("returns visibility and pageVisible fields", async () => {
-      mockUpdateFact.mockReturnValue({
-        id: "f1", category: "identity", key: "name", visibility: "public",
-      });
-      const { tools } = createAgentTools("en", "sess1");
-      const result = await tools.update_fact.execute(
-        { factId: "f1", value: { full: "Alice Updated" } },
-        toolCallOpts,
-      ) as any;
-      expect(result.success).toBe(true);
-      expect(result.visibility).toBe("public");
-      expect(result.pageVisible).toBe(true);
-      expect(result.recomposeOk).toBe(true);
-    });
-
-    it("returns pageVisible: false for private fact", async () => {
-      mockUpdateFact.mockReturnValue({
-        id: "f1", category: "contact", key: "phone", visibility: "private",
-      });
-      const { tools } = createAgentTools("en", "sess1");
-      const result = await tools.update_fact.execute(
-        { factId: "f1", value: { type: "phone", value: "+9876543210" } },
-        toolCallOpts,
-      ) as any;
-      expect(result.success).toBe(true);
-      expect(result.visibility).toBe("private");
-      expect(result.pageVisible).toBe(false);
-    });
-
-    it("returns recomposeOk: false when recomposition fails", async () => {
-      mockUpdateFact.mockReturnValue({
-        id: "f1", category: "identity", key: "name", visibility: "proposed",
-      });
-      mockGetActiveFacts.mockImplementation(() => { throw new Error("DB error"); });
-      const { tools } = createAgentTools("en", "sess1");
-      const result = await tools.update_fact.execute(
-        { factId: "f1", value: { full: "Bob" } },
-        toolCallOpts,
-      ) as any;
-      expect(result.success).toBe(true);
-      expect(result.recomposeOk).toBe(false);
-    });
-  });
-
   describe("delete_fact", () => {
-    it("returns recomposeOk: true on successful delete and recompose", async () => {
+    it("returns success and deletedCount on successful UUID delete", async () => {
       mockDeleteFact.mockReturnValue(true);
       const { tools } = createAgentTools("en", "sess1");
       const result = await tools.delete_fact.execute(
@@ -255,22 +209,10 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(true);
-      expect(result.recomposeOk).toBe(true);
+      expect((result as any).deletedCount).toBe(1);
     });
 
-    it("returns recomposeOk: false when recomposition fails after delete", async () => {
-      mockDeleteFact.mockReturnValue(true);
-      mockGetActiveFacts.mockImplementation(() => { throw new Error("DB error"); });
-      const { tools } = createAgentTools("en", "sess1");
-      const result = await tools.delete_fact.execute(
-        { factId: "f1" },
-        toolCallOpts,
-      );
-      expect(result.success).toBe(true);
-      expect(result.recomposeOk).toBe(false);
-    });
-
-    it("returns recomposeOk: true when delete returns false (no recompose attempted)", async () => {
+    it("returns error when delete returns false", async () => {
       mockDeleteFact.mockReturnValue(false);
       const { tools } = createAgentTools("en", "sess1");
       const result = await tools.delete_fact.execute(
@@ -278,7 +220,7 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(false);
-      expect(result.recomposeOk).toBe(true);
+      expect((result as any).hint).toContain("search_facts");
     });
   });
 });

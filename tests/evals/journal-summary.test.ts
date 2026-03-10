@@ -119,8 +119,8 @@ describe("buildJournalDigest", () => {
   it("limits to max 3 lines regardless of entry count", () => {
     const journal: JournalEntry[] = [
       { toolName: "create_fact", timestamp: "t1", durationMs: 10, success: true },
-      { toolName: "update_fact", timestamp: "t2", durationMs: 10, success: true },
-      { toolName: "delete_fact", timestamp: "t3", durationMs: 10, success: true },
+      { toolName: "delete_fact", timestamp: "t2", durationMs: 10, success: true },
+      { toolName: "search_facts", timestamp: "t3", durationMs: 10, success: true },
       { toolName: "generate_page", timestamp: "t4", durationMs: 100, success: true },
       { toolName: "update_page_style", timestamp: "t5", durationMs: 50, success: true },
     ];

@@ -23,6 +23,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   deleteFact: vi.fn(),
   getFactById: vi.fn(),
   factExistsAcrossReadKeys: vi.fn(() => false),
+  findFactsByOwnerCategoryKey: vi.fn(() => []),
   setFactVisibility: vi.fn(),
   archiveFact: vi.fn(),
   unarchiveFact: vi.fn(),

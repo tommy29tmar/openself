@@ -141,7 +141,7 @@ export async function createFact(
       if (!existingVal || !newVal) {
         throw new Error(
           `Fact experience/${input.key} already exists but value could not be compared. ` +
-          `Use update_fact to modify the existing entry, or use a different key.`
+          `Delete the existing fact first, then create a new one, or use a different key.`
         );
       }
       const existingCompany = String(existingVal.company ?? "").toLowerCase();
@@ -149,7 +149,7 @@ export async function createFact(
       if (existingCompany && newCompany && existingCompany !== newCompany) {
         throw new Error(
           `Fact experience/${input.key} already exists for company '${existingVal.company}'. ` +
-          `Use a different key or use update_fact to modify the existing entry.`
+          `Use a different key, or delete the existing fact first then create a new one.`
         );
       }
     }
@@ -617,4 +617,44 @@ export function backfillProfileId(sessionIds: string[], newProfileId: string): n
     }
   }
   return total;
+}
+
+/**
+ * Find active facts by owner + category + key.
+ * Used by delete_fact tool when agent passes category/key instead of UUID.
+ */
+export function findFactsByOwnerCategoryKey(
+  ownerKey: string,
+  category: string,
+  key: string,
+  readKeys?: string[],
+): FactRow[] {
+  if (PROFILE_ID_CANONICAL) {
+    return db.select().from(facts)
+      .where(and(
+        eq(facts.profileId, ownerKey),
+        eq(facts.category, category),
+        eq(facts.key, key),
+        isNull(facts.archivedAt),
+      ))
+      .all() as FactRow[];
+  }
+  if (readKeys && readKeys.length > 0) {
+    return db.select().from(facts)
+      .where(and(
+        inArray(facts.sessionId, readKeys),
+        eq(facts.category, category),
+        eq(facts.key, key),
+        isNull(facts.archivedAt),
+      ))
+      .all() as FactRow[];
+  }
+  return db.select().from(facts)
+    .where(and(
+      eq(facts.sessionId, ownerKey),
+      eq(facts.category, category),
+      eq(facts.key, key),
+      isNull(facts.archivedAt),
+    ))
+    .all() as FactRow[];
 }

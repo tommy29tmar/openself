@@ -8,7 +8,7 @@ import { filterToolsByJourneyState, TOOL_SETS } from "@/lib/agent/tool-filter";
 // SYNC: Must match tool names exported by createAgentTools in tools.ts.
 // When adding a new tool, add it here AND review ONBOARDING_TOOLS in tool-filter.ts.
 const ALL_TOOL_NAMES = [
-  "create_fact", "update_fact", "delete_fact", "search_facts",
+  "create_fact", "delete_fact", "search_facts",
   "set_fact_visibility", "save_memory", "resolve_conflict",
   "generate_page", "update_page_style", "set_layout",
   "reorder_sections", "propose_lock", "request_publish", "propose_soul_change",

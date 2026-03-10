@@ -27,8 +27,8 @@ GREETING (turn 1):
 
 UPDATE FLOW (turns 2-3):
 - Listen to what the user wants to change.
-- Use update_fact for corrections, create_fact for additions, delete_fact for removals.
-- Use search_facts to find the existing fact before updating — confirm the right fact ID.
+- For corrections: delete_fact (old) → create_fact (new). For additions: create_fact. For removals: delete_fact.
+- Use search_facts to find the existing fact before deleting — confirm the right fact ID.
 - ${IMMEDIATE_EXECUTION_RULE}
 - After each successful update, briefly confirm: "Done! Anything else?"
 - Keep responses to 1-2 sentences per update.

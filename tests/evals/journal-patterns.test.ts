@@ -76,12 +76,12 @@ describe("detectJournalPatterns", () => {
     expect(seq!.evidence.frequency).toBe(3);
   });
 
-  it("detects correction_pattern: create→update for same category 2+ times", () => {
+  it("detects correction_pattern: create→delete for same category 2+ times", () => {
     const entries = [
       makeEntry("create_fact", { category: "skill", key: "react" }),
-      makeEntry("update_fact", { category: "skill", key: "react" }),
+      makeEntry("delete_fact", { category: "skill", key: "react" }),
       makeEntry("create_fact", { category: "skill", key: "ts" }),
-      makeEntry("update_fact", { category: "skill", key: "ts" }),
+      makeEntry("delete_fact", { category: "skill", key: "ts" }),
       makeEntry("generate_page"),
     ];
     const patterns = detectJournalPatterns(entries);
@@ -127,9 +127,9 @@ describe("detectJournalPatterns", () => {
   it("handles unknown category in correction_pattern gracefully", () => {
     const entries = [
       makeEntry("create_fact"), // no args
-      makeEntry("update_fact"),
+      makeEntry("delete_fact"),
       makeEntry("create_fact"),
-      makeEntry("update_fact"),
+      makeEntry("delete_fact"),
       makeEntry("generate_page"),
     ];
     const patterns = detectJournalPatterns(entries);

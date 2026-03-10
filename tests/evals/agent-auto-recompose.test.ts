@@ -6,7 +6,6 @@ const {
   mockGetDraft,
   mockUpsertDraft,
   mockCreateFact,
-  mockUpdateFact,
   mockDeleteFact,
   mockSearchFacts,
   mockSetFactVisibility,
@@ -27,7 +26,6 @@ const {
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
   mockCreateFact: vi.fn(),
-  mockUpdateFact: vi.fn(),
   mockDeleteFact: vi.fn(),
   mockSearchFacts: vi.fn(),
   mockSetFactVisibility: vi.fn(),
@@ -47,13 +45,14 @@ const {
 
 vi.mock("@/lib/services/kb-service", () => ({
   createFact: mockCreateFact,
-  updateFact: mockUpdateFact,
+  updateFact: vi.fn(),
   deleteFact: mockDeleteFact,
   searchFacts: mockSearchFacts,
   getActiveFacts: mockGetActiveFacts,
   getFactById: vi.fn(),
   setFactVisibility: mockSetFactVisibility,
   factExistsAcrossReadKeys: vi.fn(() => false),
+  findFactsByOwnerCategoryKey: vi.fn(() => []),
   VisibilityTransitionError: class extends Error {},
 }));
 vi.mock("@/lib/services/session-metadata", () => ({
@@ -192,18 +191,6 @@ describe("auto-recompose after fact mutations", () => {
     expect(draftMeta!.style).toEqual({ primaryColor: "#000", layout: "centered" });
     expect(draftMeta!.layoutTemplate).toBe("curator");
     expect(draftMeta!.sections).toHaveLength(2); // preserves section array for order/lock merge
-  });
-
-  it("recomposes draft after update_fact", async () => {
-    mockUpdateFact.mockReturnValue({ id: "f1", category: "identity", key: "name", visibility: "public" });
-    const { tools } = createAgentTools("it", "sess1");
-    const result = await tools.update_fact.execute(
-      { factId: "f1", value: { name: "Elena Rossi" } },
-      { toolCallId: "tc2", messages: [], abortSignal: new AbortController().signal },
-    );
-    expect(result.success).toBe(true);
-    expect(projectCanonicalConfig).toHaveBeenCalled();
-    expect(mockUpsertDraft).toHaveBeenCalled();
   });
 
   it("recomposes draft after delete_fact", async () => {

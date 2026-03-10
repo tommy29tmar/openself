@@ -29,7 +29,7 @@ GREETING (turn 1):
 
 TARGETED UPDATE FLOW (turns 2-4):
 - Focus on what's CHANGED, not what's the same. Don't re-explore areas that are still current.
-- Use update_fact when information changes (new role, completed project, etc.).
+- When information changes (new role, completed project, etc.), delete the old fact and create a new one with the corrected value.
 - Use create_fact for genuinely new information (new project, new skill, new interest).
 - Use delete_fact when the user confirms something is no longer relevant.
 - ${IMMEDIATE_EXECUTION_RULE}

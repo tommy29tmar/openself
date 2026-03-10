@@ -58,40 +58,28 @@ describe("batch_facts tool", () => {
     }
   });
 
-  it("handles mixed operations (create + update + delete)", async () => {
+  it("handles mixed operations (create + delete)", async () => {
     const tool = getTools();
     const suffix = randomUUID().slice(0, 8);
 
-    // Pre-create a fact to update and one to delete
+    // Pre-create a fact to delete
     const { tools } = createAgentTools("en", sessionId);
-    const createResult = await tools.create_fact.execute(
-      { category: "skill", key: `pre-update-${suffix}`, value: { name: "Old" } },
-      { toolCallId: "pre1", messages: [] },
-    );
     const deleteResult = await tools.create_fact.execute(
       { category: "skill", key: `pre-delete-${suffix}`, value: { name: "ToDelete" } },
       { toolCallId: "pre2", messages: [] },
     );
-    createdIds.push(createResult.factId!, deleteResult.factId!);
+    createdIds.push(deleteResult.factId!);
 
     const result = await tool.execute({
       operations: [
         { action: "create" as const, category: "skill", key: `new-${suffix}`, value: { name: "New" } },
-        { action: "update" as const, factId: createResult.factId!, value: { name: "Updated" } },
         { action: "delete" as const, factId: deleteResult.factId! },
       ],
     }, { toolCallId: "test", messages: [] });
 
     expect(result.success).toBe(true);
     expect(result.created).toBe(1);
-    expect(result.updated).toBe(1);
     expect(result.deleted).toBe(1);
-
-    // Verify update applied
-    const updatedFact = getFactById(createResult.factId!, sessionId);
-    expect(updatedFact).not.toBeNull();
-    const val = typeof updatedFact!.value === "string" ? JSON.parse(updatedFact!.value) : updatedFact!.value;
-    expect(val.name).toBe("Updated");
 
     // Verify deletion
     const deletedFact = getFactById(deleteResult.factId!, sessionId);
@@ -131,7 +119,6 @@ describe("batch_facts tool", () => {
 
     expect(result.success).toBe(true);
     expect(result.created).toBe(0);
-    expect(result.updated).toBe(0);
     expect(result.deleted).toBe(0);
   });
 
@@ -165,7 +152,6 @@ describe("batch_facts tool", () => {
 
     expect(result).toHaveProperty("success", true);
     expect(result).toHaveProperty("created", 2);
-    expect(result).toHaveProperty("updated", 0);
     expect(result).toHaveProperty("deleted", 0);
 
     const active = getActiveFacts(sessionId);

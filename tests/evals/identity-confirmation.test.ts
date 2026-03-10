@@ -2,24 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const {
   mockCreateFact,
-  mockUpdateFact,
   mockGetActiveFacts,
   mockGetDraft,
   mockUpsertDraft,
   mockGetFactById,
   mockFactExists,
+  mockFindFactsByOwnerCategoryKey,
   mockLogEvent,
   mockGetFactLanguage,
   mockGetSessionMeta,
   mockMergeSessionMeta,
 } = vi.hoisted(() => ({
   mockCreateFact: vi.fn(),
-  mockUpdateFact: vi.fn(),
   mockGetActiveFacts: vi.fn(() => []),
   mockGetDraft: vi.fn(),
   mockUpsertDraft: vi.fn(),
   mockGetFactById: vi.fn(),
   mockFactExists: vi.fn(),
+  mockFindFactsByOwnerCategoryKey: vi.fn(() => []),
   mockLogEvent: vi.fn(),
   mockGetFactLanguage: vi.fn(),
   mockGetSessionMeta: vi.fn(() => ({})),
@@ -28,13 +28,14 @@ const {
 
 vi.mock("@/lib/services/kb-service", () => ({
   createFact: mockCreateFact,
-  updateFact: mockUpdateFact,
+  updateFact: vi.fn(),
   deleteFact: vi.fn(),
   searchFacts: vi.fn(),
   getActiveFacts: mockGetActiveFacts,
   getFactById: mockGetFactById,
   setFactVisibility: vi.fn(),
   factExistsAcrossReadKeys: mockFactExists,
+  findFactsByOwnerCategoryKey: mockFindFactsByOwnerCategoryKey,
   VisibilityTransitionError: class extends Error {},
 }));
 vi.mock("@/lib/services/page-service", () => ({
@@ -172,17 +173,6 @@ describe("identity overwrite confirmation gate (Bug #5)", () => {
     // Try with Roberto (different value)
     const result = await tools.create_fact.execute(
       { category: "identity", key: "name", value: { full: "Roberto Bianchi" } },
-      toolCtx,
-    );
-    expect(result.success).toBe(false);
-    expect(result.code).toBe("REQUIRES_CONFIRMATION");
-  });
-
-  it("blocks identity overwrite via update_fact", async () => {
-    mockGetFactById.mockReturnValue({ id: "f1", category: "identity", key: "name", value: { full: "Marco" } });
-    const { tools } = createAgentTools("en", "s1");
-    const result = await tools.update_fact.execute(
-      { factId: "f1", value: { full: "Roberto" } },
       toolCtx,
     );
     expect(result.success).toBe(false);

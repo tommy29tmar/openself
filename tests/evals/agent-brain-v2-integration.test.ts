@@ -36,7 +36,7 @@ function getTools() {
 }
 
 describe("Agent Brain v2 — end-to-end", () => {
-  it("job change scenario: batch update old + create new + generate", async () => {
+  it("job change scenario: delete old + create corrected (past) + create new (current)", async () => {
     const tools = getTools();
     const suffix = randomUUID().slice(0, 8);
 
@@ -55,16 +55,17 @@ describe("Agent Brain v2 — end-to-end", () => {
     // 2. Generate page to create initial draft
     await tools.generate_page.execute({ username: "draft", language: "en" }, toolCtx);
 
-    // 3. batch_facts: update old to past + create new current
+    // 3. Delete old fact, then create corrected (past) + new (current)
+    await tools.delete_fact.execute({ factId: oldFactId! }, toolCtx);
+
     const batchResult = await tools.batch_facts.execute({
       operations: [
-        { action: "update" as const, factId: oldFactId!, value: { role: "Engineer", company: "Acme", status: "past" } },
+        { action: "create" as const, category: "experience", key: `acme-${suffix}`, value: { role: "Engineer", company: "Acme", status: "past" } },
         { action: "create" as const, category: "experience", key: `newco-${suffix}`, value: { role: "Lead", company: "NewCo", status: "current" } },
       ],
     }, toolCtx);
     expect(batchResult.success).toBe(true);
-    expect(batchResult.updated).toBe(1);
-    expect(batchResult.created).toBe(1);
+    expect(batchResult.created).toBe(2);
 
     // 4. Verify: old is "past", new is "current"
     const active = getActiveFacts(sessionId);

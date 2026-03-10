@@ -44,7 +44,7 @@ export function staleFactsDirective(facts: string[]): string {
   return `STALE FACTS: These facts haven't been updated in over 30 days: ${factList}${moreNote}.
 When natural, ask the user if any of these are still accurate.
 Prioritize facts that seem most likely to have changed (job roles, projects, current activities).
-Use update_fact if the user confirms a change, delete_fact if something is no longer relevant.`;
+If the user confirms a change, delete the old fact and create a new one. Use delete_fact if something is no longer relevant.`;
 }
 
 /**

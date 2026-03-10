@@ -77,8 +77,9 @@ describe("returningNoPagePolicy", () => {
       expect(policyEn).toContain("request_publish");
     });
 
-    it("references update_fact for corrections", () => {
-      expect(policyEn).toContain("update_fact");
+    it("references delete+create for corrections", () => {
+      expect(policyEn).toContain("delete");
+      expect(policyEn).toContain("create");
     });
   });
 
@@ -236,8 +237,9 @@ describe("activeFreshPolicy", () => {
   });
 
   describe("tools", () => {
-    it("references update_fact", () => {
-      expect(policyEn).toContain("update_fact");
+    it("references delete+create for corrections", () => {
+      expect(policyEn).toContain("delete_fact");
+      expect(policyEn).toContain("create_fact");
     });
 
     it("references create_fact", () => {
@@ -332,8 +334,9 @@ describe("activeStalePolicy", () => {
       expect(policyEn).toMatch(/focus.*changed|not.*re-?explore|what's\s*changed/i);
     });
 
-    it("references update_fact for corrections", () => {
-      expect(policyEn).toContain("update_fact");
+    it("references delete+create for corrections", () => {
+      expect(policyEn).toContain("delete");
+      expect(policyEn).toContain("create");
     });
 
     it("references create_fact for new info", () => {

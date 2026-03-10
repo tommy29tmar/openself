@@ -17,6 +17,8 @@ vi.mock("@/lib/services/kb-service", () => ({
   updateFact: vi.fn(),
   deleteFact: vi.fn(),
   searchFacts: vi.fn(() => []),
+  factExistsAcrossReadKeys: vi.fn(() => false),
+  findFactsByOwnerCategoryKey: vi.fn(() => []),
 }));
 
 import { validatePageConfig } from "@/lib/page-config/schema";

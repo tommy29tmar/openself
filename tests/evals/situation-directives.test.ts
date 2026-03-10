@@ -109,10 +109,10 @@ describe("staleFactsDirective", () => {
     expect(result).toContain("STALE FACTS:");
   });
 
-  it("mentions update_fact and delete_fact tools", () => {
+  it("mentions delete and create for corrections, and delete_fact for removals", () => {
     const result = staleFactsDirective(["skill/old"]);
-    expect(result).toContain("update_fact");
-    expect(result).toContain("delete_fact");
+    expect(result).toContain("delete");
+    expect(result).toContain("create");
   });
 
   it("does not show overflow note when 5 or fewer facts", () => {

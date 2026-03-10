@@ -53,6 +53,7 @@ vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: mockGetActiveFacts,
   getFactById: vi.fn(),
   factExistsAcrossReadKeys: vi.fn(() => false),
+  findFactsByOwnerCategoryKey: vi.fn(() => []),
   setFactVisibility: mockSetFactVisibility,
   VisibilityTransitionError: class extends Error {},
 }));

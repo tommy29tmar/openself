@@ -63,7 +63,7 @@ export function hashValue(value: unknown): string {
 
 export type PendingConfirmation = {
   id: string;
-  type: "identity_overwrite" | "bulk_delete";
+  type: "identity_overwrite" | "bulk_delete" | "identity_delete";
   category?: string;
   key?: string;
   valueHash?: string;

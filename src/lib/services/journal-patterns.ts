@@ -61,10 +61,11 @@ export function detectJournalPatterns(entries: JournalEntry[]): JournalPattern[]
     }
   }
 
-  // 3. correction_pattern: create→update for same category within conversation
+  // 3. correction_pattern: create→delete for same category within conversation
+  // (previously create→update; now facts are immutable so corrections are delete→create)
   const corrections = new Map<string, number>();
   for (let i = 0; i < entries.length - 1; i++) {
-    if (entries[i].toolName === "create_fact" && entries[i + 1].toolName === "update_fact") {
+    if (entries[i].toolName === "create_fact" && entries[i + 1].toolName === "delete_fact") {
       const cat = String(entries[i].args?.category ?? "unknown");
       corrections.set(cat, (corrections.get(cat) ?? 0) + 1);
     }

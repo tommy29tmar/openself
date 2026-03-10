@@ -39,8 +39,9 @@ describe("memoryUsageDirectives", () => {
       expect(directives).toMatch(/FACT RECORDING/);
     });
 
-    it("references update_fact for changes", () => {
-      expect(directives).toContain("update_fact");
+    it("references immutable fact correction flow", () => {
+      expect(directives).toContain("delete");
+      expect(directives).toContain("immutable");
     });
 
     it("references delete_fact for removals", () => {

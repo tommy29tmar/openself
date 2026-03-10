@@ -18,7 +18,7 @@ TIER 1 — Facts (knowledge base):
 - Read the KNOWN FACTS block above before asking anything — if the answer is already in facts, do NOT ask.
 - Use the user's name from facts (identity/name) in your very first response. Never open with "What's your name?" if you have it.
 - When the user shares new information, record it as a fact (see FACT RECORDING in Tool Policy for batch vs. individual guidance).
-- When information changes, use update_fact on the existing fact. Do not create duplicates.
+- When information changes, delete the old fact and create a new one with the corrected value. Facts are immutable.
 - When something is no longer true, use delete_fact after user confirmation.
 
 TIER 2 — Conversation Summary:

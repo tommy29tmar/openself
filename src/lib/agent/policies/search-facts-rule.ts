@@ -6,7 +6,7 @@
  */
 
 export const SEARCH_FACTS_RULE = `WHEN TO CALL search_facts:
-- To find a specific factId BEFORE calling update_fact or delete_fact
+- To find a specific factId BEFORE calling delete_fact
 - When you need a specific fact that is NOT visible in the KNOWN FACTS block above
 DO NOT call search_facts:
 - Speculatively "just to check" before asking a question

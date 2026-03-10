@@ -3,7 +3,6 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import {
   createFact,
-  updateFact,
   deleteFact,
   searchFacts,
   getActiveFacts,
@@ -11,6 +10,7 @@ import {
   setFactVisibility,
   VisibilityTransitionError,
   factExistsAcrossReadKeys,
+  findFactsByOwnerCategoryKey,
 } from "@/lib/services/kb-service";
 import { db } from "@/lib/db";
 import { facts } from "@/lib/db/schema";
@@ -234,6 +234,44 @@ export function createAgentTools(
   }
 
   /**
+   * Identity delete gate. Returns null if allowed, or a confirmation-required object if blocked.
+   */
+  function identityDeleteGate(category: string, key: string): { requiresConfirmation: true; message: string } | null {
+    if (category !== "identity") return null;
+    if (_identityBlockedThisTurn) {
+      return { requiresConfirmation: true, message: "Identity changes blocked this turn — wait for user confirmation in a new message." };
+    }
+    const existing = pendings.find(p => p.type === "identity_delete" && p.category === category && p.key === key);
+    if (existing) {
+      pendings.splice(pendings.indexOf(existing), 1);
+      mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
+      return null;
+    }
+    pendings.push({
+      id: randomUUID(),
+      type: "identity_delete",
+      category,
+      key,
+      createdAt: new Date().toISOString(),
+    });
+    _identityBlockedThisTurn = true;
+    mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+    return { requiresConfirmation: true, message: `Deleting identity/${key} requires confirmation. Explain to the user what will be removed and ask them to confirm.` };
+  }
+
+  // --- Stable deep equality for duplicate detection ---
+  function stableDeepEqual(a: unknown, b: unknown): boolean {
+    return JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
+  }
+  function sortKeys(obj: unknown): unknown {
+    if (obj === null || typeof obj !== "object") return obj;
+    if (Array.isArray(obj)) return obj.map(sortKeys);
+    return Object.fromEntries(
+      Object.entries(obj as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortKeys(v)])
+    );
+  }
+
+  /**
    * Bulk delete gate. Returns null if allowed, or a message object if blocked.
    */
   function deleteGate(factId: string): { requiresConfirmation: true; message: string } | null {
@@ -381,6 +419,21 @@ export function createAgentTools(
     }),
     execute: async ({ category, key, value, confidence }) => {
       try {
+        // Duplicate guard — runs BEFORE identityGate
+        const existingFacts = findFactsByOwnerCategoryKey(effectiveOwnerKey, category, key, readKeys);
+        if (existingFacts.length > 0) {
+          const isIdentical = stableDeepEqual(existingFacts[0].value, value);
+          if (isIdentical) {
+            return { success: true, factId: existingFacts[0].id, idempotent: true };
+          }
+          return {
+            success: false,
+            error: `A fact for ${category}/${key} already exists with a different value.`,
+            hint: "To update this fact: (1) delete_fact the existing one, (2) create_fact with the new value.",
+            existingFactId: existingFacts[0].id,
+          };
+        }
+
         // Identity overwrite gate
         const blocked = identityGate(category, key, value);
         if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
@@ -423,7 +476,7 @@ export function createAgentTools(
   }),
 
   batch_facts: tool({
-    description: "Execute multiple fact operations in order. Operations are applied sequentially (create, update, delete) and a single recompose runs at the end. Max 20 operations.",
+    description: "Execute multiple fact operations in order. Operations are applied sequentially (create, delete) and a single recompose runs at the end. Max 20 operations. No updates — facts are immutable (delete + create to correct).",
     parameters: z.object({
       operations: z.array(z.discriminatedUnion("action", [
         z.object({
@@ -436,11 +489,6 @@ export function createAgentTools(
           parentFactId: z.string().optional(),
         }),
         z.object({
-          action: z.literal("update"),
-          factId: z.string(),
-          value: z.record(z.unknown()),
-        }),
-        z.object({
           action: z.literal("delete"),
           factId: z.string(),
         }),
@@ -448,7 +496,7 @@ export function createAgentTools(
     }),
     execute: async ({ operations }) => {
       if (operations.length > 20) {
-        return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, updated: 0, deleted: 0 };
+        return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, deleted: 0 };
       }
 
       // Pre-flight: batch with ≥2 deletes → all blocked (zero execute)
@@ -463,30 +511,22 @@ export function createAgentTools(
           createdAt: new Date().toISOString(),
         });
         mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-        return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, message: "Batch with 2+ deletions requires explicit user confirmation. List the items and ask the user to confirm.", created: 0, updated: 0, deleted: 0 };
+        return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, message: "Batch with 2+ deletions requires explicit user confirmation. List the items and ask the user to confirm.", created: 0, deleted: 0 };
       }
 
       // Pre-flight: identity overwrites
       for (const op of operations) {
         if (op.action === "create" && op.category === "identity") {
           const blocked = identityGate(op.category, op.key, op.value);
-          if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked, created: 0, updated: 0, deleted: 0 };
-        }
-        if (op.action === "update") {
-          const existing = getFactById(op.factId, sessionId, readKeys);
-          if (existing?.category === "identity") {
-            const blocked = identityGate(existing.category, existing.key, op.value, op.factId);
-            if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked, created: 0, updated: 0, deleted: 0 };
-          }
+          if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked, created: 0, deleted: 0 };
         }
       }
 
-      let created = 0, updated = 0, deleted = 0;
+      let created = 0, deleted = 0;
       const warnings: string[] = [];
       const reverseOps: Array<{
-        action: "delete" | "restore" | "recreate";
+        action: "delete" | "recreate";
         factId?: string;
-        previousValue?: unknown;
         previousFact?: Record<string, unknown>;
       }> = [];
 
@@ -494,6 +534,15 @@ export function createAgentTools(
         for (const op of operations) {
           switch (op.action) {
             case "create": {
+              // Duplicate guard
+              const existingFacts = findFactsByOwnerCategoryKey(effectiveOwnerKey, op.category, op.key, readKeys);
+              if (existingFacts.length > 0) {
+                if (stableDeepEqual(existingFacts[0].value, op.value)) {
+                  break; // Idempotent, count as success
+                }
+                warnings.push(`Create of ${op.category}/${op.key} blocked: fact already exists with different value. Delete first.`);
+                break;
+              }
               const result = await createFact(
                 {
                   category: op.category,
@@ -508,17 +557,6 @@ export function createAgentTools(
               );
               reverseOps.push({ action: "delete", factId: result.id });
               created++;
-              break;
-            }
-            case "update": {
-              const old = getFactById(op.factId, sessionId, readKeys);
-              if (old) reverseOps.push({ action: "restore", factId: op.factId, previousValue: old.value });
-              const updatedRow = updateFact({ factId: op.factId, value: op.value }, sessionId, readKeys);
-              if (updatedRow) {
-                updated++;
-                const w = (updatedRow as any)._warnings as string[] | undefined;
-                if (w) warnings.push(...w);
-              }
               break;
             }
             case "delete": {
@@ -542,19 +580,19 @@ export function createAgentTools(
 
         if (reverseOps.length > 0) {
           logTrustAction(effectiveOwnerKey, "batch_facts",
-            `Batch: ${created} created, ${updated} updated, ${deleted} deleted`,
+            `Batch: ${created} created, ${deleted} deleted`,
             { undoPayload: { action: "reverse_batch", reverseOps } },
           );
         }
         try { recomposeAfterMutation(); } catch (e) {
           logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e), source: "batch_facts" } });
         }
-        return { success: true, created, updated, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
+        return { success: true, created, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (err) {
         if (reverseOps.length > 0) {
           try {
             logTrustAction(effectiveOwnerKey, "batch_facts",
-              `Batch (partial): ${created} created, ${updated} updated, ${deleted} deleted — stopped by error`,
+              `Batch (partial): ${created} created, ${deleted} deleted — stopped by error`,
               { undoPayload: { action: "reverse_batch", reverseOps } },
             );
             recomposeAfterMutation();
@@ -564,88 +602,73 @@ export function createAgentTools(
         }
 
         if (err instanceof FactValidationError) {
-          return { success: false, error: "VALIDATION_ERROR", message: err.message, created, updated, deleted, hint: "Batch stopped — earlier operations were applied" };
+          return { success: false, error: "VALIDATION_ERROR", message: err.message, created, deleted, hint: "Batch stopped — earlier operations were applied" };
         }
         if (err instanceof FactConstraintError) {
-          return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, created, updated, deleted, hint: "Batch stopped — earlier operations were applied" };
+          return { success: false, code: err.code, existingFactId: err.existingFactId, suggestion: err.suggestion, created, deleted, hint: "Batch stopped — earlier operations were applied" };
         }
         throw err;
       }
     },
   }),
 
-  update_fact: tool({
-    description:
-      "Update an existing fact's value. Use when information changes (e.g., user left a job, changed location). ALWAYS provide the FULL new value object — partial updates are not supported. Example: update_fact({factId: 'abc-123', value: {role: 'senior economist', company: 'CDP', status: 'current'}})",
-    parameters: z.object({
-      factId: z.string().describe("The ID of the fact to update (from KNOWN FACTS or search_facts results)"),
-      value: z
-        .record(z.unknown())
-        .describe("REQUIRED. The complete new value object that replaces the old one. Must include all fields, not just changed ones."),
-    }),
-    execute: async ({ factId, value }) => {
-      try {
-        // Identity overwrite gate — look up existing fact for category/key
-        const existing = getFactById(factId, sessionId, readKeys);
-        if (existing) {
-          const blocked = identityGate(existing.category, existing.key, value, factId);
-          if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
-        }
-
-        const fact = updateFact({ factId, value }, sessionId, readKeys);
-        if (!fact) return { success: false, error: "Fact not found" };
-        let recomposeOk = true;
-        try { recomposeAfterMutation(); } catch (e) {
-          recomposeOk = false;
-          logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
-        }
-        const warnings = (fact as any)._warnings as string[] | undefined;
-        return {
-          success: true,
-          factId: fact.id,
-          visibility: fact.visibility,
-          pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
-          recomposeOk,
-          ...(warnings ? { warnings } : {}),
-        };
-      } catch (error) {
-        if (error instanceof FactValidationError) {
-          return { success: false, error: error.message, code: "FACT_VALIDATION_FAILED" };
-        }
-        if (error instanceof FactConstraintError) {
-          return { success: false, code: error.code, existingFactId: error.existingFactId, suggestion: error.suggestion };
-        }
-        logEvent({
-          eventType: "tool_call_error",
-          actor: "assistant",
-          payload: { requestId, tool: "update_fact", error: String(error), factId },
-        });
-        return { success: false, error: String(error) };
-      }
-    },
-  }),
-
   delete_fact: tool({
     description:
-      "Delete a fact from the knowledge base. Only use when the user explicitly asks to remove something.",
+      "Delete a fact. Accepts either a UUID factId or a 'category/key' format (e.g., 'education/dams-torino'). When using category/key and multiple facts match, requires user confirmation in a subsequent turn.",
     parameters: z.object({
-      factId: z.string().describe("The ID of the fact to delete"),
+      factId: z.string().describe("The fact ID (UUID) or category/key (e.g., 'education/dams-torino') to delete"),
     }),
     execute: async ({ factId }) => {
       try {
-        // Bulk delete gate
+        if (factId.includes("/") && !factId.match(/^[0-9a-f]{8}-/)) {
+          const [cat, ...keyParts] = factId.split("/");
+          const key = keyParts.join("/");
+
+          const matching = findFactsByOwnerCategoryKey(effectiveOwnerKey, cat, key, readKeys);
+          if (matching.length === 0) {
+            return { success: false, error: "No facts found for category/key: " + factId, hint: "Use search_facts to find available facts." };
+          }
+          if (matching.length === 1) {
+            if (cat === "identity") {
+              const identityBlocked = identityDeleteGate(cat, key);
+              if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
+            }
+            const blocked = deleteGate(matching[0].id);
+            if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
+            const ok = deleteFact(matching[0].id, sessionId, readKeys);
+            if (!ok) return { success: false, error: "Fact not found after lookup" };
+            try { recomposeAfterMutation(); } catch (e) {
+              console.warn("[delete_fact] recompose failed:", e);
+            }
+            return { success: true, deletedCount: 1 };
+          }
+          // Multiple matches
+          if (cat === "identity") {
+            const identityBlocked = identityDeleteGate(cat, key);
+            if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
+          }
+          return {
+            success: false,
+            code: "REQUIRES_CONFIRMATION",
+            message: `Found ${matching.length} facts matching "${factId}". Present these to the user and ask which to delete. Then call delete_fact with the specific UUID.`,
+            matchingFacts: matching.map(f => ({ id: f.id, value: typeof f.value === "string" ? f.value.slice(0, 100) : JSON.stringify(f.value).slice(0, 100) })),
+          };
+        }
+
+        // UUID path
+        const factToDelete = getFactById(factId, sessionId, readKeys);
+        if (factToDelete?.category === "identity") {
+          const identityBlocked = identityDeleteGate(factToDelete.category, factToDelete.key);
+          if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
+        }
         const blocked = deleteGate(factId);
         if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
-
-        const deleted = deleteFact(factId, sessionId, readKeys);
-        let recomposeOk = true;
-        if (deleted) {
-          try { recomposeAfterMutation(); } catch (e) {
-            recomposeOk = false;
-            logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
-          }
+        const ok = deleteFact(factId, sessionId, readKeys);
+        if (!ok) return { success: false, error: "Fact not found", hint: "Use search_facts to find the correct factId, or use category/key format like 'education/dams-torino'." };
+        try { recomposeAfterMutation(); } catch (e) {
+          console.warn("[delete_fact] recompose failed:", e);
         }
-        return { success: deleted, recomposeOk };
+        return { success: true, deletedCount: 1 };
       } catch (error) {
         logEvent({
           eventType: "tool_call_error",
@@ -1857,7 +1880,6 @@ Do NOT call in a loop.`,
     const r = result as Record<string, unknown> | null;
     switch (toolName) {
       case "create_fact": return `${args.category}/${args.key}`;
-      case "update_fact": return `updated ${args.factId}`;
       case "delete_fact": return `deleted ${args.factId}`;
       case "search_facts": return `searched "${args.query}" (${r?.count ?? 0} results)`;
       case "batch_facts": return `batch ${(args.operations as unknown[])?.length ?? 0} ops`;

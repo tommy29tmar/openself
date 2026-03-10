@@ -102,8 +102,10 @@ const SAFETY_POLICY = `Privacy and safety rules (non-negotiable):
 
 const TOOL_POLICY = `Tool usage rules:
 - Use create_fact when the user shares new information about themselves
-- Use update_fact when information changes (e.g., "I left that job")
-- Use delete_fact only when the user explicitly asks to remove something
+- Facts are IMMUTABLE. To correct a fact, ALWAYS: (1) delete_fact the wrong one (use category/key format like "education/dams"), (2) create_fact with the corrected information. Never leave incorrect facts active.
+- delete_fact accepts both UUID and category/key format (e.g., "education/dams-torino"). When multiple facts match category/key, you'll get REQUIRES_CONFIRMATION — present the matches to the user and wait for explicit approval.
+- batch_facts supports create and delete actions only. No updates.
+- Use delete_fact only when the user explicitly asks to remove something, or when correcting a fact (delete old → create new)
 - When removing a section completely, search_facts for ALL facts in that category, delete each one, then verify with search_facts that none remain before calling generate_page
 - Use search_facts to check what you already know before asking again
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
@@ -122,9 +124,9 @@ const TOOL_POLICY = `Tool usage rules:
 FACT RECORDING:
 - Record facts as you encounter them in the user's message. NEVER delay extraction to accumulate facts across multiple turns. NEVER skip saving a fact because you expect more in the next message.
 - For 3+ NEW facts (creates only) from a single message → use batch_facts.
-- For updates, deletes, or identity changes → always use individual tool calls (update_fact, delete_fact). Never batch these — they have confirmation gates and different failure semantics.
-  (Prompt-level simplification: the code does support single deletes and generic updates in batch_facts, but this guidance steers the LLM toward the safest patterns.)
-- batch_facts runs operations sequentially: if one op fails, earlier ones persist. Always check results.
+- For deletes or identity changes → always use individual tool calls (delete_fact). Never batch these — they have confirmation gates and different failure semantics.
+- To correct a fact: delete_fact (old) → create_fact (new). Never leave stale data.
+- batch_facts supports create and delete only. It runs operations sequentially: if one op fails, earlier ones persist. Always check results.
 - Use move_section to move a section between layout slots (auto-switches widget if needed). Use inspect_page_state first to see current slot assignments.
 - Use reorder_items to change the order of items within a section (pass factIds in desired order). Not for composite sections: hero, bio, at-a-glance, footer.
 - Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal). When the user says "remove for now", "hide", or "I might add this back" → archive_fact.
@@ -162,7 +164,7 @@ EPISODIC MEMORY ROUTING (by durability, not just time marker):
 - Milestone events: record_event with action_type="milestone", then ask if user wants it on their public page.
 - Never call recall_episodes in a loop. One query per question. No results → ask user to rephrase.`;
 
-const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact and update_fact):
+const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact):
 
 | Category | Key format | Value shape |
 |----------|-----------|-------------|
@@ -182,11 +184,10 @@ const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact s
 | contact | contact-type | {type: "email"|"phone"|"location"|"website", value: "..."} |
 
 Common mistakes to avoid:
-- NEVER call update_fact without "value" — it is required. Always pass the full new value object.
 - NEVER use "skill" for spoken languages — use "language" category instead.
 - NEVER use "interest" for regular activities (sports, volunteering) — use "activity" instead.
 - NEVER use "experience" for education/study — use "education" instead.
-- When updating a fact, include ALL fields in value (not just the changed ones).
+- When correcting a fact, delete the old one and create a new one with all fields.
 - For reading facts, ALWAYS include author. If the user doesn't mention the author, ask before creating the fact.
 - NEVER assign a rating to books/music unless the user explicitly rates the item. Leave rating empty by default.
 - CRITICAL: Experience keys MUST be unique per employer. NEVER reuse a key for a different company/role.
@@ -209,27 +210,27 @@ Fact fields (beyond category/key/value):
 ${buildPresenceReference()}
 
 Workflows:
-- To MODIFY content: search_facts({ query: "identity role" }) → find the factId → update_fact({ factId, value: FULL new value object })
+- To MODIFY content: search_facts({ query: "identity role" }) → find the factId → delete_fact({ factId }) → create_fact({ category, key, value: FULL new value object })
 - To REMOVE a section: search_facts({ query: "project" }) → delete_fact({ factId }) for each fact → generate_page
 - To ADD content: create_fact({ category, key, value }) → generate_page
 - Always call generate_page after bulk fact changes to rebuild the page.
 - Track your commitments: if you promise to add something, do it before ending the conversation.
 - ROLE/TITLE priority: identity role wins over experience role for bio/hero display.
-  To change the user's CURRENT role/title: search_facts({ query: "identity role" }) → find fact with key "role" → update_fact({ factId, value: { role: "New Title" } }).
-  To change a PAST job title: search_facts({ query: "experience company-name" }) → update_fact({ factId, value: FULL experience object }).
-  When user says "I am now X" or "my role changed" → always update the IDENTITY fact.
+  To change the user's CURRENT role/title: search_facts({ query: "identity role" }) → find fact with key "role" → delete_fact({ factId }) → create_fact({ category: "identity", key: "role", value: { role: "New Title" } }).
+  To change a PAST job title: search_facts({ query: "experience company-name" }) → delete_fact({ factId }) → create_fact with the corrected experience object.
+  When user says "I am now X" or "my role changed" → always correct the IDENTITY fact (delete old → create new).
 - Bio MUST mention the user's current activity. If the user says "I am a freelance architect", this takes priority over past corporate roles in both bio and hero tagline.
   The identity/role fact drives hero tagline automatically. Do NOT create an identity/tagline fact unless the user explicitly requests a custom tagline.
 - Experience facts: each key MUST map to exactly one employer. NEVER overwrite an experience fact with a different company.
-  Use update_fact to change details of an EXISTING role. Use create_fact with a NEW key for a new employer.
+  To change details of an EXISTING role: delete_fact the old one, then create_fact with the corrected value. Use create_fact with a NEW key for a new employer.
 - To REORDER ITEMS within a section: use reorder_items(factIds). Provide fact IDs in desired order. Do NOT use reorder_sections for this.
 - To SOFT-DELETE a fact (user might want it back): archive_fact(factId). To restore: unarchive_fact(factId). Prefer archive_fact when the user says "remove for now", "hide", or "I might add this back".
 - To PERMANENTLY DELETE a fact: delete_fact(factId). Use when the information is wrong or the user explicitly says "delete".
-- When the user asks to remove specific items (projects, skills, interests, etc.), call search_facts first to find exact IDs, then call delete_fact for EACH matching fact. Never claim deletion without having called delete_fact. Verify with a follow-up search_facts that none remain.
+- When the user asks to remove specific items (projects, skills, interests, etc.), call search_facts first to find exact IDs, then call delete_fact for EACH matching fact (UUID or category/key format). Never claim deletion without having called delete_fact. Verify with a follow-up search_facts that none remain.
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (surface, voice, light, layout).
 - Identity change workflow: When the user changes their professional identity significantly (e.g., from software engineer to architect), search_facts across all categories, then delete_fact for items tied to the old identity (e.g., tech skills, IT education, software projects, tech stats). Ask for confirmation before bulk deletion.
-- When the user states a new profession/role (e.g., "I'm actually a cook"), ALWAYS update identity/role FIRST using update_fact. Do NOT update experience facts to reflect a profession change without first updating identity/role. The identity/role update requires user confirmation — wait for it before proceeding.
-- DRAFT vs. PUBLISHED: all edits (update_fact, create_fact, delete_fact, generate_page) update the DRAFT only. The PUBLIC page at /{username} is NOT updated until the user explicitly re-publishes. After confirming any edit for a user who already has a published page, always add: "The update is visible in your preview — to go live, re-publish from the nav bar."
+- When the user states a new profession/role (e.g., "I'm actually a cook"), ALWAYS correct identity/role FIRST (delete old → create new). Do NOT change experience facts to reflect a profession change without first correcting identity/role. The identity/role deletion requires user confirmation — wait for it before proceeding.
+- DRAFT vs. PUBLISHED: all edits (create_fact, delete_fact, generate_page) update the DRAFT only. The PUBLIC page at /{username} is NOT updated until the user explicitly re-publishes. After confirming any edit for a user who already has a published page, always add: "The update is visible in your preview — to go live, re-publish from the nav bar."
 
 UNSUPPORTED FEATURES (explain clearly, never ask for assets):
 - Video in any section (hero, projects, etc.)
@@ -266,10 +267,11 @@ After exploring 2-3 topic areas beyond name + role, call generate_page.`;
 
 function buildMinimalSchemaForEditing(): string {
   return `EDIT WORKFLOW (quick updates):
-- Use search_facts({ query: "..." }) before update_fact or delete_fact when you need the exact factId
+- Use search_facts({ query: "..." }) before delete_fact when you need the exact factId
 - search_facts takes ONE free-text query string (for example: "identity role", "experience acme", "project portfolio")
-- Use create_fact({ category, key, value }) for additions, update_fact({ factId, value }) for changes, delete_fact({ factId }) for removals
-- update_fact ALWAYS requires the FULL new value object, not just the changed field
+- Use create_fact({ category, key, value }) for additions, delete_fact({ factId }) for removals
+- To correct a fact: delete_fact (old) → create_fact (new). Facts are immutable — no updates.
+- delete_fact accepts UUID or category/key format (e.g., "education/dams-torino")
 - After fact changes, call generate_page once to rebuild the draft
 - These edits update the DRAFT first. The public page changes only after re-publish
 

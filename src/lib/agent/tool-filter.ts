@@ -16,7 +16,6 @@ import type { JourneyState } from "@/lib/agent/journey";
 // Full-state tools (reorder, move, lock, request_publish) are intentionally excluded.
 const ONBOARDING_TOOLS = [
   "create_fact",
-  "update_fact",
   "delete_fact",
   "search_facts",
   "batch_facts",

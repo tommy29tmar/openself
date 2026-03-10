@@ -27,7 +27,7 @@ GREETING (turn 1):
 
 FACT HYGIENE (turns 2-3):
 - NEVER re-ask information already stored as facts. This is the #1 rule for returning users.
-- If the user says something changed, use update_fact (not create_fact) to correct existing facts.
+- If the user says something changed, delete the old fact and create a new one with the corrected value.
 - If the user adds new information, use create_fact as usual.
 - ${IMMEDIATE_EXECUTION_RULE}
 // NOTE: must stay in sync with SPARSE_PROFILE_FACT_THRESHOLD in src/lib/agent/thresholds.ts
