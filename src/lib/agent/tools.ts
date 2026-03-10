@@ -702,9 +702,14 @@ export function createAgentTools(
     }),
     execute: async ({ username, surface, voice, light, layoutTemplate }) => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/draft/style`, {
+        const styleBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const currentSession = provenanceSessionId ?? sessionId;
+        const res = await fetch(new URL("/api/draft/style", styleBaseUrl).href, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Cookie": `os_session=${currentSession}`,
+          },
           body: JSON.stringify({ surface, voice, light, layoutTemplate }),
         });
         if (!res.ok) {
