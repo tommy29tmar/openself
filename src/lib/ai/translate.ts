@@ -188,9 +188,18 @@ export async function translatePageContent(
 
 ${JSON.stringify(toTranslate, null, 2)}`;
 
+  // Guard: verify fast-tier model is available before attempting translation
+  let model: ReturnType<typeof getModelForTier>;
+  try {
+    model = getModelForTier("fast");
+  } catch {
+    // No model configured for fast tier — skip translation silently
+    return config;
+  }
+
   try {
     const result = await generateObject({
-      model: getModelForTier("fast"),
+      model,
       schema: TranslationResultSchema,
       prompt,
     });

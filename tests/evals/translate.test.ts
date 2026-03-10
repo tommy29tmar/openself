@@ -314,6 +314,23 @@ describe("translatePageContent", () => {
     const prompt = mockGenerateObject.mock.calls[0][0].prompt as string;
     expect(prompt).toContain("AI, API, IT");
   });
+
+  it("skips translation silently when getModelForTier throws", async () => {
+    const { getModelForTier } = await import("@/lib/ai/provider");
+    vi.mocked(getModelForTier).mockImplementation(() => {
+      throw new Error("No API key configured for provider");
+    });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const config = makeConfig();
+    const result = await translatePageContent(config, "it", "en");
+    expect(result).toBe(config);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    vi.mocked(getModelForTier).mockReturnValue("mock-model" as any);
+  });
 });
 
 describe("translatePageContent — cache behavior", () => {
