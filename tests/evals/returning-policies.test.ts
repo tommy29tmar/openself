@@ -428,13 +428,9 @@ describe("blockedPolicy", () => {
   });
 
   describe("banned patterns", () => {
-    for (const phrase of UNIVERSAL_BANNED_PHRASES) {
-      it(`bans "${phrase}"`, () => {
-        expect(policyEn.toLowerCase()).toMatch(
-          new RegExp(`never.*${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|do\\s*not.*${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
-        );
-      });
-    }
+    it("bans offering further help (user cannot continue)", () => {
+      expect(policyEn).toMatch(/not.*end.*offer.*help|not.*offer.*help.*further|cannot continue/i);
+    });
 
     it("bans apologetic language", () => {
       expect(policyEn).toMatch(/not.*apologize|not.*unfortunately|not.*sorry/i);

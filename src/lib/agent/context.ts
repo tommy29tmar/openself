@@ -359,7 +359,14 @@ export function assembleContext(
     }
   }
 
-  // Base system prompt — always use composable path; synthesise a minimal bootstrap when not provided
+  // Base system prompt — always use composable path.
+  // The no-bootstrap branch is a legacy/direct-call fallback: in production the
+  // chat route always provides bootstrap via assembleBootstrapPayload() (route.ts).
+  // Tests that call assembleContext() directly without bootstrap hit this path.
+  // We default to first_visit because we lack the DB queries needed to detect
+  // the real journey state here. This is acceptable — the path is not used in
+  // production and fixing it would require threading scope-dependent queries
+  // into a function that is intentionally scope-light.
   const basePrompt = bootstrap
     ? buildSystemPrompt(bootstrap, { schemaMode: profile?.schemaMode ?? "full" })
     : buildSystemPrompt(

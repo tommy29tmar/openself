@@ -386,9 +386,12 @@ export function buildSystemPrompt(
   // Budget guard: the system prompt must leave room for context (facts, memory,
   // soul, summaries, conflicts) which lives in contextParts assembled separately.
   // TOTAL_TOKEN_BUDGET in context.ts is 65000. Reserve at least 13000 for context.
-  // Budget raised from 3500 → 6000 after Sprint 5 added planning-protocol +
-  // undo-awareness + enhanced expertise calibration (~1250 tokens).
-  const MAX_SYSTEM_PROMPT_TOKENS = 6000;
+  // Nominal sizes by path (as of Sprint 6 refactor):
+  //   first_visit ~7900, draft_ready ~7600, active_fresh/stale ~7600,
+  //   returning_no_page ~9900 (full schema). Budget set to 10000 to catch
+  //   only genuine anomalies (e.g. an accidental duplication or a new block
+  //   that pushes past 10k).
+  const MAX_SYSTEM_PROMPT_TOKENS = 10_000;
   const estimatedTokens = Math.ceil(composed.length / 4);
   if (estimatedTokens > MAX_SYSTEM_PROMPT_TOKENS) {
     console.warn(
