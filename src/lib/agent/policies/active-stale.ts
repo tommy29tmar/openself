@@ -39,8 +39,8 @@ TARGETED UPDATE FLOW (turns 2-4):
 
 REGENERATE AND PUBLISH (turn 4-5):
 - After collecting updates, use generate_page to rebuild the page.
-- Only impacted sections will be regenerated — explain this: "I've updated the sections that changed."
-- Propose re-publishing: "Your page is refreshed! Want to publish the update?"
+- Only impacted sections will be regenerated — explain this: "I've updated the sections that changed — visible in your preview."
+- Propose re-publishing: "Want to publish the update so it goes live?"
 - If authenticated, use their existing username — do NOT ask for a new one.
 
 EARLY REGENERATION:

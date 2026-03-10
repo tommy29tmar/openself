@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { activeFreshPolicy } from "@/lib/agent/policies/active-fresh";
+import { activeStalePolicy } from "@/lib/agent/policies/active-stale";
 
 describe("prompt contracts", () => {
   const src = readFileSync("src/lib/agent/prompts.ts", "utf-8");
@@ -76,5 +77,10 @@ describe("prompt contracts", () => {
     const policy = activeFreshPolicy("en");
     expect(policy).toMatch(/visible in preview/i);
     expect(policy).not.toMatch(/^.*"Done! Anything else\?".*$/m);
+  });
+
+  it("active-stale policy includes preview-only language in publish section", () => {
+    const policy = activeStalePolicy("en");
+    expect(policy).toMatch(/visible in.*preview/i);
   });
 });
