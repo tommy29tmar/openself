@@ -1,0 +1,101 @@
+
+> openself@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.12
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.5:3000
+   - Environments: .env
+   - Experiments (use with caution):
+     · optimizePackageImports
+
+ ✓ Starting...
+ ✓ Ready in 3s
+ ○ Compiling /api/invite ...
+ ✓ Compiled /api/invite in 2.6s (462 modules)
+[migrate] Applied: 0001_core_schema.sql
+[migrate] Applied: 0002_taxonomy_seed.sql
+[migrate] Applied: 0003_component_registry.sql
+[migrate] Applied: 0004_page_two_row_model.sql
+[migrate] Applied: 0005_translation_cache.sql
+[migrate] Applied: 0006_sessions_and_scoping.sql
+[migrate] Applied: 0007_page_config_hash.sql
+[migrate] Applied: 0008_users_and_profiles.sql
+[migrate] Applied: 0009_profile_id_columns.sql
+[migrate] Applied: 0010_profile_id_constraints.sql
+[migrate] Applied: 0011_auth_identities.sql
+[migrate] Applied: 0012_owner_scoping.sql
+[migrate] Applied: 0013_conversation_summaries.sql
+[migrate] Applied: 0014_agent_memory_expansion.sql
+[migrate] Applied: 0015_soul_profiles.sql
+[migrate] Applied: 0016_jobs_heartbeat.sql
+[migrate] Applied: 0017_extended_taxonomy.sql
+[migrate] Applied: 0018_section_copy.sql
+[migrate] Applied: 0019_raise_token_limit.sql
+[migrate] Applied: 0020_profiles_user_unique.sql
+[migrate] Applied: 0021_journey_state_and_sort_order.sql
+[migrate] Applied: 0022_smart_facts_v2.sql
+[migrate] Applied: 0023_connector_foundation.sql
+[migrate] Applied: 0024_page_source_language.sql
+[migrate] Applied: 0025_presence_system.sql
+[migrate] Applied: 0026_session_compaction.sql
+[migrate] Applied: 0027_episodic_memory.sql
+[migrate] Applied: 0028_episodic_fts.sql
+ POST /api/invite 200 in 3131ms
+ ✓ Compiled /middleware in 477ms (159 modules)
+ ○ Compiling /api/chat ...
+ ✓ Compiled /api/chat in 3.6s (634 modules)
+[DIRECTIVE_POLICY] Priority inversion(s) detected (non-fatal):
+  - "has_thin_sections" (p=3) lists "has_sparse_profile" (p=1) as incompatible, but "has_sparse_profile" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+  - "has_archivable_facts" (p=4) lists "has_thin_sections" (p=3) as incompatible, but "has_thin_sections" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+  - "has_archivable_facts" (p=4) lists "has_sparse_profile" (p=1) as incompatible, but "has_sparse_profile" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+  - "has_recent_import" (p=2) lists "has_sparse_profile" (p=1) as incompatible, but "has_sparse_profile" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+[thinking] {
+  requestId: 'd360e807-37a1-4c9a-a3be-2de635a383b7',
+  modelId: 'claude-haiku-4-5-20251001',
+  reasoning: "L'utente ha scritto in italiano (ciao, ho sentito parlare, etc.), quindi devo rispondere in italiano e quando genero il contenuto della pagina, sarà in italiano.\n" +
+    '\n' +
+    "Sono in modalità FIRST VISIT (onboarding). Questo è il primo messaggio dell'utente, una domanda generale su cosa può fare con OpenSelf.\n" +
+    '\n' +
+    'Secondo le istruzioni:\n' +
+    '- Devo accogliere warmly e direct\n' +
+    '- Spiegare cosa fa OpenSelf in modo semplice\n' +
+    '- Poi chiedere il loro nome (Phase A — Identity, turn 1)\n' +
+    '- Mantenere la risposta breve e conversazionale\n' +
+    '- Non devo elencare cose con bullet points - devo essere conversazionale\n' +
+    '- NON devo usare le opening bans ("Certamente!", "Perfetto!", etc.)\n' +
+    '\n' +
+    'La conversazione è in italiano, quindi:\n' +
+    '- Tutte le risposte devono essere in italiano\n' +
+    '- Quando creerò la pagina, sarà in italiano\n' +
+    '- Devo usare "tu" (informale)\n' +
+    '\n' +
+    'Vediamo: il loro primo messaggio è una domanda generale. Devo:\n' +
+    "1. Spiegare cos'è OpenSelf in modo semplice e caldo\n" +
+    '2. Chiedere il loro nome per iniziare\n' +
+    '\n' +
+    'Non ci sono fatti da creare ancora - aspetto che mi dicano il nome.'
+}
+ POST /api/chat 200 in 10679ms
+ POST /api/chat 200 in 10834ms
+ POST /api/chat 200 in 14248ms
+ POST /api/chat 200 in 21567ms
+ POST /api/chat 200 in 17840ms
+ POST /api/chat 200 in 8085ms
+ POST /api/chat 200 in 4017ms
+ ○ Compiling /api/register ...
+ ✓ Compiled /api/register in 855ms (639 modules)
+ POST /api/register 400 in 1298ms
+ POST /api/register 200 in 170ms
+ ✓ Compiled /api/publish in 499ms (641 modules)
+ POST /api/publish 200 in 890ms
+[DIRECTIVE_POLICY] Priority inversion(s) detected (non-fatal):
+  - "has_thin_sections" (p=3) lists "has_sparse_profile" (p=1) as incompatible, but "has_sparse_profile" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+  - "has_archivable_facts" (p=4) lists "has_thin_sections" (p=3) as incompatible, but "has_thin_sections" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+  - "has_archivable_facts" (p=4) lists "has_sparse_profile" (p=1) as incompatible, but "has_sparse_profile" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+  - "has_recent_import" (p=2) lists "has_sparse_profile" (p=1) as incompatible, but "has_sparse_profile" has higher priority and would win — remove from incompatibleWith or adjust priorities.
+ POST /api/chat 200 in 10102ms
+ POST /api/chat 200 in 21931ms
+ POST /api/chat 200 in 6007ms
+ POST /api/chat 200 in 16581ms
+ POST /api/chat 200 in 20040ms
