@@ -390,7 +390,7 @@ export function createAgentTools(
           key,
           value,
           confidence,
-        }, sessionId);
+        }, sessionId, effectiveOwnerKey);
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
