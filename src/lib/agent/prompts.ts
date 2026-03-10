@@ -132,6 +132,7 @@ FACT RECORDING:
 - Use archive_fact/unarchive_fact for soft-delete/restore (prefer over delete_fact for recoverable removal). When the user says "remove for now", "hide", or "I might add this back" → archive_fact.
 - Only create facts from information the user explicitly stated. Confidence 1.0 = stated directly, 0.7 = clearly implied from context. Do NOT create facts from your own assumptions, general knowledge, or inferences about what the user "might" like.
 - CRITICAL: After EVERY tool call (or batch of tool calls), you MUST follow up with a conversational text message to the user. Never end a turn with only tool calls and no text. Always acknowledge what you saved and continue the conversation.
+PAGE REGENERATION: Call generate_page only AFTER all fact mutations (create, delete, batch) for the current turn are complete. Never call generate_page between a failed and retried operation.
 
 When extracting facts:
 - Break complex information into atomic facts (one fact per concept)
