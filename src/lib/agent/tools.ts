@@ -693,16 +693,20 @@ export function createAgentTools(
     execute: async ({ query }) => {
       try {
         const results = searchFacts(query, sessionId, readKeys);
+        const mapped = results.map((f) => ({
+          id: f.id,
+          category: f.category,
+          key: f.key,
+          value: f.value,
+          confidence: f.confidence,
+        }));
+        if (mapped.length === 0) {
+          return { success: true, count: 0, facts: [], hint: "No facts matched. Try broader search terms or different keywords." };
+        }
         return {
           success: true,
-          count: results.length,
-          facts: results.map((f) => ({
-            id: f.id,
-            category: f.category,
-            key: f.key,
-            value: f.value,
-            confidence: f.confidence,
-          })),
+          count: mapped.length,
+          facts: mapped,
         };
       } catch (error) {
         return { success: false, error: String(error) };
@@ -755,7 +759,7 @@ export function createAgentTools(
             username,
           },
         });
-        return { success: false, error: String(error) };
+        return { success: false, error: String(error), hint: "Style update failed. Try again or ask the user to change style from the UI." };
       }
     },
   }),
@@ -946,7 +950,7 @@ export function createAgentTools(
       try {
         const facts = getActiveFacts(sessionId, readKeys);
         if (facts.length === 0) {
-          return { success: false, error: "No facts in knowledge base yet" };
+          return { success: false, error: "No facts in knowledge base yet", hint: "Ensure facts exist before generating. Use create_fact first." };
         }
         // Preserve user's style customizations (theme, colors, font) from
         // the existing draft. composeOptimisticPage always uses defaults.
@@ -1071,7 +1075,7 @@ export function createAgentTools(
           actor: "assistant",
           payload: { requestId, tool: "generate_page", error: String(error) },
         });
-        return { success: false, error: String(error) };
+        return { success: false, error: String(error), hint: "Ensure facts exist before generating. Use create_fact first." };
       }
     },
   }),
@@ -1096,7 +1100,7 @@ export function createAgentTools(
         const { effectiveUsername, validation: usernameCheck } =
           await validatePublishUsername(username);
         if (!usernameCheck.ok) {
-          return { success: false, error: usernameCheck.message };
+          return { success: false, error: usernameCheck.message, hint: "The user must register before publishing. Guide them through the signup flow." };
         }
 
         // Mark the existing draft as pending approval — no recomposition,
@@ -1123,7 +1127,7 @@ export function createAgentTools(
           actor: "assistant",
           payload: { requestId, tool: "request_publish", error: String(error) },
         });
-        return { success: false, error: String(error) };
+        return { success: false, error: String(error), hint: "The user must register before publishing. Guide them through the signup flow." };
       }
     },
   }),
