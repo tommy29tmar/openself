@@ -126,6 +126,7 @@ export interface UiStrings {
   publishErrorStale: string;
   publishErrorGeneric: string;
   creatingAccount: string;
+  unpublishedChanges: string;
 }
 
 const en: UiStrings = {
@@ -220,6 +221,7 @@ const en: UiStrings = {
   publishErrorStale: "Page has changed. Please review and try again.",
   publishErrorGeneric: "Something went wrong. Please try again.",
   creatingAccount: "Creating account...",
+  unpublishedChanges: "You have unpublished changes",
 };
 
 const it: UiStrings = {
@@ -314,6 +316,7 @@ const it: UiStrings = {
   publishErrorStale: "La pagina è cambiata. Controlla e riprova.",
   publishErrorGeneric: "Qualcosa è andato storto. Riprova.",
   creatingAccount: "Creazione account...",
+  unpublishedChanges: "Hai modifiche non pubblicate",
 };
 
 const de: UiStrings = {
@@ -408,6 +411,7 @@ const de: UiStrings = {
   publishErrorStale: "Die Seite hat sich geändert. Bitte überprüfe und versuche es erneut.",
   publishErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   creatingAccount: "Konto wird erstellt...",
+  unpublishedChanges: "Du hast unveröffentlichte Änderungen",
 };
 
 const fr: UiStrings = {
@@ -502,6 +506,7 @@ const fr: UiStrings = {
   publishErrorStale: "La page a changé. Vérifiez et réessayez.",
   publishErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
   creatingAccount: "Création du compte...",
+  unpublishedChanges: "Vous avez des modifications non publiées",
 };
 
 const es: UiStrings = {
@@ -596,6 +601,7 @@ const es: UiStrings = {
   publishErrorStale: "La página ha cambiado. Revisa e inténtalo de nuevo.",
   publishErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
   creatingAccount: "Creando cuenta...",
+  unpublishedChanges: "Tienes cambios sin publicar",
 };
 
 const pt: UiStrings = {
@@ -690,6 +696,7 @@ const pt: UiStrings = {
   publishErrorStale: "A página mudou. Reveja e tente novamente.",
   publishErrorGeneric: "Algo correu mal. Tente novamente.",
   creatingAccount: "A criar conta...",
+  unpublishedChanges: "Você tem alterações não publicadas",
 };
 
 const ja: UiStrings = {
@@ -784,6 +791,7 @@ const ja: UiStrings = {
   publishErrorStale: "ページが変更されました。確認して再度お試しください。",
   publishErrorGeneric: "エラーが発生しました。もう一度お試しください。",
   creatingAccount: "アカウントを作成中...",
+  unpublishedChanges: "未公開の変更があります",
 };
 
 const zh: UiStrings = {
@@ -878,6 +886,7 @@ const zh: UiStrings = {
   publishErrorStale: "页面已更改。请查看后重试。",
   publishErrorGeneric: "出现错误，请重试。",
   creatingAccount: "正在创建账户...",
+  unpublishedChanges: "您有未发布的更改",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };

@@ -22,6 +22,8 @@ describe("UI L10N strings", () => {
     "domainAiMl", "domainDesign", "domainOther",
     // Platform (F17/F22)
     "platformWebsite",
+    // Unpublished changes banner
+    "unpublishedChanges",
   ];
 
   for (const lang of ["en", "it", "de", "fr", "es", "pt", "ja", "zh"] as const) {
