@@ -350,7 +350,7 @@ calls `buildSystemPrompt()` with `first_visit` defaults.
 
 1. **Core charter** — Identity, instructions, product goal, non-goals, persona boundaries. Includes: REGISTER (always informal — tu/du/vous non-formal, overridable by explicit user preference), OPENING BANS (list of banned filler openers such as "Certamente!", "Of course!"), EMOJI POLICY (only if user uses first, max 1/msg), LANGUAGE HANDLING (switch seamlessly without mentioning), RESPONSE LENGTH rules (1–2 sentences for confirmations, 3–5 max for explanations)
 2. **Safety & privacy policy** — Visibility constraints, sensitive-data rules, no silent publication
-3. **Tool policy** — 25 tools (see Section 4.3), when to call, required arguments, retry/error behavior. Includes unified FACT RECORDING block: record facts immediately as encountered, batch_facts for 3+ creates only, individual tool calls for updates/deletes/identity changes (confirmation gates, different failure semantics).
+3. **Tool policy** — 24 tools (see Section 4.3), when to call, required arguments, retry/error behavior. Facts are IMMUTABLE — no update tool exposed; to correct, agent must delete+create. Includes unified FACT RECORDING block: record facts immediately as encountered, batch_facts for 3+ creates only, individual tool calls for deletes/identity changes (confirmation gates, different failure semantics). PAGE REGENERATION rule: call generate_page only after all fact mutations for the turn are complete.
 4. **Fact schema reference** — Controlled by `schemaMode: "full" | "minimal" | "none"` (per journey state). `full` injects ~1800 tokens (complete category→value shape table). `minimal` injects ~300 tokens via `buildMinimalSchemaForOnboarding()` (first_visit) or `buildMinimalSchemaForEditing()` (active states — edit workflow with object-notation tool signatures and common value shapes). `none` injects nothing. Per-state assignment: `first_visit=minimal`, `returning_no_page=full`, `draft_ready=minimal`, `active_fresh=minimal`, `active_stale=minimal`, `blocked=none`. Estimated ~1500–1800 token savings per turn in none/minimal states.
 4a. **Data model reference** — Bio composition model (auto-composed from facts, no "bio" fact), available themes, step-by-step workflows (modify/remove/add content), full value object schemas per category, commitment tracking instruction
 5. **Output contracts** — JSON/schema requirements for tool payloads and page content generation. Includes PATTERN VARIATION block: no same acknowledgment on consecutive turns, don't always close with a question, no 3 consecutive turns opening the same way, never start two consecutive messages with the same word.
@@ -608,10 +608,9 @@ performing structured actions:
 Available tools (25):
 
 Knowledge Base management:
-  create_fact({ category, key, value, confidence? })          # Learn something new
-  batch_facts({ facts[] })                                    # Create multiple facts atomically
-  update_fact({ factId, value })                              # Update existing knowledge (FULL value object REQUIRED)
-  delete_fact({ factId })                                     # Remove outdated info
+  create_fact({ category, key, value, confidence? })          # Learn something new (duplicate detection: same value = idempotent, diff value = blocked)
+  batch_facts({ facts[] })                                    # Create/delete multiple facts atomically (no updates — facts are immutable)
+  delete_fact({ factId })                                     # Remove a fact (accepts UUID or category/key format like "education/dams")
   search_facts({ query })                                     # Free-text search the KB
   set_fact_visibility({ factId, visibility })                 # Change fact visibility (proposed/private only)
   archive_fact({ factId })                                    # Soft-archive a fact
@@ -649,7 +648,7 @@ User says: "I just started a new job at Acme Corp as a product manager"
 The agent simultaneously:
 1. Responds naturally: "Congrats! That's a big move. How are you liking it so far?"
 2. Calls `create_fact(category="experience", key="acme-corp", value={role: "Product Manager", company: "Acme Corp", start: "2026-02", status: "current"})`
-3. Calls `update_fact(factId="prev-job-id", value={...status: "past", end: "2026-01"})`
+3. Calls `delete_fact(factId="experience/prev-job")` then `create_fact(...)` with updated status (facts are immutable — delete+create replaces update)
 4. Calls `generate_page(username)` to rebuild the page from updated facts
 5. Calls `save_memory(content="User transitioned to product management — significant career shift", memoryType="insight")` if this seems like a core identity shift
 
@@ -658,12 +657,12 @@ All invisible to the user. They just had a conversation.
 ### 4.3.1 Tool Call Reliability
 
 Two mechanisms ensure the agent calls tools correctly despite the growing complexity of
-25 tools × 18 section types × 14 fact categories:
+24 tools × 18 section types × 14 fact categories:
 
 1. **Structured fact schema reference** (prevention): The system prompt includes a
    category→value shape lookup table so the LLM has the exact structure for every
-   `create_fact`/`update_fact` call. Also includes explicit "common mistakes" rules
-   (e.g., "NEVER call update_fact without value"). This is the primary defense.
+   `create_fact` call. Also includes immutable-facts rules
+   (delete+create to correct, never leave incorrect facts active). This is the primary defense.
 
 2. **`experimental_repairToolCall`** (recovery): If the LLM still sends invalid tool
    arguments (Zod validation fails before execution), the AI SDK intercepts the error
@@ -682,7 +681,7 @@ type constraint.
 from facts if none exists. This lets users request style changes before explicitly
 generating the page — the draft is created on-demand from the knowledge base.
 
-**Auto-recompose after fact mutations:** The `create_fact`, `update_fact`, and `delete_fact`
+**Auto-recompose after fact mutations:** The `create_fact`, `delete_fact`, and `batch_facts`
 tools call `recomposeAfterMutation()` after each successful operation to keep the preview
 in sync without requiring a separate `generate_page` call. The function uses
 `projectCanonicalConfig()` — the same projection used by the preview/stream endpoint —
@@ -1355,7 +1354,7 @@ It is the single source of truth from which the page is generated.
    (e.g., `job`, `work`, `employment` → `experience`) to avoid KB drift.
 7. **Experience key collision guardrail**: `createFact()` checks for existing experience
    facts with the same key but a different company. If found, it throws an error directing
-   the agent to use a different key or `update_fact`. This prevents accidental data loss
+   the agent to use a different key or delete+create with the correct key. This prevents accidental data loss
    when the agent reuses a key for a different employer. `getFactByKey()` is exported from
    `kb-service.ts` for exact triple-lookup (sessionId + category + key).
 
@@ -4450,7 +4449,7 @@ This section defines what the runtime must do, independent of prompt quality.
 
 ### 15.2 Mutation Pipeline
 
-For every write action (`create_fact`, `update_fact`, connector ingest, heartbeat update):
+For every write action (`create_fact`, `delete_fact`, `batch_facts`, connector ingest, heartbeat update):
 
 1. Validate payload schema.
 2. Normalize category via alias registry.

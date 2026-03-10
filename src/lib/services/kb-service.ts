@@ -56,6 +56,7 @@ export type CreateFactInput = {
   parentFactId?: string;
 };
 
+/** @deprecated Immutable facts pattern — use delete + create instead. Will be removed in next cleanup. */
 export type UpdateFactInput = {
   factId: string;
   value: Record<string, unknown>;
@@ -221,6 +222,7 @@ export async function createFact(
 }
 
 /**
+ * @deprecated Immutable facts pattern — use delete + create instead. Will be removed in next cleanup.
  * Update a fact. Accepts knowledgePrimaryKey (anchor session) to enable cross-session updates.
  * The fact lookup is scoped to knowledgeReadKeys (all sessions for the profile).
  */
@@ -595,8 +597,8 @@ export function backfillProfileId(sessionIds: string[], newProfileId: string): n
 
       if (existing) {
         // Collision: unique index blocks UPDATE. Resolve in transaction.
-        const candidateTime = new Date(candidate.updatedAt!).getTime();
-        const existingTime = new Date(existing.updatedAt!).getTime();
+        const candidateTime = candidate.updatedAt ? new Date(candidate.updatedAt).getTime() : 0;
+        const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
         sqlite.transaction(() => {
           const loserId = candidateTime > existingTime ? existing.id : candidate.id;
           const winnerId = candidateTime > existingTime ? candidate.id : existing.id;
@@ -607,13 +609,14 @@ export function backfillProfileId(sessionIds: string[], newProfileId: string): n
           // If candidate is winner, update its profileId
           if (winnerId === candidate.id) {
             sqlite.prepare("UPDATE facts SET profile_id = ? WHERE id = ?").run(newProfileId, winnerId);
+            total++;
           }
         })();
       } else {
         // No collision: safe to update
         db.update(facts).set({ profileId: newProfileId }).where(eq(facts.id, candidate.id)).run();
+        total++;
       }
-      total++;
     }
   }
   return total;

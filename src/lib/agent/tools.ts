@@ -538,7 +538,7 @@ export function createAgentTools(
               const existingFacts = findFactsByOwnerCategoryKey(effectiveOwnerKey, op.category, op.key, readKeys);
               if (existingFacts.length > 0) {
                 if (stableDeepEqual(existingFacts[0].value, op.value)) {
-                  break; // Idempotent, count as success
+                  break; // Skip: already exists with same value
                 }
                 warnings.push(`Create of ${op.category}/${op.key} blocked: fact already exists with different value. Delete first.`);
                 break;
