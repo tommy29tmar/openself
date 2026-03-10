@@ -8,4 +8,9 @@ describe("firstVisitPolicy", () => {
     expect(policy).toContain(`${SPARSE_PROFILE_FACT_THRESHOLD} distinct publishable facts`);
     expect(policy).not.toContain("at least 6 distinct facts");
   });
+
+  it("first-visit policy does not contain openself.dev domain in URL examples", () => {
+    const policy = firstVisitPolicy("en");
+    expect(policy).not.toMatch(/openself\.dev\/yourname/i);
+  });
 });
