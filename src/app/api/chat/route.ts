@@ -315,6 +315,7 @@ export async function POST(req: Request) {
       latestUserMessageId,
     );
     const tools = filterToolsByJourneyState(agentTools, bootstrap.journeyState);
+    let stepCounter = 0;
     const result = streamText({
       model,
       system: systemPrompt,
@@ -330,6 +331,18 @@ export async function POST(req: Request) {
             thinking: { type: "enabled" as const, budgetTokens: THINKING_BUDGET },
           },
         } : {}),
+      },
+      onStepFinish: async (stepResult) => {
+        if (stepResult.reasoning) {
+          console.info("[thinking]", {
+            requestId,
+            modelId,
+            stepIndex: stepCounter,
+            reasoning: stepResult.reasoning,
+            finishReason: stepResult.finishReason,
+          });
+        }
+        stepCounter++;
       },
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
         // Fast path: strip markdown code fences that Gemini sometimes wraps around JSON
@@ -367,10 +380,7 @@ export async function POST(req: Request) {
           return null;
         }
       },
-      onFinish: async ({ text, reasoning, usage, finishReason }) => {
-        if (reasoning) {
-          console.info("[thinking]", { requestId, modelId, reasoning });
-        }
+      onFinish: async ({ text, usage, finishReason }) => {
         const journal = getJournal();
         const persistedToolCalls = journal.length > 0 ? journal : null;
         const safeText = text
