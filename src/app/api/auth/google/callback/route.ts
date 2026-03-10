@@ -49,12 +49,13 @@ export async function GET(req: NextRequest) {
 
     const userInfo = await userInfoRes.json();
 
+    const preLoginSession = req.cookies.get("os_session")?.value;
     const { sessionId, username } = await handleOAuthCallback({
       provider: "google",
       providerUserId: userInfo.id,
       email: userInfo.email,
       displayName: userInfo.name,
-    });
+    }, preLoginSession);
 
     const redirectUrl = username ? `/${username}` : "/builder";
     const response = NextResponse.redirect(new URL(redirectUrl, req.url));

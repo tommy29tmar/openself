@@ -56,12 +56,13 @@ export async function GET(req: NextRequest) {
     // Users can update their email later via account settings
     const email = `${user.id}@twitter.oauth.openself.dev`;
 
+    const preLoginSession = req.cookies.get("os_session")?.value;
     const { sessionId, username } = await handleOAuthCallback({
       provider: "twitter",
       providerUserId: String(user.id),
       email,
       displayName: user.name ?? user.username,
-    });
+    }, preLoginSession);
 
     const redirectUrl = username ? `/${username}` : "/builder";
     const response = NextResponse.redirect(new URL(redirectUrl, req.url));

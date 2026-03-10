@@ -70,12 +70,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=no_email", req.url));
     }
 
+    const preLoginSession = req.cookies.get("os_session")?.value;
     const { sessionId, username } = await handleOAuthCallback({
       provider: "github",
       providerUserId: String(user.id),
       email,
       displayName: user.name ?? user.login,
-    });
+    }, preLoginSession);
 
     const redirectUrl = username ? `/${username}` : "/builder";
     const response = NextResponse.redirect(new URL(redirectUrl, req.url));

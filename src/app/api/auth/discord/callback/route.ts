@@ -53,12 +53,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=no_email", req.url));
     }
 
+    const preLoginSession = req.cookies.get("os_session")?.value;
     const { sessionId, username } = await handleOAuthCallback({
       provider: "discord",
       providerUserId: String(user.id),
       email: user.email,
       displayName: user.global_name ?? user.username,
-    });
+    }, preLoginSession);
 
     const redirectUrl = username ? `/${username}` : "/builder";
     const response = NextResponse.redirect(new URL(redirectUrl, req.url));

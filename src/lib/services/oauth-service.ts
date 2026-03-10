@@ -55,7 +55,27 @@ export async function handleOAuthCallback(
       .where(eq(profiles.userId, user.id))
       .get();
 
-    const sessionId = createAuthSession(user.id, profile?.id ?? user.id);
+    // Backfill existing session's profileId (returning user with anonymous session)
+    const profileId = profile?.id ?? user.id;
+    if (existingSessionId) {
+      const linkResult = sqlite
+        .prepare("UPDATE sessions SET profile_id = ? WHERE id = ? AND profile_id IS NULL")
+        .run(profileId, existingSessionId);
+
+      if (linkResult.changes === 1) {
+        try {
+          const { backfillProfileId } = await import("@/lib/services/kb-service");
+          const backfilled = backfillProfileId([existingSessionId], profileId);
+          if (backfilled > 0) {
+            console.info("[oauth] Backfilled profileId on", backfilled, "facts for session", existingSessionId);
+          }
+        } catch (err) {
+          console.warn("[oauth] Fact profileId backfill failed (non-fatal):", err);
+        }
+      }
+    }
+
+    const sessionId = createAuthSession(user.id, profileId);
     return { sessionId, username: profile?.username ?? null, isNew: false };
   }
 
@@ -117,11 +137,24 @@ export async function handleOAuthCallback(
 
   // 5. Backfill existing session's profileId (if user had an invite session)
   if (existingSessionId) {
-    sqlite
+    const linkResult = sqlite
       .prepare(
         "UPDATE sessions SET profile_id = ? WHERE id = ? AND profile_id IS NULL",
       )
       .run(profile!.id, existingSessionId);
+
+    // Backfill fact profileId so anonymous facts become visible under the profile
+    if (linkResult.changes === 1) {
+      try {
+        const { backfillProfileId } = await import("@/lib/services/kb-service");
+        const backfilled = backfillProfileId([existingSessionId], profile!.id);
+        if (backfilled > 0) {
+          console.info("[oauth] Backfilled profileId on", backfilled, "facts for session", existingSessionId);
+        }
+      } catch (err) {
+        console.warn("[oauth] Fact profileId backfill failed (non-fatal):", err);
+      }
+    }
   }
 
   // 6. Create session

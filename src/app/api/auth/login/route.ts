@@ -65,11 +65,24 @@ export async function POST(req: Request) {
     // Backfill existing session's profileId (if user had an invite session before logging in)
     const existingSessionId = getSessionIdFromRequest(req);
     if (existingSessionId) {
-      sqlite
+      const linkResult = sqlite
         .prepare(
           "UPDATE sessions SET profile_id = ? WHERE id = ? AND profile_id IS NULL",
         )
         .run(profile.id, existingSessionId);
+
+      // Backfill fact profileId so anonymous facts become visible under the profile
+      if (linkResult.changes === 1) {
+        try {
+          const { backfillProfileId } = await import("@/lib/services/kb-service");
+          const backfilled = backfillProfileId([existingSessionId], profile.id);
+          if (backfilled > 0) {
+            console.info("[login] Backfilled profileId on", backfilled, "facts for session", existingSessionId);
+          }
+        } catch (err) {
+          console.warn("[login] Fact profileId backfill failed (non-fatal):", err);
+        }
+      }
     }
 
     // Create new session (session rotation for anti-fixation)

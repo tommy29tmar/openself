@@ -52,12 +52,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=no_email", req.url));
     }
 
+    const preLoginSession = req.cookies.get("os_session")?.value;
     const { sessionId, username } = await handleOAuthCallback({
       provider: "linkedin",
       providerUserId: userInfo.sub,
       email: userInfo.email,
       displayName: userInfo.name,
-    });
+    }, preLoginSession);
 
     const redirectUrl = username ? `/${username}` : "/builder";
     const response = NextResponse.redirect(new URL(redirectUrl, req.url));

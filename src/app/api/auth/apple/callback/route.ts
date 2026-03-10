@@ -66,12 +66,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=no_email", req.url));
     }
 
+    const preLoginSession = req.cookies.get("os_session")?.value;
     const { sessionId, username } = await handleOAuthCallback({
       provider: "apple",
       providerUserId: claims.sub,
       email: claims.email,
       displayName,
-    });
+    }, preLoginSession);
 
     const redirectUrl = username ? `/${username}` : "/builder";
     const response = NextResponse.redirect(new URL(redirectUrl, req.url));

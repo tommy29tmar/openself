@@ -1,5 +1,5 @@
 import { eq, and, like, or, sql, inArray, asc, isNull, ne } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import {
   facts,
   categoryRegistry,
@@ -554,4 +554,67 @@ export function getFactById(
       .get();
   }
   return existing ? (existing as FactRow) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Login/OAuth profileId backfill
+// ---------------------------------------------------------------------------
+
+/**
+ * Backfill profileId on facts created during anonymous sessions.
+ * Called at login/OAuth time when an existing profile attaches to an anonymous session.
+ *
+ * Handles collision with `uniq_facts_profile_category_key` unique index:
+ * when both the anonymous session and the target profile have a fact with the
+ * same (category, key), the newer fact wins and the older one is hard-deleted.
+ */
+export function backfillProfileId(sessionIds: string[], newProfileId: string): number {
+  if (sessionIds.length === 0) return 0;
+
+  let total = 0;
+  for (const sid of sessionIds) {
+    // Find candidate facts: anonymous facts where profileId = sessionId
+    const candidates = db.select().from(facts)
+      .where(and(
+        eq(facts.sessionId, sid),
+        eq(facts.profileId, sid),
+        isNull(facts.archivedAt),
+      ))
+      .all();
+
+    for (const candidate of candidates) {
+      // Check for collision: does target profile already have this category/key?
+      const existing = db.select().from(facts)
+        .where(and(
+          eq(facts.profileId, newProfileId),
+          eq(facts.category, candidate.category),
+          eq(facts.key, candidate.key),
+          isNull(facts.archivedAt),
+        ))
+        .get();
+
+      if (existing) {
+        // Collision: unique index blocks UPDATE. Resolve in transaction.
+        const candidateTime = new Date(candidate.updatedAt!).getTime();
+        const existingTime = new Date(existing.updatedAt!).getTime();
+        sqlite.transaction(() => {
+          const loserId = candidateTime > existingTime ? existing.id : candidate.id;
+          const winnerId = candidateTime > existingTime ? candidate.id : existing.id;
+          // Reparent children from loser to winner
+          sqlite.prepare("UPDATE facts SET parent_fact_id = ? WHERE parent_fact_id = ?").run(winnerId, loserId);
+          // Hard-delete loser
+          sqlite.prepare("DELETE FROM facts WHERE id = ?").run(loserId);
+          // If candidate is winner, update its profileId
+          if (winnerId === candidate.id) {
+            sqlite.prepare("UPDATE facts SET profile_id = ? WHERE id = ?").run(newProfileId, winnerId);
+          }
+        })();
+      } else {
+        // No collision: safe to update
+        db.update(facts).set({ profileId: newProfileId }).where(eq(facts.id, candidate.id)).run();
+      }
+      total++;
+    }
+  }
+  return total;
 }
