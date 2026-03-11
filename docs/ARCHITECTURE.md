@@ -384,7 +384,7 @@ Dynamic context blocks are then appended by `assembleContext()`:
 - **Message quota warning** — Nudge to register when ≤3 anonymous messages remain
 - **Magic paste hint** — Detected connector URLs from latest user message
 
-Total context budget: 65000 tokens with a post-assembly iterative guard (see Section 4.2.2).
+Total context budget: 75000 tokens with a post-assembly iterative guard (see Section 4.2.2).
 
 Prompt assembly is code-driven (no prompt text embedded in UI files). Each block has a
 version id for reproducibility and A/B testing.
@@ -395,13 +395,14 @@ Context is budgeted explicitly to avoid window overflows. Token estimation uses
 `estimateTokens = ceil(chars / 4)`.
 
 ```
-Total budget: 65000 tokens
+Total budget: 75000 tokens
 
 Per-block allocation (mutable — shrinkable):
   Facts:              17000 tokens max (top 120, truncated if over)
   Soul (compiled):    13000 tokens max
   Summary (Tier 2):    7000 tokens max
-  Memories (Tier 3):   3500 tokens max
+  Memories (Tier 3):   5500 tokens max (scored by recency × provenance)
+  Episodic (Tier 4):   5000 tokens max (last 30 days, per-source caps)
   Pending conflicts:   1500 tokens max
   Page state:          1500 tokens max (steady-state profiles only)
 
@@ -409,7 +410,7 @@ Recent turns:         22000 tokens max (last 20, reduce if over)
 Static blocks:        shrinkable as last resort (PromptBlock type, 20 iterations)
 ```
 
-Post-assembly guard: if total exceeds 65000, iteratively shrink the largest block (up to
+Post-assembly guard: if total exceeds 75000, iteratively shrink the largest block (up to
 20 iterations). Mutable blocks are shrunk first; static blocks (auth, exploration,
 pending ops, coherence, quota, magic paste) are shrunk only as a last resort when no
 mutable blocks remain. Static blocks use `PromptBlock` type (`{ name, content }`) and
@@ -595,6 +596,7 @@ managed in one location.
 - Tier 1 (Facts) = WHAT you know — search before asking, record as encountered (cross-references FACT RECORDING in Tool Policy for batch vs. individual guidance)
 - Tier 2 (Summary) = CONTEXT of past conversations — use for continuity, never recite
 - Tier 3 (Meta-Memories) = HOW to behave — communication patterns, tone preferences
+- Tier 4 (Episodic) = WHAT HAPPENED — if a RECENT EVENTS block is present, reference recent activity naturally
 - Golden rule: call `save_memory` with at least one meta-observation per **significant** session. "Significant" is defined explicitly in the directive with good/bad examples embedded to prevent misapplication.
 - Cross-tier discipline: factual info in facts, interaction patterns in memories
 
@@ -888,14 +890,21 @@ Two sub-layers:
 Agent memory implementation:
 - **Expanded schema**: `owner_key`, `memory_type` (observation, preference, insight, pattern),
   `category`, `content_hash` (SHA-256), `confidence`, `is_active`, `user_feedback`,
-  `deactivated_at`
+  `deactivated_at`, `source` ('agent' or 'worker')
 - **Dedup**: SHA-256 content hash prevents duplicate active memories
 - **Quota**: 50 active memories per owner
-- **Cooldown**: 5 writes per 60-second window (DB-based, survives restart)
+- **Cooldown**: 5 writes per 60-second window (DB-based, survives restart). Cooldown applies
+  only to agent-sourced writes (`COALESCE(source, 'agent') = 'agent'`).
+- **Worker provenance**: `saveMemoryFromWorker()` bypasses cooldown with `source='worker'`
+  provenance. Used by session compaction (up to 3 patterns per window) and heartbeat
+  journal analysis. Same quota and dedup constraints apply.
 - **User feedback**: "helpful" increases confidence by +0.1 (capped at 1.0);
   "wrong" immediately deactivates the memory
 - **Memory types**: `observation` (behavioral notes), `preference` (user likes/dislikes),
   `insight` (inferred understanding), `pattern` (recurring behavior)
+- **Relevance-scored retrieval**: `getActiveMemoriesScored()` ranks memories by
+  `recency × provenance_weight`. Recency uses exponential decay with 14-day half-life.
+  Provenance weights: agent=1.0, worker=0.6. Returns top 15 (was 10, flat recency).
 
 Agent memory is stored separately from the KB and used to improve conversation
 quality over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
@@ -926,7 +935,9 @@ Design:
   can enqueue a continuation without conflict.
 - **Output** — `CompactionSummary` (topics, factsChanged, patternsObserved,
   sessionMood, keyTakeaways). Pattern observations are saved as `type="pattern"`
-  agent memories (up to 2 per window).
+  agent memories (up to 3 per window, via `saveMemoryFromWorker()`).
+- **Few-shot prompt guidance** — `patternsObserved` must be behavioral observations
+  (HOW user communicates), not facts or topics. Good/bad examples embedded in prompt.
 
 ### 4.5.2 Episodic Memory (Tier 4)
 
@@ -937,6 +948,8 @@ that the agent can query and analyze.
 **Schema:** `episodic_events` table with FTS5 full-text search on `narrative_summary`
 and `raw_input`. Events are append-only with correction via `superseded_by` (old event
 points to its replacement). Soft-delete via `archived` flag for retention window cleanup.
+Columns `source` ('chat', 'github', 'linkedin') and `external_id` (stable dedup key for
+connectors) enable multi-source event ingestion with UNIQUE partial index for dedup.
 
 **Agent tools:**
 - `record_event` — logs a user activity (workout, meal, meeting, etc.) with ISO timestamp,
@@ -966,6 +979,40 @@ Background consolidation that detects recurring patterns and surfaces them as pr
 **FTS5 safety:** `sanitizeFtsKeywords` wraps each token in double quotes to prevent
 FTS5 syntax injection. Triggers maintain sync between `episodic_events` and
 `episodic_events_fts` (INSERT, UPDATE, DELETE — all idempotent via DELETE-before-INSERT).
+
+**Smart Context Injection** (`getRecentEventsForContext()`):
+Episodic events are passively injected into the system prompt as a "RECENT EVENTS" block
+(5000 token budget). Events from the last 30 days are selected with per-source caps:
+- Chat events: max 10 (user-reported activities)
+- Per-connector events: max 3 each (GitHub, LinkedIn, etc.)
+- Total cap: 15 events
+
+Per-source queries prevent chat events from starving connector events. Sorted by recency.
+Included for `returning_no_page`, `draft_ready` (3k budget), `active_fresh`, `active_stale`.
+Excluded for `first_visit` (no events yet) and `blocked`.
+
+The Dream Cycle's `checkPatternThresholds()` filters to `source = 'chat'` only, preventing
+machine-imported events from triggering habit proposals.
+
+**Connector Dual-Write:**
+Connectors write notable discrete events to episodic memory alongside their existing
+fact extraction:
+
+- **GitHub** (`src/lib/connectors/github/activity.ts`): Fetches user events via
+  `fetchUserEvents()` with incremental pagination (boundary-based via `lastSeenEventId`,
+  max 5 pages, rate-limit aware). `filterSignificantEvents()` keeps only merged PRs,
+  releases, and new repos. `mapToEpisodicEvents()` produces `source: "github"` events
+  with `externalId` for dedup. Cursor stored as JSON in `syncCursor` field (backward-
+  compatible with legacy plain-timestamp format). Always-advance cursor strategy.
+
+- **LinkedIn** (`src/lib/connectors/linkedin-zip/activity-mapper.ts`): Maps certifications
+  and articles from ZIP import to episodic events with `source: "linkedin"`. Uses
+  `normalizeLinkedInDate()` for date parsing and `stableExternalId()` (SHA-256 hash)
+  for deterministic dedup across re-imports. Activity extraction runs even if no profile
+  facts are found (activity-only imports).
+
+Both connectors use best-effort writes: UNIQUE constraint violations are silently swallowed
+(expected on re-sync), all other failures are logged but non-fatal.
 
 **Intelligent forgetting (decay + relevance signals):**
 
@@ -3369,12 +3416,17 @@ CREATE TABLE episodic_events (
     narrative_summary TEXT NOT NULL,
     raw_input TEXT NOT NULL,
     details_json TEXT,
+    source TEXT NOT NULL DEFAULT 'chat',        -- 'chat', 'github', 'linkedin' (migration 0029)
+    external_id TEXT,                           -- stable connector dedup key (migration 0029)
     superseded_by TEXT REFERENCES episodic_events(id),
     archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX idx_episodic_owner_time ON episodic_events(owner_key, event_at_unix)
     WHERE superseded_by IS NULL AND archived = 0;
+CREATE INDEX idx_episodic_source ON episodic_events(owner_key, source);
+CREATE UNIQUE INDEX uq_episodic_external_id ON episodic_events(owner_key, source, external_id)
+    WHERE source != 'chat' AND external_id IS NOT NULL;
 
 -- FTS5 full-text search on episodic events
 CREATE VIRTUAL TABLE episodic_events_fts USING fts5(
