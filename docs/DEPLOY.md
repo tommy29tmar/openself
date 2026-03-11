@@ -198,7 +198,10 @@ Add these variables (click "New Environment Variable" for each):
 | `APPLE_KEY_ID` | `XXXXXXXXXX` | [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) → Keys → Create Key with "Sign in with Apple" |
 | `APPLE_PRIVATE_KEY` | `base64...` | Download the `.p8` key file, then encode: `base64 -w0 AuthKey_XXXXXXXXXX.p8` |
 
-> **Note:** OAuth buttons on `/login` appear for all providers — the server returns 404 if a provider is not configured.
+> **Note:** OAuth buttons on `/login` and `/signup` appear **only for configured providers**.
+> The server-side `getConfiguredProviders()` function (`src/lib/auth/providers.ts`) checks
+> that all required env vars are set before rendering a provider button. If no OAuth
+> provider is configured, only the email+password form is shown (no divider, no OAuth section).
 > Each provider is independent: configure only the ones you need.
 > If no OAuth provider is configured, users can still sign up with email+password (when `AUTH_V2=true`).
 

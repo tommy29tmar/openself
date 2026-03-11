@@ -4031,8 +4031,12 @@ In multi-user mode (`INVITE_CODES` set), publishing requires authentication:
 
 2. **Signup-before-publish flow.** Anonymous users who build a page see "Sign up to
    publish" instead of the publish button. The `SignupModal` component collects
-   username + email + password and POSTs to `/api/register`, which atomically creates
-   the user, links the profile, publishes the page, and rotates the session.
+   username + email + password + confirm password and POSTs to `/api/register`, which
+   atomically creates the user, links the profile, publishes the page, and rotates the
+   session. The confirm password field validates onBlur and at submit time. The modal
+   does NOT include OAuth buttons — OAuth callbacks redirect to `/builder` or
+   `/{username}` and cannot resume the atomic publish flow. Users who need OAuth are
+   directed to `/login` via the "Already have an account?" link.
 
 3. **Username enforcement.** If `authCtx.username` exists (user already claimed one),
    `POST /api/publish` ignores `body.username` and uses the authenticated username.
@@ -4064,6 +4068,28 @@ In multi-user mode (`INVITE_CODES` set), publishing requires authentication:
 9. **Auth-aware quota UI.** `ChatPanel` receives `authState` and branches on message
    limit: published page → link; authenticated → publish CTA; OAuth → username input;
    anonymous → signup form.
+
+10. **Dynamic OAuth provider detection.** The `/login` and `/signup` pages are Next.js
+    Server Components that call `getConfiguredProviders()` (`src/lib/auth/providers.ts`)
+    at request time to determine which OAuth buttons to render. The registry checks all
+    required env vars for each provider (including `NEXT_PUBLIC_BASE_URL` for providers
+    that build callback URLs: Google, Discord, LinkedIn, Twitter, Apple). Only GitHub
+    does not require `NEXT_PUBLIC_BASE_URL` (its arctic client uses null redirect URI).
+    The registry is intentionally stricter than the route handlers — routes fall back to
+    localhost for dev convenience, but the registry requires `NEXT_PUBLIC_BASE_URL` to
+    prevent UI buttons that redirect to localhost in production. Login and signup pages
+    pass the provider list as props to client form components (`LoginForm`, `SignupForm`),
+    which render `OAuthButtons` (shared presentational component) above the email/password
+    form with an "or" divider (hidden when no providers are configured).
+
+11. **Forgot password.** The `/login` page includes a "Forgot password?" section with
+    a `mailto:tom@openself.dev` link. This is a pre-beta solution — no self-service
+    password reset flow exists yet.
+
+12. **Confirm password.** The `/signup` page and `SignupModal` include a confirm
+    password field with onBlur validation and submit-time guard. Password onChange
+    also clears the confirm error to prevent stuck validation states. The `/login`
+    page does not have confirm password (existing account, not new password).
 
 Error codes (publish + request-publish):
 - `AUTH_REQUIRED` (403): Anonymous user attempted publish in multi-user mode

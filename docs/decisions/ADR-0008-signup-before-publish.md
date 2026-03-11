@@ -56,7 +56,8 @@ the server-side enforcement to block anonymous publish.
 Positive:
 1. Anonymous publish is blocked server-side — the auth gate cannot be bypassed.
 2. The existing `/api/register` endpoint handles the complexity; the new SignupModal
-   is a thin client that calls it.
+   is a thin client that calls it. Confirm password field with onBlur validation
+   prevents typos in the atomic signup+publish flow.
 3. Username mismatch is impossible for authenticated users.
 4. The atomic claim+publish transaction prevents orphaned state (username claimed
    without published page, or vice versa).
