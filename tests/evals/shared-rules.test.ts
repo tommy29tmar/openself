@@ -63,6 +63,16 @@ describe("IMMEDIATE_EXECUTION_RULE", () => {
   it("mentions executing tool calls in THIS turn", () => {
     expect(IMMEDIATE_EXECUTION_RULE).toMatch(/this\s*turn/i);
   });
+
+  it("immediate execution covers user confirming agent's concrete proposal", () => {
+    const rule = IMMEDIATE_EXECUTION_RULE;
+    // New clause: proposal confirmation triggers execution
+    expect(rule).toMatch(/confirm|approv/i);
+    expect(rule).toMatch(/your.*(suggestion|proposal)|you.*(proposed|suggested)/i);
+    // Original guards preserved: "concrete" and "enough info" still present
+    expect(rule).toMatch(/concrete/i);
+    expect(rule).toMatch(/enough info/i);
+  });
 });
 
 // STRUCTURAL_EXPLANATION_RULE removed — planning-protocol is the single source.

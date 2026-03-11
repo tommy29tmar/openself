@@ -41,4 +41,4 @@ export function sharedBehavioralRules(): string {
  * duplicate the "THIS turn" timing directive (which lives here).
  */
 export const IMMEDIATE_EXECUTION_RULE =
-  `When the user asks for a concrete edit and you have enough info, execute the tool call in THIS turn. Do NOT respond with only a plan.`;
+  `When the user asks for a concrete edit and you have enough info, execute the tool call in THIS turn. Do NOT respond with only a plan. This includes when the user confirms your own concrete suggestion/proposal — you already proposed the specific edits, so execute them immediately.`;
