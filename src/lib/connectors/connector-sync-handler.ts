@@ -10,6 +10,7 @@ function insertSyncLog(
   status: "success" | "error" | "partial",
   factsCreated: number,
   factsUpdated: number,
+  eventsCreated: number,
   error: string | null,
 ): void {
   db.insert(syncLog)
@@ -19,6 +20,7 @@ function insertSyncLog(
       status,
       factsCreated,
       factsUpdated,
+      eventsCreated,
       error,
     })
     .run();
@@ -27,7 +29,9 @@ function insertSyncLog(
 /**
  * Worker handler for `connector_sync` jobs.
  * Fan-out: loads all active connectors for the owner and dispatches by type.
- * Each connector type handler will be implemented in Milestone B/C.
+ * When `connectorId` is present in the payload, only that connector is synced
+ * (manual sync from UI). When absent, all active connectors are synced
+ * (scheduler path).
  */
 export async function handleConnectorSync(
   payload: Record<string, unknown>,
@@ -35,10 +39,15 @@ export async function handleConnectorSync(
   const ownerKey = payload.ownerKey as string;
   if (!ownerKey) throw new Error("connector_sync: missing ownerKey");
 
+  const connectorId = payload.connectorId as string | undefined;
+
   resolveOwnerScopeForWorker(ownerKey);
   const active = getActiveConnectors(ownerKey);
+  const toSync = connectorId
+    ? active.filter((c) => c.id === connectorId)
+    : active;
 
-  for (const connector of active) {
+  for (const connector of toSync) {
     try {
       const def = getConnector(connector.connectorType);
       if (!def) {
@@ -50,13 +59,14 @@ export async function handleConnectorSync(
           "partial",
           0,
           0,
+          0,
           `unknown connector type: ${connector.connectorType}`,
         );
         continue;
       }
 
       if (!def.supportsSync || !def.syncFn) {
-        insertSyncLog(connector.id, "partial", 0, 0, "no sync implementation");
+        insertSyncLog(connector.id, "partial", 0, 0, 0, "no sync implementation");
         continue;
       }
 
@@ -66,6 +76,7 @@ export async function handleConnectorSync(
         result.error ? "error" : "success",
         result.factsCreated,
         result.factsUpdated,
+        result.eventsCreated ?? 0,
         result.error ?? null,
       );
 
@@ -77,7 +88,7 @@ export async function handleConnectorSync(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       updateConnectorStatus(connector.id, "error", message);
-      insertSyncLog(connector.id, "error", 0, 0, message);
+      insertSyncLog(connector.id, "error", 0, 0, 0, message);
     }
   }
 }
