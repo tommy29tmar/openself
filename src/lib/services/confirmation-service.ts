@@ -68,6 +68,7 @@ export type PendingConfirmation = {
   key?: string;
   valueHash?: string;
   factIds?: string[];
+  confirmationId?: string;
   createdAt: string;
 };
 

@@ -224,4 +224,332 @@ describe("bulk delete confirmation gate (Bug #6)", () => {
     const r3 = await tools.delete_fact.execute({ factId: "f3" }, toolCtx);
     expect(r3.success).toBe(true);
   });
+
+  it("batch_facts reject does not contaminate delete_fact pending", async () => {
+    // Scenario: batch_facts blocks (creates pending with confirmationId),
+    // then delete_fact runs in same turn. delete_fact should NOT append to
+    // the batch-confirmation pending — it should create its own.
+    const { tools } = createAgentTools("en", "s1");
+
+    // Step 1: batch_facts blocks with 2+ deletes
+    const batchResult = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+    }, toolCtx) as any;
+    expect(batchResult.success).toBe(false);
+    expect(batchResult.confirmationId).toBeDefined();
+
+    // Step 2: delete_fact for a different fact (first delete in turn → allowed)
+    mockDeleteFact.mockReturnValue(true);
+    mockGetFactById.mockReturnValue({ id: "f3", category: "skill", key: "ts" });
+    const deleteResult = await tools.delete_fact.execute({
+      factId: "f3",
+    }, toolCtx);
+    expect(deleteResult.success).toBe(true);
+
+    // Step 3: second delete_fact → should be blocked with its OWN pending
+    const deleteResult2 = await tools.delete_fact.execute({
+      factId: "f4",
+    }, toolCtx);
+    expect(deleteResult2.success).toBe(false);
+    expect(deleteResult2.code).toBe("REQUIRES_CONFIRMATION");
+
+    // Verify: the batch-confirmation pending still has original factIds [f1, f2]
+    // (not contaminated with f3 or f4)
+    const lastMetaCall = mockMergeSessionMeta.mock.calls[mockMergeSessionMeta.mock.calls.length - 1];
+    const storedPendings = lastMetaCall[1]?.pendingConfirmations;
+    if (storedPendings) {
+      const batchPending = storedPendings.find((p: any) => p.confirmationId);
+      if (batchPending) {
+        expect(batchPending.factIds).toEqual(["f1", "f2"]);
+        expect(batchPending.factIds).not.toContain("f3");
+        expect(batchPending.factIds).not.toContain("f4");
+      }
+    }
+  });
+
+  it("batch_facts with valid confirmationId bypasses pre-flight and executes all deletes", async () => {
+    const confirmationId = "conf-abc-123";
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2"],
+        confirmationId,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    mockDeleteFact.mockReturnValue(true);
+    mockGetFactById.mockReturnValue({ id: "f1", category: "skill", key: "old" });
+    mockCreateFact.mockReturnValue({ id: "f-new", category: "skill", key: "ts", visibility: "proposed" });
+
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+        { action: "create" as const, category: "skill", key: "ts", value: { name: "TS" } },
+      ],
+      confirmationId,
+    }, toolCtx);
+
+    expect(result.success).toBe(true);
+    expect(result.deleted).toBe(2);
+    expect(result.created).toBe(1);
+  });
+
+  it("batch_facts with invalid confirmationId still blocks", async () => {
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2"],
+        confirmationId: "conf-abc-123",
+        createdAt: new Date().toISOString(),
+      }],
+    });
+
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+      confirmationId: "wrong-id",
+    }, toolCtx);
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("REQUIRES_CONFIRMATION");
+  });
+
+  it("batch_facts with confirmationId but mismatched factIds rejects", async () => {
+    const confirmationId = "conf-mismatch-test";
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2"],
+        confirmationId,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        // Different factIds than what was stored in pending
+        { action: "delete" as const, factId: "f3" },
+        { action: "delete" as const, factId: "f4" },
+      ],
+      confirmationId,
+    }, toolCtx);
+
+    // Should reject because factIds don't match the pending
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("REQUIRES_CONFIRMATION");
+  });
+
+  it("batch_facts without confirmationId returns confirmationId in response", async () => {
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+    }, toolCtx) as any;
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("REQUIRES_CONFIRMATION");
+    expect(result.confirmationId).toBeDefined();
+    expect(typeof result.confirmationId).toBe("string");
+  });
+
+  it("batch_facts rejects duplicate factIds in delete operations", async () => {
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+    }, toolCtx) as any;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("DUPLICATE_FACT_IDS");
+  });
+
+  it("confirmed batch_facts consumes pending AFTER execution, not before", async () => {
+    const confirmationId = "conf-defer-test";
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2"],
+        confirmationId,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    // First delete succeeds, second throws
+    let deleteCallCount = 0;
+    mockDeleteFact.mockImplementation(() => {
+      deleteCallCount++;
+      if (deleteCallCount === 2) throw new Error("DB constraint failure");
+      return true;
+    });
+    mockGetFactById.mockReturnValue({ id: "f1", category: "skill", key: "old" });
+
+    const { tools } = createAgentTools("en", "s1");
+
+    // Should throw or return error, but pending should NOT be consumed
+    try {
+      await tools.batch_facts.execute({
+        operations: [
+          { action: "delete" as const, factId: "f1" },
+          { action: "delete" as const, factId: "f2" },
+        ],
+        confirmationId,
+      }, toolCtx);
+    } catch {
+      // expected
+    }
+
+    // Verify pending was NOT consumed (mergeSessionMeta should not have been called
+    // with empty pendingConfirmations)
+    const consumeCalls = mockMergeSessionMeta.mock.calls.filter(
+      (call: any[]) => call[1]?.pendingConfirmations === null
+    );
+    expect(consumeCalls.length).toBe(0);
+  });
+
+  it("confirmed batch_facts advances _deletionCountThisTurn so later delete_fact is gated", async () => {
+    const confirmationId = "conf-turn-state";
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2"],
+        confirmationId,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    mockDeleteFact.mockReturnValue(true);
+    mockGetFactById.mockReturnValue({ id: "f1", category: "experience", key: "old" });
+
+    const { tools } = createAgentTools("en", "s1");
+
+    // Confirmed batch should succeed
+    const batchResult = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+      confirmationId,
+    }, toolCtx);
+    expect(batchResult.success).toBe(true);
+
+    // Now a subsequent delete_fact in the same turn should be blocked
+    const deleteResult = await tools.delete_fact.execute({
+      factId: "f3",
+    }, toolCtx);
+    expect(deleteResult.success).toBe(false);
+    expect(deleteResult.code).toBe("REQUIRES_CONFIRMATION");
+  });
+
+  it("confirmed batch_facts consumes pending even when some deletes return false", async () => {
+    const confirmationId = "conf-partial-delete";
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f1", "f2"],
+        confirmationId,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    // f1 deletes successfully, f2 returns false (already gone / access denied)
+    mockDeleteFact.mockImplementation((factId: string) => factId === "f1");
+    mockGetFactById.mockReturnValue({ id: "f1", category: "skill", key: "old" });
+
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+      confirmationId,
+    }, toolCtx) as any;
+
+    // Should succeed but with partial results
+    expect(result.success).toBe(true);
+    expect(result.deleted).toBe(1);
+    // Pending IS consumed
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings.length).toBeGreaterThan(0);
+    // Verify pending was consumed
+    const consumeCalls = mockMergeSessionMeta.mock.calls.filter(
+      (call: any[]) => call[1]?.pendingConfirmations === null
+    );
+    expect(consumeCalls.length).toBe(1);
+  });
+
+  it("batch_facts with identity delete ops is rejected", async () => {
+    const confirmationId = "conf-identity-test";
+    mockGetSessionMeta.mockReturnValue({
+      pendingConfirmations: [{
+        id: "p1",
+        type: "bulk_delete",
+        factIds: ["f-identity", "f2"],
+        confirmationId,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    // getFactById returns an identity fact for f-identity
+    mockGetFactById.mockImplementation((id: string) => {
+      if (id === "f-identity") return { id: "f-identity", category: "identity", key: "name" };
+      return { id: "f2", category: "skill", key: "ts" };
+    });
+
+    const { tools } = createAgentTools("en", "s1");
+
+    // Even with valid confirmationId, identity deletes should be rejected in batch
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f-identity" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+      confirmationId,
+    }, toolCtx);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("identity");
+  });
+
+  it("batch_facts rejects same-turn self-confirmation", async () => {
+    // Simulate: agent calls batch_facts → gets REQUIRES_CONFIRMATION → immediately retries
+    const { tools } = createAgentTools("en", "s1");
+
+    // First call: should block and return confirmationId
+    const firstResult = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+    }, toolCtx) as any;
+    expect(firstResult.success).toBe(false);
+    expect(firstResult.confirmationId).toBeDefined();
+
+    // Second call in same turn: should reject even with valid confirmationId
+    const secondResult = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "delete" as const, factId: "f2" },
+      ],
+      confirmationId: firstResult.confirmationId,
+    }, toolCtx) as any;
+    expect(secondResult.success).toBe(false);
+    expect(secondResult.code).toBe("REQUIRES_CONFIRMATION");
+    expect(secondResult.message).toContain("same turn");
+  });
 });

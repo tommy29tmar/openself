@@ -180,6 +180,7 @@ export function createAgentTools(
   let _identityBlockedThisTurn = false;
   let _deleteBlockedThisTurn = false;
   let _deletionCountThisTurn = 0;
+  const _batchPendingIdsThisTurn = new Set<string>();
 
   /**
    * Identity overwrite gate. Returns null if allowed, or a message object if blocked.
@@ -276,7 +277,7 @@ export function createAgentTools(
    */
   function deleteGate(factId: string): { requiresConfirmation: true; message: string } | null {
     if (_deleteBlockedThisTurn) {
-      const existingPending = pendings.find(p => p.type === "bulk_delete");
+      const existingPending = pendings.find(p => p.type === "bulk_delete" && !p.confirmationId);
       if (existingPending?.factIds && !existingPending.factIds.includes(factId)) {
         existingPending.factIds.push(factId);
         mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
@@ -285,7 +286,7 @@ export function createAgentTools(
     }
 
     // Check pending (confirmed delete from previous turn) — consume per-factId
-    const matchIdx = pendings.findIndex(p => p.type === "bulk_delete" && p.factIds?.includes(factId));
+    const matchIdx = pendings.findIndex(p => p.type === "bulk_delete" && !p.confirmationId && p.factIds?.includes(factId));
     if (matchIdx >= 0) {
       const pending = pendings[matchIdx];
       pending.factIds = pending.factIds!.filter((id: string) => id !== factId);
@@ -493,25 +494,98 @@ export function createAgentTools(
           factId: z.string(),
         }),
       ])).max(20),
+      confirmationId: z.string().optional().describe("Pass the confirmationId from a previous REQUIRES_CONFIRMATION response to confirm bulk deletions"),
     }),
-    execute: async ({ operations }) => {
+    execute: async ({ operations, confirmationId }) => {
       if (operations.length > 20) {
         return { success: false, error: "MAX_BATCH_SIZE", message: "Maximum 20 operations per batch", created: 0, deleted: 0 };
       }
 
-      // Pre-flight: batch with ≥2 deletes → all blocked (zero execute)
       const deleteOps = operations.filter(op => op.action === "delete");
+
+      // Pre-flight: identity-delete enforcement (rejected from batch regardless of confirmation)
+      for (const op of deleteOps) {
+        const factId = (op as { factId: string }).factId;
+        const fact = getFactById(factId, sessionId, readKeys);
+        if (fact && fact.category === "identity") {
+          return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot delete identity fact ${factId} via batch_facts. Use delete_fact with cross-turn confirmation instead.`, created: 0, deleted: 0 };
+        }
+      }
+
+      // Pre-flight: duplicate factId rejection
+      const deleteFactIds = deleteOps.map(op => (op as { factId: string }).factId);
+      const uniqueDeleteFactIds = new Set(deleteFactIds);
+      if (uniqueDeleteFactIds.size !== deleteFactIds.length) {
+        return { success: false, error: "DUPLICATE_FACT_IDS", message: "Duplicate factIds in delete operations", created: 0, deleted: 0 };
+      }
+
+      // Pre-flight: batch with ≥2 deletes → confirmation required
+      let _batchPreflightConfirmed = false;
+      let pendingToConsumeId: string | null = null;
+
       if (deleteOps.length >= 2) {
-        const factIds = deleteOps.map(op => (op as { factId: string }).factId);
-        _deleteBlockedThisTurn = true;
-        pendings.push({
-          id: randomUUID(),
-          type: "bulk_delete",
-          factIds,
-          createdAt: new Date().toISOString(),
-        });
-        mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-        return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, message: "Batch with 2+ deletions requires explicit user confirmation. List the items and ask the user to confirm.", created: 0, deleted: 0 };
+        if (confirmationId) {
+          // Find matching pending by confirmationId
+          const matchedPending = pendings.find(
+            p => p.type === "bulk_delete" && p.confirmationId === confirmationId
+          );
+          if (matchedPending) {
+            // Same-turn self-confirmation check
+            if (_batchPendingIdsThisTurn.has(matchedPending.id)) {
+              return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, message: "Cannot confirm batch deletions in the same turn — wait for user confirmation in a new message.", created: 0, deleted: 0 };
+            }
+            // Verify factIds match (symmetric set comparison)
+            const pendingSet = new Set(matchedPending.factIds ?? []);
+            const requestSet = uniqueDeleteFactIds;
+            const setsMatch = pendingSet.size === requestSet.size && [...pendingSet].every(id => requestSet.has(id));
+            if (setsMatch) {
+              _batchPreflightConfirmed = true;
+              pendingToConsumeId = matchedPending.id;
+            } else {
+              // FactIds mismatch — issue new confirmationId
+              const newConfirmationId = randomUUID();
+              const newPendingId = randomUUID();
+              _batchPendingIdsThisTurn.add(newPendingId);
+              pendings.push({
+                id: newPendingId,
+                type: "bulk_delete",
+                factIds: deleteFactIds,
+                confirmationId: newConfirmationId,
+                createdAt: new Date().toISOString(),
+              });
+              mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+              return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, confirmationId: newConfirmationId, message: "Batch deletions factIds do not match the confirmed set. Re-confirm with the correct list.", created: 0, deleted: 0 };
+            }
+          } else {
+            // No matching pending — issue new confirmationId
+            const newConfirmationId = randomUUID();
+            const newPendingId = randomUUID();
+            _batchPendingIdsThisTurn.add(newPendingId);
+            pendings.push({
+              id: newPendingId,
+              type: "bulk_delete",
+              factIds: deleteFactIds,
+              confirmationId: newConfirmationId,
+              createdAt: new Date().toISOString(),
+            });
+            mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+            return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, confirmationId: newConfirmationId, message: "Batch with 2+ deletions requires explicit user confirmation. List the items and ask the user to confirm.", created: 0, deleted: 0 };
+          }
+        } else {
+          // No confirmationId provided — issue one
+          const newConfirmationId = randomUUID();
+          const newPendingId = randomUUID();
+          _batchPendingIdsThisTurn.add(newPendingId);
+          pendings.push({
+            id: newPendingId,
+            type: "bulk_delete",
+            factIds: deleteFactIds,
+            confirmationId: newConfirmationId,
+            createdAt: new Date().toISOString(),
+          });
+          mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+          return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, confirmationId: newConfirmationId, message: "Batch with 2+ deletions requires explicit user confirmation. List the items and ask the user to confirm.", created: 0, deleted: 0 };
+        }
       }
 
       // Pre-flight: identity overwrites
@@ -560,19 +634,35 @@ export function createAgentTools(
               break;
             }
             case "delete": {
-              // Single delete within batch — apply delete gate
-              const dBlocked = deleteGate(op.factId);
-              if (dBlocked) {
-                warnings.push(`Delete of ${op.factId} blocked: ${dBlocked.message}`);
-                break;
+              if (_batchPreflightConfirmed) {
+                // Confirmed batch — skip deleteGate, execute directly
+                const old = getFactById(op.factId, sessionId, readKeys);
+                if (old) {
+                  const { id, ...rest } = old;
+                  reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
+                }
+                const didDelete = deleteFact(op.factId, sessionId, readKeys);
+                if (didDelete) {
+                  deleted++;
+                  _deletionCountThisTurn++;
+                } else {
+                  warnings.push(`Delete of ${op.factId} returned false (already gone or access denied)`);
+                }
+              } else {
+                // Single delete within batch — apply delete gate
+                const dBlocked = deleteGate(op.factId);
+                if (dBlocked) {
+                  warnings.push(`Delete of ${op.factId} blocked: ${dBlocked.message}`);
+                  break;
+                }
+                const old = getFactById(op.factId, sessionId, readKeys);
+                if (old) {
+                  const { id, ...rest } = old;
+                  reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
+                }
+                const didDelete = deleteFact(op.factId, sessionId, readKeys);
+                if (didDelete) deleted++;
               }
-              const old = getFactById(op.factId, sessionId, readKeys);
-              if (old) {
-                const { id, ...rest } = old;
-                reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
-              }
-              const didDelete = deleteFact(op.factId, sessionId, readKeys);
-              if (didDelete) deleted++;
               break;
             }
           }
@@ -587,8 +677,19 @@ export function createAgentTools(
         try { recomposeAfterMutation(); } catch (e) {
           logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e), source: "batch_facts" } });
         }
+
+        // Consume pending AFTER successful execution
+        if (_batchPreflightConfirmed && pendingToConsumeId) {
+          const idx = pendings.findIndex(p => p.id === pendingToConsumeId);
+          if (idx >= 0) {
+            pendings.splice(idx, 1);
+          }
+          mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length > 0 ? pendings : null });
+        }
+
         return { success: true, created, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
       } catch (err) {
+        // Do NOT consume pending on error — user already confirmed but execution failed
         if (reverseOps.length > 0) {
           try {
             logTrustAction(effectiveOwnerKey, "batch_facts",
