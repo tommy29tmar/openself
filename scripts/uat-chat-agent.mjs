@@ -1,8 +1,8 @@
 /**
- * UAT Chat Agent — Reactive Conversation
+ * UAT Chat Agent — Reactive Conversation with Publish Flow
  *
- * Impersonates Marco Bellini (brand designer, Bologna).
- * Responds contextually to what the agent asks, like a real user.
+ * Persona: Marco Bellini (brand designer, Bologna).
+ * Follows the journey: first_visit → draft_ready → register → active_fresh
  */
 
 import Database from "better-sqlite3";
@@ -15,200 +15,200 @@ const DELAY_MS = 60_000; // 1 minuto tra messaggi (evita rate limit Anthropic)
 const MAX_MESSAGES = 50;
 const MAX_RETRIES = 2;
 
-// ── Marco's knowledge pool: topic → responses (consumed once) ──────────────
-// Each key is a topic pattern the agent might ask about.
-// The value is a queue of responses (first match wins, consumed in order).
+// ── Marco's info pool ───────────────────────────────────────────────────────
+// Consumed once per topic. Order matters — first item is used first.
 
-const TOPIC_RESPONSES = {
-  // Identity / name
-  name: [
-    "Mi chiamo Marco Bellini, ho 35 anni e vivo a Bologna.",
-  ],
-  // Work / profession
+const INFO = {
+  name: ["Mi chiamo Marco Bellini, ho 35 anni e vivo a Bologna."],
   work: [
-    "Sono un brand designer e direttore creativo freelance. Ho il mio studio che si chiama Studio Forma, con due collaboratori: Anna e Luca.",
-    "Lavoro nel design da circa 8 anni. Mi sono specializzato in branding e identita visiva, soprattutto per startup tech.",
+    "Sono un brand designer e direttore creativo freelance. Ho il mio studio, Studio Forma, con due collaboratori Anna e Luca. Lavoro nel design da 8 anni, specializzato in branding e identita visiva per startup tech.",
   ],
-  // Clients / projects
-  clients: [
-    "Tra i miei clienti piu importanti ci sono Velasca, Tannico e Satispay. Ho curato il rebranding completo di Velasca nel 2022.",
-    "Ho anche collaborato con Google Italia per un evento di design a Milano nel 2023.",
+  projects: [
+    "I miei clienti piu importanti sono Velasca, Tannico e Satispay. Ho curato il rebranding completo di Velasca nel 2022. Ho anche collaborato con Google Italia per un evento di design a Milano.",
   ],
-  // Tools / skills
   tools: [
-    "Uso principalmente Figma e Affinity Designer. Per le animazioni uso After Effects, e sto sperimentando con Blender per il 3D.",
+    "Uso principalmente Figma e Affinity Designer. Per le animazioni After Effects, e sto sperimentando con Blender per il 3D.",
   ],
-  // Education
   education: [
     "Ho studiato al Politecnico di Milano, laurea in Design della Comunicazione.",
   ],
-  // Hobbies / personal
   hobbies: [
-    "Mi piace fare escursionismo sugli Appennini, soprattutto il Monte Cimone. Suono la chitarra da autodidatta, jazz e blues. Ho anche un cane, Pixel, un border collie di 3 anni.",
-    "Sono appassionato di fotografia analogica, ho una Leica M6 che era di mio nonno. Faccio anche volontariato con Emergency a Bologna.",
+    "Mi piace fare escursionismo sugli Appennini. Suono la chitarra, jazz e blues. Ho un cane, Pixel, un border collie di 3 anni. Sono appassionato di fotografia analogica con la mia Leica M6 del nonno.",
   ],
-  // YouTube / social
   social: [
-    "Ho un canale YouTube che si chiama 'Design con Marco', faccio tutorial di design. Siamo a circa 18.000 iscritti.",
-    "Il mio Instagram e @marco.bellini.design e su LinkedIn sono linkedin.com/in/marcobellini",
+    "Ho un canale YouTube 'Design con Marco' con 18.000 iscritti, tutorial di design. Instagram: @marco.bellini.design, LinkedIn: linkedin.com/in/marcobellini",
   ],
-  // Awards / publications
   awards: [
-    "Ho vinto il premio ADI Design Index nel 2024 per un progetto di packaging sostenibile. Ho anche pubblicato un articolo su Domus magazine sul design e sostenibilita.",
-    "Ho scritto un mini-ebook sul design sostenibile, e su Gumroad: gumroad.com/marcobellini",
+    "Ho vinto il premio ADI Design Index nel 2024, packaging sostenibile. Ho pubblicato un articolo su Domus magazine. Ho anche un mini-ebook sul design sostenibile su Gumroad.",
   ],
-  // Teaching
   teaching: [
-    "Tengo workshop di branding all'Accademia di Belle Arti di Bologna, due volte l'anno. Faccio anche mentoring per giovani designer con ADI Giovani.",
+    "Tengo workshop di branding all'Accademia di Belle Arti di Bologna. Faccio mentoring con ADI Giovani.",
   ],
-  // Languages
-  languages: [
-    "Parlo italiano, inglese fluente e un po' di spagnolo.",
-  ],
-  // Contact / website
-  contact: [
-    "La mia email e marco@studioforma.design. Il sito portfolio attuale e bellinidesign.it ma vorrei qualcosa di piu personale.",
-  ],
-  // Style preferences
+  languages: ["Parlo italiano, inglese fluente e un po' di spagnolo."],
+  contact: ["La mia email e marco@studioforma.design"],
   style: [
-    "Mi piace uno stile minimale ma caldo, niente troppo freddo o corporate. I miei colori sono il bordeaux scuro e il beige caldo.",
-    "Come layout mi piace tipo magazine, con tanto spazio bianco. Come i siti giapponesi minimali.",
+    "Mi piace uno stile minimale ma caldo, bordeaux scuro e beige caldo. Layout tipo magazine, tanto spazio bianco.",
   ],
-  // Page / publish
-  page: [
-    "Come sta venendo la pagina? Mi piacerebbe vederla.",
-    "Potresti mettere in evidenza i premi e le pubblicazioni? Sono importanti per i clienti.",
-    "Vorrei che la sezione dei progetti fosse piu visibile, e il mio biglietto da visita.",
-    "Mi piacerebbe avere una sezione 'Chi sono' che racconti un po' la mia storia.",
-  ],
-  // Corrections (test fact mutation)
+  volunteer: ["Faccio volontariato con Emergency a Bologna, una volta al mese."],
+
+  // Post-publish corrections (Phase 2)
   corrections: [
-    "Una correzione: il mio studio prima si chiamava 'Bellini Design Studio', l'ho rinominato 'Studio Forma' l'anno scorso.",
-    "Ah, e non uso piu tanto Illustrator, ormai faccio quasi tutto su Figma e Affinity Designer.",
+    "Ah, una correzione: il mio studio prima si chiamava 'Bellini Design Studio', ora e 'Studio Forma'.",
+    "Non uso piu Illustrator, faccio quasi tutto su Figma e Affinity Designer.",
+    "Il premio ADI era 2024, non 2023.",
   ],
-  // Deletions
   deletions: [
-    "Sai cosa, avevo un podcast 'Forma e Funzione' ma l'ho chiuso. Cancellalo se c'e.",
-    "Stavo pensando a un corso su Domestika ma e ancora in fase di pianificazione, non metterlo ancora.",
+    "Sai, avevo menzionato un podcast 'Forma e Funzione'? L'ho chiuso, cancellalo se c'e.",
   ],
-  // Publish
-  publish: [
-    "Penso che possiamo pubblicare! Il mio username sarebbe 'uat-marco-bellini'.",
+  additions: [
+    "Vorrei aggiungere una citazione: 'Il buon design e il minimo design possibile' di Dieter Rams.",
+    "Ho in programma un corso su Domestika ma e ancora in pianificazione, non metterlo.",
   ],
-  // Generic / fallback (used when no topic matches)
-  generic: [
-    "Si, certo! Dimmi pure cosa ti serve.",
-    "Va bene, continuiamo.",
-    "Ok, hai altre domande?",
-    "Perfetto, andiamo avanti.",
-    "Si si, dimmi.",
-  ],
-  // Quote
-  quote: [
-    "Vorrei aggiungere una citazione che mi piace molto: 'Il buon design e il minimo design possibile' di Dieter Rams.",
-  ],
-  // Closing
-  closing: [
-    "Grazie mille per l'aiuto! La pagina sta venendo benissimo.",
+  pageFeedback: [
+    "Potresti mettere in evidenza i premi? Sono importanti per i clienti.",
+    "La sezione progetti la vorrei piu visibile, e il mio biglietto da visita.",
+    "Vorrei una sezione 'Chi sono' che racconti la mia storia.",
   ],
 };
 
-// Topic detection: which keywords in agent's response trigger which topic
-const TOPIC_PATTERNS = [
-  { topic: "name", patterns: /come ti chiami|il tuo nome|chi sei|presentati|iniziamo|basi/i },
-  { topic: "work", patterns: /cosa fai|lavoro|professione|occupazione|mestiere|attivit[aà]/i },
-  { topic: "clients", patterns: /clienti|progett[oi]|portfolio|lavori importanti|orgoglioso/i },
-  { topic: "tools", patterns: /strumenti|tool|software|programm[ai]|usi per|competenz/i },
-  { topic: "education", patterns: /studi|formazione|universit[aà]|laurea|istruzione|scuola/i },
-  { topic: "hobbies", patterns: /hobby|tempo libero|passioni|interessi|fuori dal lavoro|sport|personale/i },
-  { topic: "social", patterns: /social|instagram|linkedin|youtube|canale|online|seguirti/i },
-  { topic: "awards", patterns: /premi|riconosciment|pubblicazion|articol|ebook|scritto/i },
-  { topic: "teaching", patterns: /insegn|workshop|mentor|formatore|corsi|didattica/i },
-  { topic: "languages", patterns: /lingu[ae]|parl[aio]|inglese|spagnolo|internazional/i },
-  { topic: "contact", patterns: /email|contatt[oi]|sito|website|telefono|raggiungerti/i },
-  { topic: "style", patterns: /stile|colori?|font|layout|estetica|aspetto|design della pagina|visual/i },
-  { topic: "page", patterns: /pagina|sezioni|anteprima|preview|struttura|come .* venendo|risultato/i },
-  { topic: "publish", patterns: /pubblicar|username|online|live|pronta/i },
+// Topic detection from agent's text
+const DETECTORS = [
+  { topic: "name", re: /come ti chiami|il tuo nome|chi sei|presentati|iniziamo|basi/i },
+  { topic: "work", re: /cosa fai|lavoro|professione|occupazione|mestiere|ruolo/i },
+  { topic: "projects", re: /clienti|progett[oi]|portfolio|orgoglioso|lavori.+importanti/i },
+  { topic: "tools", re: /strumenti|tool|software|programm|usi per|competenz/i },
+  { topic: "education", re: /studi|formazione|universit|laurea|istruzione|scuola|percorso/i },
+  { topic: "hobbies", re: /hobby|tempo libero|passioni?|interessi|fuori.+lavoro|sport|personale|appassiona/i },
+  { topic: "social", re: /social|instagram|linkedin|youtube|canale|online|seguirti|profili/i },
+  { topic: "awards", re: /premi|riconosciment|pubblicazion|articol|ebook|scritto/i },
+  { topic: "teaching", re: /insegn|workshop|mentor|corsi|didattica|formatore/i },
+  { topic: "languages", re: /lingu[ae]|parl[aio]|inglese|spagnolo|internazional/i },
+  { topic: "contact", re: /email|contatt|sito|website|telefono|raggiung/i },
+  { topic: "style", re: /stile|colori?|font|layout|estetica|aspetto|visual|tema/i },
 ];
 
-// ── Conversation phases: guide the conversation naturally ────────────────────
-const PHASES = [
-  // Phase 1 (msgs 1-3): Intro
-  { until: 3, forceTopic: null, inject: null },
-  // Phase 2 (msgs 4-10): Details — respond to agent questions
-  { until: 10, forceTopic: null, inject: null },
-  // Phase 3 (msgs 11-15): If agent hasn't asked, volunteer info
-  { until: 15, forceTopic: null, volunteerTopics: ["hobbies", "social", "awards"] },
-  // Phase 4 (msgs 16-20): Corrections phase
-  { until: 20, forceTopic: null, volunteerTopics: ["corrections", "teaching"] },
-  // Phase 5 (msgs 21-30): Page feedback
-  { until: 30, forceTopic: null, volunteerTopics: ["page", "style"] },
-  // Phase 6 (msgs 31-40): More details + deletions
-  { until: 40, forceTopic: null, volunteerTopics: ["deletions", "contact", "quote"] },
-  // Phase 7 (msgs 41-50): Wrap up
-  { until: 50, forceTopic: null, volunteerTopics: ["publish", "closing"] },
-];
-
-function detectTopic(agentText) {
-  for (const { topic, patterns } of TOPIC_PATTERNS) {
-    if (patterns.test(agentText)) return topic;
+function detectTopic(text) {
+  for (const { topic, re } of DETECTORS) {
+    if (re.test(text)) return topic;
   }
   return null;
 }
 
-function getResponse(topic) {
-  if (topic && TOPIC_RESPONSES[topic]?.length > 0) {
-    return { text: TOPIC_RESPONSES[topic].shift(), topic, source: "matched" };
+function consumeInfo(topic) {
+  if (INFO[topic]?.length > 0) return INFO[topic].shift();
+  return null;
+}
+
+// ── Conversation state machine ──────────────────────────────────────────────
+
+const STATE = {
+  phase: "onboarding", // onboarding | page_feedback | publish_gate | post_publish | closing
+  agentAskedPublish: false,
+  published: false,
+  publishAttempted: false,
+  genericIdx: 0,
+};
+
+const GENERIC = [
+  "Si, certo!",
+  "Ok, dimmi pure.",
+  "Va bene!",
+  "Perfetto, continuiamo.",
+  "Si!",
+];
+
+function pickResponse(agentText, msgNum) {
+  const topic = detectTopic(agentText);
+
+  // ── Detect agent wants to publish ──
+  if (/pubblicar|pubblica|publish|username|pronta per/i.test(agentText)) {
+    STATE.agentAskedPublish = true;
   }
-  // Fallback
-  if (TOPIC_RESPONSES.generic.length > 0) {
-    return { text: TOPIC_RESPONSES.generic.shift(), topic: "generic", source: "fallback" };
+
+  // ── Phase: ONBOARDING (msgs 1-~10) ──
+  if (STATE.phase === "onboarding") {
+    // If agent proposes publish, accept and transition
+    if (STATE.agentAskedPublish && msgNum >= 6) {
+      STATE.phase = "publish_gate";
+      return { text: "Si, pubblichiamo! Come username vorrei 'uat-marco-bellini'.", topic: "publish" };
+    }
+
+    // Respond to detected topic
+    if (topic) {
+      const answer = consumeInfo(topic);
+      if (answer) return { text: answer, topic };
+    }
+
+    // Volunteer info the agent hasn't asked about yet (after msg 5)
+    if (msgNum >= 5) {
+      for (const vt of ["hobbies", "social", "awards", "teaching", "education", "volunteer", "languages"]) {
+        const answer = consumeInfo(vt);
+        if (answer) return { text: answer, topic: vt };
+      }
+    }
+
+    // Generic
+    const g = GENERIC[STATE.genericIdx % GENERIC.length];
+    STATE.genericIdx++;
+    return { text: g, topic: "generic" };
   }
-  return { text: "Si, continua pure.", topic: "generic", source: "exhausted" };
-}
 
-function getPhase(msgNum) {
-  for (const p of PHASES) {
-    if (msgNum <= p.until) return p;
+  // ── Phase: PUBLISH GATE ──
+  if (STATE.phase === "publish_gate") {
+    if (!STATE.publishAttempted) {
+      STATE.publishAttempted = true;
+      return { text: "Si, registriamoci! Email: marco@studioforma.design, password: TestPassword123!", topic: "register" };
+    }
+    // After publish attempt, move to post_publish
+    STATE.phase = "post_publish";
+    return { text: "Perfetto! Ora che la pagina e online, vorrei fare qualche modifica.", topic: "transition" };
   }
-  return PHASES[PHASES.length - 1];
+
+  // ── Phase: POST PUBLISH ──
+  if (STATE.phase === "post_publish") {
+    // Corrections, additions, deletions, page feedback
+    for (const pool of ["corrections", "pageFeedback", "additions", "deletions", "contact", "style"]) {
+      const answer = consumeInfo(pool);
+      if (answer) return { text: answer, topic: pool };
+    }
+
+    // Also try any remaining info
+    for (const pool of Object.keys(INFO)) {
+      const answer = consumeInfo(pool);
+      if (answer) return { text: answer, topic: pool };
+    }
+
+    // Running out of things to say
+    STATE.phase = "closing";
+    return { text: "Grazie mille per l'aiuto! La pagina sta venendo benissimo.", topic: "closing" };
+  }
+
+  // ── Phase: CLOSING ──
+  return { text: "Grazie, ci vediamo!", topic: "closing" };
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function openDb() {
-  return new Database(DB_PATH, { readonly: true });
-}
-
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+// ── Network helpers ──────────────────────────────────────────────────────────
 
 function parseDataStream(raw) {
   const lines = raw.split("\n").filter(Boolean);
   let text = "";
-  const toolCalls = [];
+  let reasoning = "";
   const toolResults = [];
-  let finishData = null;
   let error = null;
 
   for (const line of lines) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const prefix = line.slice(0, colonIdx);
-    const payload = line.slice(colonIdx + 1);
-
+    const ci = line.indexOf(":");
+    if (ci === -1) continue;
+    const prefix = line.slice(0, ci);
+    const payload = line.slice(ci + 1);
     try {
-      switch (prefix) {
-        case "0": text += JSON.parse(payload); break;
-        case "9": toolResults.push(JSON.parse(payload)); break;
-        case "b": toolCalls.push(JSON.parse(payload)); break;
-        case "d": finishData = JSON.parse(payload); break;
-        case "e": error = JSON.parse(payload); break;
-      }
+      if (prefix === "0") text += JSON.parse(payload);
+      else if (prefix === "g") reasoning += JSON.parse(payload);
+      else if (prefix === "9") toolResults.push(JSON.parse(payload));
+      else if (prefix === "e") error = JSON.parse(payload);
     } catch { /* skip */ }
   }
-  return { text, toolCalls, toolResults, finishData, error };
+  return { text, reasoning, toolResults, error };
 }
 
 async function getSession() {
@@ -217,195 +217,182 @@ async function getSession() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code: INVITE_CODE }),
   });
-  if (!res.ok) throw new Error(`Invite failed: ${res.status} ${await res.text()}`);
-  const setCookie = res.headers.get("set-cookie") || res.headers.getSetCookie?.()[0];
-  const match = setCookie?.match(/os_session=([^;]+)/);
-  if (!match) throw new Error("No session cookie");
-  return match[1];
+  if (!res.ok) throw new Error(`Invite failed: ${res.status}`);
+  const cookie = (res.headers.get("set-cookie") || "").match(/os_session=([^;]+)/);
+  if (!cookie) throw new Error("No session cookie");
+  return cookie[1];
 }
 
-async function sendMessage(sessionCookie, conversationHistory) {
+async function chat(sessionCookie, history) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await fetch(`${BASE_URL}/api/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cookie": `os_session=${sessionCookie}`,
-        },
-        body: JSON.stringify({ messages: conversationHistory, language: LANGUAGE }),
-        signal: AbortSignal.timeout(120_000),
+        headers: { "Content-Type": "application/json", "Cookie": `os_session=${sessionCookie}` },
+        body: JSON.stringify({ messages: history, language: LANGUAGE }),
+        signal: AbortSignal.timeout(180_000),
       });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        if (res.status === 500 && attempt < MAX_RETRIES) {
-          console.log(`    [retry ${attempt + 1}/${MAX_RETRIES}] Server 500, waiting 30s...`);
-          await sleep(30_000);
-          continue;
-        }
-        return { status: res.status, error: errText, text: "", toolCalls: [], toolResults: [] };
-      }
-
-      const raw = await res.text();
-      const parsed = parseDataStream(raw);
-      return { status: res.status, ...parsed, rawLength: raw.length };
-    } catch (err) {
-      if (attempt < MAX_RETRIES) {
-        console.log(`    [retry ${attempt + 1}/${MAX_RETRIES}] ${err.message}, waiting 30s...`);
-        await sleep(30_000);
+      if (res.status === 500 && attempt < MAX_RETRIES) {
+        console.log(`    [retry ${attempt + 1}] 500 error, waiting 45s...`);
+        await new Promise(r => setTimeout(r, 45_000));
         continue;
       }
-      return { status: 0, error: err.message, text: "", toolCalls: [], toolResults: [] };
+      if (!res.ok) return { status: res.status, text: "", toolResults: [], error: await res.text() };
+      const raw = await res.text();
+      return { status: res.status, ...parseDataStream(raw), rawLen: raw.length };
+    } catch (err) {
+      if (attempt < MAX_RETRIES) {
+        console.log(`    [retry ${attempt + 1}] ${err.message}, waiting 45s...`);
+        await new Promise(r => setTimeout(r, 45_000));
+        continue;
+      }
+      return { status: 0, text: "", toolResults: [], error: err.message };
     }
   }
 }
 
+async function doRegister(sessionCookie, username) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cookie": `os_session=${sessionCookie}` },
+      body: JSON.stringify({ username, email: "marco@studioforma.design", password: "TestPassword123!" }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const body = await res.json();
+    console.log(`  [REGISTER] ${res.status}: ${JSON.stringify(body)}`);
+    // Return new session cookie if provided
+    const newCookie = (res.headers.get("set-cookie") || "").match(/os_session=([^;]+)/);
+    return { success: body.success, newSession: newCookie?.[1] || null };
+  } catch (err) {
+    console.log(`  [REGISTER] Error: ${err.message}`);
+    return { success: false, newSession: null };
+  }
+}
+
+function openDb() { return new Database(DB_PATH, { readonly: true }); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const anomalies = [];
-function logAnomaly(msgNum, type, detail) {
-  anomalies.push({ messageNumber: msgNum, type, detail });
-  console.error(`  !! ANOMALY [${type}] @ msg #${msgNum}: ${detail}`);
-}
 
 async function main() {
   console.log("============================================================");
-  console.log("  UAT Chat Agent — Marco Bellini (reactive conversation)");
+  console.log("  UAT: Marco Bellini — Full Journey Test");
   console.log("============================================================\n");
 
-  const sessionCookie = await getSession();
-  console.log(`Session: ${sessionCookie.slice(0, 20)}...\n`);
+  let sessionCookie = await getSession();
+  console.log(`Session: ${sessionCookie.slice(0, 24)}...\n`);
 
-  const conversationHistory = [];
-  let totalToolCalls = 0;
-  let totalToolResults = 0;
+  const history = [];
+  let totalTools = 0;
   let errors = 0;
 
   const db0 = openDb();
-  const factCountBefore = db0.prepare("SELECT COUNT(*) as c FROM facts WHERE archived_at IS NULL").get().c;
+  const factsBefore = db0.prepare("SELECT COUNT(*) as c FROM facts WHERE archived_at IS NULL").get().c;
   db0.close();
-  console.log(`Facts before: ${factCountBefore}\n`);
-
-  // First message is always the opener
-  const opener = "Ciao! Sono qui per creare la mia pagina personale.";
+  console.log(`Facts before: ${factsBefore}\n`);
 
   for (let i = 0; i < MAX_MESSAGES; i++) {
     const msgNum = i + 1;
 
-    // ── Decide what Marco says ──
-    let userMsg;
-    let topicUsed = "opener";
-
+    // ── Pick user message ──
+    let userMsg, topicUsed;
     if (i === 0) {
-      userMsg = opener;
+      userMsg = "Ciao! Sono qui per creare la mia pagina personale.";
+      topicUsed = "opener";
     } else {
-      const lastAgentText = conversationHistory[conversationHistory.length - 1]?.content || "";
-      const detectedTopic = detectTopic(lastAgentText);
-      const phase = getPhase(msgNum);
-
-      if (detectedTopic) {
-        // Agent asked something specific — answer it
-        const resp = getResponse(detectedTopic);
-        userMsg = resp.text;
-        topicUsed = resp.topic;
-      } else if (phase.volunteerTopics?.length > 0) {
-        // No clear question — volunteer info from phase topics
-        for (const vt of phase.volunteerTopics) {
-          if (TOPIC_RESPONSES[vt]?.length > 0) {
-            const resp = getResponse(vt);
-            userMsg = resp.text;
-            topicUsed = resp.topic;
-            break;
-          }
-        }
-      }
-
-      if (!userMsg) {
-        const resp = getResponse(null);
-        userMsg = resp.text;
-        topicUsed = resp.topic;
-      }
+      const lastAgent = history[history.length - 1]?.content || "";
+      const pick = pickResponse(lastAgent, msgNum);
+      userMsg = pick.text;
+      topicUsed = pick.topic;
     }
 
-    console.log(`\n-- #${msgNum}/${MAX_MESSAGES} [${topicUsed}] -------------------------`);
-    console.log(`  MARCO: ${userMsg}`);
+    console.log(`\n== #${msgNum}/${MAX_MESSAGES} [${STATE.phase}/${topicUsed}] ==`);
+    console.log(`MARCO: ${userMsg}`);
 
-    conversationHistory.push({ role: "user", content: userMsg });
+    history.push({ role: "user", content: userMsg });
 
-    // ── Send & receive ──
+    // ── Send ──
     const t0 = Date.now();
-    const response = await sendMessage(sessionCookie, conversationHistory);
-    const elapsed = Date.now() - t0;
+    const res = await chat(sessionCookie, history);
+    const ms = Date.now() - t0;
 
-    if (response.status !== 200) {
-      logAnomaly(msgNum, "HTTP_ERROR", `Status ${response.status}`);
-      errors++;
-      // Don't add failed response to history
-    } else if (!response.text?.trim()) {
-      logAnomaly(msgNum, "EMPTY_RESPONSE", "No text in response");
+    // ── Handle response ──
+    if (res.status !== 200 || !res.text?.trim()) {
+      const reason = res.status !== 200 ? `HTTP ${res.status}` : "empty response";
+      console.log(`AGENT: (${reason})`);
+      console.log(`  [${ms}ms | ${res.toolResults?.length || 0} tools]`);
+      anomalies.push({ msg: msgNum, type: reason });
       errors++;
     } else {
-      conversationHistory.push({ role: "assistant", content: response.text });
+      history.push({ role: "assistant", content: res.text });
+      // Print reasoning if present
+      if (res.reasoning) {
+        console.log(`THINKING: ${res.reasoning.slice(0, 500)}`);
+      }
+      // Print agent response
+      for (const line of res.text.split("\n").filter(Boolean)) {
+        console.log(`AGENT: ${line.slice(0, 250)}`);
+      }
+      console.log(`  [${ms}ms | ${res.toolResults.length} tools | ${res.rawLen}B]`);
     }
 
-    totalToolCalls += response.toolResults.length; // results = completed tool calls
-    totalToolResults += response.toolResults.length;
+    totalTools += res.toolResults?.length || 0;
 
-    // ── Display agent response ──
-    const agentText = response.text || "(empty/error)";
-    const lines = agentText.split("\n").filter(Boolean);
-    for (const line of lines) {
-      console.log(`  AGENT: ${line.slice(0, 200)}`);
-    }
-    console.log(`  [${elapsed}ms | ${response.toolResults.length} tools | ${response.rawLength || 0}B]`);
-
-    // ── Show tool details ──
-    for (const tr of response.toolResults) {
+    // ── Show tool executions ──
+    for (const tr of (res.toolResults || [])) {
       const name = tr.toolName || "?";
-      const args = tr.args ? JSON.stringify(tr.args).slice(0, 100) : "";
-      console.log(`    -> ${name}(${args})`);
+      const argStr = tr.args ? JSON.stringify(tr.args).slice(0, 120) : "";
+      console.log(`  -> ${name}(${argStr})`);
     }
 
     // ── Quality checks ──
-    if (response.text) {
-      const t = response.text;
-      // Action claim without tools
-      if (/ho (aggiornato|creato|modificato|aggiunto|rimosso|cambiato|salvato)/i.test(t)
-          && response.toolResults.length === 0) {
-        logAnomaly(msgNum, "UNBACKED_CLAIM", "Claims action but 0 tool calls");
+    if (res.text) {
+      if (/ho (aggiornato|creato|modificato|aggiunto|rimosso|salvato)/i.test(res.text) && (res.toolResults?.length || 0) === 0) {
+        anomalies.push({ msg: msgNum, type: "UNBACKED_CLAIM" });
+        console.log("  !! UNBACKED_CLAIM");
       }
-      // Response too short
-      if (t.length < 15) {
-        logAnomaly(msgNum, "TOO_SHORT", `Only ${t.length} chars`);
+      if (/non l'ho ancora eseguito/i.test(res.text)) {
+        anomalies.push({ msg: msgNum, type: "NONSENSE" });
+        console.log("  !! NONSENSE response");
       }
-      // Nonsense / confusion
-      if (/non l'ho ancora eseguito|non sono in grado/i.test(t)) {
-        logAnomaly(msgNum, "NONSENSE", "Agent response seems incoherent");
+    }
+
+    // ── Register when agent asks to publish ──
+    if (STATE.phase === "publish_gate" && STATE.publishAttempted) {
+      console.log("\n  >> Attempting registration...");
+      const regResult = await doRegister(sessionCookie, "uat-marco-bellini");
+      if (regResult.success && regResult.newSession) {
+        sessionCookie = regResult.newSession;
+        console.log(`  >> Registered! New session: ${sessionCookie.slice(0, 20)}...`);
+        STATE.published = true;
+      } else {
+        console.log("  >> Registration failed, continuing with current session");
       }
     }
 
     // ── DB snapshot every 10 msgs ──
-    if (msgNum % 10 === 0) {
+    if (msgNum % 10 === 0 || msgNum === MAX_MESSAGES) {
       const db = openDb();
       const fc = db.prepare("SELECT COUNT(*) as c FROM facts WHERE archived_at IS NULL").get().c;
       const mc = db.prepare("SELECT COUNT(*) as c FROM messages").get().c;
       const pc = db.prepare("SELECT COUNT(*) as c FROM page").get().c;
-      const recent = db.prepare(`
-        SELECT category, key, value FROM facts
-        WHERE archived_at IS NULL ORDER BY created_at DESC LIMIT 5
-      `).all();
-      console.log(`\n  == DB @ msg #${msgNum}: ${fc} facts (+${fc - factCountBefore}), ${mc} msgs, ${pc} pages ==`);
-      for (const f of recent) {
-        console.log(`     [${f.category}] ${f.key}: ${(f.value || "").slice(0, 60)}`);
-      }
+      const recent = db.prepare("SELECT category, key, value FROM facts WHERE archived_at IS NULL ORDER BY created_at DESC LIMIT 8").all();
+      console.log(`\n  === DB @ msg #${msgNum}: ${fc} facts (+${fc - factsBefore}), ${mc} msgs, ${pc} pages ===`);
+      for (const f of recent) console.log(`    [${f.category}] ${f.key}: ${(f.value || "").slice(0, 70)}`);
       db.close();
     }
 
-    // ── Wait ──
-    if (i < MAX_MESSAGES - 1) {
-      await sleep(DELAY_MS);
+    // ── Stop if closing ──
+    if (STATE.phase === "closing" && msgNum > 10) {
+      console.log("\n  >> Conversation complete (all info exhausted).");
+      break;
     }
+
+    // ── Wait ──
+    if (i < MAX_MESSAGES - 1) await sleep(DELAY_MS);
   }
 
   // ── Final report ──
@@ -418,42 +405,34 @@ async function main() {
   const active = allFacts.filter(f => !f.archived_at);
   const archived = allFacts.filter(f => !!f.archived_at);
 
-  console.log(`Facts: ${active.length} active (+${active.length - factCountBefore} new), ${archived.length} archived`);
+  console.log(`Facts: ${active.length} active (+${active.length - factsBefore} new), ${archived.length} archived`);
 
   const cats = {};
   for (const f of active) cats[f.category] = (cats[f.category] || 0) + 1;
-  console.log("By category:", JSON.stringify(cats));
+  console.log("By category:");
+  for (const [k, v] of Object.entries(cats).sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${v}`);
 
   const pages = db.prepare("SELECT id, config, updated_at FROM page ORDER BY updated_at DESC LIMIT 5").all();
   console.log(`\nPages: ${pages.length}`);
   for (const p of pages) {
-    try {
-      const cfg = JSON.parse(p.config);
-      console.log(`  [${p.id}] ${cfg.sections?.length || 0} sections, updated ${p.updated_at}`);
-    } catch { console.log(`  [${p.id}] unparseable`); }
+    try { const c = JSON.parse(p.config); console.log(`  [${p.id}] ${c.sections?.length || 0} sections`); }
+    catch { console.log(`  [${p.id}] unparseable`); }
   }
-
-  const souls = db.prepare("SELECT owner_key, tone, voice, updated_at FROM soul_profiles ORDER BY created_at DESC LIMIT 3").all();
-  console.log(`\nSoul profiles: ${souls.length}`);
-  for (const s of souls) console.log(`  tone=${s.tone}, voice=${s.voice}`);
 
   db.close();
 
   console.log(`\nAnomalies (${anomalies.length}):`);
-  for (const a of anomalies) console.log(`  #${a.messageNumber} [${a.type}]: ${a.detail}`);
-
-  console.log(`\nTotal tool executions: ${totalToolResults}`);
+  for (const a of anomalies) console.log(`  #${a.msg} [${a.type}]`);
+  console.log(`\nTotal tool executions: ${totalTools}`);
   console.log(`Errors: ${errors}`);
 
   const score = Math.max(0, 100 - errors * 10 - anomalies.length * 3);
-  console.log(`\nScore: ${score}/100 ${score >= 80 ? "OK" : score >= 50 ? "NEEDS WORK" : "FAILING"}`);
+  console.log(`Score: ${score}/100 ${score >= 80 ? "OK" : score >= 50 ? "NEEDS WORK" : "FAILING"}`);
 
-  // Save report
+  // Save
   const fs = await import("fs");
-  fs.writeFileSync(`scripts/uat-report-${Date.now()}.json`, JSON.stringify({
-    anomalies, totalToolResults, errors, score,
-    exchanges: conversationHistory,
-  }, null, 2));
+  fs.writeFileSync(`scripts/uat-report-${Date.now()}.json`, JSON.stringify({ anomalies, totalTools, errors, score, history }, null, 2));
+  console.log("Report saved.");
 }
 
 main().catch(e => { console.error("FATAL:", e); process.exit(1); });

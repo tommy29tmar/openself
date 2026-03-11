@@ -5,26 +5,28 @@
   <title>OpenSelf Architecture Map</title>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ 
-      startOnLoad: true, 
+    mermaid.initialize({
+      startOnLoad: true,
       theme: 'dark',
       flowchart: {
-        nodeSpacing: 50,
-        rankSpacing: 90,
+        nodeSpacing: 40,
+        rankSpacing: 70,
         curve: 'basis',
-        padding: 20
+        padding: 15
       }
     });
   </script>
   <style>
-    body { 
-        background-color: #1a1a2e; 
-        color: #e0e0e0; 
-        display: flex; 
-        justify-content: center; 
-        padding: 2rem; 
-        font-family: 'Inter', -apple-system, sans-serif; 
+    body {
+        background-color: #1a1a2e;
+        color: #e0e0e0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 2rem;
+        font-family: 'Inter', -apple-system, sans-serif;
         margin: 0;
+        gap: 2rem;
     }
     .container {
         max-width: 1400px;
@@ -37,106 +39,362 @@
     h1 {
         text-align: center;
         color: #fff;
-        margin-bottom: 2rem;
+        margin-bottom: 0.5rem;
         font-weight: 300;
         letter-spacing: 2px;
     }
-    .mermaid { 
+    .subtitle {
+        text-align: center;
+        color: #a29bfe;
+        font-size: 0.85rem;
+        margin-bottom: 2rem;
+    }
+    .mermaid {
         width: 100%;
         display: flex;
         justify-content: center;
     }
+    h2 {
+        color: #fff;
+        font-weight: 300;
+        letter-spacing: 1px;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #4a69bd;
+        padding-bottom: 0.5rem;
+    }
+    .analysis {
+        max-width: 1400px;
+        width: 100%;
+        background: #16213e;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .tier-card {
+        background: #1a1a3e;
+        border-radius: 8px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid;
+    }
+    .tier-card.critical { border-color: #00b894; }
+    .tier-card.medium { border-color: #fdcb6e; }
+    .tier-card.low { border-color: #d63031; }
+    .tier-card h3 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+    .tier-card .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-left: 0.5rem;
+    }
+    .badge.critical { background: #00b894; color: #000; }
+    .badge.medium { background: #fdcb6e; color: #000; }
+    .badge.low { background: #d63031; color: #fff; }
+    .tier-card p { margin: 0.3rem 0; font-size: 0.85rem; line-height: 1.5; color: #b2bec3; }
+    .tier-card strong { color: #dfe6e9; }
+    .tier-card code { background: #2d3436; padding: 1px 5px; border-radius: 3px; font-size: 0.8rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    th { background: #2d3436; padding: 0.6rem; text-align: left; color: #74b9ff; border-bottom: 2px solid #4a69bd; }
+    td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #2d3436; color: #b2bec3; }
+    tr:hover td { background: #1a1a3e; }
   </style>
 </head>
 <body>
+  <!-- MAIN ARCHITECTURE DIAGRAM -->
   <div class="container">
     <h1>OPENSELF SYSTEM ARCHITECTURE</h1>
+    <div class="subtitle">Last updated: 2026-03-11 &mdash; Phase 1d complete (2656 tests, 24 tools, 11 worker jobs)</div>
     <div class="mermaid">
 graph TB
-    %% STILI PIU' PULITI E MINIMALISTI
     classDef ui fill:#2d3436,stroke:#636e72,stroke-width:1px,color:#fff,rx:8px,ry:8px
     classDef core fill:#0984e3,stroke:#74b9ff,stroke-width:2px,color:#fff,rx:8px,ry:8px
     classDef data fill:#6c5ce7,stroke:#a29bfe,stroke-width:2px,color:#fff,rx:8px,ry:8px
     classDef worker fill:#d63031,stroke:#ff7675,stroke-width:1px,color:#fff,rx:8px,ry:8px
     classDef engine fill:#00b894,stroke:#55efc4,stroke-width:2px,color:#fff,rx:8px,ry:8px
+    classDef safety fill:#e17055,stroke:#fab1a0,stroke-width:2px,color:#fff,rx:8px,ry:8px
+    classDef journey fill:#fdcb6e,stroke:#ffeaa7,stroke-width:2px,color:#2d3436,rx:8px,ry:8px
+    classDef presence fill:#00cec9,stroke:#81ecec,stroke-width:2px,color:#fff,rx:8px,ry:8px
     classDef group fill:none,stroke:#4a69bd,stroke-width:2px,stroke-dasharray: 5 5,color:#a29bfe
 
     %% GRUPPO 1: INTERFACCIA E INPUT
-    subgraph INPUT ["1. Interaction Layer (The Interface)"]
+    subgraph INPUT ["1. Interaction Layer"]
         direction LR
         User((User))
-        Chat[Chat UI\n& Voice]:::ui
-        Connectors[External Connectors\nGitHub, Strava, etc.]:::ui
+        Chat[Chat UI]:::ui
+        STT[Voice / STT\nWhisper]:::ui
+        Connectors[Connectors\nGitHub OAuth\nLinkedIn ZIP]:::ui
+        MagicPaste[Magic Paste\nURL Detection]:::ui
     end
 
     %% GRUPPO 2: IL CERVELLO
-    subgraph BRAIN ["2. Cognitive Core (The Agent)"]
+    subgraph BRAIN ["2. Cognitive Core"]
         direction TB
-        Orchestrator[Agent Orchestrator\nConstraints-by-Construction]:::core
-        LLM{LLM Engine}:::core
-        Tools[Tool Calling Engine\n25+ Actions]:::core
+        subgraph JI ["Journey Intelligence"]
+            direction LR
+            JState[6 States\n11 Situations\n3 Expertise]:::journey
+            Policies[Policy Engine\nShared Rules + Per-State]:::journey
+        end
+        subgraph AGENT ["Agent Pipeline"]
+            direction TB
+            Orchestrator[Orchestrator\nConstraints-by-Construction]:::core
+            LLMRouter{Multi-Provider LLM\nfast / standard / reasoning}:::core
+            ExtThinking[Extended Thinking\nBudget: 8k tokens]:::core
+            Tools[Tool Engine\n24 Tools]:::core
+        end
+        subgraph SAFETY ["Safety Layer"]
+            direction TB
+            ClaimGuard[Action Claim Guard\nStream Rewriter]:::safety
+            ConfirmSys[Confirmation System\nDeferred Commit]:::safety
+            ToolHonesty[Tool Honesty\nTOOL_POLICY]:::safety
+        end
     end
 
     %% GRUPPO 3: LA MEMORIA (4 TIERS)
-    subgraph MEMORY ["3. Memory System (The Knowledge)"]
+    subgraph MEMORY ["3. Memory System"]
         direction LR
-        subgraph Tiers [Tiers]
+        subgraph Tiers ["4-Tier Memory"]
             direction TB
-            T1[(Tier 1: Chat History\n20 turns)]:::data
-            T2[(Tier 2: Summaries\nRolling Context)]:::data
-            T3[(Tier 3: KB & Soul\nFacts, Preferences)]:::data
-            T4[(Tier 4: Episodic\nLife Journal)]:::data
+            T1[(Tier 1: Chat History\n20 turns, 22k budget)]:::data
+            T2[(Tier 2: Summaries\nCAS, 7k budget)]:::data
+            T3[(Tier 3: KB + Soul\nFacts 17k + Soul 13k\n+ Meta-Mem 3.5k)]:::data
+            T4[(Tier 4: Episodic\nFTS5, 0 budget\nPull-only via tools)]:::data
         end
-        Trust[Trust Ledger\nAudit & Undo]:::data
+        Trust[Trust Ledger\nAudit + Undo\nReverse Ops]:::data
+        Conflicts[Conflict Detection\n1.5k budget]:::data
     end
 
     %% GRUPPO 4: BACKGROUND WORKERS
-    subgraph SUBCONSCIOUS ["4. Background Processing (The Subconscious)"]
+    subgraph SUBCONSCIOUS ["4. Background Processing (11 jobs)"]
         direction TB
-        SessionCompaction[Session Compaction\nDistills chat to memory]:::worker
-        DreamCycle[Dream Cycle\nFinds patterns in journal]:::worker
-        Heartbeat[Heartbeat\nAudit, Cache, Proposals]:::worker
+        SessionCompaction[Session Compaction\nRowid cursor\nAnti-burn drainer]:::worker
+        DreamCycle[Dream Cycle\nPattern thresholds\nLLM evaluation]:::worker
+        subgraph HB ["Heartbeat (3-tier)"]
+            direction LR
+            HBGlobal[Global\n5min]:::worker
+            HBLight[Light\nDaily]:::worker
+            HBDeep[Deep\nWeekly]:::worker
+        end
     end
 
     %% GRUPPO 5: RENDERING
-    subgraph OUTPUT ["5. Page Engine (The Expression)"]
+    subgraph OUTPUT ["5. Page Engine"]
         direction TB
-        Base[Deterministic Skeleton\nFacts -> Schema]:::engine
-        Hybrid[Hybrid Compiler\nPersonalizes with Soul]:::engine
-        Config([Page Config JSON]):::engine
-        Renderer[React Renderer\nLive SSE Stream]:::engine
+        subgraph COMPOSE ["Composition"]
+            direction TB
+            Base[Stage 1: Deterministic\nFacts to Schema]:::engine
+            Hybrid[Stage 2: LLM Personalizer\nPer-section copy]:::engine
+        end
+        subgraph RENDER ["Delivery"]
+            direction TB
+            Presence[Presence System\nSurface x Voice x Light\n9 Signature Combos]:::presence
+            Config([Page Config JSON]):::engine
+            SSE[SSE Preview Stream\nDual-hash guard]:::engine
+            Publish[Publish Pipeline\nAtomic promote\nHash + Username guard]:::engine
+            L10N[Translation\n8 Languages]:::engine
+        end
     end
 
-    %% CONNESSIONI PRINCIPALI (Flusso semplificato)
+    %% CONNESSIONI PRINCIPALI
     User <--> Chat
+    User <--> STT
+    STT -->|Transcript| Chat
     Chat <--> Orchestrator
-    Connectors -->|Raw Data| T3
-    
-    Orchestrator --> LLM
-    LLM --> Tools
-    
+    MagicPaste -->|URL hints| Orchestrator
+    Connectors -->|Import| T3
+
+    %% Journey controlla orchestrator
+    JState -->|State + Situations| Policies
+    Policies -->|Prompt + Context Profile| Orchestrator
+
+    %% Agent pipeline
+    Orchestrator --> LLMRouter
+    LLMRouter --> ExtThinking
+    ExtThinking --> Tools
+
+    %% Safety in stream
+    Tools --> ClaimGuard
+    ClaimGuard -->|Safe stream| Chat
+    ConfirmSys -.->|Pending block| Orchestrator
+
+    %% Memory access
     Tools -->|Read/Write| MEMORY
-    Orchestrator -.->|Semantic Search| T3
-    
-    %% Flusso Subconscio
+
+    %% Context assembly
+    T1 -->|Recent turns| Orchestrator
+    T2 -->|Rolling summary| Orchestrator
+    T3 -->|Facts + Soul| Orchestrator
+    Conflicts -->|Open conflicts| Orchestrator
+
+    %% Subconscious flows
     T1 -.->|Trigger| SessionCompaction
-    SessionCompaction -.->|Updates| T2
-    SessionCompaction -.->|Updates| T3
-    
-    T4 -.->|Trigger| DreamCycle
-    DreamCycle -.->|Proposes Facts| T3
-    
-    Heartbeat -.->|Maintains| MEMORY
-    
-    %% Flusso Rendering
+    SessionCompaction -.->|Distills| T2
+    SessionCompaction -.->|Extracts| T3
+
+    T4 -.->|Events| DreamCycle
+    DreamCycle -.->|Proposes activity facts| T3
+
+    HBLight -.->|Maintains| MEMORY
+    HBDeep -.->|Coherence + Conformity| MEMORY
+
+    %% Page Engine flows
     T3 -->|Feeds| Base
     Base --> Hybrid
     Hybrid --> Config
-    Config --> Renderer
-    Renderer -->|Real-time Preview| Chat
-    
-    %% Applico la classe ai sottografi per pulire visivamente
-    class INPUT,BRAIN,MEMORY,SUBCONSCIOUS,OUTPUT group
+    Presence -->|Visual identity| Config
+    Config --> SSE
+    Config --> Publish
+    Publish --> L10N
+    SSE -->|Real-time preview| Chat
+
+    class INPUT,BRAIN,MEMORY,SUBCONSCIOUS,OUTPUT,JI,AGENT,SAFETY,Tiers,COMPOSE,RENDER,HB group
+    </div>
+  </div>
+
+  <!-- MEMORY TIER ANALYSIS -->
+  <div class="analysis">
+    <h2>MEMORY TIER ANALYSIS: Valore reale per LLM</h2>
+
+    <div class="tier-card critical">
+      <h3>Tier 1: Chat History (20 turns) <span class="badge critical">CRITICAL</span></h3>
+      <p><strong>Budget:</strong> 22,000 token &mdash; <strong>Storage:</strong> <code>messages</code> table &mdash; <strong>Injection:</strong> Sempre presente nel context</p>
+      <p><strong>Come funziona:</strong> Ultimi 20 turni (user+assistant+tool calls) caricati da <code>assembleContext()</code>. Walk backwards fino a saturare il budget. Minimo 2 messaggi sempre inclusi.</p>
+      <p><strong>Valore reale:</strong> Massimo. L'LLM vede la conversazione corrente, mantiene coerenza, capisce il contesto immediato. Senza questo tier l'agente sarebbe senza memoria a breve termine.</p>
+    </div>
+
+    <div class="tier-card critical">
+      <h3>Tier 3A: Knowledge Base &mdash; Facts (fino a 120 facts) <span class="badge critical">CRITICAL</span></h3>
+      <p><strong>Budget:</strong> 13,000-17,000 token &mdash; <strong>Storage:</strong> <code>facts</code> table &mdash; <strong>Injection:</strong> Sempre nel context (anche first_visit)</p>
+      <p><strong>Come funziona:</strong> Facts immutabili (delete+create per correzioni). Ordinati da <code>sortFactsForContext()</code>: 5 pi&ugrave; recenti garantiti + resto per rilevanza (confidence &times; recency &times; children count). Dedup via <code>stableDeepEqual</code>. Formato: <code>[category/key]: {value}</code>.</p>
+      <p><strong>Valore reale:</strong> Core assoluto. &Egrave; la source of truth dell'identit&agrave; utente. Tutta la generazione pagina, personalizzazione, e comprensione dell'agente parte dai facts. Budget alto e giustificato.</p>
+    </div>
+
+    <div class="tier-card medium">
+      <h3>Tier 3B: Soul Profiles <span class="badge medium">MEDIUM</span></h3>
+      <p><strong>Budget:</strong> 8,500-13,000 token &mdash; <strong>Storage:</strong> <code>soulProfiles</code> table &mdash; <strong>Injection:</strong> Assente per first_visit e blocked</p>
+      <p><strong>Come funziona:</strong> Versioned overlay JSON (<code>voice, tone, values, selfDescription, communicationStyle</code>). Compilato in prosa dall'agente. Richiede approvazione utente via <code>propose_soul_change</code>.</p>
+      <p><strong>Valore reale:</strong> Medio-alto per utenti attivi. Influenza il tono e la voce dell'agente + personalizzazione pagina (Stage 2 compiler). Ma l'agente funziona anche senza soul &mdash; non &egrave; bloccante. <strong>Sottoutilizzato nella fase iniziale</strong>: per first_visit il budget &egrave; 0.</p>
+    </div>
+
+    <div class="tier-card medium">
+      <h3>Tier 2: Conversation Summaries <span class="badge medium">MEDIUM</span></h3>
+      <p><strong>Budget:</strong> 7,000 token &mdash; <strong>Storage:</strong> <code>conversation_summaries</code> table (CAS) &mdash; <strong>Injection:</strong> Solo returning_no_page, active_fresh, active_stale</p>
+      <p><strong>Come funziona:</strong> Generato async dal worker (<code>memory_summary</code> job). Trigger: &ge;5 messaggi non summarizzati. Cursor-based incrementale. CAS pattern anti-race. Usa modello "standard" (Claude Sonnet).</p>
+      <p><strong>Valore reale:</strong> Medio-alto per utenti di ritorno. Comprime la storia conversazionale oltre i 20 turni in un sommario strutturato. Riduce la pressione sul Tier 1. <strong>Ma assente per first_visit e draft_ready</strong> &mdash; i nuovi utenti non ne beneficiano.</p>
+    </div>
+
+    <div class="tier-card low">
+      <h3>Tier 3C: Meta-Memories (Agent Memories) <span class="badge low">LOW</span></h3>
+      <p><strong>Budget:</strong> 3,500 token &mdash; <strong>Storage:</strong> <code>agent_memory</code> table &mdash; <strong>Injection:</strong> Solo returning, active_fresh, active_stale (top 10)</p>
+      <p><strong>Come funziona:</strong> Richiede che l'agente chiami esplicitamente <code>save_memory()</code>. 4 tipi: observation, preference, insight, pattern. Cooldown 5 writes/60s. Quota max 50. Dedup via content hash.</p>
+      <p><strong>Valore reale: BASSO.</strong> L'agente quasi mai chiama <code>save_memory()</code> spontaneamente. Top 10 su max 50 = pochissimo contenuto. Budget 3.5k irrisorio ma adeguato al poco contenuto. <strong>Problemi:</strong> (1) nessun prompt esplicito che spinga l'agente a salvare memories; (2) la distinzione observation/preference/insight non &egrave; chiara per l'LLM; (3) il valore aggiunto rispetto ai facts e summaries &egrave; marginale.</p>
+    </div>
+
+    <div class="tier-card low">
+      <h3>Tier 4: Episodic Memory (Life Journal) <span class="badge low">LOW</span></h3>
+      <p><strong>Budget:</strong> <strong>0 token</strong> (zero) &mdash; <strong>Storage:</strong> <code>episodic_events</code> + FTS5 &mdash; <strong>Injection:</strong> MAI automatica, solo pull via <code>recall_episodes()</code></p>
+      <p><strong>Come funziona:</strong> Append-only event ledger. L'agente registra eventi via <code>record_event()</code>. Dream Cycle worker consolida pattern (&ge;3 eventi/60gg) e propone activity facts. <code>has_pending_episodic_patterns</code> situation segnala pattern pendenti. Ma i dati episodici <strong>non entrano mai nel system prompt</strong>.</p>
+      <p><strong>Valore reale: BASSO.</strong> Sistema completamente "pull": l'agente deve ricordarsi di chiamare <code>recall_episodes()</code>, cosa che non fa spontaneamente. Il Dream Cycle funziona ma i suoi output (proposals) diventano facts (Tier 3) solo dopo approvazione. <strong>Problemi:</strong> (1) 0 token di budget = l'LLM non vede MAI gli episodi nel contesto; (2) nessun prompt che suggerisca all'agente di consultare gli episodi; (3) il valore aggiunto &egrave; indiretto (solo via Dream Cycle → facts).</p>
+    </div>
+
+    <h2>CONTEXT BUDGET PER JOURNEY STATE</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Journey State</th>
+          <th>Facts</th>
+          <th>Soul</th>
+          <th>Summary</th>
+          <th>Meta-Mem</th>
+          <th>Conflicts</th>
+          <th>PageState</th>
+          <th>Total Mutable</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>first_visit</strong></td>
+          <td>17k</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>17k</td>
+        </tr>
+        <tr>
+          <td><strong>returning_no_page</strong></td>
+          <td>17k</td>
+          <td>7k</td>
+          <td>7k</td>
+          <td>3.5k</td>
+          <td>1.5k</td>
+          <td>&mdash;</td>
+          <td>36k</td>
+        </tr>
+        <tr>
+          <td><strong>draft_ready</strong></td>
+          <td>13k</td>
+          <td>13k</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>1.5k</td>
+          <td>1.5k</td>
+          <td>29k</td>
+        </tr>
+        <tr>
+          <td><strong>active_fresh</strong></td>
+          <td>13k</td>
+          <td>8.5k</td>
+          <td>7k</td>
+          <td>3.5k</td>
+          <td>1.5k</td>
+          <td>1.5k</td>
+          <td>35k</td>
+        </tr>
+        <tr>
+          <td><strong>active_stale</strong></td>
+          <td>17k</td>
+          <td>8.5k</td>
+          <td>7k</td>
+          <td>3.5k</td>
+          <td>1.5k</td>
+          <td>1.5k</td>
+          <td>39k</td>
+        </tr>
+        <tr>
+          <td><strong>blocked</strong></td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>0</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size: 0.8rem; color: #636e72; margin-top: 0.5rem;">
+      + Chat History (22k fissi) + Static blocks (policies, tools schema, shared rules). Total context budget: 65k tokens. Tier 4 (Episodic): 0 in tutti gli stati.
+    </p>
+
+    <h2>DIAGNOSI E RACCOMANDAZIONI</h2>
+
+    <div class="tier-card" style="border-color: #74b9ff;">
+      <h3 style="color: #74b9ff;">Tier 3C (Meta-Memories): come renderlo utile</h3>
+      <p>1. <strong>Auto-save nel prompt:</strong> Aggiungere istruzione esplicita nel TOOL_POLICY: "Dopo ogni sessione significativa, salva 1-2 observations su preferenze o pattern emersi".</p>
+      <p>2. <strong>Trigger nel session compaction:</strong> Il worker che compatta le sessioni potrebbe estrarre meta-memories automaticamente, senza dipendere dall'agente.</p>
+      <p>3. <strong>Ridurre la complessit&agrave;:</strong> Unificare i 4 tipi (observation/preference/insight/pattern) in un solo tipo generico. L'LLM non distingue bene tra questi.</p>
+    </div>
+
+    <div class="tier-card" style="border-color: #74b9ff;">
+      <h3 style="color: #74b9ff;">Tier 4 (Episodic): come renderlo utile</h3>
+      <p>1. <strong>Budget dedicato:</strong> Allocare 2-3k token per un blocco "RECENT EPISODES" nel context di active_fresh/active_stale. Iniettare top 5 eventi pi&ugrave; recenti.</p>
+      <p>2. <strong>Push, non pull:</strong> L'agente non dovrebbe dover chiamare <code>recall_episodes()</code> per vedere i propri dati. I dati dovrebbero essere gi&agrave; nel contesto.</p>
+      <p>3. <strong>Cross-reference con facts:</strong> Quando un episodio &egrave; rilevante per un fact esistente, annotarlo. "Last workout: 3 days ago (from episodic)" accanto al fact attivit&agrave;.</p>
+      <p>4. <strong>Il Dream Cycle funziona</strong> ma il suo valore &egrave; indiretto: il pattern diventa un fact solo dopo approvazione. Il percorso episodio → proposal → approvazione → fact → pagina &egrave; troppo lungo per essere percepito dall'utente.</p>
     </div>
   </div>
 </body>
