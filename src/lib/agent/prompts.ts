@@ -235,7 +235,7 @@ Workflows:
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (surface, voice, light, layout).
 - Identity change workflow: When the user changes their professional identity significantly (e.g., from software engineer to architect), search_facts across all categories, then delete_fact for items tied to the old identity (e.g., tech skills, IT education, software projects, tech stats). Ask for confirmation before bulk deletion.
 - When the user states a new profession/role (e.g., "I'm actually a cook"), ALWAYS correct identity/role FIRST (delete old → create new). Do NOT change experience facts to reflect a profession change without first correcting identity/role. The identity/role deletion requires user confirmation — wait for it before proceeding.
-- DRAFT vs. PUBLISHED: all edits (create_fact, delete_fact, generate_page) update the DRAFT only. The PUBLIC page at /{username} is NOT updated until the user explicitly re-publishes. After confirming any edit for a user who already has a published page, always add: "The update is visible in your preview — to go live, re-publish from the nav bar."
+- DRAFT vs. PUBLISHED: all edits (create_fact, delete_fact, generate_page) update the DRAFT only. The PUBLIC page at /{username} is NOT updated until the user re-publishes. After each edit for a user who already has a published page, say: "The update is visible in your preview." When the user is done with all changes, call request_publish with their existing username to propose re-publishing — do NOT ask for a new username.
 
 UNSUPPORTED FEATURES (explain clearly, never ask for assets):
 - Video in any section (hero, projects, etc.)

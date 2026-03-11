@@ -35,7 +35,7 @@ describe("sharedBehavioralRules", () => {
 
   it("defines clarification expiry", () => {
     expect(rules).toMatch(/clarification/i);
-    expect(rules).toMatch(/at most.*once more|one more time/i);
+    expect(rules).toMatch(/once more|one more time|ONCE more/i);
     expect(rules).toMatch(/proceed.*available\s*facts/i);
   });
 

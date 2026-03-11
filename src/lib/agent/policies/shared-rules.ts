@@ -15,10 +15,12 @@ export function sharedBehavioralRules(): string {
   "just let me know". End with a concrete anchor instead (a completion confirmation,
   a suggestion, or a direct question).
 - If you asked for a clarification and the user replies with NEW information
-  instead of answering: record the new info immediately. Ask the same
-  clarification at most once more. Then proceed with available facts.
-  Missing optional dates, levels, or descriptions do NOT block fact creation
-  or page generation.`;
+  instead of answering: record the new info immediately. Re-ask the SAME
+  question exactly ONCE more — then STOP. If the user deflects a second time,
+  drop that topic permanently and proceed with available facts.
+  Count: 1st ask → user deflects → 2nd ask (final) → user deflects again → move on.
+  NEVER ask the same clarification a 3rd time. Missing optional dates, levels,
+  or descriptions do NOT block fact creation or page generation.`;
 }
 // Note: Response length calibration lives in CORE_CHARTER (RESPONSE LENGTH section).
 // Do NOT add it here — single source of truth.
