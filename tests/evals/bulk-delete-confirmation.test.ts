@@ -526,6 +526,44 @@ describe("bulk delete confirmation gate (Bug #6)", () => {
     expect(result.message).toContain("identity");
   });
 
+  it("batch_facts rejects identity delete via category/key format", async () => {
+    const { tools } = createAgentTools("en", "s1");
+    const result = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "identity/name" },
+        { action: "create" as const, category: "skill", key: "ts", value: { name: "TS" } },
+      ],
+    }, toolCtx);
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("IDENTITY_DELETE_BLOCKED");
+    expect(result.created).toBe(0);
+    expect(result.deleted).toBe(0);
+  });
+
+  it("failed delete in batch does not poison turn counter for subsequent delete_fact", async () => {
+    // Setup: batch with 1 delete that fails (deleteFact returns false)
+    mockDeleteFact.mockReturnValue(false);
+    mockGetFactById.mockReturnValue({ id: "f1", category: "skill", key: "old" });
+    mockCreateFact.mockReturnValue({ id: "f-new", category: "skill", key: "ts", visibility: "proposed" });
+
+    const { tools } = createAgentTools("en", "s1");
+
+    // Batch with 1 delete (fails silently) + 1 create
+    const r1 = await tools.batch_facts.execute({
+      operations: [
+        { action: "delete" as const, factId: "f1" },
+        { action: "create" as const, category: "skill", key: "ts", value: { name: "TS" } },
+      ],
+    }, toolCtx);
+    expect(r1.success).toBe(true);
+    expect(r1.deleted).toBe(0); // delete failed
+
+    // Now a direct delete_fact should succeed (turn counter not poisoned)
+    mockDeleteFact.mockReturnValue(true);
+    const r2 = await tools.delete_fact.execute({ factId: "f2" }, toolCtx);
+    expect(r2.success).toBe(true); // should be allowed — no prior SUCCESSFUL delete
+  });
+
   it("batch_facts rejects same-turn self-confirmation", async () => {
     // Simulate: agent calls batch_facts → gets REQUIRES_CONFIRMATION → immediately retries
     const { tools } = createAgentTools("en", "s1");

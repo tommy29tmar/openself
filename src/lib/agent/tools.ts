@@ -272,10 +272,11 @@ export function createAgentTools(
     );
   }
 
-  /**
-   * Bulk delete gate. Returns null if allowed, or a message object if blocked.
-   */
-  function deleteGate(factId: string): { requiresConfirmation: true; message: string } | null {
+  type DeleteGateResult =
+    | { requiresConfirmation: true; message: string }
+    | { allowed: true; commit: () => void; consumeOnly?: () => void };
+
+  function deleteGate(factId: string): DeleteGateResult | null {
     if (_deleteBlockedThisTurn) {
       const existingPending = pendings.find(p => p.type === "bulk_delete" && !p.confirmationId);
       if (existingPending?.factIds && !existingPending.factIds.includes(factId)) {
@@ -285,17 +286,24 @@ export function createAgentTools(
       return { requiresConfirmation: true, message: "Further deletions blocked this turn — wait for user confirmation in a new message." };
     }
 
-    // Check pending (confirmed delete from previous turn) — consume per-factId
+    // Check pending (confirmed delete from previous turn) — defer until outcome known
     const matchIdx = pendings.findIndex(p => p.type === "bulk_delete" && !p.confirmationId && p.factIds?.includes(factId));
     if (matchIdx >= 0) {
       const pending = pendings[matchIdx];
-      pending.factIds = pending.factIds!.filter((id: string) => id !== factId);
-      if (pending.factIds!.length === 0) {
-        pendings.splice(matchIdx, 1);
-      }
-      mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
-      _deletionCountThisTurn++; // count it, so 2nd+ delete in same turn still blocks
-      return null; // allowed
+
+      const consumePending = () => {
+        pending.factIds = pending.factIds!.filter((id: string) => id !== factId);
+        if (pending.factIds!.length === 0) {
+          pendings.splice(matchIdx, 1);
+        }
+        mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
+      };
+
+      return {
+        allowed: true,
+        commit: () => { consumePending(); _deletionCountThisTurn++; },
+        consumeOnly: () => { consumePending(); },
+      };
     }
 
     // Unconfirmed: allow first, block 2nd+
@@ -311,8 +319,8 @@ export function createAgentTools(
       return { requiresConfirmation: true, message: "2nd+ deletion in this turn requires confirmation. List the items to delete and ask the user to confirm." };
     }
 
-    _deletionCountThisTurn++;
-    return null; // first delete — allowed
+    // First unconfirmed delete — allowed, but defer counting until caller confirms success
+    return { allowed: true, commit: () => { _deletionCountThisTurn++; } };
   }
 
   /** Auto-compose draft from facts if none exists yet. */
@@ -506,9 +514,18 @@ export function createAgentTools(
       // Pre-flight: identity-delete enforcement (rejected from batch regardless of confirmation)
       for (const op of deleteOps) {
         const factId = (op as { factId: string }).factId;
-        const fact = getFactById(factId, sessionId, readKeys);
-        if (fact && fact.category === "identity") {
-          return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot delete identity fact ${factId} via batch_facts. Use delete_fact with cross-turn confirmation instead.`, created: 0, deleted: 0 };
+        // Category/key format: parse directly — don't need DB lookup
+        if (factId.includes("/") && !factId.match(/^[0-9a-f]{8}-/)) {
+          const [cat] = factId.split("/");
+          if (cat === "identity") {
+            return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot delete identity fact ${factId} via batch_facts. ALWAYS use delete_fact for identity deletions — it supports the required cross-turn confirmation. Call delete_fact("${factId}") instead.`, created: 0, deleted: 0 };
+          }
+        } else {
+          // UUID format: check via DB
+          const fact = getFactById(factId, sessionId, readKeys);
+          if (fact && fact.category === "identity") {
+            return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot delete identity fact ${factId} via batch_facts. ALWAYS use delete_fact for identity deletions — it supports the required cross-turn confirmation. Call delete_fact("${factId}") instead.`, created: 0, deleted: 0 };
+          }
         }
       }
 
@@ -650,9 +667,9 @@ export function createAgentTools(
                 }
               } else {
                 // Single delete within batch — apply delete gate
-                const dBlocked = deleteGate(op.factId);
-                if (dBlocked) {
-                  warnings.push(`Delete of ${op.factId} blocked: ${dBlocked.message}`);
+                const dResult = deleteGate(op.factId);
+                if (dResult && "requiresConfirmation" in dResult) {
+                  warnings.push(`Delete of ${op.factId} blocked: ${dResult.message}`);
                   break;
                 }
                 const old = getFactById(op.factId, sessionId, readKeys);
@@ -661,7 +678,12 @@ export function createAgentTools(
                   reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
                 }
                 const didDelete = deleteFact(op.factId, sessionId, readKeys);
-                if (didDelete) deleted++;
+                if (didDelete) {
+                  deleted++;
+                  if (dResult && "commit" in dResult) dResult.commit();
+                } else if (dResult && "consumeOnly" in dResult && dResult.consumeOnly) {
+                  dResult.consumeOnly();
+                }
               }
               break;
             }
@@ -734,10 +756,14 @@ export function createAgentTools(
               const identityBlocked = identityDeleteGate(cat, key);
               if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
             }
-            const blocked = deleteGate(matching[0].id);
-            if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
+            const dResult = deleteGate(matching[0].id);
+            if (dResult && "requiresConfirmation" in dResult) return { success: false, code: "REQUIRES_CONFIRMATION", ...dResult };
             const ok = deleteFact(matching[0].id, sessionId, readKeys);
-            if (!ok) return { success: false, error: "Fact not found after lookup" };
+            if (!ok) {
+              if (dResult && "consumeOnly" in dResult && dResult.consumeOnly) dResult.consumeOnly();
+              return { success: false, error: "Fact not found after lookup" };
+            }
+            if (dResult && "commit" in dResult) dResult.commit();
             try { recomposeAfterMutation(); } catch (e) {
               console.warn("[delete_fact] recompose failed:", e);
             }
@@ -762,10 +788,14 @@ export function createAgentTools(
           const identityBlocked = identityDeleteGate(factToDelete.category, factToDelete.key);
           if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
         }
-        const blocked = deleteGate(factId);
-        if (blocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...blocked };
+        const dResult = deleteGate(factId);
+        if (dResult && "requiresConfirmation" in dResult) return { success: false, code: "REQUIRES_CONFIRMATION", ...dResult };
         const ok = deleteFact(factId, sessionId, readKeys);
-        if (!ok) return { success: false, error: "Fact not found", hint: "Use search_facts to find the correct factId, or use category/key format like 'education/dams-torino'." };
+        if (!ok) {
+          if (dResult && "consumeOnly" in dResult && dResult.consumeOnly) dResult.consumeOnly();
+          return { success: false, error: "Fact not found", hint: "Use search_facts to find the correct factId, or use category/key format like 'education/dams-torino'." };
+        }
+        if (dResult && "commit" in dResult) dResult.commit();
         try { recomposeAfterMutation(); } catch (e) {
           console.warn("[delete_fact] recompose failed:", e);
         }
