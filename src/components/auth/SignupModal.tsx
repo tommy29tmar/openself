@@ -18,6 +18,8 @@ export function SignupModal({ open, onClose, initialUsername, language = "en" }:
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // Sync username when initialUsername changes post-mount
   useEffect(() => {
@@ -34,9 +36,30 @@ export function SignupModal({ open, onClose, initialUsername, language = "en" }:
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // Reset all form state on close
+  useEffect(() => {
+    if (!open) {
+      setUsername(initialUsername ?? "");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setError(null);
+      setConfirmError(null);
+      setSubmitting(false);
+    }
+  }, [open, initialUsername]);
+
   const sanitizeUsername = useCallback((raw: string) => {
     return raw.toLowerCase().replace(/[^a-z0-9-]/g, "");
   }, []);
+
+  const handleConfirmBlur = useCallback(() => {
+    if (confirmPassword && confirmPassword !== password) {
+      setConfirmError(t.passwordsDoNotMatch);
+    } else {
+      setConfirmError(null);
+    }
+  }, [confirmPassword, password, t.passwordsDoNotMatch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +75,10 @@ export function SignupModal({ open, onClose, initialUsername, language = "en" }:
     }
     if (password.length < 8) {
       setError(t.passwordTooShort);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setConfirmError(t.passwordsDoNotMatch);
       return;
     }
 
@@ -137,11 +164,36 @@ export function SignupModal({ open, onClose, initialUsername, language = "en" }:
               id="signup-password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (confirmError) setConfirmError(null);
+              }}
               className="w-full rounded border px-3 py-2 text-sm"
               placeholder={t.atLeast8Chars}
               autoComplete="new-password"
             />
+          </div>
+
+          <div>
+            <label htmlFor="signup-confirm-password" className="mb-1 block text-sm font-medium">
+              {t.confirmPassword}
+            </label>
+            <input
+              id="signup-confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (confirmError) setConfirmError(null);
+              }}
+              onBlur={handleConfirmBlur}
+              className="w-full rounded border px-3 py-2 text-sm"
+              placeholder={t.confirmPassword}
+              autoComplete="new-password"
+            />
+            {confirmError && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{confirmError}</p>
+            )}
           </div>
 
           {error && (
