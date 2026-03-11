@@ -31,7 +31,7 @@ export async function syncGitHub(
 ): Promise<SyncResult> {
   const connector = getConnectorWithCredentials(connectorId);
   if (!connector?.decryptedCredentials) {
-    return { factsCreated: 0, factsUpdated: 0, error: "No credentials" };
+    return { factsCreated: 0, factsUpdated: 0, eventsCreated: 0, error: "No credentials" };
   }
 
   // decryptCredentials() returns Record<string, unknown> but handle string for robustness
@@ -111,13 +111,14 @@ export async function syncGitHub(
       .where(eq(connectors.id, connectorId))
       .run();
 
-    return { factsCreated: report.factsWritten, factsUpdated: 0 };
+    return { factsCreated: report.factsWritten, factsUpdated: 0, eventsCreated: 0 };
   } catch (error) {
     if (error instanceof GitHubAuthError) {
       updateConnectorStatus(connectorId, "error", "Token expired or revoked");
       return {
         factsCreated: 0,
         factsUpdated: 0,
+        eventsCreated: 0,
         error: "Token expired or revoked — reconnect required",
       };
     }
