@@ -214,6 +214,7 @@ export const connectorItems = sqliteTable(
     externalId: text("external_id").notNull(),
     externalHash: text("external_hash"),
     factId: text("fact_id"),
+    eventId: text("event_id"),
     lastSeenAt: text("last_seen_at").default(sql`(datetime('now'))`),
   },
   (table) => [
@@ -229,6 +230,7 @@ export const syncLog = sqliteTable("sync_log", {
   status: text("status").notNull(),
   factsCreated: integer("facts_created").default(0),
   factsUpdated: integer("facts_updated").default(0),
+  eventsCreated: integer("events_created").default(0),
   error: text("error"),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
 });
@@ -543,6 +545,7 @@ export const episodicEvents = sqliteTable(
     archived: integer("archived").notNull().default(0),
     archivedAt: text("archived_at"),
     createdAt: text("created_at").default(sql`(datetime('now'))`),
+    source: text("source").notNull().default("chat"),
   },
   (table) => [
     index("idx_episodic_owner_time")
