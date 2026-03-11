@@ -5,6 +5,7 @@ export type ConnectorStatus = "connected" | "paused" | "error" | "disconnected";
 export type SyncResult = {
   factsCreated: number;
   factsUpdated: number;
+  eventsCreated?: number; // episodic events written
   error?: string;
 };
 
@@ -46,6 +47,19 @@ export type ConnectorStatusRow = {
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/**
+ * Episodic event input for connector dual-write.
+ * Connectors write notable discrete events to episodic memory (Tier 4).
+ */
+export type ConnectorEpisodicInput = {
+  actionType: string;
+  eventAtUnix: number;
+  eventAtHuman: string;
+  narrativeSummary: string;
+  entities?: string[];
+  source: string; // 'github', 'linkedin', etc.
 };
 
 export type ConnectorUIDefinition = {
