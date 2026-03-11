@@ -352,12 +352,20 @@ export function deleteFact(
 }
 
 export function searchFacts(query: string, sessionId: string = "__default__", sessionIds?: string[]): FactRow[] {
-  const pattern = `%${query}%`;
-  const matchCondition = or(
-    like(facts.category, pattern),
-    like(facts.key, pattern),
-    sql`json_extract(${facts.value}, '$') LIKE ${pattern}`,
-  );
+  const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+  if (terms.length === 0) return [];
+
+  // Each term must match at least one field (AND between terms, OR between fields)
+  const termConditions = terms.map(term => {
+    const pattern = `%${term}%`;
+    return or(
+      like(facts.category, pattern),
+      like(facts.key, pattern),
+      sql`json_extract(${facts.value}, '$') LIKE ${pattern}`,
+    );
+  });
+
+  const matchCondition = and(...termConditions);
 
   if (PROFILE_ID_CANONICAL) {
     return db.select().from(facts)
