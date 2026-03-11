@@ -10,6 +10,15 @@ vi.mock("@/lib/connectors/connector-fact-writer", () => ({
   batchCreateFacts: (...args: any[]) => mockBatchCreateFacts(...args),
 }));
 
+vi.mock("@/lib/services/episodic-service", () => ({
+  insertEvent: vi.fn(),
+}));
+
+vi.mock("@/lib/connectors/linkedin-zip/activity-mapper", () => ({
+  mapCertificationsToEpisodic: vi.fn(() => []),
+  mapArticlesToEpisodic: vi.fn(() => []),
+}));
+
 // Mock parser — returns rows from content so we can verify which files were parsed
 const mockParseLinkedInCsv = vi.fn().mockImplementation((content: string) => {
   // Return a simple row so mappers have something to work with

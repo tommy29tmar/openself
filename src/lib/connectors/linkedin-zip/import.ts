@@ -11,6 +11,12 @@ import {
   type FactInput,
 } from "./mapper";
 import { batchCreateFacts } from "../connector-fact-writer";
+import { insertEvent } from "@/lib/services/episodic-service";
+import {
+  mapCertificationsToEpisodic,
+  mapArticlesToEpisodic,
+  type EpisodicInput,
+} from "./activity-mapper";
 import type { OwnerScope } from "@/lib/auth/session";
 import type { ImportReport } from "../types";
 
@@ -32,6 +38,19 @@ const FILE_MAPPERS: Record<string, MapperFn> = {
  * All lowercase so comparison with filename.toLowerCase() works correctly.
  */
 const DEFERRED_FILES = new Set(["skills.csv"]);
+
+/**
+ * Activity-only files: extracted for episodic events (T4) but NOT for facts.
+ * Certifications.csv is already in FILE_MAPPERS (produces facts AND events).
+ * All lowercase so comparison with filename.toLowerCase() works correctly.
+ */
+const ACTIVITY_FILES = new Set(["articles.csv"]);
+
+/** Activity mappers: filename → episodic event mapper */
+const ACTIVITY_MAPPERS: Record<string, (rows: Record<string, string>[]) => EpisodicInput[]> = {
+  "Certifications.csv": mapCertificationsToEpisodic,
+  "Articles.csv": mapArticlesToEpisodic,
+};
 
 // All lowercase so comparison with filename.toLowerCase() works correctly
 const EXCLUDE_FILES = new Set([
@@ -78,7 +97,11 @@ export async function importLinkedInZip(
     for await (const entry of zipReader) {
       const filename = entry.filename.split("/").pop() ?? entry.filename;
       if (EXCLUDE_FILES.has(filename.toLowerCase())) continue;
-      if (!FILE_MAPPERS[filename] && !DEFERRED_FILES.has(filename.toLowerCase())) continue;
+      if (
+        !FILE_MAPPERS[filename] &&
+        !DEFERRED_FILES.has(filename.toLowerCase()) &&
+        !ACTIVITY_FILES.has(filename.toLowerCase())
+      ) continue;
 
       const stream = await entry.openReadStream();
       const chunks: Buffer[] = [];
@@ -110,6 +133,46 @@ export async function importLinkedInZip(
     );
     const rows = parseLinkedInCsv(skillsCsv);
     allFacts.push(...mapSkills(rows, languageNames));
+  }
+
+  // --- Activity Stream: notable events → Episodic (T4) ---
+  try {
+    let eventsWritten = 0;
+    for (const [filename, mapFn] of Object.entries(ACTIVITY_MAPPERS)) {
+      const csvContent = csvContents.get(filename);
+      if (!csvContent) continue;
+      try {
+        const rows = parseLinkedInCsv(csvContent);
+        const events = mapFn(rows);
+        for (const input of events) {
+          try {
+            insertEvent({
+              ownerKey: scope.cognitiveOwnerKey,
+              sessionId: "connector:linkedin_zip",
+              eventAtUnix: input.eventAtUnix,
+              eventAtHuman: input.eventAtHuman,
+              actionType: input.actionType,
+              narrativeSummary: input.narrativeSummary,
+              source: "linkedin",
+              externalId: input.externalId,
+            });
+            eventsWritten++;
+          } catch (err) {
+            // Silently skip duplicate events (UNIQUE constraint on externalId)
+            if (!(err instanceof Error && err.message.includes("UNIQUE"))) {
+              console.warn("[linkedin] event write failed:", err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[linkedin] activity parse failed for ${filename}:`, err);
+      }
+    }
+    if (eventsWritten > 0) {
+      console.info(`[linkedin] activity: ${eventsWritten} events written`);
+    }
+  } catch (err) {
+    console.warn("[linkedin] activity mapper failed (non-fatal):", err);
   }
 
   if (allFacts.length === 0) {

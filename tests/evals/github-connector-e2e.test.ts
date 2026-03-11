@@ -139,6 +139,10 @@ vi.mock("drizzle-orm", () => ({
   inArray: vi.fn((...args: any[]) => args),
 }));
 
+vi.mock("@/lib/services/episodic-service", () => ({
+  insertEvent: vi.fn(),
+}));
+
 // ── Mock fetch for GitHub API ───────────────────────────────────────
 
 const mockFetch = vi.fn();
@@ -206,6 +210,14 @@ mockFetch.mockImplementation(async (url: string | URL | Request) => {
       status: 200,
       json: () =>
         Promise.resolve({ TypeScript: 1000, JavaScript: 500 }),
+      headers: new Headers(),
+    };
+  }
+  if (urlStr.includes("/events")) {
+    return {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
       headers: new Headers(),
     };
   }
