@@ -10,6 +10,7 @@ describe("UI L10N strings", () => {
     "editYourPage", "share", "logOut", "loggingOut", "logIn",
     "createYourAccount", "signUpToPublishPage", "username", "email",
     "password", "atLeast8Chars", "signUpAndPublish", "alreadyHaveAccount",
+    "confirmPassword", "passwordsDoNotMatch", "forgotPassword",
     "usernameRequired", "emailRequired", "passwordTooShort",
     "registrationFailed", "networkError",
     "improvementsReady", "review", "pageImprovements",
