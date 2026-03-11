@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   createUnbackedActionClaimTransform,
+  getProposalFallback,
   hasSuccessfulMutationToolCall,
+  hasSuccessfulProposalToolCall,
   looksLikeUnbackedActionClaim,
   sanitizeUnbackedActionClaim,
 } from "@/lib/agent/action-claim-guard";
@@ -127,7 +129,83 @@ describe("action claim guard", () => {
 
     expect(output).toEqual([
       { type: "tool-result", toolName: "request_publish", result: { success: true } },
-      { type: "text-delta", textDelta: "Non l'ho ancora eseguito. Se vuoi, lo faccio adesso." },
+      { type: "text-delta", textDelta: "La pubblicazione è in attesa — usa il tasto di conferma per procedere." },
     ]);
+  });
+
+  it("hasSuccessfulProposalToolCall returns true for request_publish", () => {
+    expect(hasSuccessfulProposalToolCall([
+      { toolName: "request_publish", success: true },
+    ])).toBe(true);
+    expect(hasSuccessfulProposalToolCall([
+      { toolName: "create_fact", success: true },
+    ])).toBe(false);
+    expect(hasSuccessfulProposalToolCall([
+      { toolName: "request_publish", success: false },
+    ])).toBe(false);
+  });
+
+  it("getProposalFallback returns tool-specific text for request_publish", () => {
+    const itFallback = getProposalFallback("request_publish", "it");
+    expect(itFallback).toContain("conferma");
+    expect(itFallback).toContain("pubblicazione");
+    const enFallback = getProposalFallback("request_publish", "en");
+    expect(enFallback).toContain("confirmation");
+    expect(enFallback).toContain("publish");
+  });
+
+  it("getProposalFallback returns tool-specific text for propose_soul_change", () => {
+    const itFallback = getProposalFallback("propose_soul_change", "it");
+    expect(itFallback).toContain("proposta");
+    const enFallback = getProposalFallback("propose_soul_change", "en");
+    expect(enFallback).toContain("proposal");
+  });
+
+  it("sanitizeUnbackedActionClaim uses proposal fallback when only proposal tools ran", () => {
+    const result = sanitizeUnbackedActionClaim(
+      "Pubblicato. Ora è live.",
+      [{ toolName: "request_publish", success: true }],
+      "it",
+    );
+    // Should NOT be the generic "Non l'ho ancora eseguito" — should be the proposal fallback
+    expect(result).not.toBe("Non l'ho ancora eseguito. Se vuoi, lo faccio adesso.");
+    expect(result).toContain("conferma");
+    expect(result).toContain("pubblicazione");
+  });
+
+  it("stream transform uses proposal fallback after request_publish + action claim", async () => {
+    const output = await collect([
+      { type: "tool-result", toolName: "request_publish", result: { success: true } },
+      { type: "text-delta", textDelta: "Pubblicato. Ora è live." },
+    ]);
+
+    const text = output.filter(p => p.type === "text-delta").map(p => (p as any).textDelta).join("");
+    // Should be proposal-specific fallback, not the generic one
+    expect(text).not.toBe("Non l'ho ancora eseguito. Se vuoi, lo faccio adesso.");
+    expect(text).toContain("conferma");
+  });
+
+  it("sanitizeUnbackedActionClaim uses generic fallback when multiple proposal tools succeeded", () => {
+    const result = sanitizeUnbackedActionClaim(
+      "Ho aggiornato tutto e pubblicato.",
+      [
+        { toolName: "propose_soul_change", success: true },
+        { toolName: "request_publish", success: true },
+      ],
+      "it",
+    );
+    // Multiple proposal tools → generic fallback, not tool-specific
+    expect(result).toBe("Non l'ho ancora eseguito. Se vuoi, lo faccio adesso.");
+  });
+
+  it("sanitizeUnbackedActionClaim uses en proposal fallback for english", () => {
+    const result = sanitizeUnbackedActionClaim(
+      "Published! Your page is live.",
+      [{ toolName: "request_publish", success: true }],
+      "en",
+    );
+    expect(result).not.toBe("I haven't done that yet. If you want, I can do it now.");
+    expect(result).toContain("confirmation");
+    expect(result).toContain("publish");
   });
 });

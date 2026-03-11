@@ -45,6 +45,61 @@ const ACTION_FALLBACKS: Record<string, string> = {
   it: "Non l'ho ancora eseguito. Se vuoi, lo faccio adesso.",
 };
 
+const PROPOSAL_TOOL_NAMES = new Set([
+  "request_publish",
+  "propose_soul_change",
+  "propose_lock",
+]);
+
+// Per-tool × per-language fallback text
+const PROPOSAL_FALLBACKS: Record<string, Record<string, string>> = {
+  request_publish: {
+    en: "The publish is pending — use the confirmation button to proceed.",
+    it: "La pubblicazione è in attesa — usa il tasto di conferma per procedere.",
+  },
+  propose_soul_change: {
+    en: "The proposal has been registered.",
+    it: "La proposta è stata registrata.",
+  },
+  propose_lock: {
+    en: "The lock proposal has been registered.",
+    it: "La proposta di blocco è stata registrata.",
+  },
+};
+
+// Generic fallback if tool name not in the map
+const PROPOSAL_GENERIC_FALLBACK: Record<string, string> = {
+  en: "The action is pending — use the confirmation button to proceed.",
+  it: "L'azione è in attesa di conferma — usa il tasto di conferma per procedere.",
+};
+
+function isSuccessfulProposalToolResult(part: GuardStreamPart): boolean {
+  if (part.type !== "tool-result") return false;
+  const tr = part as { toolName: string; result: unknown };
+  const result = tr.result as Record<string, unknown> | null | undefined;
+  return result?.success === true && PROPOSAL_TOOL_NAMES.has(tr.toolName);
+}
+
+export function hasSuccessfulProposalToolCall(journal: JournalEntry[]): boolean {
+  return journal.some(entry =>
+    entry.success && PROPOSAL_TOOL_NAMES.has(entry.toolName)
+  );
+}
+
+function getSuccessfulProposalToolNames(journal: JournalEntry[]): string[] {
+  return journal
+    .filter(entry => entry.success && PROPOSAL_TOOL_NAMES.has(entry.toolName))
+    .map(entry => entry.toolName);
+}
+
+export function getProposalFallback(toolName: string, language: string): string {
+  const toolFallbacks = PROPOSAL_FALLBACKS[toolName];
+  if (toolFallbacks) {
+    return toolFallbacks[language] ?? toolFallbacks.en;
+  }
+  return PROPOSAL_GENERIC_FALLBACK[language] ?? PROPOSAL_GENERIC_FALLBACK.en;
+}
+
 function normalize(text: string): string {
   return text
     .trimStart()
@@ -129,12 +184,18 @@ export function sanitizeUnbackedActionClaim(
   if (!text.trim()) return text;
   if (hasSuccessfulMutationToolCall(journal)) return text;
   if (!looksLikeUnbackedActionClaim(text)) return text;
+  const proposalTools = getSuccessfulProposalToolNames(journal);
+  // Exactly one proposal tool → use its specific fallback.
+  // Multiple proposal tools → generic fallback to avoid wrong attribution.
+  if (proposalTools.length === 1) return getProposalFallback(proposalTools[0], language);
   return getUnbackedActionFallback(language);
 }
 
 export function createUnbackedActionClaimTransform(language: string) {
   return () => {
     let sawSuccessfulMutation = false;
+    let proposalToolCount = 0;
+    let singleProposalToolName = "";
     let decided = false;
     let bufferingRiskyPrefix = false;
     let bufferedText = "";
@@ -156,6 +217,10 @@ export function createUnbackedActionClaimTransform(language: string) {
             if (bufferedParts.length > 0) {
               flushBufferedParts(controller);
             }
+          }
+          if (isSuccessfulProposalToolResult(part)) {
+            proposalToolCount++;
+            singleProposalToolName = (part as { toolName: string }).toolName;
           }
           controller.enqueue(part);
           return;
@@ -204,9 +269,15 @@ export function createUnbackedActionClaimTransform(language: string) {
         if (bufferedParts.length === 0) return;
 
         if (!sawSuccessfulMutation && looksLikeUnbackedActionClaim(bufferedText)) {
+          // When exactly one proposal tool succeeded, use its specific fallback.
+          // When multiple proposal tools succeeded, use the generic fallback
+          // to avoid attributing the claim to the wrong tool.
+          const fallback = proposalToolCount === 1
+            ? getProposalFallback(singleProposalToolName, language)
+            : getUnbackedActionFallback(language);
           controller.enqueue({
             type: "text-delta",
-            textDelta: getUnbackedActionFallback(language),
+            textDelta: fallback,
           });
           return;
         }
