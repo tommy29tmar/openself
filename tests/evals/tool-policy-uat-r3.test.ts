@@ -57,4 +57,15 @@ describe("TOOL_POLICY UAT Round 3 additions", () => {
     expect(prompt).toContain("MIXED OUTCOMES");
     expect(prompt).toContain("report each result individually");
   });
+
+  it("TOOL_POLICY references PENDING CONFIRMATIONS context block", () => {
+    const prompt = buildSystemPrompt(makeBootstrap());
+    expect(prompt).toMatch(/PENDING CONFIRMATIONS/);
+    expect(prompt).toMatch(/confirmationId/);
+  });
+
+  it("TOOL_POLICY has NEVER-batch identity delete instruction", () => {
+    const prompt = buildSystemPrompt(makeBootstrap());
+    expect(prompt).toMatch(/NEVER.*batch_facts.*identity/i);
+  });
 });
