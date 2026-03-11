@@ -168,6 +168,21 @@ export function getConnectorWithCredentials(connectorId: string) {
 }
 
 /**
+ * Update connector credentials (used after token refresh).
+ */
+export function updateConnectorCredentials(
+  connectorId: string,
+  credentials: Record<string, unknown>,
+): void {
+  const key = getEncryptionKey();
+  const encrypted = encryptCredentials(credentials, key);
+  db.update(connectors)
+    .set({ credentials: encrypted, updatedAt: new Date().toISOString() })
+    .where(eq(connectors.id, connectorId))
+    .run();
+}
+
+/**
  * Update connector status and optional last_error.
  */
 export function updateConnectorStatus(
