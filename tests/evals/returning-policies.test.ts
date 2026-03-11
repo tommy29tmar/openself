@@ -316,8 +316,9 @@ describe("activeStalePolicy", () => {
       expect(policyEn).toMatch(/name\s*from\s*facts|identity\/name|never.*ask.*name/i);
     });
 
-    it("instructs to acknowledge time passed", () => {
-      expect(policyEn).toMatch(/acknowledge.*time|been\s*a\s*while|time\s*gap/i);
+    it("MUST acknowledge time gap in greeting (not optional)", () => {
+      expect(policyEn).toMatch(/MUST.*acknowledge|MUST.*mention.*time/i);
+      expect(policyEn).toMatch(/been\s*a\s*while|it's\s*been|time.*passed/i);
     });
 
     it("instructs to ask what changed", () => {
