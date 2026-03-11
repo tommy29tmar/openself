@@ -27,6 +27,7 @@ export function checkPatternThresholds(ownerKey: string): CandidatePattern[] {
     FROM episodic_events
     WHERE owner_key = ? AND event_at_unix >= ?
       AND superseded_by IS NULL AND archived = 0
+      AND source = 'chat'
     GROUP BY action_type HAVING cnt >= ?
   `).all(ownerKey, windowFrom, MIN_EVENTS) as Array<{ action_type: string; cnt: number; latest: number }>;
 

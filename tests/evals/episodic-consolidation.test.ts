@@ -1,5 +1,6 @@
 // tests/evals/episodic-consolidation.test.ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { randomUUID } from "crypto";
 import { sqlite } from "@/lib/db";
 import { insertEvent } from "@/lib/services/episodic-service";
 
@@ -80,5 +81,35 @@ describe("checkPatternThresholds", () => {
     sqlite.prepare("UPDATE episodic_pattern_proposals SET expires_at = ? WHERE id = ?")
       .run(new Date(Date.now() - 86400_000).toISOString(), propId);
     expect(checkPatternThresholds("o7").some(p => p.actionType === "workout")).toBe(true);
+  });
+
+  it("excludes non-chat events from pattern detection", async () => {
+    const { checkPatternThresholds } = await import("@/lib/services/episodic-consolidation-service");
+    const owner = `dream-source-${randomUUID()}`;
+    const now = Math.floor(Date.now() / 1000);
+    // Insert 5 github events (should NOT trigger pattern)
+    for (let i = 0; i < 5; i++) {
+      insertEvent({
+        ownerKey: owner, sessionId: "s1",
+        eventAtUnix: now - i * 3600, eventAtHuman: "h",
+        actionType: "code_push", narrativeSummary: `commit ${i}`,
+        source: "github",
+      });
+    }
+    const candidates = checkPatternThresholds(owner);
+    expect(candidates.length).toBe(0);
+
+    // Insert 3 chat events (should trigger pattern)
+    for (let i = 0; i < 3; i++) {
+      insertEvent({
+        ownerKey: owner, sessionId: "s1",
+        eventAtUnix: now - i * 86400, eventAtHuman: "h",
+        actionType: "workout", narrativeSummary: `ran ${i}km`,
+        source: "chat",
+      });
+    }
+    const candidates2 = checkPatternThresholds(owner);
+    expect(candidates2.length).toBe(1);
+    expect(candidates2[0].actionType).toBe("workout");
   });
 });

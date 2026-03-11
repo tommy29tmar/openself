@@ -75,6 +75,31 @@ describe("countKeywordEvents", () => {
   });
 });
 
+describe("insertEvent with source", () => {
+  it("defaults source to 'chat'", async () => {
+    const { insertEvent } = await import("@/lib/services/episodic-service");
+    const id = insertEvent({
+      ownerKey: "source-test-1", sessionId: "s1",
+      eventAtUnix: Math.floor(Date.now() / 1000), eventAtHuman: new Date().toISOString(),
+      actionType: "workout", narrativeSummary: "default source test",
+    });
+    const row = sqlite.prepare("SELECT source FROM episodic_events WHERE id = ?").get(id) as any;
+    expect(row.source).toBe("chat");
+  });
+
+  it("accepts explicit source param", async () => {
+    const { insertEvent } = await import("@/lib/services/episodic-service");
+    const id = insertEvent({
+      ownerKey: "source-test-2", sessionId: "s1",
+      eventAtUnix: Math.floor(Date.now() / 1000), eventAtHuman: new Date().toISOString(),
+      actionType: "code", narrativeSummary: "Merged PR #42",
+      source: "github",
+    });
+    const row = sqlite.prepare("SELECT source FROM episodic_events WHERE id = ?").get(id) as any;
+    expect(row.source).toBe("github");
+  });
+});
+
 describe("resolveEpisodicProposal — expiry guard (R5-4)", () => {
   it("cannot accept an expired proposal", async () => {
     const { insertEpisodicProposal, resolveEpisodicProposal } = await import("@/lib/services/episodic-service");

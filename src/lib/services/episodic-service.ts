@@ -17,6 +17,8 @@ export type InsertEventInput = {
   ownerKey: string; sessionId: string; sourceMessageId?: string; deviceId?: string;
   eventAtUnix: number; eventAtHuman: string; actionType: string;
   narrativeSummary: string; rawInput?: string; entities?: unknown[];
+  source?: string; // 'chat' (default), 'github', 'linkedin', etc.
+  externalId?: string; // stable connector dedup key
 };
 
 export type EpisodicProposalRow = {
@@ -37,14 +39,16 @@ export function insertEvent(input: InsertEventInput): string {
   sqlite.prepare(`
     INSERT INTO episodic_events
       (id, owner_key, session_id, source_message_id, device_id,
-       event_at_unix, event_at_human, action_type, narrative_summary, raw_input, entities)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       event_at_unix, event_at_human, action_type, narrative_summary, raw_input, entities,
+       source, external_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, input.ownerKey, input.sessionId,
     input.sourceMessageId ?? null, input.deviceId ?? null,
     input.eventAtUnix, input.eventAtHuman, input.actionType,
     input.narrativeSummary, input.rawInput ?? null,
     JSON.stringify(input.entities ?? []),
+    input.source ?? "chat", input.externalId ?? null,
   );
   return id;
 }
