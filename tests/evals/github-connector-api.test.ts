@@ -89,7 +89,7 @@ describe("POST /api/connectors/github/sync", () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.message).toBe("Sync queued");
-    expect(mockEnqueueJob).toHaveBeenCalledWith("connector_sync", { ownerKey: "owner-1" });
+    expect(mockEnqueueJob).toHaveBeenCalledWith("connector_sync", { ownerKey: "owner-1", connectorId: "c1" });
   });
 
   it("only matches 'connected' status — not 'error', 'disconnected', or 'paused'", async () => {

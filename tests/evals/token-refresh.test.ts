@@ -26,6 +26,7 @@ const makeConnector = (accessToken = "access-token-1", refreshToken = "refresh-t
   credentials: "encrypted",
   config: null,
   lastSync: null,
+  syncCursor: null,
   lastError: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
