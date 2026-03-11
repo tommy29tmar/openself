@@ -20,6 +20,7 @@ import type { PromptMode } from "./prompts";
 import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { getFactsReadScope } from "@/lib/agent/facts-read-scope";
+import type { PendingConfirmation } from "@/lib/services/confirmation-service";
 
 /**
  * Sort facts for context injection:
@@ -520,6 +521,38 @@ Before proposing a reorder, explain reasoning and ask for confirmation.`;
       const directive = coherenceIssuesDirective(allIssues);
       if (directive) {
         staticBlocks.push({ name: "coherence", content: `\n\n---\n\n${directive}` });
+      }
+    } catch { /* best-effort */ }
+  }
+
+  // --- Pending confirmations injection (BUG-1b: surface confirmationIds for agent retry) ---
+  // Scoped to bulk_delete with confirmationId only — other types work via existing tool flow.
+  // Read from anchor session (scope.knowledgePrimaryKey), same as createAgentTools/pruneUnconfirmedPendings.
+  // Apply same 5-min TTL as createAgentTools (tools.ts:169) since assembleContext runs first.
+  const CONFIRM_TTL_MS = 5 * 60 * 1000;
+  const anchorForConfirmations = scope.knowledgePrimaryKey;
+  if (anchorForConfirmations) {
+    try {
+      const confirmMeta = getSessionMeta(anchorForConfirmations);
+      const rawPendings = confirmMeta?.pendingConfirmations as PendingConfirmation[] | undefined;
+      if (Array.isArray(rawPendings) && rawPendings.length > 0) {
+        const confirmNow = Date.now();
+        // Filter: TTL + only bulk_delete with confirmationId
+        const confirmPendings = rawPendings.filter(
+          p => p.type === "bulk_delete"
+            && p.confirmationId
+            && confirmNow - new Date(p.createdAt).getTime() < CONFIRM_TTL_MS
+        );
+        if (confirmPendings.length > 0) {
+          const lines = confirmPendings.map(p => {
+            const ids = (p.factIds ?? []).join(", ");
+            return `- batch_facts confirmation pending: confirmationId="${p.confirmationId}" for deleting [${ids}]. Pass this confirmationId in your next batch_facts call.`;
+          });
+          staticBlocks.push({
+            name: "pendingConfirmations",
+            content: `\n\n---\n\nPENDING CONFIRMATIONS (from previous turn):\n${lines.join("\n")}`,
+          });
+        }
       }
     } catch { /* best-effort */ }
   }
