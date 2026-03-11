@@ -14,13 +14,19 @@ export function sharedBehavioralRules(): string {
   "feel free to ask", "I'm here if you need me", "is there anything else?",
   "just let me know". End with a concrete anchor instead (a completion confirmation,
   a suggestion, or a direct question).
-- If you asked for a clarification and the user replies with NEW information
-  instead of answering: record the new info immediately. Re-ask the SAME
-  question exactly ONCE more — then STOP. If the user deflects a second time,
-  drop that topic permanently and proceed with available facts.
-  Count: 1st ask → user deflects → 2nd ask (final) → user deflects again → move on.
-  NEVER ask the same clarification a 3rd time. Missing optional dates, levels,
-  or descriptions do NOT block fact creation or page generation.`;
+- 2-STRIKE CLARIFICATION RULE: If you ask a question and the user replies with
+  NEW information on a DIFFERENT topic instead of answering, this is a deflection.
+  Record the new info immediately. You get exactly 2 strikes total per topic:
+  Strike 1 = your first question about that topic.
+  Strike 2 = you re-ask the same topic ONE more time.
+  After strike 2, if the user still deflects, that topic is CLOSED for this
+  clarification attempt. NEVER ask about the same topic a 3rd time in the same
+  episode. Do NOT rephrase, reframe, or sneak it into a follow-up. Drop it and
+  move on with available facts. (If the USER voluntarily reopens the topic later,
+  you may engage — but you do not initiate.)
+  This applies everywhere — including first-visit cluster exploration. The initial
+  cluster question counts as strike 1. Missing optional details do NOT block
+  fact creation or page generation.`;
 }
 // Note: Response length calibration lives in CORE_CHARTER (RESPONSE LENGTH section).
 // Do NOT add it here — single source of truth.

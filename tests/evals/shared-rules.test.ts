@@ -33,10 +33,11 @@ describe("sharedBehavioralRules", () => {
     expect(rules).not.toMatch(/1.*2.*sentence/i);
   });
 
-  it("defines clarification expiry", () => {
+  it("defines clarification expiry with 2-STRIKE rule", () => {
     expect(rules).toMatch(/clarification/i);
-    expect(rules).toMatch(/once more|one more time|ONCE more/i);
-    expect(rules).toMatch(/proceed.*available\s*facts/i);
+    expect(rules).toMatch(/2-STRIKE/);
+    expect(rules).toMatch(/strike 1.*strike 2/is);
+    expect(rules).toMatch(/NEVER.*3rd/i);
   });
 
   it("contains ZERO conditional branching (no if/when state mentions)", () => {
