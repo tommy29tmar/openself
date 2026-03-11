@@ -1,0 +1,226 @@
+import { describe, it, expect } from "vitest";
+
+import {
+  mapSpotifyProfile,
+  mapSpotifyTopArtists,
+  mapSpotifyTopTracks,
+  mapSpotifyGenres,
+  detectTasteShift,
+} from "@/lib/connectors/spotify/mapper";
+import type {
+  SpotifyProfile,
+  SpotifyArtist,
+  SpotifyTrack,
+} from "@/lib/connectors/spotify/client";
+
+// ── Fixtures ──────────────────────────────────────────────────────────
+
+const profile: SpotifyProfile = {
+  id: "user1",
+  display_name: "Test User",
+  external_urls: { spotify: "https://open.spotify.com/user/user1" },
+};
+
+const profileNoName: SpotifyProfile = {
+  id: "user2",
+  display_name: null,
+  external_urls: { spotify: "https://open.spotify.com/user/user2" },
+};
+
+const artists: SpotifyArtist[] = [
+  {
+    id: "a1",
+    name: "Radiohead",
+    genres: ["alternative rock", "art rock"],
+    external_urls: { spotify: "https://open.spotify.com/artist/a1" },
+  },
+  {
+    id: "a2",
+    name: "Aphex Twin",
+    genres: ["electronic", "idm"],
+    external_urls: { spotify: "https://open.spotify.com/artist/a2" },
+  },
+  {
+    id: "a3",
+    name: "Björk",
+    genres: ["art rock", "electronic", "experimental"],
+    external_urls: { spotify: "https://open.spotify.com/artist/a3" },
+  },
+];
+
+const tracks: SpotifyTrack[] = [
+  {
+    id: "t1",
+    name: "Everything In Its Right Place",
+    artists: [{ id: "a1", name: "Radiohead" }],
+    external_urls: { spotify: "https://open.spotify.com/track/t1" },
+  },
+  {
+    id: "t2",
+    name: "Windowlicker",
+    artists: [{ id: "a2", name: "Aphex Twin" }],
+    external_urls: { spotify: "https://open.spotify.com/track/t2" },
+  },
+];
+
+// ── Tests ─────────────────────────────────────────────────────────────
+
+describe("mapSpotifyProfile", () => {
+  it("maps profile with display_name", () => {
+    const facts = mapSpotifyProfile(profile);
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toEqual({
+      category: "social",
+      key: "spotify-profile",
+      value: {
+        platform: "spotify",
+        url: "https://open.spotify.com/user/user1",
+        label: "Test User",
+      },
+    });
+  });
+
+  it("falls back to id when display_name is null", () => {
+    const facts = mapSpotifyProfile(profileNoName);
+    expect(facts[0].value.label).toBe("user2");
+  });
+});
+
+describe("mapSpotifyTopArtists", () => {
+  it("maps artists to interest facts", () => {
+    const facts = mapSpotifyTopArtists(artists);
+    expect(facts).toHaveLength(3);
+    expect(facts[0]).toEqual({
+      category: "interest",
+      key: "sp-artist-a1",
+      value: {
+        name: "Radiohead",
+        genres: ["alternative rock", "art rock"],
+        url: "https://open.spotify.com/artist/a1",
+      },
+    });
+  });
+
+  it("handles empty list", () => {
+    expect(mapSpotifyTopArtists([])).toEqual([]);
+  });
+});
+
+describe("mapSpotifyTopTracks", () => {
+  it("maps tracks to interest facts", () => {
+    const facts = mapSpotifyTopTracks(tracks);
+    expect(facts).toHaveLength(2);
+    expect(facts[0]).toEqual({
+      category: "interest",
+      key: "sp-track-t1",
+      value: {
+        name: "Everything In Its Right Place",
+        artists: ["Radiohead"],
+        url: "https://open.spotify.com/track/t1",
+      },
+    });
+  });
+
+  it("handles multiple artists per track", () => {
+    const multiArtistTrack: SpotifyTrack[] = [
+      {
+        id: "t3",
+        name: "Collab Track",
+        artists: [
+          { id: "a1", name: "Artist A" },
+          { id: "a2", name: "Artist B" },
+        ],
+        external_urls: { spotify: "url" },
+      },
+    ];
+    const facts = mapSpotifyTopTracks(multiArtistTrack);
+    expect(facts[0].value.artists).toEqual(["Artist A", "Artist B"]);
+  });
+});
+
+describe("mapSpotifyGenres", () => {
+  it("aggregates genres by frequency, returns top 5", () => {
+    const facts = mapSpotifyGenres(artists);
+    // Genres: alternative rock(1), art rock(2), electronic(2), idm(1), experimental(1)
+    // Top by frequency: art rock(2), electronic(2), alternative rock(1), idm(1), experimental(1)
+    expect(facts.length).toBeLessThanOrEqual(5);
+
+    // art rock and electronic have count 2, should be first
+    const genreNames = facts.map((f) => f.value.name);
+    expect(genreNames).toContain("art rock");
+    expect(genreNames).toContain("electronic");
+  });
+
+  it("normalizes genre key", () => {
+    const facts = mapSpotifyGenres([
+      {
+        id: "x",
+        name: "X",
+        genres: ["hip hop"],
+        external_urls: { spotify: "url" },
+      },
+    ]);
+    expect(facts[0].key).toBe("sp-genre-hip-hop");
+    expect(facts[0].value.type).toBe("music_genre");
+  });
+
+  it("handles artists with no genres", () => {
+    const facts = mapSpotifyGenres([
+      {
+        id: "x",
+        name: "X",
+        genres: [],
+        external_urls: { spotify: "url" },
+      },
+    ]);
+    expect(facts).toEqual([]);
+  });
+
+  it("handles empty artist list", () => {
+    expect(mapSpotifyGenres([])).toEqual([]);
+  });
+});
+
+describe("detectTasteShift", () => {
+  it("returns null on first sync (empty previous)", () => {
+    const result = detectTasteShift(["a1", "a2", "a3", "a4", "a5"], []);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when fewer than 3 artists changed", () => {
+    const result = detectTasteShift(
+      ["a1", "a2", "a3", "a4", "a5"],
+      ["a1", "a2", "a3", "b4", "b5"],
+    );
+    // Changed: a4, a5 (only 2)
+    expect(result).toBeNull();
+  });
+
+  it("detects taste shift when exactly 3 artists changed", () => {
+    const result = detectTasteShift(
+      ["a1", "a2", "new1", "new2", "new3"],
+      ["a1", "a2", "a3", "a4", "a5"],
+    );
+    expect(result).not.toBeNull();
+    expect(result!.actionType).toBe("music");
+    expect(result!.narrativeSummary).toContain("3/5 top artists changed");
+    expect(result!.externalId).toMatch(/^taste-shift-/);
+  });
+
+  it("detects taste shift when all 5 artists changed", () => {
+    const result = detectTasteShift(
+      ["new1", "new2", "new3", "new4", "new5"],
+      ["a1", "a2", "a3", "a4", "a5"],
+    );
+    expect(result).not.toBeNull();
+    expect(result!.narrativeSummary).toContain("5/5 top artists changed");
+  });
+
+  it("returns null when no artists changed", () => {
+    const result = detectTasteShift(
+      ["a1", "a2", "a3", "a4", "a5"],
+      ["a1", "a2", "a3", "a4", "a5"],
+    );
+    expect(result).toBeNull();
+  });
+});
