@@ -14,6 +14,7 @@ vi.mock("@/lib/services/summary-service", () => ({
 }));
 vi.mock("@/lib/services/memory-service", () => ({
   getActiveMemories: vi.fn(() => []),
+  getActiveMemoriesScored: vi.fn(() => []),
 }));
 vi.mock("@/lib/services/soul-service", () => ({
   getActiveSoul: vi.fn(() => null),
@@ -26,6 +27,11 @@ vi.mock("@/lib/services/page-projection", () => ({
 }));
 vi.mock("@/lib/connectors/magic-paste", () => ({
   detectConnectorUrls: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/episodic-service", () => ({
+  getRecentEventsForContext: vi.fn(() => []),
+  insertEvent: vi.fn(),
+  queryEvents: vi.fn(() => []),
 }));
 vi.mock("@/lib/agent/journey", () => ({
   computeRelevance: vi.fn(() => 0.5),

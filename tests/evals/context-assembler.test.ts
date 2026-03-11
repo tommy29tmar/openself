@@ -23,6 +23,7 @@ vi.mock("@/lib/services/summary-service", () => ({
 }));
 vi.mock("@/lib/services/memory-service", () => ({
   getActiveMemories: vi.fn(() => []),
+  getActiveMemoriesScored: vi.fn(() => []),
 }));
 vi.mock("@/lib/services/soul-service", () => ({
   getActiveSoul: vi.fn(() => null),
@@ -40,6 +41,11 @@ vi.mock("@/lib/services/session-metadata", () => ({
 vi.mock("@/lib/connectors/magic-paste", () => ({
   detectConnectorUrls: vi.fn(() => []),
 }));
+vi.mock("@/lib/services/episodic-service", () => ({
+  getRecentEventsForContext: vi.fn(() => []),
+  insertEvent: vi.fn(),
+  queryEvents: vi.fn(() => []),
+}));
 vi.mock("@/lib/agent/prompts", () => ({
   buildSystemPrompt: vi.fn(() => "BOOTSTRAP_PROMPT"),
 }));
@@ -54,7 +60,7 @@ import type { BootstrapPayload } from "@/lib/agent/journey";
 import { countFacts, getActiveFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
-import { getActiveMemories } from "@/lib/services/memory-service";
+import { getActiveMemories, getActiveMemoriesScored } from "@/lib/services/memory-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
 import { buildSystemPrompt } from "@/lib/agent/prompts";
@@ -75,6 +81,7 @@ beforeEach(() => {
   vi.mocked(getActiveFacts).mockReturnValue([]);
   vi.mocked(getSummary).mockReturnValue(null);
   vi.mocked(getActiveMemories).mockReturnValue([]);
+  vi.mocked(getActiveMemoriesScored).mockReturnValue([]);
   vi.mocked(getActiveSoul).mockReturnValue(null);
   vi.mocked(getOpenConflicts).mockReturnValue([]);
   vi.mocked(getSessionMeta).mockReturnValue({});
@@ -172,7 +179,7 @@ describe("assembleContext", () => {
   });
 
   it("includes memories block when memories exist", () => {
-    vi.mocked(getActiveMemories).mockReturnValue([
+    vi.mocked(getActiveMemoriesScored).mockReturnValue([
       { memoryType: "preference", content: "Loves TypeScript" },
     ] as any);
 
@@ -248,7 +255,7 @@ describe("post-assembly guard", () => {
       compiled: "Z".repeat(6000), // 1500 tokens worth
     } as any);
     vi.mocked(getSummary).mockReturnValue("S".repeat(3200)); // 800 tokens
-    vi.mocked(getActiveMemories).mockReturnValue(
+    vi.mocked(getActiveMemoriesScored).mockReturnValue(
       Array.from({ length: 10 }, (_, i) => ({
         memoryType: "note",
         content: "M".repeat(160),
@@ -278,7 +285,7 @@ describe("post-assembly guard", () => {
 
     expect(result.systemPrompt).toContain("INCOMPLETE_OPERATION");
     expect(result.systemPrompt).toContain("...");
-    expect(estimateTokens(result.systemPrompt)).toBeLessThanOrEqual(65000);
+    expect(estimateTokens(result.systemPrompt)).toBeLessThanOrEqual(75000);
   });
 });
 
@@ -548,5 +555,71 @@ describe("assembleContext with bootstrap", () => {
 
     const result = assembleContext(SCOPE, "en", [], undefined, bootstrap);
     expect(result.systemPrompt).not.toContain("No facts recorded yet");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Episodic block injection
+// ---------------------------------------------------------------------------
+describe("episodic block injection", () => {
+  function bootstrapWithState(state: string): BootstrapPayload {
+    return {
+      journeyState: state as BootstrapPayload["journeyState"],
+      situations: [],
+      expertiseLevel: "novice" as const,
+      userName: null,
+      lastSeenDaysAgo: null,
+      publishedUsername: null,
+      pendingProposalCount: 0,
+      thinSections: [] as string[],
+      staleFacts: [] as string[],
+      openConflicts: [] as string[],
+      archivableFacts: [] as string[],
+      language: "en",
+      conversationContext: null,
+      archetype: "generalist" as const,
+    };
+  }
+
+  it("includes episodic block when events exist and profile includes it", async () => {
+    const { getRecentEventsForContext } = await import("@/lib/services/episodic-service");
+    vi.mocked(getRecentEventsForContext).mockReturnValue([
+      { eventAtUnix: 1741593600, eventAtHuman: "2026-03-10T08:00:00Z", actionType: "workout", narrativeSummary: "Ran 5km", source: "chat" },
+    ]);
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrapWithState("active_fresh"));
+    expect(result.systemPrompt).toContain("RECENT EVENTS");
+    expect(result.systemPrompt).toContain("Ran 5km");
+  });
+
+  it("excludes episodic block for first_visit", async () => {
+    const { getRecentEventsForContext } = await import("@/lib/services/episodic-service");
+    vi.mocked(getRecentEventsForContext).mockReturnValue([
+      { eventAtUnix: 1741593600, eventAtHuman: "2026-03-10T08:00:00Z", actionType: "workout", narrativeSummary: "Ran 5km", source: "chat" },
+    ]);
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrapWithState("first_visit"));
+    expect(result.systemPrompt).not.toContain("RECENT EVENTS");
+  });
+
+  it("excludes episodic block for blocked state", async () => {
+    const { getRecentEventsForContext } = await import("@/lib/services/episodic-service");
+    vi.mocked(getRecentEventsForContext).mockReturnValue([
+      { eventAtUnix: 1741593600, eventAtHuman: "2026-03-10T08:00:00Z", actionType: "workout", narrativeSummary: "Ran 5km", source: "chat" },
+    ]);
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrapWithState("blocked"));
+    expect(result.systemPrompt).not.toContain("RECENT EVENTS");
+  });
+
+  it("includes episodic block for returning_no_page", async () => {
+    const { getRecentEventsForContext } = await import("@/lib/services/episodic-service");
+    vi.mocked(getRecentEventsForContext).mockReturnValue([
+      { eventAtUnix: 1741593600, eventAtHuman: "2026-03-10T08:00:00Z", actionType: "meeting", narrativeSummary: "Team standup", source: "chat" },
+    ]);
+
+    const result = assembleContext(SCOPE, "en", [], undefined, bootstrapWithState("returning_no_page"));
+    expect(result.systemPrompt).toContain("RECENT EVENTS");
+    expect(result.systemPrompt).toContain("Team standup");
   });
 });

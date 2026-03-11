@@ -2,7 +2,8 @@ import type { OwnerScope } from "@/lib/auth/session";
 import { getActiveFacts, countFacts } from "@/lib/services/kb-service";
 import { hasAnyPublishedPage, getDraft } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
-import { getActiveMemories } from "@/lib/services/memory-service";
+import { getActiveMemoriesScored } from "@/lib/services/memory-service";
+import { getRecentEventsForContext } from "@/lib/services/episodic-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getOpenConflicts } from "@/lib/services/conflict-service";
 import { buildSystemPrompt } from "@/lib/agent/prompts";
@@ -13,6 +14,7 @@ import type { JourneyState, BootstrapPayload, BootstrapData } from "@/lib/agent/
 import { computeRelevance } from "@/lib/agent/journey";
 import type { FactRow } from "@/lib/services/kb-service";
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
+import { SPARSE_PROFILE_FACT_THRESHOLD } from "@/lib/agent/thresholds";
 import { getSessionMeta, mergeSessionMeta } from "@/lib/services/session-metadata";
 import { coherenceIssuesDirective } from "@/lib/agent/policies/situations";
 import { isNewTopicSignal } from "@/lib/agent/policies/topic-signal-detector";
@@ -81,11 +83,12 @@ const BUDGET = {
   soul: 13000,
   facts: 17000,
   summary: 7000,
-  memories: 3500,
+  memories: 5500,
+  episodic: 5000,
   conflicts: 1500,
   pageState: 1500,
   recentTurns: 22000,
-  total: 65000,
+  total: 75000,
 } as const;
 
 export type ContextResult = {
@@ -109,6 +112,7 @@ export type ContextProfile = {
   soul: { include: boolean; budget: number };
   summary: { include: boolean; budget: number };
   memories: { include: boolean; budget: number };
+  episodic: { include: boolean; budget: number };
   conflicts: { include: boolean; budget: number };
   pageState: { include: boolean; budget: number };
   richness: { include: boolean };
@@ -119,9 +123,10 @@ export type ContextProfile = {
 export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
   first_visit: {
     facts: { include: true, budget: 17000 },
-    soul: { include: false, budget: 0 },
+    soul: { include: false, budget: 3000 },
     summary: { include: false, budget: 0 },
     memories: { include: false, budget: 0 },
+    episodic: { include: false, budget: 0 },
     conflicts: { include: false, budget: 0 },
     pageState: { include: false, budget: 0 },
     richness: { include: false },
@@ -132,7 +137,8 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     facts: { include: true, budget: 17000 },
     soul: { include: true, budget: 7000 },
     summary: { include: true, budget: 7000 },
-    memories: { include: true, budget: 3500 },
+    memories: { include: true, budget: 5500 },
+    episodic: { include: true, budget: 5000 },
     conflicts: { include: true, budget: 1500 },
     pageState: { include: false, budget: 0 },
     richness: { include: false },
@@ -142,8 +148,9 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
   draft_ready: {
     facts: { include: true, budget: 13000 },
     soul: { include: true, budget: 13000 },
-    summary: { include: false, budget: 0 },
-    memories: { include: false, budget: 0 },
+    summary: { include: true, budget: 5000 },
+    memories: { include: true, budget: 5500 },
+    episodic: { include: true, budget: 3000 },
     conflicts: { include: true, budget: 1500 },
     pageState: { include: true, budget: 1500 },
     richness: { include: true },
@@ -154,7 +161,8 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     facts: { include: true, budget: 13000 },
     soul: { include: true, budget: 8500 },
     summary: { include: true, budget: 7000 },
-    memories: { include: true, budget: 3500 },
+    memories: { include: true, budget: 5500 },
+    episodic: { include: true, budget: 5000 },
     conflicts: { include: true, budget: 1500 },
     pageState: { include: true, budget: 1500 },
     richness: { include: true },
@@ -165,7 +173,8 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     facts: { include: true, budget: 17000 },
     soul: { include: true, budget: 8500 },
     summary: { include: true, budget: 7000 },
-    memories: { include: true, budget: 3500 },
+    memories: { include: true, budget: 5500 },
+    episodic: { include: true, budget: 5000 },
     conflicts: { include: true, budget: 1500 },
     pageState: { include: true, budget: 1500 },
     richness: { include: true },
@@ -177,6 +186,7 @@ export const CONTEXT_PROFILES: Record<JourneyState, ContextProfile> = {
     soul: { include: false, budget: 0 },
     summary: { include: false, budget: 0 },
     memories: { include: false, budget: 0 },
+    episodic: { include: false, budget: 0 },
     conflicts: { include: false, budget: 0 },
     pageState: { include: false, budget: 0 },
     richness: { include: false },
@@ -299,8 +309,16 @@ export function assembleContext(
   }
 
   // Soul block (compiled identity overlay) — passthrough or query
+  // Runtime gate: enable soul for first_visit when enough facts exist (budget > 0 allows activation)
+  let soulInclude = profile?.soul?.include ?? false;
+  if (bootstrap?.journeyState === "first_visit" && !soulInclude && (profile?.soul?.budget ?? 0) > 0) {
+    const publishableCount = (bootstrapData?.publishableFacts ?? filterPublishableFacts(existingFacts)).length;
+    if (publishableCount >= SPARSE_PROFILE_FACT_THRESHOLD) {
+      soulInclude = true;
+    }
+  }
   let soulBlock = "";
-  if (!profile || profile.soul.include) {
+  if (!profile || soulInclude) {
     const activeSoul = bootstrapData?.soul
       ?? getActiveSoul(scope.cognitiveOwnerKey);
     soulBlock = activeSoul?.compiled ?? "";
@@ -317,7 +335,7 @@ export function assembleContext(
   // Memories block (Tier 3)
   let memoriesBlock = "";
   if (!profile || profile.memories.include) {
-    const activeMemories = getActiveMemories(scope.cognitiveOwnerKey, 10);
+    const activeMemories = getActiveMemoriesScored(scope.cognitiveOwnerKey, 15);
     memoriesBlock =
       activeMemories.length > 0
         ? activeMemories
@@ -325,6 +343,20 @@ export function assembleContext(
             .join("\n")
         : "";
     memoriesBlock = truncateToTokenBudget(memoriesBlock, profile?.memories.budget ?? BUDGET.memories);
+  }
+
+  // Episodic block (Tier 4) — recent events for conversational awareness
+  let episodicBlock = "";
+  if (profile?.episodic?.include) {
+    const events = getRecentEventsForContext(scope.cognitiveOwnerKey);
+    if (events.length > 0) {
+      const lines = events.map((e) => {
+        const date = e.eventAtHuman.slice(0, 10);
+        return `- [${date} ${e.actionType}] ${e.narrativeSummary}`;
+      });
+      episodicBlock = `RECENT EVENTS (last 30 days, ${events.length} events):\n${lines.join("\n")}`;
+      episodicBlock = truncateToTokenBudget(episodicBlock, profile.episodic.budget ?? BUDGET.episodic);
+    }
   }
 
   // Conflicts block — passthrough or query
@@ -396,6 +428,7 @@ export function assembleContext(
   if (soulBlock) mutableParts.push(`\n\n---\n\nSOUL PROFILE:\n${soulBlock}`);
   if (summaryBlock) mutableParts.push(`\n\n---\n\nCONVERSATION SUMMARY:\n${summaryBlock}`);
   if (memoriesBlock) mutableParts.push(`\n\n---\n\nAGENT MEMORIES:\n${memoriesBlock}`);
+  if (episodicBlock) mutableParts.push(`\n\n---\n\n${episodicBlock}`);
   if (conflictsBlock) mutableParts.push(`\n\n---\n\nPENDING CONFLICTS:\n${conflictsBlock}`);
   if (pageStateBlock) mutableParts.push(`\n\n---\n\nPAGE STATE:\n${pageStateBlock}`);
 
@@ -598,6 +631,7 @@ Do NOT add this if you're mid-explanation or mid-topic.` });
       { name: "soul", content: soulBlock, budget: BUDGET.soul },
       { name: "summary", content: summaryBlock, budget: BUDGET.summary },
       { name: "memories", content: memoriesBlock, budget: BUDGET.memories },
+      { name: "episodic", content: episodicBlock, budget: BUDGET.episodic },
       { name: "conflicts", content: conflictsBlock, budget: BUDGET.conflicts },
       { name: "pageState", content: pageStateBlock, budget: BUDGET.pageState },
     ];
@@ -630,9 +664,11 @@ Do NOT add this if you're mid-explanation or mid-topic.` });
                   ? "CONVERSATION SUMMARY:\n"
                   : b.name === "memories"
                     ? "AGENT MEMORIES:\n"
-                    : b.name === "conflicts"
-                      ? "PENDING CONFLICTS:\n"
-                      : "PAGE STATE:\n";
+                    : b.name === "episodic"
+                      ? ""
+                      : b.name === "conflicts"
+                        ? "PENDING CONFLICTS:\n"
+                        : "PAGE STATE:\n";
           parts.push(`\n\n---\n\n${label}${b.content}`);
         }
       }
