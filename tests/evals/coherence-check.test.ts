@@ -63,7 +63,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("quickCoherenceCheck — deterministic", () => {
-  it("detects timeline_overlap: two current experiences with overlapping dates", () => {
+  it("allows multiple concurrent current experiences (freelance + contributor is valid)", () => {
     const facts = [
       makeFact({ category: "experience", key: "exp-a", value: { role: "Engineer", company: "Acme", start: "2022-01", status: "current" } }),
       makeFact({ category: "experience", key: "exp-b", value: { role: "Consultant", company: "Beta", start: "2023-06", status: "current" } }),
@@ -71,10 +71,20 @@ describe("quickCoherenceCheck — deterministic", () => {
     const sections = [makeSection("experience", { items: [] })];
 
     const issues = quickCoherenceCheck(sections, facts);
+    expect(issues.filter(i => i.type === "timeline_overlap")).toHaveLength(0);
+  });
+
+  it("detects timeline_overlap: current experience with end date is contradictory", () => {
+    const facts = [
+      makeFact({ category: "experience", key: "exp-a", value: { role: "Engineer", company: "Acme", start: "2022-01", end: "2024-06", status: "current" } }),
+    ];
+    const sections = [makeSection("experience", { items: [] })];
+
+    const issues = quickCoherenceCheck(sections, facts);
     expect(issues).toHaveLength(1);
     expect(issues[0].type).toBe("timeline_overlap");
     expect(issues[0].severity).toBe("warning");
-    expect(issues[0].affectedSections).toContain("experience");
+    expect(issues[0].description).toContain("end date");
   });
 
   it("does not flag non-overlapping experiences (past + current)", () => {
@@ -418,8 +428,8 @@ describe("checkPageCoherence — hybrid", () => {
     );
 
     const facts = [
-      makeFact({ category: "experience", key: "exp-a", value: { role: "Engineer", start: "2020-01", status: "current" } }),
-      makeFact({ category: "experience", key: "exp-b", value: { role: "Designer", start: "2021-01", status: "current" } }),
+      // current + end date = contradictory → timeline_overlap
+      makeFact({ category: "experience", key: "exp-a", value: { role: "Engineer", start: "2020-01", end: "2024-06", status: "current" } }),
     ];
     const sections = [
       makeSection("hero", { tagline: "" }),
@@ -436,10 +446,9 @@ describe("checkPageCoherence — hybrid", () => {
   }, 10000);
 
   it("returns max 3 issues total after merge", async () => {
-    // 2 deterministic issues + 2 LLM issues = 4, but capped at 3
+    // deterministic issue (current+end) + hero mismatch + 2 LLM issues = 4, but capped at 3
     const facts = [
-      makeFact({ category: "experience", key: "exp-a", value: { role: "Engineer", start: "2020-01", status: "current" } }),
-      makeFact({ category: "experience", key: "exp-b", value: { role: "Designer", start: "2021-01", status: "current" } }),
+      makeFact({ category: "experience", key: "exp-a", value: { role: "Engineer", start: "2020-01", end: "2024-06", status: "current" } }),
     ];
     vi.mocked(generateObject).mockResolvedValue({
       object: {

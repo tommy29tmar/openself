@@ -70,11 +70,13 @@ Applied at the application level, not in the prompt.
 
 **1. Current uniqueness (per-category):**
 
+> **DEPRECATED (2026-03-11):** `CURRENT_UNIQUE_CATEGORIES` emptied — "experience" removed because people legitimately hold multiple current roles (freelance + contributor, full-time + consulting). Mechanism kept dormant for future categories. See `src/lib/services/fact-constraints.ts`.
+
 ```typescript
-const CURRENT_UNIQUE_CATEGORIES = ["experience"]; // NOT education (dual degrees are valid)
+const CURRENT_UNIQUE_CATEGORIES = new Set<string>(); // was ["experience"], now empty
 ```
 
-`createFact()` with `value.status === "current"` in a unique category → search for existing current facts. If found → throw `FactConstraintError({ code: "EXISTING_CURRENT", existingFactId, suggestion: "Update existing fact to past first" })`.
+~~`createFact()` with `value.status === "current"` in a unique category → search for existing current facts. If found → throw `FactConstraintError({ code: "EXISTING_CURRENT", existingFactId, suggestion: "Update existing fact to past first" })`.~~
 
 **2. Cascade check:**
 

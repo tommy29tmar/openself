@@ -103,8 +103,8 @@ export async function createFact(
   const normalized = await normalizeCategory(input.category, taxonomyStore);
   const confidence = input.confidence ?? 1.0;
 
-  // Current uniqueness check — only one "current" per category (e.g. experience)
-  // Exclude same key to avoid blocking idempotent upserts.
+  // Current uniqueness check — dormant (CURRENT_UNIQUE_CATEGORIES is empty).
+  // Multiple current experiences are valid. Kept for future categories if needed.
   if (CURRENT_UNIQUE_CATEGORIES.has(normalized.canonical)) {
     const val = typeof input.value === "object" ? input.value : {};
     if ((val as Record<string, unknown>).status === "current") {
@@ -252,7 +252,7 @@ export function updateFact(
   // Validate new value before persisting
   validateFactValue(existing.category, existing.key, input.value);
 
-  // Current uniqueness check (analogous to createFact, with self-exclusion)
+  // Current uniqueness check — dormant (CURRENT_UNIQUE_CATEGORIES is empty)
   if (CURRENT_UNIQUE_CATEGORIES.has(existing.category)) {
     const newVal = typeof input.value === "object" ? input.value : {};
     if ((newVal as Record<string, unknown>).status === "current") {

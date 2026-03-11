@@ -224,7 +224,7 @@ describe("batch_facts tool", () => {
     expect(result.warnings![0]).toContain("no fact found");
   });
 
-  it("respects constraint layer within batch (two current experiences)", async () => {
+  it("allows two current experiences in same batch (multiple current roles valid)", async () => {
     const tool = getTools();
     const suffix = randomUUID().slice(0, 8);
     const result = await tool.execute({
@@ -234,14 +234,12 @@ describe("batch_facts tool", () => {
       ],
     }, { toolCallId: "test", messages: [] });
 
-    // First op succeeded, second hit FactConstraintError
-    expect(result.success).toBe(false);
-    expect((result as any).code).toBe("EXISTING_CURRENT");
-    expect(result.created).toBe(1);
+    expect(result.success).toBe(true);
+    expect(result.created).toBe(2);
 
-    // First fact persisted
+    // Both facts persisted
     const active = getActiveFacts(sessionId);
-    const persisted = active.find(f => f.key === `first-${suffix}`);
-    expect(persisted).toBeDefined();
+    expect(active.find(f => f.key === `first-${suffix}`)).toBeDefined();
+    expect(active.find(f => f.key === `second-${suffix}`)).toBeDefined();
   });
 });

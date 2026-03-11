@@ -228,7 +228,7 @@ Key naming strategy: prefix keys with `li-` to avoid collision with chat-created
 - **`Positions.csv`** — columns: `Company Name`, `Title`, `Description`, `Location`, `Started On`, `Finished On`
   - → `experience/li-<company-slug>-<start-year>` (see Section 7.5 for collision handling)
   - Value: `{ role: Title, company: "Company Name", description: Description, start: normalizeDate("Started On"), end: normalizeDate("Finished On"), status }`
-  - **Ordering rule**: import chronologically (oldest first). Mark all positions as `status: "past"` except the most recent without a `Finished On` date → `status: "current"`. This respects `CURRENT_UNIQUE_CATEGORIES` guardrail.
+  - **Ordering rule**: import chronologically (oldest first). Mark all positions as `status: "past"` except the most recent without a `Finished On` date → `status: "current"`. ~~This respects `CURRENT_UNIQUE_CATEGORIES` guardrail.~~ (Note 2026-03-11: constraint removed — multiple current roles now valid. Mapper still uses single-current logic, could be relaxed in follow-up.)
   - Date fields: `Started On` / `Finished On` are typically `Mon YYYY` format (e.g. `Apr 2024`). Parse to `YYYY-MM`.
 - **`Education.csv`** — columns: `School Name`, `Start Date`, `End Date`, `Notes`, `Degree Name`, `Activities`
   - → `education/li-<school-slug>-<start-year>` → `{ institution: "School Name", degree: "Degree Name", start, end, description: Notes }`
@@ -349,7 +349,7 @@ Several guardrails in `kb-service.ts:createFact` affect bulk imports:
 | Guardrail | Impact on connector | Mitigation |
 |-----------|-------------------|------------|
 | `validateFactValue()` | Rejects malformed values and placeholder dates | Parser must produce strictly valid values. `normalizeLinkedInDate()` must output ISO or partial ISO. Values that fail validation are **skipped** (not crash), logged to import report. |
-| `CURRENT_UNIQUE_CATEGORIES` | Only one `status: "current"` per category allowed | LinkedIn import sorts positions chronologically, marks only the single most recent (no end date) as `current`. All others → `past`. |
+| ~~`CURRENT_UNIQUE_CATEGORIES`~~ | ~~Only one `status: "current"` per category allowed~~ **(DEPRECATED 2026-03-11: set emptied, multiple current roles valid)** | LinkedIn mapper still marks only the most recent as `current` — could be relaxed in follow-up. |
 | Experience key collision (company mismatch) | `createFact` throws if `experience/<key>` exists with different company | Use `li-<company-slug>-<start-year>` keys to guarantee uniqueness. If slug collision occurs (same company, same year, different role), append `-<index>`. |
 | `logEvent` hardcoded `actor: "assistant"` | Audit trail shows wrong actor | **Refactor `createFact`** to accept optional `actor` parameter (default `"assistant"` for backward compat). Connector-fact-writer passes `actor: "connector"`. Small, safe change. |
 | `initialVisibility` with `mode: "onboarding"` | Contact facts would be `proposed` not `private` | Use `private-contact` category for sensitive contact data (see 5.5). For non-sensitive data, `mode: "onboarding"` → `proposed` is actually correct. |
@@ -389,7 +389,7 @@ Rationale: deleting imported facts on disconnect would be destructive and unexpe
 - **Fact mapper** (LinkedIn → OpenSelf): test each CSV file type → expected fact category/key/value. Verify key uniqueness strategy (slugging, dedup index).
 - **Fact mapper** (GitHub → OpenSelf): test profile, repos, languages → expected facts.
 - **Connector-fact-writer**: test `source="connector"`, actor override, visibility policy per category, batch create + single recompose.
-- **Experience ordering**: test `CURRENT_UNIQUE_CATEGORIES` compliance with multiple positions, ensure only one `current`.
+- **Experience ordering**: test position ordering with multiple positions. (Note 2026-03-11: `CURRENT_UNIQUE_CATEGORIES` emptied — multiple current roles now valid.)
 - **Credential encryption**: round-trip test (encrypt → decrypt → compare).
 
 ### 8.2 Integration tests
@@ -491,7 +491,7 @@ All findings from the 2026-03-02 code review are tracked here for traceability.
 | H3 | High | Credential encryption deferred to Milestone D (too late) | Moved to Section 7.6 + Milestone A |
 | H4 | High | No upload size limit or streaming for ZIP import | Added to Section 5.2: 100 MB limit, MIME validation, streaming extraction |
 | H5 | High | Experience key collision with `createFact` company-mismatch guardrail | Added to Sections 5.4 + 7.5: `li-<company-slug>-<start-year>` keys with index suffix for collisions |
-| H6 | High | `CURRENT_UNIQUE_CATEGORIES` rejects multiple `status: "current"` per category | Added to Sections 5.4 + 7.5: chronological import order, single `current` |
+| H6 | ~~High~~ Resolved | ~~`CURRENT_UNIQUE_CATEGORIES` rejects multiple `status: "current"` per category~~ **(DEPRECATED 2026-03-11: constraint removed)** | Was: chronological import order. Now: multiple current roles valid. |
 | M1 | Medium | GitHub token refresh/expiry not mentioned | Added Section 4.3: token lifecycle, 401 handling, future GitHub Apps migration path |
 | M2 | Medium | Timeline 6-10 days optimistic | Revised to 9-13 days in Section 9 |
 | M3 | Medium | No test strategy | Added Section 8: unit, integration, and E2E test plan |

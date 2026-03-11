@@ -56,31 +56,24 @@ const SECTION_CATEGORY_MAP: Record<string, string> = {
 export function quickCoherenceCheck(sections: Section[], facts: FactRow[]): CoherenceIssue[] {
   const issues: CoherenceIssue[] = [];
 
-  // 1. timeline_overlap: two experiences with status:"current" and overlapping date ranges
+  // 1. timeline_overlap: experience marked "current" but with an end date (contradictory)
+  // Note: multiple concurrent current roles are valid (freelance + contributor, etc.)
   const currentExperiences = facts.filter(f =>
     f.category === "experience" && !f.archivedAt &&
     (f.value as Record<string, unknown>)?.status === "current"
   );
-  if (currentExperiences.length >= 2) {
-    for (let i = 0; i < currentExperiences.length; i++) {
-      for (let j = i + 1; j < currentExperiences.length; j++) {
-        const aVal = currentExperiences[i].value as Record<string, unknown>;
-        const bVal = currentExperiences[j].value as Record<string, unknown>;
-        const aStart = String(aVal.start ?? "");
-        const bStart = String(bVal.start ?? "");
-        // Both current with start dates → overlap (both run to present)
-        if (aStart && bStart) {
-          issues.push({
-            type: "timeline_overlap",
-            severity: "warning",
-            description: `Two concurrent current roles: "${aVal.role ?? aVal.company}" and "${bVal.role ?? bVal.company}"`,
-            suggestion: "Verify both roles are truly concurrent, or archive the ended one.",
-            affectedSections: ["experience"],
-          });
-          break; // one overlap is enough
-        }
-      }
-      if (issues.some(i => i.type === "timeline_overlap")) break;
+  for (const exp of currentExperiences) {
+    const val = exp.value as Record<string, unknown>;
+    const endDate = String(val.end ?? "");
+    if (endDate) {
+      issues.push({
+        type: "timeline_overlap",
+        severity: "warning",
+        description: `"${val.role ?? val.company}" is marked current but has end date ${endDate}`,
+        suggestion: "If the role ended, change status to past. If still active, remove the end date.",
+        affectedSections: ["experience"],
+      });
+      break; // one issue is enough
     }
   }
 

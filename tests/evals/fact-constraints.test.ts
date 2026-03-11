@@ -34,7 +34,7 @@ afterAll(() => {
 describe("FactConstraintError — current uniqueness", () => {
   beforeEach(cleanup);
 
-  it("blocks creating second current experience when one exists", async () => {
+  it("allows multiple current experiences (freelance + contributor is valid)", async () => {
     const suffix = randomUUID().slice(0, 8);
     const f1 = await createFact({
       category: "experience",
@@ -43,11 +43,14 @@ describe("FactConstraintError — current uniqueness", () => {
     }, sessionId);
     createdIds.push(f1.id);
 
-    await expect(createFact({
+    const f2 = await createFact({
       category: "experience",
       key: `beta-${suffix}`,
       value: { role: "Lead", company: "Beta", status: "current" },
-    }, sessionId)).rejects.toThrow(FactConstraintError);
+    }, sessionId);
+    createdIds.push(f2.id);
+    expect(f2).toBeDefined();
+    expect(f2.id).not.toBe(f1.id);
   });
 
   it("allows creating current experience when no current exists", async () => {
@@ -86,7 +89,7 @@ describe("FactConstraintError — current uniqueness", () => {
     expect(f2).toBeDefined();
   });
 
-  it("error includes existingFactId and suggestion", async () => {
+  it("three current experiences all persist (no uniqueness constraint)", async () => {
     const suffix = randomUUID().slice(0, 8);
     const f1 = await createFact({
       category: "experience",
@@ -95,20 +98,22 @@ describe("FactConstraintError — current uniqueness", () => {
     }, sessionId);
     createdIds.push(f1.id);
 
-    try {
-      await createFact({
-        category: "experience",
-        key: `beta-${suffix}`,
-        value: { role: "Lead", company: "Beta", status: "current" },
-      }, sessionId);
-      expect.unreachable("Should have thrown");
-    } catch (err) {
-      expect(err).toBeInstanceOf(FactConstraintError);
-      const e = err as FactConstraintError;
-      expect(e.code).toBe("EXISTING_CURRENT");
-      expect(e.existingFactId).toBe(f1.id);
-      expect(e.suggestion).toContain("past");
-    }
+    const f2 = await createFact({
+      category: "experience",
+      key: `beta-${suffix}`,
+      value: { role: "Lead", company: "Beta", status: "current" },
+    }, sessionId);
+    createdIds.push(f2.id);
+
+    const f3 = await createFact({
+      category: "experience",
+      key: `gamma-${suffix}`,
+      value: { role: "Advisor", company: "Gamma", status: "current" },
+    }, sessionId);
+    createdIds.push(f3.id);
+
+    expect(f1.id).not.toBe(f2.id);
+    expect(f2.id).not.toBe(f3.id);
   });
 
   it("upsert with same key does not trigger constraint (idempotent)", async () => {
@@ -130,10 +135,10 @@ describe("FactConstraintError — current uniqueness", () => {
   });
 });
 
-describe("updateFact — current uniqueness", () => {
+describe("updateFact — current uniqueness (no constraint)", () => {
   beforeEach(cleanup);
 
-  it("blocks updating to current when another current exists", async () => {
+  it("allows updating to current even when another current exists", async () => {
     const suffix = randomUUID().slice(0, 8);
     const f1 = await createFact({
       category: "experience",
@@ -149,10 +154,11 @@ describe("updateFact — current uniqueness", () => {
     }, sessionId);
     createdIds.push(f2.id);
 
-    expect(() => updateFact({
+    const updated = updateFact({
       factId: f2.id,
       value: { role: "Lead", company: "Beta", status: "current" },
-    }, sessionId)).toThrow(FactConstraintError);
+    }, sessionId);
+    expect(updated).not.toBeNull();
   });
 });
 

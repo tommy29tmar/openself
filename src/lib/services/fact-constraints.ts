@@ -12,4 +12,7 @@ export class FactConstraintError extends Error {
   }
 }
 
-export const CURRENT_UNIQUE_CATEGORIES = new Set(["experience"]);
+// Previously contained "experience", but people legitimately hold multiple
+// current roles (freelance + contributor, full-time + consulting, etc.).
+// Kept as mechanism for future categories if needed.
+export const CURRENT_UNIQUE_CATEGORIES = new Set<string>();
