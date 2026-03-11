@@ -182,6 +182,48 @@ describe("batch_facts tool", () => {
     expect(persisted).toBeDefined();
   });
 
+  it("deletes by category/key format (resolves to UUID)", async () => {
+    const tool = getTools();
+    const suffix = randomUUID().slice(0, 8);
+
+    // Pre-create a fact
+    const { tools } = createAgentTools("en", sessionId);
+    const createResult = await tools.create_fact.execute(
+      { category: "activity", key: `yoga-${suffix}`, value: { name: "Yoga" } },
+      { toolCallId: "pre3", messages: [] },
+    );
+    createdIds.push(createResult.factId!);
+
+    // Delete using category/key format within batch
+    const result = await tool.execute({
+      operations: [
+        { action: "delete" as const, factId: `activity/yoga-${suffix}` },
+      ],
+    }, { toolCallId: "test", messages: [] });
+
+    expect(result.success).toBe(true);
+    expect(result.deleted).toBe(1);
+
+    // Verify deletion
+    const deletedFact = getFactById(createResult.factId!, sessionId);
+    expect(deletedFact).toBeNull();
+  });
+
+  it("warns when category/key matches no facts in batch delete", async () => {
+    const tool = getTools();
+    const result = await tool.execute({
+      operations: [
+        { action: "delete" as const, factId: "activity/nonexistent-xyz" },
+      ],
+    }, { toolCallId: "test", messages: [] });
+
+    expect(result.success).toBe(true);
+    expect(result.deleted).toBe(0);
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings!.length).toBeGreaterThan(0);
+    expect(result.warnings![0]).toContain("no fact found");
+  });
+
   it("respects constraint layer within batch (two current experiences)", async () => {
     const tool = getTools();
     const suffix = randomUUID().slice(0, 8);

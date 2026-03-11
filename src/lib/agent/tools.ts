@@ -651,33 +651,50 @@ export function createAgentTools(
               break;
             }
             case "delete": {
+              // Resolve category/key format (e.g. "activity/yoga") to UUID
+              let resolvedId = op.factId;
+              if (op.factId.includes("/") && !op.factId.match(/^[0-9a-f]{8}-/)) {
+                const [cat, ...keyParts] = op.factId.split("/");
+                const key = keyParts.join("/");
+                const matching = findFactsByOwnerCategoryKey(effectiveOwnerKey, cat, key, readKeys);
+                if (matching.length === 1) {
+                  resolvedId = matching[0].id;
+                } else if (matching.length === 0) {
+                  warnings.push(`Delete of ${op.factId}: no fact found for category/key`);
+                  break;
+                } else {
+                  warnings.push(`Delete of ${op.factId}: ${matching.length} facts match category/key — use UUID to disambiguate`);
+                  break;
+                }
+              }
+
               if (_batchPreflightConfirmed) {
                 // Confirmed batch — skip deleteGate, execute directly
-                const old = getFactById(op.factId, sessionId, readKeys);
+                const old = getFactById(resolvedId, sessionId, readKeys);
                 if (old) {
                   const { id, ...rest } = old;
                   reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
                 }
-                const didDelete = deleteFact(op.factId, sessionId, readKeys);
+                const didDelete = deleteFact(resolvedId, sessionId, readKeys);
                 if (didDelete) {
                   deleted++;
                   _deletionCountThisTurn++;
                 } else {
-                  warnings.push(`Delete of ${op.factId} returned false (already gone or access denied)`);
+                  warnings.push(`Delete of ${resolvedId} returned false (already gone or access denied)`);
                 }
               } else {
                 // Single delete within batch — apply delete gate
-                const dResult = deleteGate(op.factId);
+                const dResult = deleteGate(resolvedId);
                 if (dResult && "requiresConfirmation" in dResult) {
-                  warnings.push(`Delete of ${op.factId} blocked: ${dResult.message}`);
+                  warnings.push(`Delete of ${resolvedId} blocked: ${dResult.message}`);
                   break;
                 }
-                const old = getFactById(op.factId, sessionId, readKeys);
+                const old = getFactById(resolvedId, sessionId, readKeys);
                 if (old) {
                   const { id, ...rest } = old;
                   reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
                 }
-                const didDelete = deleteFact(op.factId, sessionId, readKeys);
+                const didDelete = deleteFact(resolvedId, sessionId, readKeys);
                 if (didDelete) {
                   deleted++;
                   if (dResult && "commit" in dResult) dResult.commit();
