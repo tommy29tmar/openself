@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return connectorError("RATE_LIMITED", "Please wait before syncing again.", 429, true);
   }
 
-  enqueueJob("connector_sync", { ownerKey });
+  enqueueJob("connector_sync", { ownerKey, connectorId: github.id });
 
   return NextResponse.json({ success: true, message: "Sync queued" });
 }

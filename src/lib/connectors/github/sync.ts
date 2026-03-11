@@ -9,6 +9,7 @@ import {
   updateConnectorStatus,
 } from "../connector-service";
 import { batchCreateFacts } from "../connector-fact-writer";
+import { batchRecordEvents } from "../connector-event-writer";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { getDraft } from "@/lib/services/page-service";
 import {
@@ -18,7 +19,7 @@ import {
   GitHubAuthError,
 } from "./client";
 import { mapProfile, mapRepos } from "./mapper";
-import type { SyncResult } from "../types";
+import type { SyncResult, EpisodicEventInput } from "../types";
 import { db } from "@/lib/db";
 import { connectors, connectorItems } from "@/lib/db/schema";
 import { randomUUID } from "node:crypto";
@@ -75,6 +76,54 @@ export async function syncGitHub(
       factLanguage,
     );
 
+    // ── Episodic events for truly new repos ──────────────────────────
+    const isFirstSync = !connector.lastSync;
+    let eventsCreated = 0;
+
+    if (!isFirstSync) {
+      // Query existing external IDs to detect truly new repos
+      const existingItems = db
+        .select()
+        .from(connectorItems)
+        .where(eq(connectorItems.connectorId, connectorId))
+        .all();
+      const existingExternalIds = new Set(existingItems.map((item) => item.externalId));
+
+      const nonForkRepos = repos.filter((r) => !r.fork);
+      const newRepos = nonForkRepos.filter(
+        (r) => !existingExternalIds.has(r.node_id),
+      );
+
+      if (newRepos.length > 0) {
+        const now = Math.floor(Date.now() / 1000);
+        const nowHuman = new Date().toISOString();
+
+        const events: EpisodicEventInput[] = newRepos.map((repo) => {
+          const repoLangs = languagesByRepo.get(repo.full_name);
+          const entities = repoLangs ? Object.keys(repoLangs) : [];
+          const desc = repo.description
+            ? `Created new repository: ${repo.name} — ${repo.description}`
+            : `Created new repository: ${repo.name}`;
+          return {
+            externalId: `repo-${repo.node_id}`,
+            eventAtUnix: now,
+            eventAtHuman: nowHuman,
+            actionType: "work",
+            narrativeSummary: desc,
+            entities,
+          };
+        });
+
+        const eventReport = await batchRecordEvents(events, {
+          ownerKey,
+          connectorId,
+          connectorType: "github",
+          sessionId: scope.knowledgePrimaryKey,
+        });
+        eventsCreated = eventReport.eventsWritten;
+      }
+    }
+
     // Record provenance for each non-fork repo in connector_items
     for (const repo of repos.filter((r) => !r.fork)) {
       db.insert(connectorItems)
@@ -111,7 +160,7 @@ export async function syncGitHub(
       .where(eq(connectors.id, connectorId))
       .run();
 
-    return { factsCreated: report.factsWritten, factsUpdated: 0, eventsCreated: 0 };
+    return { factsCreated: report.factsWritten, factsUpdated: 0, eventsCreated };
   } catch (error) {
     if (error instanceof GitHubAuthError) {
       updateConnectorStatus(connectorId, "error", "Token expired or revoked");
