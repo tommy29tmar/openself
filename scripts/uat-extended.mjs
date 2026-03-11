@@ -401,10 +401,19 @@ function checkAnomalies(res, msgNum, currentPhase) {
     }
   }
 
-  // BUG-6: delete confirm loop
+  // BUG-6: delete confirm loop (stricter than shared isDeleteConfirmPrompt at line 109)
+  // The shared function matches ANY delete verb form including past participles.
+  // This BUG-6-specific check excludes past participles (completion reports like "Eliminati",
+  // "cancellato") so that post-execution text doesn't trigger false positives.
   if (STATE.justConfirmedDelete) {
     STATE.justConfirmedDelete = false;
-    if (isDeleteConfirmPrompt(text)) {
+    // True if text has at least one delete verb that is NOT a past participle
+    const hasDeleteIntent = (t) => {
+      const tokens = t.match(/\b(elimin\w*|cancell\w*|rimuov\w*|toglie\w*|toglio|tolgo)\b/ig) || [];
+      const completionRe = /^(eliminat[oaie]|cancellat[oaie]|rimoss[oaie]|tolt[oaie])$/i;
+      return tokens.some(m => !completionRe.test(m));
+    };
+    if (hasDeleteIntent(text) && hasQuestionWith(text, /conferm\w*|sicur\w*|proced\w*|vuoi/i)) {
       anomalies.push({ msg: msgNum, phase: currentPhase, type: "BUG-6_DELETE_CONFIRM_LOOP" });
       console.log("  !! BUG-6: Agent re-asked for delete confirmation after user confirmed!");
     }
