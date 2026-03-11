@@ -3167,13 +3167,13 @@ CREATE TABLE llm_usage_daily (
 CREATE TABLE llm_limits (
     id TEXT PRIMARY KEY DEFAULT 'main',
     daily_token_limit INTEGER DEFAULT 500000,
-    monthly_cost_limit_usd REAL DEFAULT 25.0,
+    monthly_cost_limit_usd REAL DEFAULT 25.0, -- legacy, unused
     daily_cost_warning_usd REAL DEFAULT 1.0,
     daily_cost_hard_limit_usd REAL DEFAULT 2.0,
-    warning_thresholds_json TEXT DEFAULT '[0.5,0.75,0.9,1.0]',
-    heartbeat_call_limit INTEGER DEFAULT 3,
+    warning_thresholds_json TEXT DEFAULT '[0.5,0.75,0.9,1.0]', -- legacy, unused
+    heartbeat_call_limit INTEGER DEFAULT 3, -- legacy, unused
     hard_stop BOOLEAN DEFAULT TRUE,
-    warning_cooldown_minutes INTEGER DEFAULT 60,
+    warning_cooldown_minutes INTEGER DEFAULT 60, -- legacy, unused
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -3772,7 +3772,6 @@ GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 
 # Cost guardrails (recommended)
 LLM_DAILY_TOKEN_LIMIT=500000
-LLM_MONTHLY_COST_LIMIT_USD=25
 LLM_DAILY_COST_WARNING_USD=1
 LLM_DAILY_COST_HARD_LIMIT_USD=2
 LLM_WARNING_THRESHOLDS_PCT=50,75,90,100

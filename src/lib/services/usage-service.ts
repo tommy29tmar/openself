@@ -115,6 +115,13 @@ function parseEnvFloat(key: string): number | undefined {
   return raw && /^\d+(\.\d+)?$/.test(raw) ? parseFloat(raw) : undefined;
 }
 
+function parseEnvBool(key: string): boolean | undefined {
+  const raw = process.env[key]?.toLowerCase();
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  return undefined;
+}
+
 function getLimits() {
   const row = db
     .select()
@@ -125,13 +132,14 @@ function getLimits() {
   const envTokenLimit = parseEnvInt("LLM_DAILY_TOKEN_LIMIT");
   const envCostWarning = parseEnvFloat("LLM_DAILY_COST_WARNING_USD");
   const envCostHardLimit = parseEnvFloat("LLM_DAILY_COST_HARD_LIMIT_USD");
+  const envHardStop = parseEnvBool("LLM_HARD_STOP");
 
   // Env vars take precedence over DB, DB is fallback for runtime overrides
   return {
     dailyTokenLimit: envTokenLimit ?? row?.dailyTokenLimit ?? 500_000,
     dailyCostWarningUsd: envCostWarning ?? row?.dailyCostWarningUsd ?? 1.0,
     dailyCostHardLimitUsd: envCostHardLimit ?? row?.dailyCostHardLimitUsd ?? 2.0,
-    hardStop: row?.hardStop ?? true,
+    hardStop: envHardStop ?? row?.hardStop ?? true,
   };
 }
 
@@ -144,53 +152,104 @@ export function checkBudget(): BudgetResult {
   const usage = getTodayUsage();
   const limits = getLimits();
 
-  // Hard stop: daily cost
-  if (limits.hardStop && usage.estimatedCostUsd >= limits.dailyCostHardLimitUsd) {
-    logEvent({
-      eventType: "budget_warning",
-      actor: "system",
-      payload: {
-        level: "hard_limit",
-        dailyCostUsd: usage.estimatedCostUsd,
-        limitUsd: limits.dailyCostHardLimitUsd,
-      },
-    });
-    return {
-      allowed: false,
-      warningMessage: `Daily cost limit reached ($${usage.estimatedCostUsd.toFixed(2)} / $${limits.dailyCostHardLimitUsd.toFixed(2)}). Try again tomorrow.`,
-    };
+  // --- Determine which hard limits are exceeded ---
+  const costExceeded = usage.estimatedCostUsd >= limits.dailyCostHardLimitUsd;
+  const tokensExceeded = usage.totalTokens >= limits.dailyTokenLimit;
+
+  // --- Hard stop: block if enabled ---
+  // NOTE: logEvent is intentionally NOT wrapped in try/catch here.
+  // If logging fails, the error propagates and blocks the request — fail-closed.
+  if (limits.hardStop) {
+    if (costExceeded) {
+      logEvent({
+        eventType: "budget_warning",
+        actor: "system",
+        payload: {
+          level: "hard_limit",
+          dailyCostUsd: usage.estimatedCostUsd,
+          limitUsd: limits.dailyCostHardLimitUsd,
+        },
+      });
+      return {
+        allowed: false,
+        warningMessage: `Daily cost limit reached ($${usage.estimatedCostUsd.toFixed(2)} / $${limits.dailyCostHardLimitUsd.toFixed(2)}). Try again tomorrow.`,
+      };
+    }
+    if (tokensExceeded) {
+      logEvent({
+        eventType: "budget_warning",
+        actor: "system",
+        payload: {
+          level: "hard_limit",
+          totalTokens: usage.totalTokens,
+          limitTokens: limits.dailyTokenLimit,
+        },
+      });
+      return {
+        allowed: false,
+        warningMessage: `Daily token limit reached (${usage.totalTokens.toLocaleString()} / ${limits.dailyTokenLimit.toLocaleString()}). Try again tomorrow.`,
+      };
+    }
   }
 
-  // Hard stop: daily tokens
-  if (limits.hardStop && usage.totalTokens >= limits.dailyTokenLimit) {
-    logEvent({
-      eventType: "budget_warning",
-      actor: "system",
-      payload: {
-        level: "hard_limit",
-        totalTokens: usage.totalTokens,
-        limitTokens: limits.dailyTokenLimit,
-      },
-    });
-    return {
-      allowed: false,
-      warningMessage: `Daily token limit reached (${usage.totalTokens.toLocaleString()} / ${limits.dailyTokenLimit.toLocaleString()}). Try again tomorrow.`,
-    };
-  }
-
-  // Warning: daily cost approaching
+  // --- Bypass mode (hardStop=false): log exactly one event, always allow ---
+  // CRITICAL: Set warningMessage BEFORE logEvent — if logEvent throws, the message
+  // must already be set to prevent fallthrough to the generic warning branch.
   let warningMessage: string | undefined;
-  if (usage.estimatedCostUsd >= limits.dailyCostWarningUsd) {
+  let bypassed = false;
+
+  if (costExceeded) {
+    // Cost bypass takes priority — even if tokens are also exceeded, only one event
+    warningMessage = `Daily cost limit bypassed (LLM_HARD_STOP=false): $${usage.estimatedCostUsd.toFixed(2)} / $${limits.dailyCostHardLimitUsd.toFixed(2)}.`;
+    bypassed = true;
+    try {
+      logEvent({
+        eventType: "budget_warning",
+        actor: "system",
+        payload: {
+          level: "hard_limit_bypassed",
+          dailyCostUsd: usage.estimatedCostUsd,
+          limitUsd: limits.dailyCostHardLimitUsd,
+        },
+      });
+    } catch {
+      // Best-effort: logging failure must not block requests
+    }
+  } else if (tokensExceeded) {
+    warningMessage = `Daily token limit bypassed (LLM_HARD_STOP=false): ${usage.totalTokens.toLocaleString()} / ${limits.dailyTokenLimit.toLocaleString()}.`;
+    bypassed = true;
+    try {
+      logEvent({
+        eventType: "budget_warning",
+        actor: "system",
+        payload: {
+          level: "hard_limit_bypassed",
+          totalTokens: usage.totalTokens,
+          limitTokens: limits.dailyTokenLimit,
+        },
+      });
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // Warning: daily cost approaching (below hard limit but above warning threshold)
+  // Suppressed when a bypass is active — avoid duplicate/misleading logging
+  if (!bypassed && usage.estimatedCostUsd >= limits.dailyCostWarningUsd) {
     warningMessage = `Daily cost warning: $${usage.estimatedCostUsd.toFixed(2)} of $${limits.dailyCostHardLimitUsd.toFixed(2)} hard limit used.`;
-    logEvent({
-      eventType: "budget_warning",
-      actor: "system",
-      payload: {
-        level: "warning",
-        dailyCostUsd: usage.estimatedCostUsd,
-        warningUsd: limits.dailyCostWarningUsd,
-      },
-    });
+    try {
+      logEvent({
+        eventType: "budget_warning",
+        actor: "system",
+        payload: {
+          level: "warning",
+          dailyCostUsd: usage.estimatedCostUsd,
+          warningUsd: limits.dailyCostWarningUsd,
+        },
+      });
+    } catch {
+      // Best-effort
+    }
   }
 
   return { allowed: true, warningMessage };

@@ -11,6 +11,23 @@ function checkAdminAuth(req: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
+/** Serialize DB row to public API shape (excludes deprecated columns). */
+function serializeLimits(row: typeof llmLimits.$inferSelect | undefined) {
+  return {
+    dailyTokenLimit: row?.dailyTokenLimit ?? 500_000,
+    dailyCostWarningUsd: row?.dailyCostWarningUsd ?? 1.0,
+    dailyCostHardLimitUsd: row?.dailyCostHardLimitUsd ?? 2.0,
+    hardStop: row?.hardStop ?? true,
+  };
+}
+
+const PATCHABLE_FIELDS = new Set([
+  "dailyTokenLimit",
+  "dailyCostWarningUsd",
+  "dailyCostHardLimitUsd",
+  "hardStop",
+]);
+
 /** GET /api/admin/limits — read current limits + today's usage */
 export async function GET(req: Request) {
   if (!checkAdminAuth(req)) {
@@ -23,15 +40,7 @@ export async function GET(req: Request) {
     .where(eq(llmLimits.id, "main"))
     .get();
 
-  const limits = {
-    dailyTokenLimit: row?.dailyTokenLimit ?? 150_000,
-    monthlyCostLimitUsd: row?.monthlyCostLimitUsd ?? 25.0,
-    dailyCostWarningUsd: row?.dailyCostWarningUsd ?? 1.0,
-    dailyCostHardLimitUsd: row?.dailyCostHardLimitUsd ?? 2.0,
-    heartbeatCallLimit: row?.heartbeatCallLimit ?? 3,
-    hardStop: row?.hardStop ?? true,
-  };
-
+  const limits = serializeLimits(row);
   const usage = getTodayUsage();
 
   return NextResponse.json({ limits, usage });
@@ -45,18 +54,9 @@ export async function PATCH(req: Request) {
 
   const body = await req.json();
 
-  const allowed = new Set([
-    "dailyTokenLimit",
-    "monthlyCostLimitUsd",
-    "dailyCostWarningUsd",
-    "dailyCostHardLimitUsd",
-    "heartbeatCallLimit",
-    "hardStop",
-  ]);
-
   const updates: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (allowed.has(key)) updates[key] = value;
+    if (PATCHABLE_FIELDS.has(key)) updates[key] = value;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -77,12 +77,12 @@ export async function PATCH(req: Request) {
     .where(eq(llmLimits.id, "main"))
     .run();
 
-  // Return updated state
+  // Return updated state through serializer — never leak deprecated columns
   const row = db
     .select()
     .from(llmLimits)
     .where(eq(llmLimits.id, "main"))
     .get();
 
-  return NextResponse.json({ success: true, limits: row });
+  return NextResponse.json({ success: true, limits: serializeLimits(row) });
 }

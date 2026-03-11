@@ -151,7 +151,6 @@ Expected: `200` or `404` (no draft yet)
 | `PROFILE_ID_CANONICAL` | `true` | Profile-based identity |
 | `NEXT_PUBLIC_BASE_URL` | `https://openself.dev` | OAuth callbacks |
 | `LLM_DAILY_TOKEN_LIMIT` | `150000` | Cost guardrail |
-| `LLM_MONTHLY_COST_LIMIT_USD` | `25` | Cost guardrail |
 | `LLM_HARD_STOP` | `true` | Hard stop on limit |
 | `DB_BOOTSTRAP_MODE` | `leader` | Web app runs migrations |
 

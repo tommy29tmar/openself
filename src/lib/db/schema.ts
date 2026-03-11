@@ -371,13 +371,13 @@ export const llmUsageDaily = sqliteTable(
 export const llmLimits = sqliteTable("llm_limits", {
   id: text("id").primaryKey().default("main"),
   dailyTokenLimit: integer("daily_token_limit").default(500000),
-  monthlyCostLimitUsd: real("monthly_cost_limit_usd").default(25.0),
+  monthlyCostLimitUsd: real("monthly_cost_limit_usd").default(25.0), // @deprecated — never enforced
   dailyCostWarningUsd: real("daily_cost_warning_usd").default(1.0),
   dailyCostHardLimitUsd: real("daily_cost_hard_limit_usd").default(2.0),
-  warningThresholdsJson: text("warning_thresholds_json").default("[0.5,0.75,0.9,1.0]"),
-  heartbeatCallLimit: integer("heartbeat_call_limit").default(3),
+  warningThresholdsJson: text("warning_thresholds_json").default("[0.5,0.75,0.9,1.0]"), // @deprecated — never read
+  heartbeatCallLimit: integer("heartbeat_call_limit").default(3), // @deprecated — never read
   hardStop: integer("hard_stop", { mode: "boolean" }).default(true),
-  warningCooldownMinutes: integer("warning_cooldown_minutes").default(60),
+  warningCooldownMinutes: integer("warning_cooldown_minutes").default(60), // @deprecated — never read
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
