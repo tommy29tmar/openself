@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Mocks ---
 
+const mockInsertEvent = vi.fn().mockReturnValue("event-uuid");
+vi.mock("@/lib/services/episodic-service", () => ({
+  insertEvent: (...args: any[]) => mockInsertEvent(...args),
+}));
+
 const mockBatchCreateFacts = vi
   .fn()
   .mockResolvedValue({ factsWritten: 5, factsSkipped: 0, errors: [] });
@@ -349,6 +354,63 @@ describe("importLinkedInZip", () => {
     );
 
     expect(report.errors[0].reason).toBe("Invalid ZIP: string error");
+  });
+
+  it("creates milestone episodic event on import", async () => {
+    const zipReader = createMockZipReader([
+      createMockEntry("Profile.csv", "[]"),
+      createMockEntry("Positions.csv", "[]"),
+      createMockEntry("Skills.csv", "[]"),
+      createMockEntry("Certifications.csv", "[]"),
+    ]);
+    mockFromBuffer.mockResolvedValue(zipReader);
+
+    const report = await importLinkedInZip(
+      Buffer.from("fake-zip"),
+      mockScope,
+      "testuser",
+      "en",
+    );
+
+    expect(report.factsWritten).toBe(5);
+    expect(mockInsertEvent).toHaveBeenCalledOnce();
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerKey: "owner-1",
+        sessionId: "sess-1",
+        actionType: "milestone",
+        source: "linkedin_zip",
+        narrativeSummary: expect.stringContaining("Imported LinkedIn profile"),
+        entities: [],
+      }),
+    );
+    // Verify counts in narrative
+    const summary = mockInsertEvent.mock.calls[0][0].narrativeSummary;
+    expect(summary).toContain("1 positions");
+    expect(summary).toContain("1 skills");
+    expect(summary).toContain("1 certifications");
+  });
+
+  it("does not create episodic event when no facts written", async () => {
+    mockBatchCreateFacts.mockResolvedValue({
+      factsWritten: 0,
+      factsSkipped: 3,
+      errors: [],
+    });
+
+    const zipReader = createMockZipReader([
+      createMockEntry("Profile.csv", "[]"),
+    ]);
+    mockFromBuffer.mockResolvedValue(zipReader);
+
+    await importLinkedInZip(
+      Buffer.from("fake-zip"),
+      mockScope,
+      "testuser",
+      "en",
+    );
+
+    expect(mockInsertEvent).not.toHaveBeenCalled();
   });
 
   it("handles mapper returning empty array (no facts from file)", async () => {

@@ -11,6 +11,7 @@ import {
   type FactInput,
 } from "./mapper";
 import { batchCreateFacts } from "../connector-fact-writer";
+import { insertEvent } from "@/lib/services/episodic-service";
 import type { OwnerScope } from "@/lib/auth/session";
 import type { ImportReport } from "../types";
 
@@ -116,5 +117,24 @@ export async function importLinkedInZip(
     return { factsWritten: 0, factsSkipped: 0, errors: [] };
   }
 
-  return batchCreateFacts(allFacts, scope, username, factLanguage);
+  const report = await batchCreateFacts(allFacts, scope, username, factLanguage);
+
+  if (report.factsWritten > 0) {
+    const positionCount = allFacts.filter((f) => f.category === "experience").length;
+    const skillCount = allFacts.filter((f) => f.category === "skill").length;
+    const certCount = allFacts.filter((f) => f.category === "achievement").length;
+
+    insertEvent({
+      ownerKey: scope.cognitiveOwnerKey,
+      sessionId: scope.knowledgePrimaryKey,
+      eventAtUnix: Math.floor(Date.now() / 1000),
+      eventAtHuman: new Date().toISOString(),
+      actionType: "milestone",
+      narrativeSummary: `Imported LinkedIn profile: ${positionCount} positions, ${skillCount} skills, ${certCount} certifications`,
+      entities: [],
+      source: "linkedin_zip",
+    });
+  }
+
+  return report;
 }
