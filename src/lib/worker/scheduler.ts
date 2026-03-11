@@ -1,11 +1,13 @@
 /**
  * Heartbeat scheduler — auto-enqueues heartbeat_light (daily) and heartbeat_deep (weekly).
+ * Also dispatches daily connector_sync jobs for owners with active connectors.
  *
  * Runs as a periodic tick inside the worker process. Each tick checks all active owners
  * and enqueues jobs based on their local timezone:
  * - Light: daily at/after 3 AM local time (catch-up) — deterministic housekeeping, no LLM
  * - Deep: Sunday at/after 3 AM local time (catch-up) — LLM-dependent, gated by minimum fact count
  * - Deep recovery: Monday before noon if previous week's deep was missed
+ * - Connector sync: daily, per-connector guard using owner's timezone
  */
 
 import {
@@ -19,10 +21,12 @@ import {
   getPreviousWeek,
 } from "@/lib/services/heartbeat-config-service";
 import { enqueueJob } from "@/lib/worker/index";
+import { sqlite } from "@/lib/db";
 import { DEEP_HEARTBEAT_MIN_FACTS } from "@/lib/agent/thresholds";
 import { runGlobalHousekeeping } from "@/lib/worker/heartbeat";
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
+import { getActiveConnectors } from "@/lib/connectors/connector-service";
 
 /** Scheduler runs every 15 minutes. */
 export const SCHEDULER_INTERVAL_MS = 15 * 60_000;
@@ -126,6 +130,38 @@ export async function runSchedulerTick(): Promise<void> {
           }
         }
       }
+    }
+
+    // === CONNECTOR SYNC LOOP ===
+    // Discover connector-only owners (who have connectors but may not be in heartbeat loop)
+    const connectorOwnerRows = sqlite
+      .prepare(
+        `SELECT DISTINCT owner_key FROM connectors WHERE status IN ('connected','error') AND enabled = 1`,
+      )
+      .all() as Array<{ owner_key: string }>;
+    const allConnectorOwnerKeys = [
+      ...new Set([
+        ...owners,
+        ...connectorOwnerRows.map((r) => r.owner_key),
+      ]),
+    ];
+
+    for (const ownerKey of allConnectorOwnerKeys) {
+      const activeConns = getActiveConnectors(ownerKey);
+      if (activeConns.length === 0) continue;
+
+      // Per-connector once-per-day guard using owner's timezone
+      const tz = getHeartbeatConfig(ownerKey).timezone;
+      const ownerToday = computeOwnerDay(tz);
+      const allSyncedToday = activeConns.every((c) => {
+        if (!c.lastSync) return false;
+        const lastSyncDay = computeOwnerDay(tz, new Date(c.lastSync));
+        return lastSyncDay === ownerToday;
+      });
+      if (allSyncedToday) continue;
+
+      // Concurrency guard: enqueueJob uses dedup index (onConflictDoNothing)
+      enqueueJob("connector_sync", { ownerKey, ownerDay: computeOwnerDay(tz) });
     }
   } finally {
     isSchedulerRunning = false;

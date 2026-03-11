@@ -92,6 +92,21 @@ testSqlite.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   CREATE INDEX idx_jobs_due ON jobs(status, run_after);
+
+  CREATE TABLE connectors (
+    id TEXT PRIMARY KEY,
+    connector_type TEXT NOT NULL,
+    credentials TEXT,
+    config TEXT,
+    last_sync TEXT,
+    enabled INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    owner_key TEXT,
+    status TEXT NOT NULL DEFAULT 'connected',
+    sync_cursor TEXT,
+    last_error TEXT,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // ── Mock db module ──────────────────────────────────────────────────────────
@@ -135,6 +150,27 @@ vi.mock("@/lib/auth/session", () => ({
     knowledgePrimaryKey: ownerKey,
     currentSessionId: ownerKey,
   })),
+}));
+
+// ── Mock getActiveConnectors ─────────────────────────────────────────────────
+
+const mockGetActiveConnectors = vi.fn((_ownerKey: string) => [] as Array<{
+  id: string;
+  connectorType: string;
+  status: string;
+  enabled: boolean;
+  lastSync: string | null;
+  ownerKey: string | null;
+  credentials: string | null;
+  config: unknown;
+  syncCursor: string | null;
+  lastError: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}>);
+
+vi.mock("@/lib/connectors/connector-service", () => ({
+  getActiveConnectors: (ownerKey: string) => mockGetActiveConnectors(ownerKey),
 }));
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────
@@ -187,6 +223,22 @@ function insertRun(ownerKey: string, runType: "light" | "deep", ownerDay: string
     .run(id, ownerKey, runType, ownerDay);
 }
 
+function insertConnector(
+  ownerKey: string,
+  connectorType: string,
+  status: string = "connected",
+  lastSync: string | null = null,
+  enabled: number = 1,
+) {
+  const id = `conn-${Math.random().toString(36).slice(2, 8)}`;
+  testSqlite
+    .prepare(
+      "INSERT INTO connectors (id, owner_key, connector_type, status, last_sync, enabled) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run(id, ownerKey, connectorType, status, lastSync, enabled);
+  return id;
+}
+
 // ── Cleanup ─────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -194,11 +246,14 @@ beforeEach(() => {
   testSqlite.exec("DELETE FROM heartbeat_config");
   testSqlite.exec("DELETE FROM heartbeat_runs");
   testSqlite.exec("DELETE FROM jobs");
+  testSqlite.exec("DELETE FROM connectors");
   enqueueJobCalls.length = 0;
   // Reset fact count mock to 30 (above threshold) for deep heartbeat tests
   mockGetActiveFacts.mockReturnValue(Array.from({ length: 30 }, (_, i) => ({
     id: `fact-${i}`, category: `cat-${i}`, key: `key-${i}`, value: { v: true },
   })));
+  // Reset connector mock to return empty (no active connectors) by default
+  mockGetActiveConnectors.mockReturnValue([]);
 });
 
 afterAll(() => {
@@ -569,6 +624,245 @@ describe("runSchedulerTick", () => {
     await runSchedulerTick();
 
     expect(enqueueJobCalls.length).toBeGreaterThan(0);
+    vi.useRealTimers();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Connector sync loop tests
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("runSchedulerTick — connector sync", () => {
+  it("enqueues connector_sync for owners with active connectors", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T05:00:00Z"));
+
+    // Insert connector row so owner discovery finds it
+    insertConnector("connector-owner-1", "github", "connected", null);
+    // Mock getActiveConnectors to return a connector with no lastSync
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "connector-owner-1") {
+        return [{
+          id: "conn-1", connectorType: "github", status: "connected",
+          enabled: true, lastSync: null, ownerKey: "connector-owner-1",
+          credentials: null, config: null, syncCursor: null, lastError: null,
+          createdAt: null, updatedAt: null,
+        }];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(1);
+    expect(syncJobs[0].payload).toEqual({
+      ownerKey: "connector-owner-1",
+      ownerDay: "2026-02-25",
+    });
+    vi.useRealTimers();
+  });
+
+  it("does NOT enqueue connector_sync when all connectors synced today", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T10:00:00Z"));
+
+    insertConnector("owner-synced", "github", "connected", "2026-02-25T08:00:00Z");
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "owner-synced") {
+        return [{
+          id: "conn-2", connectorType: "github", status: "connected",
+          enabled: true, lastSync: "2026-02-25T08:00:00Z", ownerKey: "owner-synced",
+          credentials: null, config: null, syncCursor: null, lastError: null,
+          createdAt: null, updatedAt: null,
+        }];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it("enqueues connector_sync when at least one connector has not synced today", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T10:00:00Z"));
+
+    insertConnector("owner-partial", "github", "connected", "2026-02-25T08:00:00Z");
+    insertConnector("owner-partial", "spotify", "connected", null);
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "owner-partial") {
+        return [
+          {
+            id: "conn-gh", connectorType: "github", status: "connected",
+            enabled: true, lastSync: "2026-02-25T08:00:00Z", ownerKey: "owner-partial",
+            credentials: null, config: null, syncCursor: null, lastError: null,
+            createdAt: null, updatedAt: null,
+          },
+          {
+            id: "conn-sp", connectorType: "spotify", status: "connected",
+            enabled: true, lastSync: null, ownerKey: "owner-partial",
+            credentials: null, config: null, syncCursor: null, lastError: null,
+            createdAt: null, updatedAt: null,
+          },
+        ];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(1);
+    expect(syncJobs[0].payload.ownerKey).toBe("owner-partial");
+    vi.useRealTimers();
+  });
+
+  it("discovers connector-only owners (no heartbeat config or facts)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T05:00:00Z"));
+
+    // No heartbeat config, no facts — only a connector row
+    insertConnector("connector-only-owner", "rss", "connected", null);
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "connector-only-owner") {
+        return [{
+          id: "conn-rss", connectorType: "rss", status: "connected",
+          enabled: true, lastSync: null, ownerKey: "connector-only-owner",
+          credentials: null, config: null, syncCursor: null, lastError: null,
+          createdAt: null, updatedAt: null,
+        }];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(1);
+    expect(syncJobs[0].payload.ownerKey).toBe("connector-only-owner");
+    // Should NOT have heartbeat jobs for this connector-only owner
+    const heartbeatJobs = enqueueJobCalls.filter(
+      (c) => c.jobType === "heartbeat_light" || c.jobType === "heartbeat_deep",
+    );
+    expect(heartbeatJobs).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it("does NOT enqueue connector_sync for disconnected/paused connectors", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T05:00:00Z"));
+
+    // Insert connectors with status that should not be discovered
+    insertConnector("owner-disc", "github", "disconnected", null);
+    insertConnector("owner-paused", "spotify", "paused", null);
+    // getActiveConnectors returns empty for these owners (correct behavior)
+    mockGetActiveConnectors.mockReturnValue([]);
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it("includes error-status connectors in sync", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T05:00:00Z"));
+
+    insertConnector("owner-err", "strava", "error", null);
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "owner-err") {
+        return [{
+          id: "conn-err", connectorType: "strava", status: "error",
+          enabled: true, lastSync: null, ownerKey: "owner-err",
+          credentials: null, config: null, syncCursor: null, lastError: "rate limit",
+          createdAt: null, updatedAt: null,
+        }];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(1);
+    expect(syncJobs[0].payload.ownerKey).toBe("owner-err");
+    vi.useRealTimers();
+  });
+
+  it("uses owner timezone for daily guard", async () => {
+    vi.useFakeTimers();
+    // 2026-02-25 23:00 UTC = 2026-02-26 08:00 Asia/Tokyo
+    vi.setSystemTime(new Date("2026-02-25T23:00:00Z"));
+
+    insertConnector("owner-tz", "github", "connected", null);
+    insertConfig("owner-tz", "Asia/Tokyo");
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "owner-tz") {
+        return [{
+          id: "conn-tz", connectorType: "github", status: "connected",
+          enabled: true, lastSync: null, ownerKey: "owner-tz",
+          credentials: null, config: null, syncCursor: null, lastError: null,
+          createdAt: null, updatedAt: null,
+        }];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(1);
+    // ownerDay should be in Tokyo timezone (Feb 26), not UTC (Feb 25)
+    expect(syncJobs[0].payload.ownerDay).toBe("2026-02-26");
+    vi.useRealTimers();
+  });
+
+  it("skips disabled connectors in owner discovery", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T05:00:00Z"));
+
+    // Connector with enabled=0 should not be discovered
+    insertConnector("owner-disabled-conn", "github", "connected", null, 0);
+    mockGetActiveConnectors.mockReturnValue([]);
+
+    await runSchedulerTick();
+
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it("deduplicates owners present in both heartbeat and connector loops", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-25T05:00:00Z"));
+
+    // Owner has both heartbeat config and a connector
+    insertConfig("dual-owner", "UTC");
+    insertFact("session-dual", "dual-owner", "identity", "name");
+    insertConnector("dual-owner", "github", "connected", null);
+    mockGetActiveConnectors.mockImplementation((ownerKey: string) => {
+      if (ownerKey === "dual-owner") {
+        return [{
+          id: "conn-dual", connectorType: "github", status: "connected",
+          enabled: true, lastSync: null, ownerKey: "dual-owner",
+          credentials: null, config: null, syncCursor: null, lastError: null,
+          createdAt: null, updatedAt: null,
+        }];
+      }
+      return [];
+    });
+
+    await runSchedulerTick();
+
+    // Should have exactly 1 connector_sync job (not 2)
+    const syncJobs = enqueueJobCalls.filter((c) => c.jobType === "connector_sync");
+    expect(syncJobs).toHaveLength(1);
+    expect(syncJobs[0].payload.ownerKey).toBe("dual-owner");
     vi.useRealTimers();
   });
 });

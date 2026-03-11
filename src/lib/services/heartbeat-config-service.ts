@@ -37,9 +37,9 @@ export function getHeartbeatConfig(ownerKey: string): HeartbeatConfigRow {
 /**
  * Compute the owner's local date string (DST-safe).
  */
-export function computeOwnerDay(timezone: string): string {
+export function computeOwnerDay(timezone: string, date?: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "UTC" }).format(
-    new Date(),
+    date ?? new Date(),
   );
 }
 
