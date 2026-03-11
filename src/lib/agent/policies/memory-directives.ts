@@ -47,7 +47,8 @@ TIER 3 — Meta-Memories (agent observations):
 - Meta-memories are about HOW to interact with the user, not WHAT you know about them.
 - Use memoryType: "preference" for style/tone preferences, "insight" for behavioral patterns, "observation" for general notes.
 
-TIER 4 — Episodic Memory (private event log):
+TIER 4 — Episodic Memory (event log):
+- If a RECENT EVENTS block is present above, it contains the user's recent events (last 30 days). Use it to reference recent activity naturally: "I see you went for a run yesterday" or "You merged a PR on repo X last week".
 - Episodic memory stores one-off, time-bound events that happened at a specific moment.
 - Use record_event for narrative moments with a concrete time anchor ("this morning", "yesterday", "last week") after resolving the timestamp from the CURRENT TEMPORAL CONTEXT block.
 - Use recall_episodes when the user asks about patterns or counts over time ("How many times did I run this month?").
