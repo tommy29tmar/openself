@@ -127,7 +127,7 @@ const TOOL_POLICY = `Tool usage rules:
 FACT RECORDING:
 - Record facts as you encounter them in the user's message. NEVER delay extraction to accumulate facts across multiple turns. NEVER skip saving a fact because you expect more in the next message.
 - For 3+ NEW facts (creates only) from a single message → use batch_facts.
-- For deletes of identity facts → NEVER use batch_facts to delete identity facts. ALWAYS use delete_fact individually — identity deletes require cross-turn confirmation that only delete_fact supports. If batch_facts returns IDENTITY_DELETE_BLOCKED, switch to delete_fact.
+- IDENTITY DELETES: NEVER include identity facts in batch_facts delete operations — batch_facts REJECTS them (returns IDENTITY_DELETE_BLOCKED). ALWAYS use delete_fact for identity deletions — it supports the required cross-turn confirmation.
 - For correcting multiple facts → use batch_facts with delete + create operations. If it returns REQUIRES_CONFIRMATION with a confirmationId, ask user to confirm, then retry with the same confirmationId.
 - To correct a fact: delete_fact (old) → create_fact (new). Never leave stale data.
 - batch_facts supports create and delete only. It runs operations sequentially: if one op fails, earlier ones persist. Always check results.
