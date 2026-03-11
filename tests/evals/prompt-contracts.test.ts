@@ -62,7 +62,7 @@ describe("prompt contracts", () => {
     expect(src).toMatch(/FACT RECORDING/);
     expect(src).toMatch(/NEVER delay.*accumulate.*across.*turns/i);
     expect(src).toMatch(/3\+.*NEW.*facts.*creates.*only.*batch_facts/i);
-    expect(src).toMatch(/deletes.*identity.*individual\s*tool/i);
+    expect(src).toMatch(/NEVER.*batch_facts.*identity/i);
   });
 
   it("workflow examples use current tool signatures", () => {
