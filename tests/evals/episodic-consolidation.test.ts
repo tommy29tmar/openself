@@ -81,4 +81,24 @@ describe("checkPatternThresholds", () => {
       .run(new Date(Date.now() - 86400_000).toISOString(), propId);
     expect(checkPatternThresholds("o7").some(p => p.actionType === "workout")).toBe(true);
   });
+
+  it("excludes connector-sourced events from pattern detection", async () => {
+    const { checkPatternThresholds } = await import("@/lib/services/episodic-consolidation-service");
+    // Insert 5 'workout' events with source='strava' (above MIN_EVENTS threshold)
+    for (let i = 0; i < 5; i++) {
+      insertEvent({
+        ownerKey: "test-owner-source-filter",
+        sessionId: "sess",
+        eventAtUnix: Math.floor(Date.now() / 1000) - i * DAY,
+        eventAtHuman: new Date().toISOString(),
+        actionType: "workout",
+        narrativeSummary: "Ran 5km",
+        source: "strava",
+      });
+    }
+
+    const candidates = checkPatternThresholds("test-owner-source-filter");
+    // Should find 0 candidates — all events are source='strava', not 'chat'
+    expect(candidates).toHaveLength(0);
+  });
 });
