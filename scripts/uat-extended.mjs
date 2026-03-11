@@ -382,13 +382,22 @@ function checkAnomalies(res, msgNum, currentPhase) {
   const text = res.text || "";
   const tools = res.toolResults || [];
 
-  // BUG-7: batch_facts for identity delete
+  // BUG-7: batch_facts with identity delete — dual-signal
+  // WARN = agent tried but was correctly blocked (prompt fix reduces these over time)
+  // FAIL = safety net failed, identity delete went through (real regression)
+  // IDENTITY_DELETE_BLOCKED fires for both category/key AND UUID formats
   for (const tr of tools) {
-    const ops = tr.toolName === "batch_facts" ? (tr.args?.operations || []) : [];
-    const idDeletes = ops.filter(op => op.action === "delete" && op.factId?.startsWith("identity/"));
-    if (idDeletes.length > 0) {
-      anomalies.push({ msg: msgNum, phase: currentPhase, type: "BUG-7_BATCH_IDENTITY_DELETE" });
-      console.log("  !! BUG-7: batch_facts used for identity delete!");
+    if (tr.toolName === "batch_facts") {
+      const ops = tr.args?.operations || [];
+      const hasIdDeleteByKey = ops.some(op => op.action === "delete" && op.factId?.startsWith("identity/"));
+      const wasBlocked = tr.result?.code === "IDENTITY_DELETE_BLOCKED";
+      if (wasBlocked) {
+        STATE.blockedIdDeleteAttempts = (STATE.blockedIdDeleteAttempts || 0) + 1;
+        console.log("  [WARN] batch_facts attempted identity delete but was correctly blocked");
+      } else if (hasIdDeleteByKey && tr.result?.success === true && (tr.result?.deleted || 0) > 0) {
+        anomalies.push({ msg: msgNum, phase: currentPhase, type: "BUG-7_BATCH_IDENTITY_DELETE" });
+        console.log("  !! BUG-7: batch_facts SUCCEEDED with identity delete (safety net failed)!");
+      }
     }
   }
 
@@ -489,6 +498,11 @@ async function runConversation(sessionCookie, history, picker, maxMsgs, phaseLab
 
     // Anomaly checks
     checkAnomalies(res, globalMsgNum, phaseLabel);
+
+    // Track return_publish tool names for Phase 2 execution verification
+    if (phaseLabel === "phase2" && topicUsed === "return_publish") {
+      STATE.returnPublishTools = (res.toolResults || []).map(tr => tr.toolName);
+    }
 
     // Register when agent asks to publish (phase 1 only)
     if (phaseLabel === "phase1" && STATE.phase === "publish_gate" && STATE.publishAttempted) {
@@ -681,8 +695,9 @@ async function main() {
   const usedName = /marco/i.test(phase2FirstAgent);
   console.log(`Stale greeting (used name):     ${usedName ? "PASS" : "FAIL — agent didn't use Marco's name"}`);
 
-  const ackedTimeGap = /un po'|tempo|settiman|giorn|while|tornato|rivedert|bentornat/i.test(phase2FirstAgent);
-  console.log(`Stale greeting (time ack):      ${ackedTimeGap ? "PASS" : "WARN — no time gap acknowledgment"}`);
+  // Explicit elapsed-time phrases only. "bentornato" alone does NOT pass — must reference time.
+  const ackedTimeGap = /da un po'|è passato|sono passat|been a while|it's been|da qualche|da tanto|quanto tempo|(?:da|dopo|sono passat[ioe]?\s+\w*\s*)(?:giorni?|settiman[ae]?)/i.test(phase2FirstAgent);
+  console.log(`Stale greeting (time ack):      ${ackedTimeGap ? "PASS" : "FAIL — no time gap acknowledgment"}`);
 
   // Check if Phase 2 updates were saved (Condé Nast, bouldering, Bologna After Dark)
   const db3 = openDb();
@@ -701,6 +716,11 @@ async function main() {
   const phase2Publish = requestPublishCount >= 2;
   console.log(`Return: Re-publish called:      ${phase2Publish ? "PASS" : "WARN — only published once"}`);
 
+  // Execution check: did the agent act on the confirmation turn?
+  const EXEC_TOOLS = new Set(["create_fact", "delete_fact", "batch_facts", "generate_page", "request_publish", "publish_preflight"]);
+  const hadExecTools = (STATE.returnPublishTools || []).some(t => EXEC_TOOLS.has(t));
+  console.log(`Return: Immediate execution:    ${hadExecTools ? "PASS" : "WARN — agent didn't execute on confirmation turn"}`);
+
   console.log("\n--- BUG CHECKS ---");
 
   const bug6 = anomalies.filter(a => a.type === "BUG-6_DELETE_CONFIRM_LOOP");
@@ -712,6 +732,9 @@ async function main() {
 
   console.log(`BUG-6 (delete confirm loop):    ${bug6.length === 0 ? "PASS" : "FAIL"}`);
   console.log(`BUG-7 (batch identity):         ${bug7.length === 0 ? "PASS" : "FAIL"}`);
+  if (STATE.blockedIdDeleteAttempts > 0) {
+    console.log(`BUG-7 blocked attempts:         WARN (${STATE.blockedIdDeleteAttempts} blocked by code)`);
+  }
   console.log(`Unbacked claims:                ${unbacked.length === 0 ? "PASS" : `WARN (${unbacked.length})`}`);
   console.log(`Nonsense responses:             ${nonsense.length === 0 ? "PASS" : `FAIL (${nonsense.length})`}`);
   console.log(`Passive deferrals:              ${passive.length === 0 ? "PASS" : `WARN (${passive.length})`}`);
@@ -737,6 +760,8 @@ async function main() {
     - (batchDeletePass ? 0 : 10)
     - (nameCorrect ? 0 : 5)
     - (usedName ? 0 : 5)
+    - (ackedTimeGap ? 0 : 5)
+    - (hadExecTools ? 0 : 5)
     - (condeNast ? 0 : 5)
     - (bouldering ? 0 : 5)
     - (bolognaDark ? 0 : 5)
