@@ -21,6 +21,9 @@ export type MemoryRow = {
   isActive: number;
   userFeedback: string | null;
   createdAt: string | null;
+  contentHash?: string | null;
+  deactivatedAt?: string | null;
+  source?: string;
 };
 
 function computeContentHash(content: string): string {
@@ -53,11 +56,12 @@ export function saveMemory(
     .get();
   if (existing) return null;
 
-  // Cooldown: count recent writes (DB-based, survives restart)
+  // Cooldown: count recent agent-sourced writes only (worker writes excluded)
   const recentCount = sqlite
     .prepare(
       `SELECT COUNT(*) as cnt FROM agent_memory
-       WHERE owner_key = ? AND created_at > datetime('now', '-${COOLDOWN_WINDOW_SECONDS} seconds')`,
+       WHERE owner_key = ? AND COALESCE(source, 'agent') = 'agent'
+       AND created_at > datetime('now', '-${COOLDOWN_WINDOW_SECONDS} seconds')`,
     )
     .get(ownerKey) as { cnt: number };
   if (recentCount.cnt >= MAX_WRITES_IN_COOLDOWN) return null;
@@ -83,6 +87,7 @@ export function saveMemory(
       contentHash,
       confidence: confidence ?? 1.0,
       isActive: 1,
+      source: "agent",
       createdAt: now,
     })
     .run();
@@ -97,6 +102,69 @@ export function saveMemory(
     isActive: 1,
     userFeedback: null,
     createdAt: now,
+    source: "agent",
+  };
+}
+
+/**
+ * Save a meta-memory from the background worker.
+ * No per-minute cooldown (worker runs infrequently).
+ * Same 50 max quota and content-hash dedup.
+ * Provenance: source = "worker".
+ */
+export function saveMemoryFromWorker(
+  ownerKey: string,
+  content: string,
+  memoryType?: MemoryType,
+  category?: string,
+  confidence?: number,
+): MemoryRow | null {
+  const hash = computeContentHash(content);
+
+  // Dedup: same content already active?
+  const existing = db
+    .select()
+    .from(agentMemory)
+    .where(
+      and(
+        eq(agentMemory.ownerKey, ownerKey),
+        eq(agentMemory.contentHash, hash),
+        eq(agentMemory.isActive, 1),
+      ),
+    )
+    .get();
+  if (existing) return null;
+
+  // Quota check (no cooldown — worker runs infrequently)
+  const activeCount = db
+    .select({ count: sql<number>`count(*)` })
+    .from(agentMemory)
+    .where(and(eq(agentMemory.ownerKey, ownerKey), eq(agentMemory.isActive, 1)))
+    .get();
+  if ((activeCount?.count ?? 0) >= MAX_MEMORIES_PER_OWNER) return null;
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  sqlite
+    .prepare(
+      `INSERT INTO agent_memory (id, owner_key, content, memory_type, category, content_hash, confidence, is_active, source, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'worker', ?)`,
+    )
+    .run(id, ownerKey, content, memoryType ?? "pattern", category ?? null, hash, confidence ?? 0.8, now);
+
+  return {
+    id,
+    ownerKey,
+    content,
+    memoryType: memoryType ?? "pattern",
+    category: category ?? null,
+    confidence: confidence ?? 0.8,
+    contentHash: hash,
+    isActive: 1,
+    userFeedback: null,
+    deactivatedAt: null,
+    createdAt: now,
+    source: "worker",
   };
 }
 
