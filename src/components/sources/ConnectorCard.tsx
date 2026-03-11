@@ -13,6 +13,8 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
   const [loading, setLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [feedUrl, setFeedUrl] = useState("");
+  const [changingUrl, setChangingUrl] = useState(false);
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -107,6 +109,28 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
     input.click();
   };
 
+  const handleSubscribe = async () => {
+    if (!feedUrl.trim() || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/connectors/rss/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: feedUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Subscribe failed");
+      showMessage("Feed subscribed!", "success");
+      setFeedUrl("");
+      setChangingUrl(false);
+      onRefresh();
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Subscribe failed", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -144,20 +168,52 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
       </p>
 
       {/* Not connected */}
-      {!isConnected && !hasError &&
-        (definition.authType === "oauth" ? (
-          <button onClick={handleConnect} style={btnStyle("#c9a96e", "#111")}>
-            Connect {definition.displayName}
-          </button>
-        ) : (
+      {!isConnected && !hasError && definition.authType === "oauth" && (
+        <button onClick={handleConnect} style={btnStyle("#c9a96e", "#111")}>
+          Connect {definition.displayName}
+        </button>
+      )}
+      {!isConnected && !hasError && definition.authType === "zip_upload" && (
+        <button
+          onClick={handleImport}
+          disabled={loading}
+          style={btnStyle("rgba(255,255,255,0.1)", "#e8e4de")}
+        >
+          {loading ? "Importing\u2026" : `Import ${definition.displayName} ZIP`}
+        </button>
+      )}
+      {!isConnected && !hasError && definition.authType === "url_input" && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="url"
+            value={feedUrl}
+            onChange={(e) => setFeedUrl(e.target.value)}
+            placeholder="https://example.com/feed"
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubscribe(); }}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              borderRadius: 6,
+              fontSize: 11,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "#e8e4de",
+              outline: "none",
+            }}
+          />
           <button
-            onClick={handleImport}
-            disabled={loading}
-            style={btnStyle("rgba(255,255,255,0.1)", "#e8e4de")}
+            type="button"
+            onClick={handleSubscribe}
+            disabled={loading || !feedUrl.trim()}
+            style={{
+              ...btnStyle("#c9a96e", "#111"),
+              opacity: loading || !feedUrl.trim() ? 0.5 : 1,
+            }}
           >
-            {loading ? "Importing\u2026" : `Import ${definition.displayName} ZIP`}
+            {loading ? "Subscribing\u2026" : "Subscribe"}
           </button>
-        ))}
+        </div>
+      )}
 
       {/* Connected (OAuth) */}
       {isConnected && definition.authType === "oauth" && (
@@ -181,8 +237,72 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
         </div>
       )}
 
-      {/* Error state */}
-      {hasError && (
+      {/* Connected (url_input) */}
+      {isConnected && definition.authType === "url_input" && (
+        <div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {definition.syncUrl && (
+              <button
+                onClick={handleSync}
+                disabled={loading || disconnecting}
+                style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
+              >
+                {loading ? "Syncing\u2026" : "Sync Now"}
+              </button>
+            )}
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting || loading}
+              style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
+            >
+              {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
+            </button>
+          </div>
+          {changingUrl ? (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input
+                type="url"
+                value={feedUrl}
+                onChange={(e) => setFeedUrl(e.target.value)}
+                placeholder="https://example.com/feed"
+                onKeyDown={(e) => { if (e.key === "Enter") handleSubscribe(); }}
+                style={{
+                  flex: 1,
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "#e8e4de",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSubscribe}
+                disabled={loading || !feedUrl.trim()}
+                style={{
+                  ...btnStyle("#c9a96e", "#111"),
+                  opacity: loading || !feedUrl.trim() ? 0.5 : 1,
+                }}
+              >
+                {loading ? "Subscribing\u2026" : "Subscribe"}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setChangingUrl(true)}
+              style={{ ...btnStyle("rgba(255,255,255,0.06)", "#e8e4de"), marginTop: 8, width: "100%" }}
+            >
+              Change URL
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Error state (oauth / zip_upload) */}
+      {hasError && definition.authType !== "url_input" && (
         <div>
           <p style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>
             {status?.lastError}
@@ -200,6 +320,63 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
               style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
             >
               {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error state (url_input) */}
+      {hasError && definition.authType === "url_input" && (
+        <div>
+          <p style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>
+            {status?.lastError}
+          </p>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            {definition.syncUrl && (
+              <button
+                onClick={handleSync}
+                disabled={loading || disconnecting}
+                style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
+              >
+                {loading ? "Syncing\u2026" : "Retry Sync"}
+              </button>
+            )}
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting || loading}
+              style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
+            >
+              {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="url"
+              value={feedUrl}
+              onChange={(e) => setFeedUrl(e.target.value)}
+              placeholder="https://example.com/feed"
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubscribe(); }}
+              style={{
+                flex: 1,
+                padding: "6px 10px",
+                borderRadius: 6,
+                fontSize: 11,
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "#e8e4de",
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={loading || !feedUrl.trim()}
+              style={{
+                ...btnStyle("#c9a96e", "#111"),
+                opacity: loading || !feedUrl.trim() ? 0.5 : 1,
+              }}
+            >
+              {loading ? "Subscribing\u2026" : "Change URL"}
             </button>
           </div>
         </div>
