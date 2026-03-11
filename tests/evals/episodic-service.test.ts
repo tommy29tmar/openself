@@ -24,6 +24,37 @@ describe("insertEvent", () => {
     expect(row.archived).toBe(0);
     expect(row.superseded_by).toBeNull();
   });
+
+  it("inserts event with source field", async () => {
+    const { insertEvent } = await import("@/lib/services/episodic-service");
+    const id = insertEvent({
+      ownerKey: "test-owner",
+      sessionId: "test-session",
+      eventAtUnix: 1710000000,
+      eventAtHuman: "2026-03-10T00:00:00Z",
+      actionType: "work",
+      narrativeSummary: "Created repo",
+      source: "github",
+    });
+
+    const row = sqlite.prepare("SELECT source FROM episodic_events WHERE id = ?").get(id) as any;
+    expect(row.source).toBe("github");
+  });
+
+  it("defaults source to chat when not provided", async () => {
+    const { insertEvent } = await import("@/lib/services/episodic-service");
+    const id = insertEvent({
+      ownerKey: "test-owner",
+      sessionId: "test-session",
+      eventAtUnix: 1710000000,
+      eventAtHuman: "2026-03-10T00:00:00Z",
+      actionType: "workout",
+      narrativeSummary: "Ran 5km",
+    });
+
+    const row = sqlite.prepare("SELECT source FROM episodic_events WHERE id = ?").get(id) as any;
+    expect(row.source).toBe("chat");
+  });
 });
 
 describe("queryEvents", () => {
