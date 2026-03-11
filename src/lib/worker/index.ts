@@ -13,7 +13,7 @@ import { handleConnectorSync } from "@/lib/connectors/connector-sync-handler";
 import { runSessionCompaction, persistCompactionLog, getLastCompactionRowid } from "@/lib/services/session-compaction-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { consolidateEpisodesHandler } from "@/lib/worker/handlers/consolidate-episodes";
-import { saveMemory } from "@/lib/services/memory-service";
+import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import "@/lib/connectors/register-all";
 
 const MAX_ATTEMPTS = 3;
@@ -126,8 +126,15 @@ const handlers: Record<string, JobHandler> = {
       persistCompactionLog(ownerKey, sessionKey, cursorRowid, result);
 
       if (result.success && result.structuredSummary) {
-        for (const pattern of result.structuredSummary.patternsObserved.slice(0, 2)) {
-          try { saveMemory(ownerKey, pattern, "pattern"); } catch (e) { console.warn("[worker] pattern save failed:", e); }
+        for (const pattern of result.structuredSummary.patternsObserved.slice(0, 3)) {
+          try {
+            const saved = saveMemoryFromWorker(ownerKey, pattern);
+            if (saved) {
+              console.info(`[worker] meta-memory saved: ${saved.id} (source=worker)`);
+            }
+          } catch (e) {
+            console.warn("[worker] pattern save failed:", e);
+          }
         }
         console.info(`[worker] compaction window ${window + 1}: ${sessionKey} — ${result.factsExtracted} extracted`);
         if (rows.length < 40) break; // partial window = backlog drained

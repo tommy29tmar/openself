@@ -57,7 +57,23 @@ Produce a JSON object:
   "sessionMood": "productive|exploratory|corrective|casual",
   "keyTakeaways": ["string"]
 }
-Rules: explicit facts only, patternsObserved = HOW user communicates, strings < 100 chars, ONLY valid JSON.`;
+
+IMPORTANT for patternsObserved — these must be BEHAVIORAL OBSERVATIONS about HOW the user communicates, NOT what they said:
+
+GOOD patternsObserved examples:
+- "User prefers concrete options over open-ended questions"
+- "User downplays achievements and needs encouragement to claim credit"
+- "User switches to English when discussing technical topics"
+- "User responds better to bullet points than long paragraphs"
+- "User is impatient with confirmations — prefers direct execution"
+
+BAD patternsObserved (do NOT include these — they are facts or topics, not behavioral patterns):
+- "User works at Acme Corp" (this is a fact)
+- "Discussed page layout" (this is a topic)
+- "User wants to add a portfolio section" (this is a task, not a behavior)
+- "User seems happy today" (transient mood, not a pattern)
+
+Rules: explicit facts only in factsChanged, patternsObserved = HOW user communicates (stable behavioral patterns only), strings < 100 chars, ONLY valid JSON.`;
 
 /**
  * Get rowid of last processed message from the most advanced successful/skipped compaction run.
