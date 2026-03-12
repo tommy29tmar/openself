@@ -35,11 +35,11 @@ describe("activity type L10N", () => {
   it("passes through unknown activity types unchanged", () => {
     const facts = [
       ...baseFacts,
-      makeFact({ key: "a2", value: { name: "Climbing", activityType: "sport" } }),
+      makeFact({ key: "a2", value: { name: "Climbing", activityType: "outdoor" } }),
     ];
     const page = composeOptimisticPage(facts, "draft", "it");
     const act = page.sections.find((s) => s.type === "activities");
     const items = (act!.content as { items: { name: string; activityType?: string }[] }).items;
-    expect(items[0].activityType).toBe("sport");
+    expect(items[0].activityType).toBe("outdoor");
   });
 });
