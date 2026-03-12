@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { saveMemory, getActiveMemoriesScored } from "@/lib/services/memory-service";
+import { saveMemory, getActiveMemoriesScored, updateLastReferencedAt } from "@/lib/services/memory-service";
 import { sqlite } from "@/lib/db";
 import { randomUUID } from "crypto";
 
@@ -59,5 +59,23 @@ describe("memory scoring formula", () => {
     const scored = getActiveMemoriesScored(owner, 10);
     expect(scored[0].content).toBe("Agent memory");
     expect(scored[1].content).toBe("Worker memory");
+  });
+
+  it("should batch-update last_referenced_at", () => {
+    const owner = uniqueOwner();
+    const m1 = saveMemory(owner, "Mem 1", "observation");
+    const m2 = saveMemory(owner, "Mem 2", "preference");
+
+    const before = sqlite.prepare(
+      "SELECT last_referenced_at FROM agent_memory WHERE id = ?"
+    ).get(m1!.id) as any;
+    expect(before.last_referenced_at).toBeNull();
+
+    updateLastReferencedAt([m1!.id, m2!.id]);
+
+    const after = sqlite.prepare(
+      "SELECT last_referenced_at FROM agent_memory WHERE id = ?"
+    ).get(m1!.id) as any;
+    expect(after.last_referenced_at).not.toBeNull();
   });
 });

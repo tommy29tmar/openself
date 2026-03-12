@@ -394,3 +394,16 @@ export function reactivateMemory(memoryId: string, ownerKey: string): boolean {
 
   return result.changes > 0;
 }
+
+/**
+ * Batch-update last_referenced_at for memories that appeared in agent context.
+ * Called async post-turn in onFinish — never in the read path.
+ */
+export function updateLastReferencedAt(memoryIds: string[]): void {
+  if (memoryIds.length === 0) return;
+  const placeholders = memoryIds.map(() => "?").join(",");
+  sqlite.prepare(
+    `UPDATE agent_memory SET last_referenced_at = datetime('now')
+     WHERE id IN (${placeholders}) AND is_active = 1`
+  ).run(...memoryIds);
+}
