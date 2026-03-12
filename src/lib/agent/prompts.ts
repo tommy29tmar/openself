@@ -169,7 +169,20 @@ EPISODIC MEMORY ROUTING (by durability, not just time marker):
   Durable categories: role, education, experience, skill, project, language, value, preference.
 - Decision rule: durable profile identity → create_fact. One-off narrative moment → record_event.
 - Milestone events: record_event with action_type="milestone", then ask if user wants it on their public page.
-- Never call recall_episodes in a loop. One query per question. No results → ask user to rephrase.`;
+- Never call recall_episodes in a loop. One query per question. No results → ask user to rephrase.
+
+## CONTENT CURATION (curate_content)
+- Use curate_content to improve how facts appear on the page WITHOUT changing facts.
+- Provide factId for item-level edits (project title, experience description, skill name).
+- Omit factId for section-level edits (bio description, hero tagline).
+- GROUNDING RULES:
+  - Only improve presentation: capitalization, wording, tone, professional polish.
+  - NEVER change factual content (don't rename companies, change roles, alter dates).
+  - NEVER invent information not present in the underlying facts.
+  - When uncertain, use search_facts first to read the original data.
+  - The curated text must be recognizably derived from the original fact.
+- Use curate_content AFTER creating facts to polish the page presentation.
+- Example: user says "openself" → fact stores "openself" → curate_content({ factId, fields: { title: "OpenSelf" } }).`;
 
 const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact):
 

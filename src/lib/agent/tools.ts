@@ -54,6 +54,10 @@ import { checkPageCoherence } from "@/lib/services/coherence-check";
 import { mergeSessionMeta, getSessionMeta } from "@/lib/services/session-metadata";
 import type { JournalEntry } from "@/lib/services/session-metadata";
 import { hashValue, type PendingConfirmation } from "@/lib/services/confirmation-service";
+import { getFactDisplayOverrideService, computeFactValueHash, filterEditableFields, ITEM_EDITABLE_FIELDS } from "@/lib/services/fact-display-override-service";
+import { PERSONALIZABLE_FIELDS } from "@/lib/services/personalizer-schemas";
+import { upsertState as upsertCopyState } from "@/lib/services/section-copy-state-service";
+import { computeSectionFactsHash } from "@/lib/services/personalization-hashing";
 
 function evaluateLayoutPublishability(config: PageConfig): {
   valid: boolean;
@@ -2028,6 +2032,114 @@ Do NOT call in a loop.`,
       }
     },
   }),
+  curate_content: tool({
+    description:
+      "Curate the display text of page content without modifying facts. " +
+      "Use for capitalization fixes, wording improvements, tone adjustments, and professional polish. " +
+      "If factId is provided, curates a specific item (e.g., project title). " +
+      "If factId is omitted, curates the section-level description (e.g., bio text). " +
+      "The underlying facts remain unchanged — this only affects presentation.",
+    parameters: z.object({
+      sectionType: z
+        .string()
+        .describe("Section type to curate (e.g., 'projects', 'bio', 'experience')"),
+      factId: z
+        .string()
+        .optional()
+        .describe(
+          "Fact UUID for item-level curation (e.g., a specific project). " +
+          "Omit for section-level curation (e.g., bio description).",
+        ),
+      fields: z
+        .record(z.string())
+        .describe(
+          "Fields to override. Only text fields allowed (no dates, URLs, or structural data). " +
+          "Example: { title: 'OpenSelf', description: 'AI-powered page builder' }",
+        ),
+    }),
+    execute: async ({ sectionType, factId, fields }) => {
+      if (factId) {
+        // --- ITEM-LEVEL: route to fact_display_overrides ---
+        const allFacts = getActiveFacts(sessionId, readKeys);
+        const fact = allFacts.find((f: { id: string }) => f.id === factId);
+        if (!fact) {
+          return { success: false, error: `Fact ${factId} not found` };
+        }
+
+        // Filter to editable fields only
+        const editableFields = filterEditableFields(fact.category, fields);
+        if (Object.keys(editableFields).length === 0) {
+          return {
+            success: false,
+            error: `No editable fields for category '${fact.category}'. Editable: ${ITEM_EDITABLE_FIELDS[fact.category]?.join(", ") ?? "none"}`,
+          };
+        }
+
+        const service = getFactDisplayOverrideService();
+        service.upsertOverride({
+          ownerKey: effectiveOwnerKey,
+          factId,
+          displayFields: editableFields,
+          factValueHash: computeFactValueHash(fact.value),
+          source: "agent",
+        });
+
+        // Trigger recomposition so preview updates
+        recomposeAfterMutation();
+
+        return {
+          success: true,
+          level: "item",
+          factId,
+          category: fact.category,
+          appliedFields: editableFields,
+        };
+      } else {
+        // --- SECTION-LEVEL: route to section_copy_state ---
+        const allowed = PERSONALIZABLE_FIELDS[sectionType];
+        if (!allowed) {
+          return { success: false, error: `Section '${sectionType}' does not support curation` };
+        }
+
+        // Filter to allowed fields
+        const filteredFields: Record<string, string> = {};
+        for (const key of Object.keys(fields)) {
+          if (allowed.includes(key)) filteredFields[key] = fields[key];
+        }
+        if (Object.keys(filteredFields).length === 0) {
+          return {
+            success: false,
+            error: `No editable fields for section '${sectionType}'. Allowed: ${allowed.join(", ")}`,
+          };
+        }
+
+        const allFacts = getActiveFacts(sessionId, readKeys);
+        const factsHash = computeSectionFactsHash(allFacts, sectionType);
+        const soul = getActiveSoul(effectiveOwnerKey);
+        const soulHash = computeHash(soul?.compiled ?? "");
+
+        upsertCopyState({
+          ownerKey: effectiveOwnerKey,
+          sectionType,
+          language: sessionLanguage,
+          personalizedContent: JSON.stringify(filteredFields),
+          factsHash,
+          soulHash,
+          source: "agent",
+        });
+
+        // Trigger recomposition
+        recomposeAfterMutation();
+
+        return {
+          success: true,
+          level: "section",
+          sectionType,
+          appliedFields: filteredFields,
+        };
+      }
+    },
+  }),
   };
 
   // --- Journal recording wrapper ---
@@ -2053,6 +2165,7 @@ Do NOT call in a loop.`,
       case "record_event": return `event ${args.actionType}`;
       case "recall_episodes": return `recall ${args.timeframe}${args.keywords ? ` "${args.keywords}"` : ""}`;
       case "confirm_episodic_pattern": return `${args.accept ? "accepted" : "rejected"} pattern ${args.proposalId}`;
+      case "curate_content": return `curate ${args.sectionType}${args.factId ? ` item ${args.factId}` : ""}`;
       default: return toolName;
     }
   }
