@@ -180,12 +180,30 @@ describe("assembleContext", () => {
 
   it("includes memories block when memories exist", () => {
     vi.mocked(getActiveMemoriesScored).mockReturnValue([
-      { memoryType: "preference", content: "Loves TypeScript" },
+      { id: "mem-1", memoryType: "preference", category: "dev", content: "Loves TypeScript" },
     ] as any);
 
     const result = assembleContext(SCOPE, "en", []);
     expect(result.systemPrompt).toContain("AGENT MEMORIES:");
-    expect(result.systemPrompt).toContain("[preference] Loves TypeScript");
+    expect(result.systemPrompt).toContain("[preference|dev] Loves TypeScript");
+    expect(result.referencedMemoryIds).toEqual(["mem-1"]);
+  });
+
+  it("uses 'general' as default category when memory has null category", () => {
+    vi.mocked(getActiveMemoriesScored).mockReturnValue([
+      { id: "mem-2", memoryType: "observation", category: null, content: "Prefers dark mode" },
+    ] as any);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.systemPrompt).toContain("[observation|general] Prefers dark mode");
+    expect(result.referencedMemoryIds).toEqual(["mem-2"]);
+  });
+
+  it("returns empty referencedMemoryIds when no memories exist", () => {
+    vi.mocked(getActiveMemoriesScored).mockReturnValue([]);
+
+    const result = assembleContext(SCOPE, "en", []);
+    expect(result.referencedMemoryIds).toEqual([]);
   });
 
   it("includes conflicts block when open conflicts exist", () => {
@@ -257,7 +275,9 @@ describe("post-assembly guard", () => {
     vi.mocked(getSummary).mockReturnValue("S".repeat(3200)); // 800 tokens
     vi.mocked(getActiveMemoriesScored).mockReturnValue(
       Array.from({ length: 10 }, (_, i) => ({
+        id: `mem-guard-${i}`,
         memoryType: "note",
+        category: null,
         content: "M".repeat(160),
       })) as any,
     );
