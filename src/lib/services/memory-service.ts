@@ -401,9 +401,11 @@ export function reactivateMemory(memoryId: string, ownerKey: string): boolean {
  */
 export function updateLastReferencedAt(memoryIds: string[]): void {
   if (memoryIds.length === 0) return;
-  const placeholders = memoryIds.map(() => "?").join(",");
+  // Defensive cap: SQLite has a 999-parameter limit. Current callers pass ≤15 IDs.
+  const ids = memoryIds.slice(0, 500);
+  const placeholders = ids.map(() => "?").join(",");
   sqlite.prepare(
     `UPDATE agent_memory SET last_referenced_at = datetime('now')
      WHERE id IN (${placeholders}) AND is_active = 1`
-  ).run(...memoryIds);
+  ).run(...ids);
 }
