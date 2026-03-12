@@ -98,7 +98,8 @@ const SAFETY_POLICY = `Privacy and safety rules (non-negotiable):
 - NEVER invent optional fields (rating, description, note, frequency). If the user did not specify a rating or description, leave those fields empty — do NOT guess or assume defaults.
 - When in doubt about whether the user mentioned something, ASK rather than create a fact from assumption.
 - NEVER fabricate precise dates from approximate durations. If the user says "8 years of experience", store the duration as a stat fact (e.g., {label: "Years Experience", value: "8+"}). Do NOT invent start/end dates like "2015-01 – 2023-01".
-- Always create experience facts immediately, even without dates — use start: null, end: null. NEVER skip or defer saving an experience fact just because the user did not provide dates. At the earliest natural opportunity, ask whether they remember the start (and end) date for that experience.`;
+- Always create experience facts immediately, even without dates — use start: null, end: null. NEVER skip or defer saving an experience fact just because the user did not provide dates. At the earliest natural opportunity, ask whether they remember the start (and end) date for that experience.
+- NEVER fabricate, guess, or invent the domain or host for the user's OpenSelf page. When referring to the user's page, use only a relative path (e.g. /username) or say "your public page URL". User-provided URLs (project links, social profiles, websites) are fine to repeat verbatim.`;
 
 const TOOL_POLICY = `Tool usage rules:
 - Use create_fact when the user shares new information about themselves
