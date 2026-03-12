@@ -135,7 +135,7 @@ describe("Spotify stale facts cleanup", () => {
     sqlite
       .prepare(
         `INSERT INTO facts (id, session_id, profile_id, category, key, value, source, visibility, created_at, updated_at)
-         VALUES (?, ?, ?, 'interest', 'sp-artist-staletest', '{"name":"Stale Artist"}', 'connector', 'proposed', datetime('now'), datetime('now'))`,
+         VALUES (?, ?, ?, 'music', 'sp-artist-staletest', '{"name":"Stale Artist"}', 'connector', 'proposed', datetime('now'), datetime('now'))`,
       )
       .run(factId, knowledgeKey, knowledgeKey);
 
@@ -159,7 +159,7 @@ describe("Spotify stale facts cleanup", () => {
     sqlite
       .prepare(
         `INSERT INTO facts (id, session_id, profile_id, category, key, value, source, visibility, archived_at, created_at, updated_at)
-         VALUES (?, ?, ?, 'interest', 'sp-artist-reappear', '{"name":"Comeback Artist"}', 'connector', 'proposed', datetime('now'), datetime('now'), datetime('now'))`,
+         VALUES (?, ?, ?, 'music', 'sp-artist-reappear', '{"name":"Comeback Artist"}', 'connector', 'proposed', datetime('now'), datetime('now'), datetime('now'))`,
       )
       .run(factId, knowledgeKey, knowledgeKey);
 
@@ -170,7 +170,7 @@ describe("Spotify stale facts cleanup", () => {
 
     await createFact(
       {
-        category: "interest",
+        category: "music",
         key: "sp-artist-reappear",
         value: { name: "Comeback Artist" },
         source: "connector",
