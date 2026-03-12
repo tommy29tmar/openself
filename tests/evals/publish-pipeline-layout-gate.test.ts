@@ -55,6 +55,13 @@ vi.mock("@/lib/page-config/normalize", () => ({
   normalizeConfigForWrite: vi.fn((config: unknown) => config),
 }));
 
+vi.mock("@/lib/services/fact-display-override-service", () => ({
+  getFactDisplayOverrideService: vi.fn(() => ({
+    getValidOverrides: vi.fn(() => new Map()),
+  })),
+  computeFactValueHash: vi.fn(() => "mock-hash"),
+}));
+
 vi.mock("@/lib/layout/registry", () => ({
   resolveLayoutTemplate: vi.fn(() => ({ id: "monolith", slots: [] })),
 }));
