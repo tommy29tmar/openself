@@ -7,6 +7,7 @@ import {
   decryptCredentials,
 } from "@/lib/services/connector-encryption";
 import type { ConnectorStatus } from "./types";
+import { purgeConnectorData, type PurgeResult } from "./connector-purge";
 
 function getEncryptionKey(): string {
   const key = process.env.CONNECTOR_ENCRYPTION_KEY;
@@ -105,6 +106,28 @@ export function disconnectConnector(connectorId: string): void {
     })
     .where(eq(connectors.id, connectorId))
     .run();
+}
+
+/**
+ * Disconnect a connector and optionally purge all imported data.
+ * IMPORTANT: disconnect FIRST (sets status="disconnected", clears credentials),
+ * THEN purge. This ordering prevents the scheduler from re-enqueuing a sync job
+ * between purge and disconnect (getActiveConnectors excludes status="disconnected").
+ */
+export function disconnectConnectorWithPurge(
+  connectorId: string,
+  ownerKey: string,
+  purge: boolean,
+): { purgeResult?: PurgeResult } {
+  // Disconnect first — makes connector invisible to scheduler
+  disconnectConnector(connectorId);
+
+  let purgeResult: PurgeResult | undefined;
+  if (purge) {
+    purgeResult = purgeConnectorData(connectorId, ownerKey);
+  }
+
+  return { purgeResult };
 }
 
 /**
