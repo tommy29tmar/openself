@@ -18,6 +18,7 @@ export type InsertEventInput = {
   eventAtUnix: number; eventAtHuman: string; actionType: string;
   narrativeSummary: string; rawInput?: string; entities?: unknown[];
   source?: string; // 'chat' (default), 'github', 'linkedin_zip', 'rss', 'spotify', 'strava'
+  externalId?: string; // stable connector dedup key
 };
 
 export type EpisodicProposalRow = {
@@ -31,6 +32,73 @@ type AcceptProposalResult = {
   factKey: string;
 };
 
+// --- Context injection ---
+
+const CONTEXT_WINDOW_DAYS = 30;
+const CHAT_SOURCE_CAP = 10;
+const CONNECTOR_SOURCE_CAP = 3;
+const TOTAL_CONTEXT_CAP = 15;
+
+export type EpisodicContextEvent = {
+  eventAtUnix: number;
+  eventAtHuman: string;
+  actionType: string;
+  narrativeSummary: string;
+  source: string;
+};
+
+/**
+ * Source-weighted episodic events for LLM context injection.
+ * 30-day window, per-source caps (chat: 10, per-connector: 3), total cap 15.
+ */
+export function getRecentEventsForContext(ownerKey: string): EpisodicContextEvent[] {
+  const cutoffUnix = Math.floor(Date.now() / 1000) - CONTEXT_WINDOW_DAYS * 86400;
+
+  const sources = sqlite
+    .prepare(
+      `SELECT DISTINCT COALESCE(source, 'chat') AS source
+       FROM episodic_events
+       WHERE owner_key = ? AND event_at_unix >= ?
+         AND superseded_by IS NULL AND archived = 0`,
+    )
+    .all(ownerKey, cutoffUnix) as Array<{ source: string }>;
+
+  const buckets: EpisodicContextEvent[] = [];
+  for (const { source: src } of sources) {
+    const cap = src === "chat" ? CHAT_SOURCE_CAP : CONNECTOR_SOURCE_CAP;
+    const rows = sqlite
+      .prepare(
+        `SELECT event_at_unix, event_at_human, action_type, narrative_summary, COALESCE(source, 'chat') AS source
+         FROM episodic_events
+         WHERE owner_key = ? AND event_at_unix >= ?
+           AND superseded_by IS NULL AND archived = 0
+           AND COALESCE(source, 'chat') = ?
+         ORDER BY event_at_unix DESC
+         LIMIT ?`,
+      )
+      .all(ownerKey, cutoffUnix, src, cap) as Array<{
+        event_at_unix: number;
+        event_at_human: string;
+        action_type: string;
+        narrative_summary: string;
+        source: string;
+      }>;
+
+    for (const row of rows) {
+      buckets.push({
+        eventAtUnix: row.event_at_unix,
+        eventAtHuman: row.event_at_human,
+        actionType: row.action_type,
+        narrativeSummary: row.narrative_summary,
+        source: row.source,
+      });
+    }
+  }
+
+  buckets.sort((a, b) => b.eventAtUnix - a.eventAtUnix);
+  return buckets.slice(0, TOTAL_CONTEXT_CAP);
+}
+
 // --- Event CRUD ---
 
 export function insertEvent(input: InsertEventInput): string {
@@ -38,15 +106,16 @@ export function insertEvent(input: InsertEventInput): string {
   sqlite.prepare(`
     INSERT INTO episodic_events
       (id, owner_key, session_id, source_message_id, device_id,
-       event_at_unix, event_at_human, action_type, narrative_summary, raw_input, entities, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       event_at_unix, event_at_human, action_type, narrative_summary, raw_input, entities,
+       source, external_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, input.ownerKey, input.sessionId,
     input.sourceMessageId ?? null, input.deviceId ?? null,
     input.eventAtUnix, input.eventAtHuman, input.actionType,
     input.narrativeSummary, input.rawInput ?? null,
     JSON.stringify(input.entities ?? []),
-    input.source ?? "chat",
+    input.source ?? "chat", input.externalId ?? null,
   );
   return id;
 }

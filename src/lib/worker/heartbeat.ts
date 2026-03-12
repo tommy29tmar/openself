@@ -20,7 +20,7 @@ import { getActiveFacts } from "@/lib/services/kb-service";
 import { checkPageCoherence } from "@/lib/services/coherence-check";
 import { mergeSessionMeta, getRecentJournalEntries } from "@/lib/services/session-metadata";
 import { detectJournalPatterns } from "@/lib/services/journal-patterns";
-import { saveMemory } from "@/lib/services/memory-service";
+import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { DEEP_HEARTBEAT_MIN_FACTS } from "@/lib/agent/thresholds";
 
@@ -116,7 +116,7 @@ export function handleHeartbeatLight(payload: Record<string, unknown>): void {
     const recentJournals = getRecentJournalEntries(ownerKey, 5);
     const patterns = detectJournalPatterns(recentJournals);
     for (const pattern of patterns) {
-      const saved = saveMemory(
+      const saved = saveMemoryFromWorker(
         ownerKey,
         `${pattern.description}. ${pattern.suggestion}`,
         "pattern",

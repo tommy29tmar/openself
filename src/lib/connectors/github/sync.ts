@@ -16,8 +16,11 @@ import {
   fetchProfile,
   fetchRepos,
   fetchRepoLanguages,
+  fetchUserEvents,
   GitHubAuthError,
 } from "./client";
+import { filterSignificantEvents, mapToEpisodicEvents } from "./activity";
+import { insertEvent } from "@/lib/services/episodic-service";
 import { mapProfile, mapRepos } from "./mapper";
 import type { SyncResult, EpisodicEventInput } from "../types";
 import { db } from "@/lib/db";
@@ -144,6 +147,63 @@ export async function syncGitHub(
         .run();
     }
 
+    // --- Activity Stream: notable events → Episodic (T4) ---
+    let activityCursorData: Record<string, string | null> = {};
+    try {
+      const rawCursor = connector.syncCursor ?? null;
+
+      if (rawCursor) {
+        try {
+          Object.assign(activityCursorData, JSON.parse(rawCursor));
+        } catch {
+          // Legacy plain-timestamp cursor → migrate into repoCursor
+          activityCursorData.repoCursor = rawCursor;
+        }
+      }
+      const lastSeenEventId = activityCursorData.lastEventId ?? null;
+
+      const rawEvents = await fetchUserEvents(
+        token,
+        profile.login,
+        lastSeenEventId,
+      );
+      const significant = filterSignificantEvents(rawEvents);
+      const episodicInputs = mapToEpisodicEvents(significant);
+
+      let eventsWritten = 0;
+      for (const input of episodicInputs) {
+        try {
+          insertEvent({
+            ownerKey,
+            sessionId: `connector:github:${connectorId}`,
+            eventAtUnix: input.eventAtUnix,
+            eventAtHuman: input.eventAtHuman,
+            actionType: input.actionType,
+            narrativeSummary: input.narrativeSummary,
+            entities: input.entities,
+            source: input.source,
+            externalId: input.externalId,
+          });
+          eventsWritten++;
+        } catch (err) {
+          if (
+            !(err instanceof Error && err.message.includes("UNIQUE"))
+          ) {
+            console.warn("[github] event write failed:", err);
+          }
+        }
+      }
+      console.info(
+        `[github] activity: ${significant.length} significant, ${eventsWritten} written`,
+      );
+
+      if (rawEvents.length > 0) {
+        activityCursorData.lastEventId = rawEvents[0].id;
+      }
+    } catch (err) {
+      console.warn("[github] activity stream failed (non-fatal):", err);
+    }
+
     // Update lastSync + syncCursor after successful sync
     const latestPushedAt = repos
       .filter((r) => !r.fork)
@@ -154,7 +214,10 @@ export async function syncGitHub(
     db.update(connectors)
       .set({
         lastSync: new Date().toISOString(),
-        syncCursor: latestPushedAt ?? null,
+        syncCursor: JSON.stringify({
+          ...activityCursorData,
+          repoCursor: latestPushedAt ?? null,
+        }),
         updatedAt: new Date().toISOString(),
       })
       .where(eq(connectors.id, connectorId))

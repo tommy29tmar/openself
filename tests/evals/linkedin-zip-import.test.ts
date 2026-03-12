@@ -15,6 +15,11 @@ vi.mock("@/lib/connectors/connector-fact-writer", () => ({
   batchCreateFacts: (...args: any[]) => mockBatchCreateFacts(...args),
 }));
 
+vi.mock("@/lib/connectors/linkedin-zip/activity-mapper", () => ({
+  mapCertificationsToEpisodic: vi.fn(() => []),
+  mapArticlesToEpisodic: vi.fn(() => []),
+}));
+
 // Mock parser — returns rows from content so we can verify which files were parsed
 const mockParseLinkedInCsv = vi.fn().mockImplementation((content: string) => {
   // Return a simple row so mappers have something to work with
@@ -373,7 +378,6 @@ describe("importLinkedInZip", () => {
     );
 
     expect(report.factsWritten).toBe(5);
-    expect(mockInsertEvent).toHaveBeenCalledOnce();
     expect(mockInsertEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         ownerKey: "owner-1",
@@ -385,7 +389,9 @@ describe("importLinkedInZip", () => {
       }),
     );
     // Verify counts in narrative
-    const summary = mockInsertEvent.mock.calls[0][0].narrativeSummary;
+    const milestoneCalls = mockInsertEvent.mock.calls.filter((c: any) => c[0].actionType === 'milestone');
+    expect(milestoneCalls).toHaveLength(1);
+    const summary = milestoneCalls[0][0].narrativeSummary;
     expect(summary).toContain("1 positions");
     expect(summary).toContain("1 skills");
     expect(summary).toContain("1 certifications");

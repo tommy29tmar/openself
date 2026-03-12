@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/services/kb-service", () => ({ getActiveFacts: vi.fn(() => []), countFacts: vi.fn(() => 0) }));
 vi.mock("@/lib/services/page-service", () => ({ hasAnyPublishedPage: vi.fn(() => false), getDraft: vi.fn(() => null) }));
 vi.mock("@/lib/services/summary-service", () => ({ getSummary: vi.fn(() => null) }));
-vi.mock("@/lib/services/memory-service", () => ({ getActiveMemories: vi.fn(() => []) }));
+vi.mock("@/lib/services/memory-service", () => ({ getActiveMemories: vi.fn(() => []), getActiveMemoriesScored: vi.fn(() => []) }));
 vi.mock("@/lib/services/soul-service", () => ({ getActiveSoul: vi.fn(() => null) }));
 vi.mock("@/lib/services/conflict-service", () => ({ getOpenConflicts: vi.fn(() => []) }));
 vi.mock("@/lib/services/page-projection", () => ({ filterPublishableFacts: vi.fn(() => []) }));
@@ -10,6 +10,11 @@ vi.mock("@/lib/agent/prompts", () => ({ buildSystemPrompt: vi.fn(() => "PROMPT")
 vi.mock("@/lib/agent/journey", () => ({ computeRelevance: vi.fn(() => 0.5) }));
 vi.mock("@/lib/services/session-metadata", () => ({ getSessionMeta: vi.fn(() => ({})), mergeSessionMeta: vi.fn() }));
 vi.mock("@/lib/connectors/magic-paste", () => ({ detectConnectorUrls: vi.fn(() => []) }));
+vi.mock("@/lib/services/episodic-service", () => ({
+  getRecentEventsForContext: vi.fn(() => []),
+  insertEvent: vi.fn(),
+  queryEvents: vi.fn(() => []),
+}));
 
 import { assembleContext } from "@/lib/agent/context";
 import { getDraft } from "@/lib/services/page-service";

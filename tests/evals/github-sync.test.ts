@@ -57,11 +57,23 @@ class MockGitHubAuthError extends Error {
   }
 }
 
+const mockFetchUserEvents = vi.fn().mockResolvedValue([]);
+
 vi.mock("@/lib/connectors/github/client", () => ({
   fetchProfile: (...args: any[]) => mockFetchProfile(...args),
   fetchRepos: (...args: any[]) => mockFetchRepos(...args),
   fetchRepoLanguages: (...args: any[]) => mockFetchRepoLanguages(...args),
+  fetchUserEvents: (...args: any[]) => mockFetchUserEvents(...args),
   GitHubAuthError: MockGitHubAuthError,
+}));
+
+vi.mock("@/lib/connectors/github/activity", () => ({
+  filterSignificantEvents: vi.fn(() => []),
+  mapToEpisodicEvents: vi.fn(() => []),
+}));
+
+vi.mock("@/lib/services/episodic-service", () => ({
+  insertEvent: vi.fn(),
 }));
 
 // Mock DB operations
@@ -315,7 +327,9 @@ describe("syncGitHub", () => {
 
     const setArg = mockUpdateSet.mock.calls[0][0];
     expect(setArg.lastSync).toBeDefined();
-    expect(setArg.syncCursor).toBe("2024-03-15T00:00:00Z"); // latest pushed_at among non-fork
+    // syncCursor is now JSON with repoCursor + optional lastEventId
+    const cursor = JSON.parse(setArg.syncCursor);
+    expect(cursor.repoCursor).toBe("2024-03-15T00:00:00Z"); // latest pushed_at among non-fork
     expect(setArg.updatedAt).toBeDefined();
   });
 

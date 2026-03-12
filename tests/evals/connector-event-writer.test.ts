@@ -146,6 +146,14 @@ describe("connector-event-writer", () => {
     );
   });
 
+  it("forwards externalId to insertEvent", async () => {
+    await batchRecordEvents([makeEvent("push-1")], ctx);
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ externalId: "push-1" }),
+    );
+  });
+
   it("upserts connector_items with event_id after successful insertEvent", async () => {
     mockInsertEvent.mockReturnValue("event-uuid-42");
 

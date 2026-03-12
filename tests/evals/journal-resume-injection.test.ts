@@ -34,6 +34,7 @@ vi.mock("@/lib/services/summary-service", () => ({
 }));
 vi.mock("@/lib/services/memory-service", () => ({
   getActiveMemories: vi.fn(() => []),
+  getActiveMemoriesScored: vi.fn(() => []),
 }));
 vi.mock("@/lib/services/soul-service", () => ({
   getActiveSoul: vi.fn(() => null),
@@ -43,6 +44,11 @@ vi.mock("@/lib/services/conflict-service", () => ({
 }));
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: vi.fn(() => []),
+}));
+vi.mock("@/lib/services/episodic-service", () => ({
+  getRecentEventsForContext: vi.fn(() => []),
+  insertEvent: vi.fn(),
+  queryEvents: vi.fn(() => []),
 }));
 
 import { assembleContext } from "@/lib/agent/context";

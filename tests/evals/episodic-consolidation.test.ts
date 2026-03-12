@@ -1,5 +1,6 @@
 // tests/evals/episodic-consolidation.test.ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { randomUUID } from "crypto";
 import { sqlite } from "@/lib/db";
 import { insertEvent } from "@/lib/services/episodic-service";
 

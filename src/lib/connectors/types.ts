@@ -67,6 +67,19 @@ export type ConnectorStatusRow = {
   updatedAt: string;
 };
 
+/**
+ * Episodic event input for connector dual-write.
+ * Connectors write notable discrete events to episodic memory (Tier 4).
+ */
+export type ConnectorEpisodicInput = {
+  actionType: string;
+  eventAtUnix: number;
+  eventAtHuman: string;
+  narrativeSummary: string;
+  entities?: string[];
+  source: string; // 'github', 'linkedin', etc.
+};
+
 export type ConnectorUIDefinition = {
   id: string;
   displayName: string;

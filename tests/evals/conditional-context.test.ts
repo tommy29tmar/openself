@@ -24,8 +24,12 @@ vi.mock("@/lib/services/summary-service", () => ({
 const mockGetActiveMemories = vi.fn((..._: any[]) => [
   { memoryType: "observation", content: "User likes React" },
 ]);
+const mockGetActiveMemoriesScored = vi.fn((..._: any[]) => [
+  { memoryType: "observation", content: "User likes React" },
+]);
 vi.mock("@/lib/services/memory-service", () => ({
   getActiveMemories: (...args: any[]) => mockGetActiveMemories(...args),
+  getActiveMemoriesScored: (...args: any[]) => mockGetActiveMemoriesScored(...args),
 }));
 
 const mockGetActiveSoul = vi.fn((..._: any[]) => ({ compiled: "Soul: creative person" }));
@@ -52,6 +56,11 @@ vi.mock("@/lib/agent/journey", () => ({ computeRelevance: vi.fn(() => 0.5) }));
 vi.mock("@/lib/services/session-metadata", () => ({
   getSessionMeta: vi.fn(() => ({})),
   mergeSessionMeta: vi.fn(() => ({})),
+}));
+vi.mock("@/lib/services/episodic-service", () => ({
+  getRecentEventsForContext: vi.fn(() => []),
+  insertEvent: vi.fn(),
+  queryEvents: vi.fn(() => []),
 }));
 
 import { assembleContext, estimateTokens, CONTEXT_PROFILES } from "@/lib/agent/context";
@@ -94,6 +103,7 @@ beforeEach(() => {
   mockGetActiveFacts.mockReturnValue([]);
   mockGetSummary.mockReturnValue("A conversation summary");
   mockGetActiveMemories.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
+  mockGetActiveMemoriesScored.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
   mockGetActiveSoul.mockReturnValue({ compiled: "Soul: creative person" });
   mockGetOpenConflicts.mockReturnValue([]);
   mockBuildSystemPrompt.mockReturnValue("BOOTSTRAP_PROMPT");
@@ -119,7 +129,7 @@ describe("conditional context by journey state", () => {
     );
   });
 
-  it("draft_ready: injects minimal schema, includes soul + richness", () => {
+  it("draft_ready: injects minimal schema, includes soul + summary + memories + richness", () => {
     const result = assembleContext(SCOPE, "en", MESSAGES, undefined, makeBootstrap("draft_ready"));
 
     // buildSystemPrompt receives schemaMode: "minimal" for draft_ready
@@ -131,9 +141,9 @@ describe("conditional context by journey state", () => {
     // Soul IS queried
     expect(mockGetActiveSoul).toHaveBeenCalled();
 
-    // Summary and memories are NOT queried
-    expect(mockGetSummary).not.toHaveBeenCalled();
-    expect(mockGetActiveMemories).not.toHaveBeenCalled();
+    // Summary and memories are now included for draft_ready
+    expect(mockGetSummary).toHaveBeenCalled();
+    expect(mockGetActiveMemoriesScored).toHaveBeenCalled();
   });
 
   it("active_fresh: includes all blocks with minimal edit schema", () => {
@@ -143,7 +153,7 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
-    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetActiveMemoriesScored).toHaveBeenCalled();
     expect(mockGetOpenConflicts).toHaveBeenCalled();
 
     // Active update states get the minimal edit schema
@@ -159,7 +169,7 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
-    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetActiveMemoriesScored).toHaveBeenCalled();
     expect(mockGetOpenConflicts).toHaveBeenCalled();
 
     expect(mockBuildSystemPrompt).toHaveBeenCalledWith(
@@ -184,7 +194,7 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
-    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetActiveMemoriesScored).toHaveBeenCalled();
     expect(mockGetOpenConflicts).toHaveBeenCalled();
 
     // Schema reference is on (returning user still needs to collect facts)
@@ -201,7 +211,7 @@ describe("conditional context by journey state", () => {
     expect(mockGetActiveFacts).toHaveBeenCalled();
     expect(mockGetActiveSoul).toHaveBeenCalled();
     expect(mockGetSummary).toHaveBeenCalled();
-    expect(mockGetActiveMemories).toHaveBeenCalled();
+    expect(mockGetActiveMemoriesScored).toHaveBeenCalled();
     expect(mockGetOpenConflicts).toHaveBeenCalled();
   });
 

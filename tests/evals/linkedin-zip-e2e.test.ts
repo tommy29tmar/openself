@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { FactInput } from "@/lib/connectors/linkedin-zip/mapper";
 
 // ---------------------------------------------------------------------------
-// Mock only the DB-touching layer (batchCreateFacts) — capture facts for assertions.
+// Mock only the DB-touching layer (batchCreateFacts + insertEvent) — capture facts for assertions.
 // The REAL parser + mapper + import orchestration run unchanged.
 // ---------------------------------------------------------------------------
 
@@ -17,6 +17,10 @@ const mockBatchCreateFacts = vi
 
 vi.mock("@/lib/connectors/connector-fact-writer", () => ({
   batchCreateFacts: (...args: any[]) => mockBatchCreateFacts(...args),
+}));
+
+vi.mock("@/lib/services/episodic-service", () => ({
+  insertEvent: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------

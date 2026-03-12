@@ -6,6 +6,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import {
   saveMemory,
   getActiveMemories,
+  getActiveMemoriesScored,
   feedbackMemory,
   deactivateMemory,
   reactivateMemory,
@@ -14,6 +15,7 @@ import { db, sqlite } from "@/lib/db";
 import { agentMemory } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { createHash } from "node:crypto";
 
 /** Unique owner per test to avoid cross-test contamination. */
 function uniqueOwner() {
@@ -279,5 +281,41 @@ describe("cooldown", () => {
     // 6th should be rejected by cooldown
     const rejected = saveMemory(owner, "sixth rapid save");
     expect(rejected).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14-15. getActiveMemoriesScored
+// ---------------------------------------------------------------------------
+describe("getActiveMemoriesScored", () => {
+  // Use direct SQL seeding to bypass saveMemory() cooldown (5/60s)
+  const seedMemory = (owner: string, content: string, source: string, ageDays: number) => {
+    const id = randomUUID();
+    const hash = createHash("sha256").update(content.trim().toLowerCase()).digest("hex");
+    const createdAt = new Date(Date.now() - ageDays * 86400000).toISOString();
+    sqlite.prepare(
+      `INSERT INTO agent_memory (id, owner_key, content, memory_type, content_hash, confidence, is_active, source, created_at)
+       VALUES (?, ?, ?, 'observation', ?, 1.0, 1, ?, ?)`,
+    ).run(id, owner, content, hash, source, createdAt);
+  };
+
+  it("returns up to 15 memories scored by relevance", () => {
+    const owner = uniqueOwner();
+    for (let i = 0; i < 20; i++) {
+      seedMemory(owner, `Scored memory ${i}`, "agent", i * 2);
+    }
+    const result = getActiveMemoriesScored(owner, 15);
+    expect(result.length).toBeLessThanOrEqual(15);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("ranks agent-sourced memories higher than worker-sourced at same age", () => {
+    const owner = uniqueOwner();
+    seedMemory(owner, "Worker pattern A", "worker", 0);
+    seedMemory(owner, "Agent observation B", "agent", 0);
+    const result = getActiveMemoriesScored(owner, 15);
+    const agentIdx = result.findIndex(m => m.content === "Agent observation B");
+    const workerIdx = result.findIndex(m => m.content === "Worker pattern A");
+    expect(agentIdx).toBeLessThan(workerIdx);
   });
 });

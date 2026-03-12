@@ -178,6 +178,7 @@ export const agentMemory = sqliteTable(
     isActive: integer("is_active").notNull().default(1),
     userFeedback: text("user_feedback"),
     deactivatedAt: text("deactivated_at"),
+    source: text("source").notNull().default("agent"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -544,8 +545,9 @@ export const episodicEvents = sqliteTable(
     supersededBy: text("superseded_by"),
     archived: integer("archived").notNull().default(0),
     archivedAt: text("archived_at"),
-    createdAt: text("created_at").default(sql`(datetime('now'))`),
     source: text("source").notNull().default("chat"),
+    externalId: text("external_id"),
+    createdAt: text("created_at").default(sql`(datetime('now'))`),
   },
   (table) => [
     index("idx_episodic_owner_time")

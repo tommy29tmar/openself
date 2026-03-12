@@ -69,6 +69,7 @@ export async function batchRecordEvents(
           narrativeSummary: event.narrativeSummary,
           entities: event.entities ?? [],
           source: ctx.connectorType,
+          externalId: event.externalId,
         });
 
         sqlite
