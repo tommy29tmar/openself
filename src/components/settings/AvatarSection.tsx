@@ -94,14 +94,14 @@ export function AvatarSection({ onAvatarChange }: AvatarSectionProps) {
         <button
           onClick={handleUpload}
           disabled={uploading}
-          className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--page-border,#e5e5e5)] hover:bg-[var(--page-bg-secondary,#f5f5f5)] transition-colors disabled:opacity-40"
+          className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--page-border,#e5e5e5)] text-[var(--page-fg,#e5e5e5)] hover:bg-[var(--page-bg-secondary,#f5f5f5)] transition-colors disabled:opacity-40"
         >
           {uploading ? "Uploading\u2026" : "Upload"}
         </button>
         {avatarUrl && (
           <button
             onClick={handleRemove}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--page-border,#e5e5e5)] hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--page-border,#e5e5e5)] text-[var(--page-fg,#e5e5e5)] hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
           >
             Remove
           </button>
