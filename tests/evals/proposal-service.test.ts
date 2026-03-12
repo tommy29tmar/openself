@@ -83,6 +83,15 @@ vi.mock("@/lib/auth/session", () => ({
     mockResolveOwnerScopeForWorker(...args),
 }));
 
+const mockUpsertOverride = vi.fn();
+vi.mock("@/lib/services/fact-display-override-service", () => ({
+  getFactDisplayOverrideService: () => ({
+    upsertOverride: (...args: any[]) => mockUpsertOverride(...args),
+  }),
+  computeFactValueHash: (v: unknown) =>
+    require("crypto").createHash("sha256").update(JSON.stringify(v)).digest("hex"),
+}));
+
 import { createProposalService, type CreateProposalInput } from "@/lib/services/proposal-service";
 import { computeHash } from "@/lib/services/personalization-hashing";
 
@@ -419,5 +428,76 @@ describe("markStaleProposals", () => {
     // Verify it actually ran (no stale proposals since hashes match)
     const pending = getPendingProposals("owner1");
     expect(pending).toHaveLength(1);
+  });
+});
+
+describe("acceptProposal — item-level curation routing", () => {
+  beforeEach(() => {
+    setupDb();
+    mockUpsertOverride.mockClear();
+    mockGetActiveFacts.mockReturnValue([
+      { id: "fact-abc", category: "project", key: "my-project", value: { title: "openself" } },
+    ]);
+  });
+
+  it("routes curation proposals with [item:factId] to fact_display_overrides", () => {
+    const svc = createProposalService(testDb as any);
+    svc.createProposal(
+      makeProposal({
+        issueType: "curation",
+        reason: '[item:fact-abc] Fix capitalization',
+        proposedContent: JSON.stringify({ title: "OpenSelf" }),
+      }),
+    );
+
+    const pending = svc.getPendingProposals("owner1");
+    expect(pending).toHaveLength(1);
+
+    const result = svc.acceptProposal(pending[0].id, "owner1");
+    expect(result.ok).toBe(true);
+
+    // Verify override was written via the mock
+    expect(mockUpsertOverride).toHaveBeenCalledTimes(1);
+    expect(mockUpsertOverride).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerKey: "owner1",
+        factId: "fact-abc",
+        displayFields: { title: "OpenSelf" },
+        source: "worker",
+      }),
+    );
+
+    // Verify proposal is marked accepted
+    const afterAccept = svc.getPendingProposals("owner1");
+    expect(afterAccept).toHaveLength(0);
+  });
+
+  it("returns FACT_NOT_FOUND when referenced fact no longer exists", () => {
+    mockGetActiveFacts.mockReturnValue([]); // no facts
+
+    const svc = createProposalService(testDb as any);
+    svc.createProposal(
+      makeProposal({
+        issueType: "curation",
+        reason: '[item:fact-gone] Fix capitalization',
+        proposedContent: JSON.stringify({ title: "OpenSelf" }),
+      }),
+    );
+
+    const pending = svc.getPendingProposals("owner1");
+    const result = svc.acceptProposal(pending[0].id, "owner1");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("FACT_NOT_FOUND");
+    expect(mockUpsertOverride).not.toHaveBeenCalled();
+  });
+
+  it("does NOT route non-curation proposals through item-level path", () => {
+    const svc = createProposalService(testDb as any);
+    svc.createProposal(makeProposal()); // default: issueType="tone_mismatch"
+
+    const pending = svc.getPendingProposals("owner1");
+    const result = svc.acceptProposal(pending[0].id, "owner1");
+    expect(result.ok).toBe(true);
+    expect(mockUpsertOverride).not.toHaveBeenCalled(); // went through section_copy_state path
   });
 });
