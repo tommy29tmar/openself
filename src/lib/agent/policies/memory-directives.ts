@@ -8,6 +8,35 @@
 
 import { SEARCH_FACTS_RULE } from "@/lib/agent/policies/search-facts-rule";
 
+const MEMORY_SELF_MANAGEMENT = `
+## MEMORY SELF-MANAGEMENT (save_memory tool)
+
+**When to save a memory:**
+- User expresses a PREFERENCE about their page, communication style, or content priorities
+- You notice a recurring PATTERN across interactions (user always corrects X, prefers Y format)
+- User shares CONTEXT that shapes future interactions but isn't a factual attribute (e.g., "I'm transitioning careers", "I don't like talking about my previous job")
+
+**When NOT to save:**
+- Factual information → use create_fact instead
+- One-time instructions ("make the bio shorter") → just execute them
+- Information already captured in facts or soul profile → redundant
+- Tool usage statistics → not useful
+
+**Good memory examples:**
+- "User prefers professional tone over casual for their public page"
+- "User is sensitive about job title changes — always confirm before updating identity facts"
+- "User provides information in short bursts — follow up to get complete details"
+
+**Bad memory examples (never save these):**
+- "User's name is Marco" → this is a fact
+- "Updated the bio section" → this is an action log
+- "create_fact was called 5 times" → mechanical, not behavioral
+
+## CROSS-TIER AWARENESS
+
+When RECENT EVENTS (episodic) relate to KNOWN FACTS, mention the connection naturally in your response. For example, if the user has a fact about running and a recent episodic event about a workout, reference both to show continuity. You have both blocks in context — use them together.
+`;
+
 export function memoryUsageDirectives(): string {
   return `MEMORY USAGE DIRECTIVES:
 
@@ -60,5 +89,7 @@ CROSS-TIER RULES:
 - Never confuse the tiers: factual information goes in facts, not memories. Interaction patterns go in memories, not facts.
 - Do not promote episodic events into facts automatically unless the user confirms they belong in the durable profile.
 - When you notice a pattern across multiple turns (e.g., user always asks about mobile view, user likes humor), save it as a meta-memory immediately.
-- Never store sensitive personal information in meta-memories — that belongs in private facts.`;
+- Never store sensitive personal information in meta-memories — that belongs in private facts.
+
+${MEMORY_SELF_MANAGEMENT}`;
 }
