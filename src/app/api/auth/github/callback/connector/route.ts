@@ -3,7 +3,9 @@ import type { NextRequest } from "next/server";
 import { GitHub } from "arctic";
 import { createConnector } from "@/lib/connectors/connector-service";
 import { enqueueJob } from "@/lib/worker";
+import { recoverStaleConnectorJobs } from "@/lib/connectors/idempotency";
 import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
+import { buildCallbackRedirectUrl } from "@/lib/connectors/redirect-helper";
 
 function getConnectorGitHubClient(): GitHub | null {
   const clientId = process.env.GITHUB_CLIENT_ID;
@@ -26,12 +28,12 @@ function getConnectorGitHubClient(): GitHub | null {
 export async function GET(req: NextRequest) {
   const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
-    return NextResponse.redirect(new URL("/builder?error=auth_required", req.url));
+    return NextResponse.redirect(buildCallbackRedirectUrl("/builder?error=auth_required"));
   }
 
   const github = getConnectorGitHubClient();
   if (!github) {
-    return NextResponse.redirect(new URL("/builder?error=oauth_not_configured", req.url));
+    return NextResponse.redirect(buildCallbackRedirectUrl("/builder?error=oauth_not_configured"));
   }
 
   const { searchParams } = new URL(req.url);
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
   const storedState = req.cookies.get("gh_connector_state")?.value;
 
   if (!code || !state || !storedState || state !== storedState) {
-    return NextResponse.redirect(new URL("/builder?error=invalid_state", req.url));
+    return NextResponse.redirect(buildCallbackRedirectUrl("/builder?error=invalid_state"));
   }
 
   try {
@@ -51,13 +53,17 @@ export async function GET(req: NextRequest) {
 
     createConnector(ownerKey, "github", { access_token: accessToken }, {});
 
-    enqueueJob("connector_sync", { ownerKey });
+    recoverStaleConnectorJobs(ownerKey);
+    const jobId = enqueueJob("connector_sync", { ownerKey });
+    if (!jobId) {
+      console.warn("[github-connector-oauth] Sync job already pending for", ownerKey);
+    }
 
-    const response = NextResponse.redirect(new URL("/builder?connector=github_connected", req.url));
+    const response = NextResponse.redirect(buildCallbackRedirectUrl("/builder?connector=github_connected"));
     response.cookies.delete("gh_connector_state");
     return response;
   } catch (error) {
     console.error("[github-connector-oauth] Callback error:", error);
-    return NextResponse.redirect(new URL("/builder?error=github_connect_failed", req.url));
+    return NextResponse.redirect(buildCallbackRedirectUrl("/builder?error=github_connect_failed"));
   }
 }

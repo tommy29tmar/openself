@@ -3,7 +3,9 @@ import type { NextRequest } from "next/server";
 import { Spotify } from "arctic";
 import { createConnector } from "@/lib/connectors/connector-service";
 import { enqueueJob } from "@/lib/worker";
+import { recoverStaleConnectorJobs } from "@/lib/connectors/idempotency";
 import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
+import { buildCallbackRedirectUrl } from "@/lib/connectors/redirect-helper";
 
 function getSpotifyClient(): Spotify | null {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
@@ -31,14 +33,14 @@ export async function GET(req: NextRequest) {
   const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
     return NextResponse.redirect(
-      new URL("/builder?error=auth_required", req.url),
+      buildCallbackRedirectUrl("/builder?error=auth_required"),
     );
   }
 
   const spotify = getSpotifyClient();
   if (!spotify) {
     return NextResponse.redirect(
-      new URL("/builder?error=oauth_not_configured", req.url),
+      buildCallbackRedirectUrl("/builder?error=oauth_not_configured"),
     );
   }
 
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest) {
 
   if (!code || !state || !storedState || state !== storedState) {
     return NextResponse.redirect(
-      new URL("/builder?error=invalid_state", req.url),
+      buildCallbackRedirectUrl("/builder?error=invalid_state"),
     );
   }
 
@@ -69,20 +71,24 @@ export async function GET(req: NextRequest) {
       expires_in: expiresIn,
     });
 
-    enqueueJob("connector_sync", {
+    recoverStaleConnectorJobs(ownerKey);
+    const jobId = enqueueJob("connector_sync", {
       ownerKey,
       connectorId: connector.id,
     });
+    if (!jobId) {
+      console.warn("[spotify-connector-oauth] Sync job already pending for", ownerKey);
+    }
 
     const response = NextResponse.redirect(
-      new URL("/builder?connector=spotify_connected", req.url),
+      buildCallbackRedirectUrl("/builder?connector=spotify_connected"),
     );
     response.cookies.delete("sp_connector_state");
     return response;
   } catch (error) {
     console.error("[spotify-connector-oauth] Callback error:", error);
     return NextResponse.redirect(
-      new URL("/builder?error=spotify_connect_failed", req.url),
+      buildCallbackRedirectUrl("/builder?error=spotify_connect_failed"),
     );
   }
 }

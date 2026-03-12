@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createConnector } from "@/lib/connectors/connector-service";
 import { enqueueJob } from "@/lib/worker";
+import { recoverStaleConnectorJobs } from "@/lib/connectors/idempotency";
 import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
+import { buildCallbackRedirectUrl } from "@/lib/connectors/redirect-helper";
 
 /**
  * GET /api/auth/strava/callback/connector
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
   const scope = resolveAuthenticatedConnectorScope(req);
   if (!scope) {
     return NextResponse.redirect(
-      new URL("/builder?error=auth_required", req.url),
+      buildCallbackRedirectUrl("/builder?error=auth_required"),
     );
   }
 
@@ -23,7 +25,7 @@ export async function GET(req: NextRequest) {
   const clientSecret = process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     return NextResponse.redirect(
-      new URL("/builder?error=oauth_not_configured", req.url),
+      buildCallbackRedirectUrl("/builder?error=oauth_not_configured"),
     );
   }
 
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   if (!code || !state || !storedState || state !== storedState) {
     return NextResponse.redirect(
-      new URL("/builder?error=invalid_state", req.url),
+      buildCallbackRedirectUrl("/builder?error=invalid_state"),
     );
   }
 
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
         tokenRes.status,
       );
       return NextResponse.redirect(
-        new URL("/builder?error=strava_connect_failed", req.url),
+        buildCallbackRedirectUrl("/builder?error=strava_connect_failed"),
       );
     }
 
@@ -76,20 +78,24 @@ export async function GET(req: NextRequest) {
       {},
     );
 
-    enqueueJob("connector_sync", {
+    recoverStaleConnectorJobs(ownerKey);
+    const jobId = enqueueJob("connector_sync", {
       ownerKey,
       connectorId: connector.id,
     });
+    if (!jobId) {
+      console.warn("[strava-connector-oauth] Sync job already pending for", ownerKey);
+    }
 
     const response = NextResponse.redirect(
-      new URL("/builder?connector=strava_connected", req.url),
+      buildCallbackRedirectUrl("/builder?connector=strava_connected"),
     );
     response.cookies.delete("strava_connector_state");
     return response;
   } catch (error) {
     console.error("[strava-connector-oauth] Callback error:", error);
     return NextResponse.redirect(
-      new URL("/builder?error=strava_connect_failed", req.url),
+      buildCallbackRedirectUrl("/builder?error=strava_connect_failed"),
     );
   }
 }
