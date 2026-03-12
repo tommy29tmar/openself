@@ -10,6 +10,7 @@ import { generateSummary } from "@/lib/services/summary-service";
 import { handleHeartbeatLight, handleHeartbeatDeep } from "./heartbeat";
 import { expireStaleProposals } from "@/lib/services/soul-service";
 import { handleConnectorSync } from "@/lib/connectors/connector-sync-handler";
+import { STALE_JOB_TIMEOUT_MINUTES } from "@/lib/connectors/idempotency";
 import { runSessionCompaction, persistCompactionLog, getLastCompactionRowid } from "@/lib/services/session-compaction-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { consolidateEpisodesHandler } from "@/lib/worker/handlers/consolidate-episodes";
@@ -290,7 +291,7 @@ export async function processJobs(): Promise<number> {
     UPDATE jobs SET status = 'failed', last_error = 'heartbeat timeout', updated_at = ?
     WHERE status = 'running'
       AND job_type = 'connector_sync'
-      AND datetime(COALESCE(heartbeat_at, updated_at)) < datetime('now', '-10 minutes')
+      AND datetime(COALESCE(heartbeat_at, updated_at)) < datetime('now', '-${STALE_JOB_TIMEOUT_MINUTES} minutes')
   `).run(new Date().toISOString());
 
   const now = new Date().toISOString();

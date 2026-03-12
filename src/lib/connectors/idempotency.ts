@@ -14,7 +14,8 @@ import { sqlite } from "@/lib/db";
 // Job-level idempotency (DB-backed)
 // ---------------------------------------------------------------------------
 
-const STALE_JOB_TIMEOUT_MINUTES = 10;
+/** If no heartbeat in this many minutes, job is considered dead. Also used by worker processJobs(). */
+export const STALE_JOB_TIMEOUT_MINUTES = 10;
 
 const PENDING_JOB_SQL = `
   SELECT 1 FROM jobs
