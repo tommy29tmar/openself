@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 const MAX_MEMORIES_PER_OWNER = 50;
 const COOLDOWN_WINDOW_SECONDS = 60;
 const MAX_WRITES_IN_COOLDOWN = 5;
+const AGENT_FLOOR = 5;
 
 export type MemoryType = "observation" | "preference" | "insight" | "pattern";
 export type MemoryFeedback = "helpful" | "wrong";
@@ -68,13 +69,16 @@ export function saveMemory(
     .get(ownerKey) as { cnt: number };
   if (recentCount.cnt >= MAX_WRITES_IN_COOLDOWN) return null;
 
-  // Quota: count active memories
+  // Quota: count active memories; evict lowest-scoring if at cap
   const activeCount = db
     .select({ count: sql<number>`count(*)` })
     .from(agentMemory)
     .where(and(eq(agentMemory.ownerKey, ownerKey), eq(agentMemory.isActive, 1)))
     .get();
-  if ((activeCount?.count ?? 0) >= MAX_MEMORIES_PER_OWNER) return null;
+  if ((activeCount?.count ?? 0) >= MAX_MEMORIES_PER_OWNER) {
+    const evicted = evictLowestScoring(ownerKey);
+    if (!evicted) return null;
+  }
 
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -137,13 +141,16 @@ export function saveMemoryFromWorker(
     .get();
   if (existing) return null;
 
-  // Quota check (no cooldown — worker runs infrequently)
+  // Quota check (no cooldown — worker runs infrequently); evict if at cap
   const activeCount = db
     .select({ count: sql<number>`count(*)` })
     .from(agentMemory)
     .where(and(eq(agentMemory.ownerKey, ownerKey), eq(agentMemory.isActive, 1)))
     .get();
-  if ((activeCount?.count ?? 0) >= MAX_MEMORIES_PER_OWNER) return null;
+  if ((activeCount?.count ?? 0) >= MAX_MEMORIES_PER_OWNER) {
+    const evicted = evictLowestScoring(ownerKey);
+    if (!evicted) return null;
+  }
 
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -174,6 +181,56 @@ const PROVENANCE_WEIGHT = { agent: 1.0, worker: 0.6 } as const;
 const RECENCY_HALF_LIFE_DAYS = 14;
 const USAGE_HALF_LIFE_DAYS = 28;
 const NEVER_REFERENCED_PENALTY = 0.5;
+
+/**
+ * Evict the lowest-scoring active memory for the given owner.
+ * Agent memories are protected down to AGENT_FLOOR (5) — they will not be
+ * evicted as long as the agent count is at or below that threshold.
+ * Returns true if a memory was evicted, false if nothing could be evicted.
+ */
+function evictLowestScoring(ownerKey: string): boolean {
+  const rows = sqlite
+    .prepare(
+      `SELECT id, COALESCE(source, 'agent') AS source,
+         julianday('now') - julianday(created_at) AS age_days,
+         CASE WHEN last_referenced_at IS NOT NULL
+           THEN julianday('now') - julianday(last_referenced_at) ELSE NULL
+         END AS days_since_last_ref
+       FROM agent_memory WHERE owner_key = ? AND is_active = 1
+       ORDER BY created_at DESC LIMIT 50`,
+    )
+    .all(ownerKey) as Array<{
+      id: string;
+      source: string;
+      age_days: number;
+      days_since_last_ref: number | null;
+    }>;
+
+  const agentCount = rows.filter((r) => r.source === "agent").length;
+
+  const scored = rows.map((r) => {
+    const recency = Math.pow(0.5, (r.age_days ?? 0) / RECENCY_HALF_LIFE_DAYS);
+    const prov = PROVENANCE_WEIGHT[r.source as keyof typeof PROVENANCE_WEIGHT] ?? 0.6;
+    const usage =
+      r.days_since_last_ref !== null
+        ? Math.pow(0.5, r.days_since_last_ref / USAGE_HALF_LIFE_DAYS)
+        : NEVER_REFERENCED_PENALTY;
+    return { id: r.id, source: r.source, score: recency * prov * usage };
+  });
+
+  scored.sort((a, b) => a.score - b.score);
+
+  for (const candidate of scored) {
+    if (candidate.source === "agent" && agentCount <= AGENT_FLOOR) continue;
+    sqlite
+      .prepare(
+        "UPDATE agent_memory SET is_active = 0, deactivated_at = datetime('now') WHERE id = ?",
+      )
+      .run(candidate.id);
+    return true;
+  }
+  return false;
+}
 
 /**
  * Relevance-scored retrieval: recency × provenance_weight × usageBoost.
