@@ -2,9 +2,13 @@
  * RSS / Atom feed parser.
  * Supports RSS 2.0 and Atom 1.0 formats.
  * Uses fast-xml-parser for efficient XML parsing.
+ *
+ * Also exports `validateFeedUrl` for subscribe-time feed validation
+ * (fetch + parse probe without full sync).
  */
 
 import { XMLParser } from "fast-xml-parser";
+import { fetchFeedSafe } from "./fetch";
 
 export type RssFeedItem = {
   title: string;
@@ -115,4 +119,57 @@ function stripHtml(s: string): string {
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + "..." : s;
+}
+
+// ---------------------------------------------------------------------------
+// Subscribe-time feed validation
+// ---------------------------------------------------------------------------
+
+export type FeedValidationResult =
+  | { ok: true; feed: { title?: string; items: RssFeedItem[] } }
+  | { ok: false; reason: "parse_error" | "network_error"; message: string };
+
+/**
+ * Probe a URL to check whether it serves a recognizable RSS/Atom feed.
+ * Uses the same SSRF-protected fetch as the sync path.
+ *
+ * Rejection criteria:
+ *  - Network/fetch failures → `network_error` (retriable)
+ *  - No recognizable feed structure (no title AND no link) → `parse_error` (definitive)
+ *
+ * Feeds with zero items are accepted — a new/quiet feed is still valid.
+ */
+export async function validateFeedUrl(
+  url: string,
+): Promise<FeedValidationResult> {
+  let xml: string;
+  try {
+    xml = await fetchFeedSafe(url);
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "network_error",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const feed = parseRssFeed(xml);
+
+  // A valid feed must have at least a title or a link — this distinguishes
+  // a real feed (even an empty one) from an HTML page or random XML.
+  if (!feed.title && !feed.link) {
+    return {
+      ok: false,
+      reason: "parse_error",
+      message: "No recognizable RSS or Atom feed structure found.",
+    };
+  }
+
+  return {
+    ok: true,
+    feed: {
+      title: feed.title || undefined,
+      items: feed.items,
+    },
+  };
 }
