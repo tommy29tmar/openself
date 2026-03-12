@@ -184,7 +184,7 @@ export async function syncGitHub(
         let eventsWritten = 0;
         for (const input of episodicInputs) {
           try {
-            insertEvent({
+            const eventId = insertEvent({
               ownerKey,
               sessionId: `connector:github:${connectorId}`,
               eventAtUnix: input.eventAtUnix,
@@ -195,6 +195,21 @@ export async function syncGitHub(
               source: input.source,
               externalId: input.externalId,
             });
+
+            // Track in connector_items for purge support
+            db.insert(connectorItems)
+              .values({
+                id: randomUUID(),
+                connectorId,
+                externalId: `event:${input.externalId}`,
+                eventId,
+              })
+              .onConflictDoUpdate({
+                target: [connectorItems.connectorId, connectorItems.externalId],
+                set: { eventId, lastSeenAt: new Date().toISOString() },
+              })
+              .run();
+
             eventsWritten++;
           } catch (err) {
             if (
