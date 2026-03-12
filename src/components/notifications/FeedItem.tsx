@@ -71,7 +71,7 @@ export function FeedItemComponent({
   language,
   t,
 }: FeedItemComponentProps) {
-  const isResolved = item.status && item.status !== "pending";
+  const isResolved = Boolean(item.status && item.status !== "pending");
 
   return (
     <div style={containerStyle}>

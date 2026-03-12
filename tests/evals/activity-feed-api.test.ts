@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockResolveOwnerScope = vi.fn();
 const mockIsMultiUserEnabled = vi.fn();
-const mockGetActivityFeed = vi.fn(() => []);
-const mockGetUnreadCount = vi.fn(() => 5);
+const mockGetActivityFeed = vi.fn((_ownerKey: string, _opts?: { limit: number }) => [] as any[]);
+const mockGetUnreadCount = vi.fn((_ownerKey: string) => 5);
 const mockMarkFeedViewed = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
@@ -15,9 +15,9 @@ vi.mock("@/lib/services/session-service", () => ({
 }));
 
 vi.mock("@/lib/services/activity-feed-service", () => ({
-  getActivityFeed: (...args: any[]) => mockGetActivityFeed(...args),
-  getUnreadCount: (...args: any[]) => mockGetUnreadCount(...args),
-  markFeedViewed: (...args: any[]) => mockMarkFeedViewed(...args),
+  getActivityFeed: (ownerKey: string, opts?: { limit: number }) => mockGetActivityFeed(ownerKey, opts),
+  getUnreadCount: (ownerKey: string) => mockGetUnreadCount(ownerKey),
+  markFeedViewed: (ownerKey: string) => mockMarkFeedViewed(ownerKey),
 }));
 
 const ownerScope = {
@@ -83,7 +83,7 @@ describe("GET /api/activity-feed", () => {
   });
 
   it("returns items from service", async () => {
-    const fakeItems = [{ id: "item-1", type: "connector_sync" }];
+    const fakeItems = [{ id: "item-1", type: "connector_sync" }] as any;
     mockGetActivityFeed.mockReturnValue(fakeItems);
     const { GET } = await import("@/app/api/activity-feed/route");
     const req = new Request("http://localhost/api/activity-feed");
