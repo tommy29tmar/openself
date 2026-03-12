@@ -23,6 +23,7 @@ const mockGetActiveFacts = vi.fn().mockReturnValue([]);
 vi.mock("@/lib/services/kb-service", () => ({
   createFact: (...args: any[]) => mockCreateFact(...args),
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
+  getFactByKey: vi.fn().mockReturnValue(null),
 }));
 
 const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
@@ -116,12 +117,23 @@ const mockUpdateWhere = vi.fn().mockReturnValue({ run: vi.fn() });
 const mockUpdateSet = vi.fn().mockReturnValue({ where: mockUpdateWhere });
 const mockDbUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
 
+// mockSqlite must be declared via vi.hoisted so it is available inside vi.mock factories
+// (which are hoisted to the top of the file by vitest)
+const mockSqlite = vi.hoisted(() => ({
+  prepare: vi.fn().mockReturnValue({
+    run: vi.fn(),
+    all: vi.fn().mockReturnValue([]),
+    get: vi.fn(),
+  }),
+  transaction: vi.fn((fn: any) => fn),
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     insert: (...args: any[]) => mockDbInsert(...args),
     update: (...args: any[]) => mockDbUpdate(...args),
   },
-  sqlite: {},
+  sqlite: mockSqlite,
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -283,6 +295,11 @@ describe("GitHub connector E2E", () => {
     mockDbUpdate.mockReturnValue({ set: mockUpdateSet });
     mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
     mockUpdateWhere.mockReturnValue({ run: vi.fn() });
+    mockSqlite.prepare.mockReturnValue({
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([]),
+      get: vi.fn(),
+    });
   });
 
   it("full flow: sync → facts created → disconnect → facts preserved", async () => {
