@@ -5,8 +5,6 @@ import { ALL_JOURNEY_STATES, type DirectivePolicy } from "@/lib/agent/policies/d
 const INTENTIONALLY_EMPTY_STATES: Situation[] = ["has_name", "has_soul"];
 
 export function validateDirectivePolicy(policy: DirectivePolicy): void {
-  const warnings: string[] = [];
-
   for (const [situation, entry] of Object.entries(policy) as [Situation, DirectivePolicy[Situation]][]) {
     // 1. No self-conflict
     if (entry.incompatibleWith.includes(situation)) {
@@ -40,11 +38,6 @@ export function validateDirectivePolicy(policy: DirectivePolicy): void {
           `but "${other}" does not list "${situation}". Add it, or document why asymmetric.`
         );
       }
-      if (entry.priority > otherEntry.priority) {
-        warnings.push(
-          `"${situation}" (p=${entry.priority}) lists "${other}" (p=${otherEntry.priority}) as incompatible, but "${other}" has higher priority and would win — remove from incompatibleWith or adjust priorities.`,
-        );
-      }
       // Equal-priority incompatible pairs are ambiguous — resolveIncompatibilities() will throw at runtime
       if (entry.priority === otherEntry.priority) {
         throw new Error(
@@ -53,14 +46,5 @@ export function validateDirectivePolicy(policy: DirectivePolicy): void {
         );
       }
     }
-  }
-
-  if (warnings.length > 0) {
-    // Priority inversions are non-fatal: the higher-priority item correctly wins at runtime
-    // because resolveIncompatibilities() processes items sorted by priority (lowest first).
-    // Log so policy authors are aware — these listings are redundant but not incorrect.
-    console.warn(
-      `[DIRECTIVE_POLICY] Priority inversion(s) detected (non-fatal):\n${warnings.map(w => `  - ${w}`).join("\n")}`,
-    );
   }
 }

@@ -38,8 +38,10 @@ function applyLayoutInUpdatePageStyle(
 const BASE_CONFIG: PageConfig = {
   version: 1,
   username: "testuser",
-  theme: "minimal",
-  style: { colorScheme: "light", primaryColor: "#6366f1", fontFamily: "inter", layout: "centered" },
+  surface: "canvas",
+  voice: "signal",
+  light: "day",
+  style: { primaryColor: "#6366f1", layout: "centered" },
   sections: [
     { id: "hero-1", type: "hero", variant: "large", content: { name: "Test", tagline: "Hello" } },
     { id: "footer-1", type: "footer", content: {} },

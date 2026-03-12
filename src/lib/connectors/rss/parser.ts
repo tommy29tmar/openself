@@ -25,7 +25,7 @@ export type RssFeed = {
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
-  isArray: (_name, jpath) => {
+  isArray: (_name: string, jpath: string | unknown) => {
     // Force array for item/entry/category at any depth
     const jp = String(jpath);
     return (

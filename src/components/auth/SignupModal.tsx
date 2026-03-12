@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { friendlyError } from "@/lib/i18n/error-messages";
@@ -211,9 +212,9 @@ export function SignupModal({ open, onClose, initialUsername, language = "en" }:
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
           {t.alreadyHaveAccount}{" "}
-          <a href="/login" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/login" className="underline underline-offset-2 hover:text-foreground">
             {t.logIn}
-          </a>
+          </Link>
         </p>
       </div>
     </div>

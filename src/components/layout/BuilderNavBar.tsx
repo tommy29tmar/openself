@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import type { AuthState } from "@/app/builder/page";
 
@@ -51,7 +52,7 @@ export function BuilderNavBar({
       }}
     >
       {/* Logo */}
-      <a
+      <Link
         href="/"
         style={{
           fontFamily: "var(--font-jetbrains, monospace)", fontSize: 13,
@@ -60,7 +61,7 @@ export function BuilderNavBar({
         }}
       >
         openself
-      </a>
+      </Link>
 
       {/* Status pill — always visible */}
       {(() => {
@@ -80,17 +81,30 @@ export function BuilderNavBar({
           label = "Draft";
         }
         return (
-          <a
-            href={href}
-            style={{
-              fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11,
-              padding: "3px 10px", borderRadius: 4,
-              background: "rgba(201,169,110,0.15)", color: "#c9a96e",
-              textDecoration: "none", flexShrink: 0,
-            }}
-          >
-            {label}
-          </a>
+          href ? (
+            <Link
+              href={href}
+              style={{
+                fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11,
+                padding: "3px 10px", borderRadius: 4,
+                background: "rgba(201,169,110,0.15)", color: "#c9a96e",
+                textDecoration: "none", flexShrink: 0,
+              }}
+            >
+              {label}
+            </Link>
+          ) : (
+            <span
+              style={{
+                fontFamily: "var(--font-jetbrains, monospace)", fontSize: 11,
+                padding: "3px 10px", borderRadius: 4,
+                background: "rgba(201,169,110,0.15)", color: "#c9a96e",
+                textDecoration: "none", flexShrink: 0,
+              }}
+            >
+              {label}
+            </span>
+          )
         );
       })()}
 

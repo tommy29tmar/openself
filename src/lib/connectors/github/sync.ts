@@ -148,7 +148,7 @@ export async function syncGitHub(
     }
 
     // --- Activity Stream: notable events → Episodic (T4) ---
-    let activityCursorData: Record<string, string | null> = {};
+    const activityCursorData: Record<string, string | null> = {};
     try {
       const rawCursor = connector.syncCursor ?? null;
 

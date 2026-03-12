@@ -219,9 +219,10 @@ describe("batch_facts tool", () => {
 
     expect(result.success).toBe(true);
     expect(result.deleted).toBe(0);
-    expect(result.warnings).toBeDefined();
-    expect(result.warnings!.length).toBeGreaterThan(0);
-    expect(result.warnings![0]).toContain("no fact found");
+    const w = (result as Record<string, unknown>).warnings as string[] | undefined;
+    expect(w).toBeDefined();
+    expect(w!.length).toBeGreaterThan(0);
+    expect(w![0]).toContain("no fact found");
   });
 
   it("allows two current experiences in same batch (multiple current roles valid)", async () => {

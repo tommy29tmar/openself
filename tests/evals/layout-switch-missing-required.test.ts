@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { LayoutIssue } from "@/lib/layout/quality";
+import type { LayoutValidationIssue as LayoutIssue } from "@/lib/layout/quality";
 
 /**
  * Tests that missing_required errors are treated as warnings during layout switch.
