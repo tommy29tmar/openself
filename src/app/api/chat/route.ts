@@ -486,7 +486,7 @@ export async function POST(req: Request) {
     });
 
     return result.toDataStreamResponse({
-      sendReasoning: true,
+      sendReasoning: false,
       headers: { ...extraHeaders, "X-Request-Id": requestId },
       getErrorMessage: (error) => {
         console.error("[chat] Stream error:", error);
