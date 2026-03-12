@@ -162,43 +162,64 @@ export async function syncGitHub(
       }
       const lastSeenEventId = activityCursorData.lastEventId ?? null;
 
+      // Guard: only write events when we have an established activity baseline.
+      // On first sync (no lastEventId) AND for legacy connectors that have
+      // lastSync but no lastEventId, we seed the cursor without writing any events.
+      // This enforces the "first-sync = facts only, zero events" rule.
+      const hasActivityBaseline =
+        !!activityCursorData.lastEventId ||
+        !!activityCursorData.activityInitialized;
+
       const rawEvents = await fetchUserEvents(
         token,
         profile.login,
         lastSeenEventId,
       );
-      const significant = filterSignificantEvents(rawEvents);
-      const episodicInputs = mapToEpisodicEvents(significant);
 
-      let eventsWritten = 0;
-      for (const input of episodicInputs) {
-        try {
-          insertEvent({
-            ownerKey,
-            sessionId: `connector:github:${connectorId}`,
-            eventAtUnix: input.eventAtUnix,
-            eventAtHuman: input.eventAtHuman,
-            actionType: input.actionType,
-            narrativeSummary: input.narrativeSummary,
-            entities: input.entities,
-            source: input.source,
-            externalId: input.externalId,
-          });
-          eventsWritten++;
-        } catch (err) {
-          if (
-            !(err instanceof Error && err.message.includes("UNIQUE"))
-          ) {
-            console.warn("[github] event write failed:", err);
+      if (hasActivityBaseline) {
+        const significant = filterSignificantEvents(rawEvents);
+        const episodicInputs = mapToEpisodicEvents(significant);
+
+        let eventsWritten = 0;
+        for (const input of episodicInputs) {
+          try {
+            insertEvent({
+              ownerKey,
+              sessionId: `connector:github:${connectorId}`,
+              eventAtUnix: input.eventAtUnix,
+              eventAtHuman: input.eventAtHuman,
+              actionType: input.actionType,
+              narrativeSummary: input.narrativeSummary,
+              entities: input.entities,
+              source: input.source,
+              externalId: input.externalId,
+            });
+            eventsWritten++;
+          } catch (err) {
+            if (
+              !(err instanceof Error && err.message.includes("UNIQUE"))
+            ) {
+              console.warn("[github] event write failed:", err);
+            }
           }
         }
-      }
-      console.info(
-        `[github] activity: ${significant.length} significant, ${eventsWritten} written`,
-      );
+        console.info(
+          `[github] activity: ${significant.length} significant, ${eventsWritten} written`,
+        );
 
-      if (rawEvents.length > 0) {
-        activityCursorData.lastEventId = rawEvents[0].id;
+        if (rawEvents.length > 0) {
+          activityCursorData.lastEventId = rawEvents[0].id;
+        }
+      } else {
+        // First sync OR legacy connector: seed cursor without writing events
+        if (rawEvents.length > 0) {
+          activityCursorData.lastEventId = rawEvents[0].id;
+        } else {
+          activityCursorData.activityInitialized = new Date().toISOString();
+        }
+        console.info(
+          `[github] activity: first-sync baseline seeded (no events written)`,
+        );
       }
     } catch (err) {
       console.warn("[github] activity stream failed (non-fatal):", err);
