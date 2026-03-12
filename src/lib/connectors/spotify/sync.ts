@@ -2,7 +2,7 @@
  * Spotify sync orchestration.
  * Fetches profile + top artists + top tracks → maps to facts → batch writes.
  * Detects taste-shift events by comparing short-term top-5 artists with previous snapshot.
- * Archives stale sp-artist/sp-track/sp-genre facts after STALE_THRESHOLD consecutive absent syncs.
+ * Archives stale sp-artist/sp-track facts after STALE_THRESHOLD consecutive absent syncs.
  */
 
 import {
@@ -29,7 +29,6 @@ import {
   mapSpotifyProfile,
   mapSpotifyTopArtists,
   mapSpotifyTopTracks,
-  mapSpotifyGenres,
   detectTasteShift,
 } from "./mapper";
 import type { SyncResult, EpisodicEventInput } from "../types";
@@ -115,8 +114,7 @@ export async function syncSpotify(
     const profileFacts = mapSpotifyProfile(profile);
     const artistFacts = mapSpotifyTopArtists(mediumArtists);
     const trackFacts = mapSpotifyTopTracks(mediumTracks);
-    const genreFacts = mapSpotifyGenres(mediumArtists);
-    const allFacts = [...profileFacts, ...artistFacts, ...trackFacts, ...genreFacts];
+    const allFacts = [...profileFacts, ...artistFacts, ...trackFacts];
 
     // ── Parse previous cursor ──────────────────────────────────────────
     let previousTop5: string[] = [];
@@ -132,7 +130,7 @@ export async function syncSpotify(
     }
 
     // ── Stale fact archival (BEFORE batchCreateFacts) ───────────────────
-    // Collect current fact keys from this sync's mapped facts (sp-artist-*, sp-track-*, sp-genre-*)
+    // Collect current fact keys from this sync's mapped facts (sp-artist-*, sp-track-*)
     const currentFactKeys = new Set(allFacts.map((f) => f.key));
 
     // Query all existing active sp-* fact keys in the DB
