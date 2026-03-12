@@ -137,6 +137,25 @@ export interface UiStrings {
   publishErrorGeneric: string;
   creatingAccount: string;
   unpublishedChanges: string;
+
+  // Activity Feed
+  activityTitle: string;
+  activityEmpty: string;
+  activityMarkAllRead: string;
+  activitySynced: string;
+  activitySyncFailed: string;
+  activityFacts: string;
+  activityEvents: string;
+  activityConformity: string;
+  activitySoul: string;
+  activityEpisodicPattern: string;
+  activityAccept: string;
+  activityReject: string;
+  activityResolved: string;
+  activityCurrent: string;
+  activityProposed: string;
+  activityReason: string;
+  activitySeverity: string;
 }
 
 const en: UiStrings = {
@@ -240,6 +259,23 @@ const en: UiStrings = {
   publishErrorGeneric: "Something went wrong. Please try again.",
   creatingAccount: "Creating account...",
   unpublishedChanges: "You have unpublished changes",
+  activityTitle: "Activity",
+  activityEmpty: "Nothing new",
+  activityMarkAllRead: "Mark all read",
+  activitySynced: "synced",
+  activitySyncFailed: "sync failed",
+  activityFacts: "facts",
+  activityEvents: "events",
+  activityConformity: "Page improvement suggested",
+  activitySoul: "Soul change proposed",
+  activityEpisodicPattern: "Pattern detected",
+  activityAccept: "Accept",
+  activityReject: "Reject",
+  activityResolved: "Resolved",
+  activityCurrent: "Current",
+  activityProposed: "Proposed",
+  activityReason: "Reason",
+  activitySeverity: "Severity",
 };
 
 const it: UiStrings = {
@@ -343,6 +379,23 @@ const it: UiStrings = {
   publishErrorGeneric: "Qualcosa è andato storto. Riprova.",
   creatingAccount: "Creazione account...",
   unpublishedChanges: "Hai modifiche non pubblicate",
+  activityTitle: "Attività",
+  activityEmpty: "Nessuna novità",
+  activityMarkAllRead: "Segna tutto come letto",
+  activitySynced: "sincronizzato",
+  activitySyncFailed: "sincronizzazione fallita",
+  activityFacts: "fatti",
+  activityEvents: "eventi",
+  activityConformity: "Miglioramento pagina suggerito",
+  activitySoul: "Modifica soul proposta",
+  activityEpisodicPattern: "Pattern rilevato",
+  activityAccept: "Accetta",
+  activityReject: "Rifiuta",
+  activityResolved: "Risolto",
+  activityCurrent: "Attuale",
+  activityProposed: "Proposto",
+  activityReason: "Motivo",
+  activitySeverity: "Gravità",
 };
 
 const de: UiStrings = {
@@ -446,6 +499,23 @@ const de: UiStrings = {
   publishErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   creatingAccount: "Konto wird erstellt...",
   unpublishedChanges: "Du hast unveröffentlichte Änderungen",
+  activityTitle: "Aktivität",
+  activityEmpty: "Nichts Neues",
+  activityMarkAllRead: "Alle als gelesen markieren",
+  activitySynced: "synchronisiert",
+  activitySyncFailed: "Synchronisierung fehlgeschlagen",
+  activityFacts: "Fakten",
+  activityEvents: "Ereignisse",
+  activityConformity: "Seitenverbesserung vorgeschlagen",
+  activitySoul: "Soul-Änderung vorgeschlagen",
+  activityEpisodicPattern: "Muster erkannt",
+  activityAccept: "Akzeptieren",
+  activityReject: "Ablehnen",
+  activityResolved: "Erledigt",
+  activityCurrent: "Aktuell",
+  activityProposed: "Vorgeschlagen",
+  activityReason: "Grund",
+  activitySeverity: "Schweregrad",
 };
 
 const fr: UiStrings = {
@@ -549,6 +619,23 @@ const fr: UiStrings = {
   publishErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
   creatingAccount: "Création du compte...",
   unpublishedChanges: "Vous avez des modifications non publiées",
+  activityTitle: "Activité",
+  activityEmpty: "Rien de nouveau",
+  activityMarkAllRead: "Tout marquer comme lu",
+  activitySynced: "synchronisé",
+  activitySyncFailed: "synchronisation échouée",
+  activityFacts: "faits",
+  activityEvents: "événements",
+  activityConformity: "Amélioration de page suggérée",
+  activitySoul: "Modification soul proposée",
+  activityEpisodicPattern: "Pattern détecté",
+  activityAccept: "Accepter",
+  activityReject: "Rejeter",
+  activityResolved: "Résolu",
+  activityCurrent: "Actuel",
+  activityProposed: "Proposé",
+  activityReason: "Raison",
+  activitySeverity: "Gravité",
 };
 
 const es: UiStrings = {
@@ -652,6 +739,23 @@ const es: UiStrings = {
   publishErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
   creatingAccount: "Creando cuenta...",
   unpublishedChanges: "Tienes cambios sin publicar",
+  activityTitle: "Actividad",
+  activityEmpty: "Nada nuevo",
+  activityMarkAllRead: "Marcar todo como leído",
+  activitySynced: "sincronizado",
+  activitySyncFailed: "sincronización fallida",
+  activityFacts: "hechos",
+  activityEvents: "eventos",
+  activityConformity: "Mejora de página sugerida",
+  activitySoul: "Cambio de soul propuesto",
+  activityEpisodicPattern: "Patrón detectado",
+  activityAccept: "Aceptar",
+  activityReject: "Rechazar",
+  activityResolved: "Resuelto",
+  activityCurrent: "Actual",
+  activityProposed: "Propuesto",
+  activityReason: "Razón",
+  activitySeverity: "Gravedad",
 };
 
 const pt: UiStrings = {
@@ -755,6 +859,23 @@ const pt: UiStrings = {
   publishErrorGeneric: "Algo correu mal. Tente novamente.",
   creatingAccount: "A criar conta...",
   unpublishedChanges: "Você tem alterações não publicadas",
+  activityTitle: "Atividade",
+  activityEmpty: "Nada novo",
+  activityMarkAllRead: "Marcar tudo como lido",
+  activitySynced: "sincronizado",
+  activitySyncFailed: "sincronização falhou",
+  activityFacts: "fatos",
+  activityEvents: "eventos",
+  activityConformity: "Melhoria de página sugerida",
+  activitySoul: "Mudança de soul proposta",
+  activityEpisodicPattern: "Padrão detectado",
+  activityAccept: "Aceitar",
+  activityReject: "Rejeitar",
+  activityResolved: "Resolvido",
+  activityCurrent: "Atual",
+  activityProposed: "Proposto",
+  activityReason: "Motivo",
+  activitySeverity: "Gravidade",
 };
 
 const ja: UiStrings = {
@@ -858,6 +979,23 @@ const ja: UiStrings = {
   publishErrorGeneric: "エラーが発生しました。もう一度お試しください。",
   creatingAccount: "アカウントを作成中...",
   unpublishedChanges: "未公開の変更があります",
+  activityTitle: "アクティビティ",
+  activityEmpty: "新着なし",
+  activityMarkAllRead: "すべて既読にする",
+  activitySynced: "同期済み",
+  activitySyncFailed: "同期失敗",
+  activityFacts: "ファクト",
+  activityEvents: "イベント",
+  activityConformity: "ページ改善の提案",
+  activitySoul: "ソウル変更の提案",
+  activityEpisodicPattern: "パターン検出",
+  activityAccept: "承認",
+  activityReject: "却下",
+  activityResolved: "解決済み",
+  activityCurrent: "現在",
+  activityProposed: "提案",
+  activityReason: "理由",
+  activitySeverity: "重要度",
 };
 
 const zh: UiStrings = {
@@ -961,6 +1099,23 @@ const zh: UiStrings = {
   publishErrorGeneric: "出现错误，请重试。",
   creatingAccount: "正在创建账户...",
   unpublishedChanges: "您有未发布的更改",
+  activityTitle: "动态",
+  activityEmpty: "暂无新内容",
+  activityMarkAllRead: "全部标为已读",
+  activitySynced: "已同步",
+  activitySyncFailed: "同步失败",
+  activityFacts: "事实",
+  activityEvents: "事件",
+  activityConformity: "页面改进建议",
+  activitySoul: "灵魂变更提议",
+  activityEpisodicPattern: "模式已检测",
+  activityAccept: "接受",
+  activityReject: "拒绝",
+  activityResolved: "已解决",
+  activityCurrent: "当前",
+  activityProposed: "建议",
+  activityReason: "原因",
+  activitySeverity: "严重程度",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };
