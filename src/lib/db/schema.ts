@@ -527,6 +527,25 @@ export const sectionCopyProposals = sqliteTable("section_copy_proposals", {
   reviewedAt: text("reviewed_at"),
 });
 
+// -- Fact Display Overrides (Content Curation Layer)
+export const factDisplayOverrides = sqliteTable(
+  "fact_display_overrides",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    factId: text("fact_id").notNull().unique(),
+    displayFields: text("display_fields").notNull(), // JSON
+    factValueHash: text("fact_value_hash").notNull(),
+    source: text("source").notNull().default("agent"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+);
+
 // -- Episodic Events (Tier 4 — Life Logging)
 export const episodicEvents = sqliteTable(
   "episodic_events",
