@@ -172,9 +172,12 @@ export function saveMemoryFromWorker(
 
 const PROVENANCE_WEIGHT = { agent: 1.0, worker: 0.6 } as const;
 const RECENCY_HALF_LIFE_DAYS = 14;
+const USAGE_HALF_LIFE_DAYS = 28;
+const NEVER_REFERENCED_PENALTY = 0.5;
 
 /**
- * Relevance-scored retrieval: recency × provenance_weight.
+ * Relevance-scored retrieval: recency × provenance_weight × usageBoost.
+ * usageBoost: 0.5^(days_since_last_ref / 28) when referenced, else 0.5 penalty.
  * Replaces flat getActiveMemories(ownerKey, 10) for context injection.
  */
 export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): ScoredMemoryRow[] {
@@ -183,7 +186,11 @@ export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): S
       `SELECT id, owner_key, content, memory_type, category, content_hash,
               confidence, is_active, user_feedback, deactivated_at, created_at,
               COALESCE(source, 'agent') AS source,
-              julianday('now') - julianday(created_at) AS age_days
+              julianday('now') - julianday(created_at) AS age_days,
+              CASE WHEN last_referenced_at IS NOT NULL
+                THEN julianday('now') - julianday(last_referenced_at)
+                ELSE NULL
+              END AS days_since_last_ref
        FROM agent_memory
        WHERE owner_key = ? AND is_active = 1
        ORDER BY created_at DESC
@@ -194,6 +201,7 @@ export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): S
       category: string | null; content_hash: string | null; confidence: number | null;
       is_active: number; user_feedback: string | null; deactivated_at: string | null;
       created_at: string | null; source: string; age_days: number;
+      days_since_last_ref: number | null;
     }>;
 
   const scored = rows.map((row) => {
@@ -201,6 +209,9 @@ export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): S
     const recencyScore = Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS);
     const provenanceScore =
       PROVENANCE_WEIGHT[row.source as keyof typeof PROVENANCE_WEIGHT] ?? 0.6;
+    const usageBoost = row.days_since_last_ref !== null
+      ? Math.pow(0.5, row.days_since_last_ref / USAGE_HALF_LIFE_DAYS)
+      : NEVER_REFERENCED_PENALTY;
     const mem: MemoryRow & { score: number } = {
       id: row.id,
       ownerKey: row.owner_key,
@@ -214,7 +225,7 @@ export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): S
       deactivatedAt: row.deactivated_at,
       createdAt: row.created_at,
       source: row.source,
-      score: recencyScore * provenanceScore,
+      score: recencyScore * provenanceScore * usageBoost,
     };
     return mem;
   });
