@@ -204,7 +204,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
       model,
       schema: TranslationResultSchema,
       prompt,
-      providerOptions: getThinkingProviderOptions(),
+      providerOptions: getThinkingProviderOptions({ structured: true }),
     });
 
     const translated: SectionPayload[] = result.object.sections;

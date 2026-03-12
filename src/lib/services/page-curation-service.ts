@@ -90,7 +90,7 @@ export async function analyzeSectionForCuration(
       model,
       schema: curationResponseSchema,
       prompt,
-      providerOptions: getThinkingProviderOptions(),
+      providerOptions: getThinkingProviderOptions({ structured: true }),
     });
     return parseCurationResponse(object, agentCuratedFactIds);
   } catch (error) {

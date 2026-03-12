@@ -118,7 +118,7 @@ export async function personalizeSection(
     const { object } = await generateObject({
       model: getModelForTier("fast"),
       schema,
-      providerOptions: getThinkingProviderOptions(),
+      providerOptions: getThinkingProviderOptions({ structured: true }),
       prompt: [
         `You are a personal page copywriter. Rewrite the content of a "${section.type}" section for ${username}'s personal page.`,
         `\n## Voice & Tone\n${soulCompiled}`,

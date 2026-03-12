@@ -43,7 +43,7 @@ export async function analyzeConformity(
     const { object } = await generateObject({
       model: getModelForTier("reasoning"),
       schema: analysisSchema,
-      providerOptions: getThinkingProviderOptions(),
+      providerOptions: getThinkingProviderOptions({ structured: true }),
       prompt: [
         `Analyze these page sections for coherence issues.`,
         ``,
@@ -100,7 +100,7 @@ export async function generateRewrite(
     const { object } = await generateObject({
       model: getModelForTier("reasoning"),
       schema: rewriteSchema,
-      providerOptions: getThinkingProviderOptions(),
+      providerOptions: getThinkingProviderOptions({ structured: true }),
       prompt: [
         `Rewrite the "${sectionType}" section to fix: ${issue.reason}`,
         ``,

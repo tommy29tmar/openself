@@ -205,7 +205,7 @@ export async function checkPageCoherence(
       model: getModelForTier("fast"),
       schema: coherenceSchema,
       prompt: buildCoherencePrompt(sections, soulCompiled),
-      providerOptions: getThinkingProviderOptions(),
+      providerOptions: getThinkingProviderOptions({ structured: true }),
     }),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("coherence_timeout")), COHERENCE_TIMEOUT_MS),

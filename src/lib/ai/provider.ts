@@ -193,11 +193,20 @@ export function getModel(): LanguageModel {
  * Returns providerOptions that enable extended thinking for Anthropic models.
  * Reads AI_THINKING_BUDGET env var (default 8000). Requires >= 1024 to activate.
  * Google thinking is explicitly disabled (budget 0).
- * For non-Anthropic providers, returns empty object.
+ *
+ * IMPORTANT: Anthropic does not allow thinking when tool_choice forces tool use,
+ * which is what generateObject does internally. Pass `structured: true` for
+ * generateObject calls to skip Anthropic thinking (Google thinking still works).
  */
-export function getThinkingProviderOptions(): ProviderMetadata {
+export function getThinkingProviderOptions(opts?: { structured?: boolean }): ProviderMetadata {
   const budget = parseInt(process.env.AI_THINKING_BUDGET ?? "8000", 10) || 0;
   if (budget < 1024) return {} as ProviderMetadata;
+  // generateObject forces tool_choice — Anthropic rejects thinking in that mode
+  if (opts?.structured) {
+    return {
+      google: { thinkingConfig: { thinkingBudget: 0 } },
+    } as ProviderMetadata;
+  }
   return {
     google: { thinkingConfig: { thinkingBudget: 0 } },
     anthropic: {
