@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { db, sqlite } from "@/lib/db";
-import { heartbeatRuns } from "@/lib/db/schema";
+import { heartbeatRuns, factDisplayOverrides } from "@/lib/db/schema";
+import { getFactDisplayOverrideService } from "@/lib/services/fact-display-override-service";
 import {
   getHeartbeatConfig,
   computeOwnerDay,
@@ -23,6 +24,7 @@ import { detectJournalPatterns } from "@/lib/services/journal-patterns";
 import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { DEEP_HEARTBEAT_MIN_FACTS } from "@/lib/agent/thresholds";
+import { handlePageCuration } from "@/lib/worker/handlers/curate-page";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -60,6 +62,24 @@ export function runGlobalHousekeeping(): void {
     }
   } catch (err) {
     console.error("[housekeeping] Cache cleanup failed:", err);
+  }
+
+  // Clean up orphaned fact display overrides (facts that were deleted)
+  try {
+    const overrideService = getFactDisplayOverrideService();
+    const allOverrides = db.select({ ownerKey: factDisplayOverrides.ownerKey })
+      .from(factDisplayOverrides)
+      .groupBy(factDisplayOverrides.ownerKey)
+      .all();
+
+    for (const { ownerKey } of allOverrides) {
+      const scope = resolveOwnerScopeForWorker(ownerKey);
+      const activeFacts = getActiveFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
+      const activeFactIds = activeFacts.map((f: { id: string }) => f.id);
+      overrideService.cleanupOrphans(ownerKey, activeFactIds);
+    }
+  } catch {
+    // Non-fatal — orphans will be cleaned next cycle
   }
 }
 
@@ -268,6 +288,18 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
     coherenceCompleted = true;
   } catch (err) {
     console.error("[heartbeat-deep] Coherence check failed:", err);
+  }
+
+  // --- Substep 3: Page curation (after conformity + coherence) ---
+  try {
+    await handlePageCuration({ ownerKey });
+  } catch (error) {
+    logEvent({
+      eventType: "curate_page_error",
+      actor: "worker",
+      payload: { ownerKey, error: String(error) },
+    });
+    // Non-fatal: curation failure doesn't block heartbeat recording
   }
 
   // Only record a successful run if both substeps completed (or were trivially skipped).
