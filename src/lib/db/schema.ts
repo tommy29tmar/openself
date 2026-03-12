@@ -180,6 +180,7 @@ export const agentMemory = sqliteTable(
     deactivatedAt: text("deactivated_at"),
     source: text("source").notNull().default("agent"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    lastReferencedAt: text("last_referenced_at"),
   },
   (table) => [
     index("idx_agent_memory_owner_active")

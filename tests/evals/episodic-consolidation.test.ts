@@ -4,6 +4,26 @@ import { randomUUID } from "crypto";
 import { sqlite } from "@/lib/db";
 import { insertEvent } from "@/lib/services/episodic-service";
 
+// Mocks for evaluatePatternWithLLM (called by consolidateEpisodesForOwner).
+// checkPatternThresholds is pure DB — unaffected by these mocks.
+vi.mock("ai", () => ({
+  generateText: vi.fn().mockResolvedValue({
+    text: JSON.stringify({ worthy: true, summary: "Regular workout routine" }),
+    usage: { promptTokens: 50, completionTokens: 20 },
+  }),
+}));
+
+vi.mock("@/lib/ai/provider", () => ({
+  getModelForTier: vi.fn().mockReturnValue("mock-model"),
+  getModelIdForTier: vi.fn().mockReturnValue("mock-model-id"),
+  getProviderForTier: vi.fn().mockReturnValue("mock-provider"),
+}));
+
+vi.mock("@/lib/services/usage-service", () => ({
+  checkBudget: vi.fn().mockReturnValue({ allowed: true }),
+  recordUsage: vi.fn(),
+}));
+
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 86400;
 
@@ -101,5 +121,103 @@ describe("checkPatternThresholds", () => {
     const candidates = checkPatternThresholds("test-owner-source-filter");
     // Should find 0 candidates — all events are source='strava', not 'chat'
     expect(candidates).toHaveLength(0);
+  });
+});
+
+describe("evaluatePatternWithLLM (via consolidateEpisodesForOwner)", () => {
+  it("creates a proposal when LLM deems pattern worthy", async () => {
+    const { consolidateEpisodesForOwner } = await import("@/lib/services/episodic-consolidation-service");
+    const ownerKey = `llm-eval-${randomUUID()}`;
+
+    // Seed 4 chat events with same action_type to cross the >=3 threshold
+    for (let i = 0; i < 4; i++) {
+      const unix = NOW - i * 5 * DAY; // spread over 20 days (within 60d window, recent within 30d)
+      insertEvent({
+        ownerKey,
+        sessionId: "s1",
+        eventAtUnix: unix,
+        eventAtHuman: new Date(unix * 1000).toISOString(),
+        actionType: "meditation",
+        narrativeSummary: `Meditation session #${i + 1}`,
+        rawInput: "meditated",
+      });
+    }
+
+    const created = await consolidateEpisodesForOwner(ownerKey);
+    expect(created).toBe(1);
+
+    // Verify proposal was written to DB
+    const proposals = sqlite
+      .prepare("SELECT * FROM episodic_pattern_proposals WHERE owner_key = ? AND action_type = ?")
+      .all(ownerKey, "meditation") as Array<{ status: string; pattern_summary: string; event_count: number }>;
+
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].status).toBe("pending");
+    expect(proposals[0].pattern_summary).toBe("Regular workout routine");
+    expect(proposals[0].event_count).toBe(4);
+  });
+
+  it("does not create a proposal when LLM deems pattern unworthy", async () => {
+    const { generateText } = await import("ai");
+    (generateText as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      text: JSON.stringify({ worthy: false, summary: "" }),
+      usage: { promptTokens: 50, completionTokens: 10 },
+    });
+
+    const { consolidateEpisodesForOwner } = await import("@/lib/services/episodic-consolidation-service");
+    const ownerKey = `llm-unworthy-${randomUUID()}`;
+
+    for (let i = 0; i < 4; i++) {
+      const unix = NOW - i * 5 * DAY;
+      insertEvent({
+        ownerKey,
+        sessionId: "s1",
+        eventAtUnix: unix,
+        eventAtHuman: new Date(unix * 1000).toISOString(),
+        actionType: "commuting",
+        narrativeSummary: `Commute #${i + 1}`,
+        rawInput: "commuted",
+      });
+    }
+
+    const created = await consolidateEpisodesForOwner(ownerKey);
+    expect(created).toBe(0);
+
+    const proposals = sqlite
+      .prepare("SELECT * FROM episodic_pattern_proposals WHERE owner_key = ?")
+      .all(ownerKey);
+    expect(proposals).toHaveLength(0);
+  });
+
+  it("handles LLM returning invalid JSON gracefully (no proposal created)", async () => {
+    const { generateText } = await import("ai");
+    (generateText as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      text: "not valid json at all",
+      usage: { promptTokens: 50, completionTokens: 10 },
+    });
+
+    const { consolidateEpisodesForOwner } = await import("@/lib/services/episodic-consolidation-service");
+    const ownerKey = `llm-badjson-${randomUUID()}`;
+
+    for (let i = 0; i < 4; i++) {
+      const unix = NOW - i * 5 * DAY;
+      insertEvent({
+        ownerKey,
+        sessionId: "s1",
+        eventAtUnix: unix,
+        eventAtHuman: new Date(unix * 1000).toISOString(),
+        actionType: "reading",
+        narrativeSummary: `Reading session #${i + 1}`,
+        rawInput: "read",
+      });
+    }
+
+    const created = await consolidateEpisodesForOwner(ownerKey);
+    expect(created).toBe(0);
+
+    const proposals = sqlite
+      .prepare("SELECT * FROM episodic_pattern_proposals WHERE owner_key = ?")
+      .all(ownerKey);
+    expect(proposals).toHaveLength(0);
   });
 });

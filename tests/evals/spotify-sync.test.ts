@@ -112,6 +112,12 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
 }));
 
+vi.mock("@/lib/services/kb-service", () => ({
+  archiveFact: vi.fn().mockReturnValue(true),
+  getActiveFactKeysByPrefix: vi.fn().mockReturnValue([]),
+  findFactsByKeyPattern: vi.fn().mockReturnValue([]),
+}));
+
 import { syncSpotify } from "@/lib/connectors/spotify/sync";
 import { getConnectorWithCredentials } from "@/lib/connectors/connector-service";
 import { batchRecordEvents } from "@/lib/connectors/connector-event-writer";

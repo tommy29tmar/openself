@@ -32,13 +32,19 @@ describe("saveMemoryFromWorker", () => {
     expect(saved.length).toBe(10);
   });
 
-  it("still enforces the 50 max quota", () => {
+  it("still enforces the 50 max quota via eviction", () => {
     const owner = uniqueOwner();
     for (let i = 0; i < 50; i++) {
       saveMemoryFromWorker(owner, `Quota test ${i}`);
     }
-    const overflow = saveMemoryFromWorker(owner, "This should be rejected");
-    expect(overflow).toBeNull();
+    // With eviction policy, #51 evicts the lowest-scoring and succeeds
+    const overflow = saveMemoryFromWorker(owner, "This triggers eviction");
+    expect(overflow).not.toBeNull();
+    // Still exactly 50 active
+    const count = sqlite.prepare(
+      "SELECT COUNT(*) as c FROM agent_memory WHERE owner_key = ? AND is_active = 1"
+    ).get(owner) as any;
+    expect(count.c).toBe(50);
   });
 
   it("deduplicates by content hash", () => {

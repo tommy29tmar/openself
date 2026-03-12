@@ -44,8 +44,7 @@ export async function batchRecordEvents(
     const rows = sqlite
       .prepare(
         `SELECT external_id FROM connector_items
-         WHERE connector_id = ? AND external_id IN (${placeholders})
-         AND event_id IS NOT NULL`,
+         WHERE connector_id = ? AND external_id IN (${placeholders})`,
       )
       .all(ctx.connectorId, ...chunk.map((e) => e.externalId)) as Array<{ external_id: string }>;
     for (const r of rows) existingIds.add(r.external_id);

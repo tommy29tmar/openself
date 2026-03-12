@@ -95,6 +95,7 @@ export type ContextResult = {
   systemPrompt: string;
   trimmedMessages: Array<{ role: string; content: string }>;
   mode: PromptMode;
+  referencedMemoryIds: string[];
 };
 
 type PromptBlock = {
@@ -334,14 +335,16 @@ export function assembleContext(
 
   // Memories block (Tier 3)
   let memoriesBlock = "";
+  const memoryLineToId = new Map<string, string>();
   if (!profile || profile.memories.include) {
     const activeMemories = getActiveMemoriesScored(scope.cognitiveOwnerKey, 15);
-    memoriesBlock =
-      activeMemories.length > 0
-        ? activeMemories
-            .map((m) => `- [${m.memoryType}] ${m.content}`)
-            .join("\n")
-        : "";
+    if (activeMemories.length > 0) {
+      for (const m of activeMemories) {
+        const line = `- [${m.memoryType}|${m.category ?? "general"}] ${m.content}`;
+        memoryLineToId.set(line, m.id);
+      }
+      memoriesBlock = [...memoryLineToId.keys()].join("\n");
+    }
     memoriesBlock = truncateToTokenBudget(memoriesBlock, profile?.memories.budget ?? BUDGET.memories);
   }
 
@@ -683,6 +686,19 @@ Do NOT add this if you're mid-explanation or mid-topic.` });
     }
   }
 
+  // --- Derive referenced memory IDs after ALL truncation phases ---
+  // The overflow loop may have shrunk the memories block via blocks[3].content,
+  // and the final hard truncation may have cut systemPrompt further.
+  // We check against the final systemPrompt to be accurate.
+  const referencedMemoryIds: string[] = [];
+  if (memoryLineToId.size > 0) {
+    for (const [line, id] of memoryLineToId) {
+      if (systemPrompt.includes(line)) {
+        referencedMemoryIds.push(id);
+      }
+    }
+  }
+
   // --- Trim client messages to fit within recent turns budget ---
   const maxTurnChars = BUDGET.recentTurns * 4;
   let turnChars = 0;
@@ -710,5 +726,6 @@ Do NOT add this if you're mid-explanation or mid-topic.` });
     systemPrompt,
     trimmedMessages: finalMessages,
     mode,
+    referencedMemoryIds,
   };
 }

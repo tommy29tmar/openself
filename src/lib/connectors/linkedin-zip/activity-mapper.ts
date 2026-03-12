@@ -66,7 +66,7 @@ export function mapCertificationsToEpisodic(
       eventAtHuman: new Date(eventAt * 1000).toISOString(),
       actionType: "certification",
       narrativeSummary: `Earned certification: ${name}${authority ? ` (${authority})` : ""}`.slice(0, 200),
-      source: "linkedin",
+      source: "linkedin_zip",
       externalId: stableExternalId("cert", name, authority, dateStr),
     });
   }
@@ -98,7 +98,7 @@ export function mapArticlesToEpisodic(
       eventAtHuman: new Date(eventAt * 1000).toISOString(),
       actionType: "publication",
       narrativeSummary: `Published article: ${title}`.slice(0, 200),
-      source: "linkedin",
+      source: "linkedin_zip",
       externalId: stableExternalId("article", title, url),
     });
   }

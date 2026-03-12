@@ -22,10 +22,10 @@ vi.mock("@/lib/services/summary-service", () => ({
 }));
 
 const mockGetActiveMemories = vi.fn((..._: any[]) => [
-  { memoryType: "observation", content: "User likes React" },
+  { id: "mem-cc-1", memoryType: "observation", category: null, content: "User likes React" },
 ]);
 const mockGetActiveMemoriesScored = vi.fn((..._: any[]) => [
-  { memoryType: "observation", content: "User likes React" },
+  { id: "mem-cc-1", memoryType: "observation", category: null, content: "User likes React" },
 ]);
 vi.mock("@/lib/services/memory-service", () => ({
   getActiveMemories: (...args: any[]) => mockGetActiveMemories(...args),
@@ -102,8 +102,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetActiveFacts.mockReturnValue([]);
   mockGetSummary.mockReturnValue("A conversation summary");
-  mockGetActiveMemories.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
-  mockGetActiveMemoriesScored.mockReturnValue([{ memoryType: "observation", content: "User likes React" }]);
+  mockGetActiveMemories.mockReturnValue([{ id: "mem-cc-1", memoryType: "observation", category: null, content: "User likes React" }]);
+  mockGetActiveMemoriesScored.mockReturnValue([{ id: "mem-cc-1", memoryType: "observation", category: null, content: "User likes React" }]);
   mockGetActiveSoul.mockReturnValue({ compiled: "Soul: creative person" });
   mockGetOpenConflicts.mockReturnValue([]);
   mockBuildSystemPrompt.mockReturnValue("BOOTSTRAP_PROMPT");

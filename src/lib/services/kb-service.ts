@@ -191,6 +191,7 @@ export async function createFact(
         confidence,
         profileId: effectiveProfileId,
         visibility: sql`CASE WHEN ${facts.visibility} = 'private' THEN ${visibility} ELSE ${facts.visibility} END`,
+        archivedAt: null,
         updatedAt: now,
       },
     })
@@ -301,6 +302,41 @@ export function updateFact(
     updatedAt: now,
     ...(hasChildren ? { _warnings: [`This fact has ${children!.count} child fact(s) that may need updating`] } : {}),
   } as FactRow;
+}
+
+/**
+ * Soft-archive a fact (sets archived_at). Returns true if the fact was found and archived.
+ * Used by connector sync to retire stale facts before re-creating updated ones.
+ */
+export function archiveFact(factId: string): boolean {
+  const result = sqlite
+    .prepare(
+      `UPDATE facts SET archived_at = datetime('now'), updated_at = datetime('now')
+       WHERE id = ? AND archived_at IS NULL`
+    )
+    .run(factId);
+  return result.changes > 0;
+}
+
+/**
+ * Return all active (non-archived) fact keys that start with the given prefix.
+ * Takes knowledgeKey (scope.knowledgePrimaryKey), which maps to the facts.session_id column.
+ */
+export function getActiveFactKeysByPrefix(knowledgeKey: string, prefix: string): string[] {
+  return sqlite
+    .prepare(`SELECT key FROM facts WHERE session_id = ? AND key LIKE ? AND archived_at IS NULL`)
+    .all(knowledgeKey, `${prefix}%`)
+    .map((r: any) => r.key as string);
+}
+
+/**
+ * Return id+key pairs for all active facts matching a key LIKE pattern.
+ * Takes knowledgeKey (scope.knowledgePrimaryKey), which maps to the facts.session_id column.
+ */
+export function findFactsByKeyPattern(knowledgeKey: string, pattern: string): Array<{ id: string; key: string }> {
+  return sqlite
+    .prepare(`SELECT id, key FROM facts WHERE session_id = ? AND key LIKE ? AND archived_at IS NULL`)
+    .all(knowledgeKey, pattern) as Array<{ id: string; key: string }>;
 }
 
 /**

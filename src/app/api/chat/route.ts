@@ -26,6 +26,7 @@ import { consumeImportEvent, markImportEventConsumed, revertImportEvent, type Im
 import { analyzeImportGaps, type ImportGapReport } from "@/lib/connectors/import-gap-analyzer";
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { STEP_EXHAUSTION_FALLBACK } from "@/lib/agent/step-exhaustion-fallback";
+import { updateLastReferencedAt } from "@/lib/services/memory-service";
 import { stringifyToolArgsForRepair, stripMarkdownCodeFences } from "@/lib/agent/tool-call-repair";
 import {
   createUnbackedActionClaimTransform,
@@ -266,7 +267,7 @@ export async function POST(req: Request) {
   }
 
   // Assemble context using full context system (mode detection, soul, memories, summaries, conflicts)
-  const { systemPrompt, trimmedMessages, mode } = assembleContext(
+  const { systemPrompt, trimmedMessages, mode, referencedMemoryIds } = assembleContext(
     effectiveScope,
     sessionLanguage,
     messages,
@@ -471,6 +472,15 @@ export async function POST(req: Request) {
           if (!String(e).includes("UNIQUE constraint failed")) {
             console.warn("[chat] Failed to enqueue session_compaction:", e);
           }
+        }
+
+        // Update last_referenced_at for memories that survived all truncation phases
+        try {
+          if (referencedMemoryIds.length > 0) {
+            updateLastReferencedAt(referencedMemoryIds);
+          }
+        } catch (e) {
+          console.warn("[chat] Failed to update memory references:", e);
         }
       },
     });

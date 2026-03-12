@@ -58,22 +58,23 @@ Produce a JSON object:
   "keyTakeaways": ["string"]
 }
 
-IMPORTANT for patternsObserved — these must be BEHAVIORAL OBSERVATIONS about HOW the user communicates, NOT what they said:
+## patternsObserved (array of max 3 strings)
+Extract BEHAVIORAL PATTERNS about the user — NOT mechanical tool usage stats.
 
-GOOD patternsObserved examples:
-- "User prefers concrete options over open-ended questions"
-- "User downplays achievements and needs encouragement to claim credit"
-- "User switches to English when discussing technical topics"
-- "User responds better to bullet points than long paragraphs"
-- "User is impatient with confirmations — prefers direct execution"
+GOOD patterns (behavioral synthesis):
+- "User prefers professional tone for their public page but is casual in conversation"
+- "User consistently adds context about career transitions — they seem to be repositioning professionally"
+- "User is protective of personal contact info — always marks phone/email as private"
 
-BAD patternsObserved (do NOT include these — they are facts or topics, not behavioral patterns):
-- "User works at Acme Corp" (this is a fact)
-- "Discussed page layout" (this is a topic)
-- "User wants to add a portfolio section" (this is a task, not a behavior)
-- "User seems happy today" (transient mood, not a pattern)
+BAD patterns (mechanical summaries — NEVER output these):
+- "Tool 'create_fact' called 12 times"
+- "User sent 8 messages in this session"
+- "Session lasted approximately 15 minutes"
 
-Rules: explicit facts only in factsChanged, patternsObserved = HOW user communicates (stable behavioral patterns only), strings < 100 chars, ONLY valid JSON.`;
+Each pattern must describe a USER PREFERENCE, COMMUNICATION STYLE, or BEHAVIORAL TENDENCY.
+If no meaningful behavioral pattern is evident, return an empty array.
+
+Rules: explicit facts only in factsChanged, patternsObserved = behavioral synthesis only (never mechanical stats), strings < 100 chars, ONLY valid JSON.`;
 
 /**
  * Get rowid of last processed message from the most advanced successful/skipped compaction run.
