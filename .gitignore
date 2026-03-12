@@ -59,3 +59,9 @@ dev_server.log
 query_db.js
 screenshot/
 .worktrees/
+
+# DB backups (UAT reset)
+*.db.bak*
+
+# UAT artifacts
+uat/
