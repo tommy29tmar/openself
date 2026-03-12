@@ -46,6 +46,7 @@ export const profiles = sqliteTable(
     username: text("username"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+    lastFeedViewedAt: text("last_feed_viewed_at"),
   },
   (table) => [
     uniqueIndex("profiles_user_id_unique")
