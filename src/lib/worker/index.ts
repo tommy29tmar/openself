@@ -14,6 +14,7 @@ import { STALE_JOB_TIMEOUT_MINUTES } from "@/lib/connectors/idempotency";
 import { runSessionCompaction, persistCompactionLog, getLastCompactionRowid } from "@/lib/services/session-compaction-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { consolidateEpisodesHandler } from "@/lib/worker/handlers/consolidate-episodes";
+import { handlePageCuration } from "@/lib/worker/handlers/curate-page";
 import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import "@/lib/connectors/register-all";
 
@@ -167,6 +168,7 @@ const handlers: Record<string, JobHandler> = {
     }
   },
   consolidate_episodes: consolidateEpisodesHandler,
+  curate_page: handlePageCuration,
 };
 
 export function getHandlerCount(): number {
