@@ -27,7 +27,7 @@ export type SituationContext = {
 // Journey Policy
 // ---------------------------------------------------------------------------
 
-const POLICY_MAP: Record<JourneyState, (language: string) => string> = {
+const POLICY_MAP: Record<JourneyState, (language: string, lastSeenDaysAgo?: number | null) => string> = {
   first_visit: firstVisitPolicy,
   returning_no_page: returningNoPagePolicy,
   draft_ready: draftReadyPolicy,
@@ -40,13 +40,13 @@ const POLICY_MAP: Record<JourneyState, (language: string) => string> = {
  * Returns the prompt policy text for the given journey state.
  * This is the primary mode-specific block in the system prompt.
  */
-export function getJourneyPolicy(state: JourneyState, language: string): string {
+export function getJourneyPolicy(state: JourneyState, language: string, lastSeenDaysAgo?: number | null): string {
   const policyFn = POLICY_MAP[state];
   if (!policyFn) {
     // Defensive: fall back to first_visit if state is unknown
     return firstVisitPolicy(language);
   }
-  return policyFn(language);
+  return policyFn(language, lastSeenDaysAgo);
 }
 
 // ---------------------------------------------------------------------------

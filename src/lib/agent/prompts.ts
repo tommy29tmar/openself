@@ -335,7 +335,7 @@ export function buildSystemPrompt(
   bootstrap: BootstrapPayload,
   opts?: { schemaMode?: "full" | "minimal" | "none" },
 ): string {
-  const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language);
+  const journeyPolicy = getJourneyPolicy(bootstrap.journeyState, bootstrap.language, bootstrap.lastSeenDaysAgo);
 
   // Build situation context from bootstrap data
   const situationContext: SituationContext = {

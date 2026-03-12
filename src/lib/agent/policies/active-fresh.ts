@@ -30,7 +30,7 @@ UPDATE FLOW (turns 2-3):
 - For corrections: delete_fact (old) → create_fact (new). For additions: create_fact. For removals: delete_fact.
 - Use search_facts to find the existing fact before deleting — confirm the right fact ID.
 - ${IMMEDIATE_EXECUTION_RULE}
-- After each successful update, briefly confirm: "Done — visible in preview. Anything else to update?"
+- After each successful update, briefly confirm and steer: "Done — visible in preview. Want to update another section?"
 - Keep responses to 1-2 sentences per update.
 
 REGENERATE AND PUBLISH (after updates):

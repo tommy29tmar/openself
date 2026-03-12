@@ -281,6 +281,11 @@ describe("activeFreshPolicy", () => {
     it("bans reopening exploration (policy-specific)", () => {
       expect(policyEn).toMatch(/not.*reopen.*explor|not.*ask.*tell.*more/i);
     });
+
+    it("does NOT use passive deferral in update confirmation example", () => {
+      const policy = activeFreshPolicy("en");
+      expect(policy).not.toMatch(/anything else\??/i);
+    });
   });
 });
 
@@ -288,8 +293,8 @@ describe("activeFreshPolicy", () => {
 // activeStalePolicy
 // ---------------------------------------------------------------------------
 describe("activeStalePolicy", () => {
-  const policyEn = activeStalePolicy("en");
-  const policyIt = activeStalePolicy("it");
+  const policyEn = activeStalePolicy("en", 8);
+  const policyIt = activeStalePolicy("it", 8);
 
   describe("structure", () => {
     it("returns a non-empty string", () => {
@@ -316,9 +321,40 @@ describe("activeStalePolicy", () => {
       expect(policyEn).toMatch(/name\s*from\s*facts|identity\/name|never.*ask.*name/i);
     });
 
-    it("MUST acknowledge time gap in greeting (not optional)", () => {
-      expect(policyEn).toMatch(/MUST.*acknowledge|MUST.*mention.*time/i);
-      expect(policyEn).toMatch(/been\s*a\s*while|it's\s*been|time.*passed/i);
+    it("injects last-contact data when lastSeenDaysAgo >= 2", () => {
+      expect(policyEn).toMatch(/LAST CONTACT.*8 days/i);
+      expect(policyEn).toMatch(/MUST.*reference.*time/i);
+    });
+
+    it("does NOT claim time gap when lastSeenDaysAgo is null", () => {
+      const policyNull = activeStalePolicy("en", null);
+      expect(policyNull).not.toMatch(/LAST CONTACT/i);
+      expect(policyNull).not.toMatch(/returning visitor/i);
+      expect(policyNull).toMatch(/do not.*mention.*elapsed.*time/i);
+    });
+
+    it("treats 0-1 as recent return without time gap", () => {
+      const policy0 = activeStalePolicy("en", 0);
+      const policy1 = activeStalePolicy("en", 1);
+      expect(policy0).not.toMatch(/LAST CONTACT/i);
+      expect(policy0).toMatch(/recent return/i);
+      expect(policy0).toMatch(/just here/i);
+      expect(policy1).not.toMatch(/LAST CONTACT/i);
+      expect(policy1).toMatch(/recent return/i);
+    });
+
+    it.each([
+      { days: 2, label: "a few days" },
+      { days: 6, label: "a few days" },
+      { days: 7, label: "about a week" },
+      { days: 13, label: "about a week" },
+      { days: 14, label: "a couple of weeks" },
+      { days: 29, label: "a couple of weeks" },
+      { days: 30, label: "a while" },
+    ])("maps $days days to ~$label", ({ days, label }) => {
+      const policy = activeStalePolicy("en", days);
+      expect(policy).toMatch(new RegExp(`LAST CONTACT.*${days} days`, "i"));
+      expect(policy).toMatch(new RegExp(`~${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"));
     });
 
     it("instructs to ask what changed", () => {
@@ -454,7 +490,7 @@ describe("cross-policy invariants", () => {
     { name: "returningNoPage", fn: returningNoPagePolicy },
     { name: "draftReady", fn: draftReadyPolicy },
     { name: "activeFresh", fn: activeFreshPolicy },
-    { name: "activeStale", fn: activeStalePolicy },
+    { name: "activeStale", fn: (lang: string) => activeStalePolicy(lang, 10) },
     { name: "blocked", fn: blockedPolicy },
   ];
 

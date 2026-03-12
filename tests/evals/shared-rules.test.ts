@@ -21,11 +21,19 @@ describe("sharedBehavioralRules", () => {
     expect(rules).toMatch(/one\s*question\s*per\s*turn/i);
   });
 
-  it("bans passive closings with specific phrases", () => {
-    expect(rules).toMatch(/let me know if you need anything/i);
-    expect(rules).toMatch(/feel free to ask/i);
-    expect(rules).toMatch(/is there anything else/i);
-    expect(rules).toMatch(/just let me know/i);
+  it("has positive TURN CLOSING rule with anchor guidance", () => {
+    expect(rules).toMatch(/TURN CLOSING/i);
+    expect(rules).toMatch(/concrete anchor/i);
+    expect(rules).toMatch(/confirmation/i);
+  });
+
+  it("bans open-ended deferrals with multilingual coverage", () => {
+    expect(rules).toMatch(/NEVER.*open-ended.*deferral/i);
+    // Verify key language coverage
+    expect(rules).toMatch(/anything else/i);
+    expect(rules).toMatch(/c'è altro/i);
+    expect(rules).toMatch(/sonst noch etwas/i);
+    expect(rules).toMatch(/何かあれば/);
   });
 
   it("does NOT duplicate response-length calibration (lives in CORE_CHARTER)", () => {

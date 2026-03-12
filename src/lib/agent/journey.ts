@@ -303,6 +303,15 @@ export function getOrDetectJourneyState(
       }
     }
 
+    // Re-detect if active_fresh has gone stale (page aged past freshness window)
+    if (state === "active_fresh") {
+      const detected = detectJourneyState(scope, authInfo);
+      if (detected === "active_stale") {
+        updateJourneyStatePin(anchorId, detected);
+        return detected;
+      }
+    }
+
     return state;
   }
 

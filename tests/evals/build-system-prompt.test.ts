@@ -19,7 +19,7 @@ vi.mock("@/lib/agent/policies/active-fresh", () => ({
   activeFreshPolicy: vi.fn((lang: string) => `ACTIVE_FRESH_${lang}`),
 }));
 vi.mock("@/lib/agent/policies/active-stale", () => ({
-  activeStalePolicy: vi.fn((lang: string) => `ACTIVE_STALE_${lang}`),
+  activeStalePolicy: vi.fn((lang: string, _days?: number | null) => `ACTIVE_STALE_${lang}`),
 }));
 vi.mock("@/lib/agent/policies/blocked", () => ({
   blockedPolicy: vi.fn((lang: string) => `BLOCKED_${lang}`),
@@ -224,6 +224,13 @@ describe("buildSystemPrompt", () => {
     it("routes blocked to blockedPolicy", () => {
       const result = buildSystemPrompt(makeBootstrap({ journeyState: "blocked" }));
       expect(result).toContain("BLOCKED_en");
+    });
+
+    it("passes lastSeenDaysAgo to activeStalePolicy", async () => {
+      const { activeStalePolicy: mockFn } = await import("@/lib/agent/policies/active-stale");
+      vi.mocked(mockFn).mockClear();
+      buildSystemPrompt(makeBootstrap({ journeyState: "active_stale", lastSeenDaysAgo: 12 }));
+      expect(mockFn).toHaveBeenCalledWith("en", 12);
     });
   });
 

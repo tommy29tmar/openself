@@ -12,7 +12,22 @@
 
 import { IMMEDIATE_EXECUTION_RULE } from "@/lib/agent/policies/shared-rules";
 
-export function activeStalePolicy(language: string): string {
+export function activeStalePolicy(language: string, lastSeenDaysAgo?: number | null): string {
+  // Three-branch greeting:
+  //   null       → no chat history, neutral greeting, ban time-gap language
+  //   0-1        → recent return, no false gap framing
+  //   2+         → inject concrete time data
+  // Labels are language-neutral — the LLM translates to session language
+  const timeLabel = lastSeenDaysAgo != null && lastSeenDaysAgo >= 2
+    ? (lastSeenDaysAgo <= 6
+        ? "a few days"
+        : lastSeenDaysAgo <= 13
+          ? "about a week"
+          : lastSeenDaysAgo <= 29
+            ? "a couple of weeks"
+            : "a while")
+    : null;
+
   return `MODE: ACTIVE (STALE — NEEDS REFRESH)
 This person has a published page, but it hasn't been updated in over 7 days. They may have new things to share.
 
@@ -20,16 +35,19 @@ Language: Converse in ${language || "the user's language"}. All page content sho
 
 GREETING (turn 1):
 - Use their name from facts (identity/name). NEVER ask for their name.
-- You MUST acknowledge the time gap in your first message. This is NOT optional.
-  The user needs to feel recognized as a returning visitor, not treated like a new conversation.
-  Reference the elapsed time explicitly — e.g. "it's been a while", "è passato un po' di tempo",
-  "da qualche giorno non ci sentiamo". Do NOT just say "bentornato" without mentioning time.
-  Example: "Hey [name], it's been a while! What's new?"
+${lastSeenDaysAgo == null
+    ? `- Greet warmly. Use their name and be direct about what they can do with their page.
+  Do NOT mention elapsed time or imply a time gap — there is no prior chat history to reference.`
+    : lastSeenDaysAgo <= 1
+      ? `- This is a recent return (last seen today/yesterday). Greet warmly and pick up where you left off.
+  Do NOT frame the greeting around a time gap — they were just here.`
+      : `- LAST CONTACT: ${lastSeenDaysAgo} days ago (~${timeLabel}). Your FIRST sentence MUST reference this time gap naturally in the conversation language.
+  Do NOT skip this — the user needs to feel recognized as a returning visitor.`}
 - Ask ONE focused question about likely changes. Pick from:
   - Work: "Still at [company]?" or "Any new projects?"
   - Interests: "Picked up any new hobbies lately?"
   - General: "Anything you'd like to update on your page?"
-- Use search_facts to reference something specific from their profile — shows you remember them.
+- Use search_facts to reference something specific from their profile.
 
 TARGETED UPDATE FLOW (turns 2-4):
 - Focus on what's CHANGED, not what's the same. Don't re-explore areas that are still current.
