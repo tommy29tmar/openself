@@ -121,7 +121,7 @@ export const factDisplayOverrides = sqliteTable(
   {
     id: text("id").primaryKey(),
     ownerKey: text("owner_key").notNull(),
-    factId: text("fact_id").notNull(),
+    factId: text("fact_id").notNull().unique(),
     displayFields: text("display_fields").notNull(), // JSON
     factValueHash: text("fact_value_hash").notNull(),
     source: text("source").notNull().default("agent"),
@@ -282,7 +282,6 @@ import { eq } from "drizzle-orm";
 import { db as defaultDb } from "@/lib/db";
 import { factDisplayOverrides } from "@/lib/db/schema";
 import { computeHash } from "@/lib/services/personalization-hashing";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 export type UpsertOverrideInput = {
   ownerKey: string;
@@ -332,7 +331,7 @@ export function filterEditableFields(
   return filtered;
 }
 
-export function createFactDisplayOverrideService(db: BetterSQLite3Database) {
+export function createFactDisplayOverrideService(db: typeof defaultDb = defaultDb) {
   function upsertOverride(input: UpsertOverrideInput) {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -805,7 +804,15 @@ Expected: FAIL or PASS (filterEditableFields already implemented in Task 3)
 
 - [ ] **Step 3: Add curate_content tool to tools.ts**
 
-Add after the last tool in the tools object (~line 1952+):
+**Note on imports:** All imports used inside the tool must be top-level `import` statements at the top of `tools.ts` (lines 1-56), NOT `require()`. The codebase uses ESM — `require()` with `@/` aliases may not resolve. Add these imports at the top of tools.ts:
+
+```typescript
+import { getFactDisplayOverrideService, computeFactValueHash, filterEditableFields, ITEM_EDITABLE_FIELDS } from "@/lib/services/fact-display-override-service";
+import { PERSONALIZABLE_FIELDS } from "@/lib/services/personalizer-schemas";
+import { upsertState as upsertCopyState, getActiveCopy } from "@/lib/services/section-copy-state-service";
+```
+
+Then add the tool after the last tool in the tools object (~line 1952+):
 
 ```typescript
 curate_content: tool({
@@ -836,9 +843,7 @@ curate_content: tool({
   execute: async ({ sectionType, factId, fields }) => {
     if (factId) {
       // --- ITEM-LEVEL: route to fact_display_overrides ---
-      const { getFactDisplayOverrideService, computeFactValueHash, filterEditableFields, ITEM_EDITABLE_FIELDS } =
-        require("@/lib/services/fact-display-override-service");
-      const { getActiveFacts } = require("@/lib/services/kb-service");
+      // All imports are top-level (see note above)
 
       // Find the fact
       const allFacts = getActiveFacts(sessionId, readKeys);
@@ -884,7 +889,7 @@ curate_content: tool({
       };
     } else {
       // --- SECTION-LEVEL: route to section_copy_state ---
-      const { PERSONALIZABLE_FIELDS } = require("@/lib/services/personalizer-schemas");
+      // PERSONALIZABLE_FIELDS imported at top level
       const allowed = PERSONALIZABLE_FIELDS[sectionType];
       if (!allowed) {
         return { success: false, error: `Section '${sectionType}' does not support curation` };
@@ -903,11 +908,8 @@ curate_content: tool({
       }
 
       // Compute hashes for section-level
-      const { computeSectionFactsHash, computeHash } =
-        require("@/lib/services/personalization-hashing");
-      const { getActiveFacts } = require("@/lib/services/kb-service");
-      const { upsertState: upsertCopyState, getActiveCopy } = require("@/lib/services/section-copy-state-service");
-      const { getActiveSoul } = require("@/lib/services/soul-service");
+      // computeSectionFactsHash, computeHash, getActiveFacts, upsertCopyState, getActiveSoul
+      // all imported at top level of tools.ts
 
       const allFacts = getActiveFacts(sessionId, readKeys);
       const factsHash = computeSectionFactsHash(allFacts, sectionType);
@@ -1342,8 +1344,8 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
 
   logEvent({
     eventType: "curate_page",
-    ownerKey: scope.cognitiveOwnerKey,
-    metadata: { proposalsCreated: totalProposals },
+    actor: "worker",
+    payload: { ownerKey: scope.cognitiveOwnerKey, proposalsCreated: totalProposals },
   });
 }
 ```
@@ -1380,15 +1382,15 @@ After the coherence check (line ~271) in `handleHeartbeatDeep()`:
 ```typescript
 // --- Substep 3: Page curation (weekly, after conformity + coherence) ---
 let curationCompleted = false;
+// import { handlePageCuration } from "@/lib/worker/handlers/curate-page" — add at TOP of heartbeat.ts
 try {
-  const { handlePageCuration } = require("@/lib/worker/handlers/curate-page");
   await handlePageCuration({ ownerKey });
   curationCompleted = true;
 } catch (error) {
   logEvent({
     eventType: "curate_page_error",
-    ownerKey,
-    metadata: { error: String(error) },
+    actor: "worker",
+    payload: { ownerKey, error: String(error) },
   });
   // Non-fatal: curation failure doesn't block heartbeat recording
   curationCompleted = true; // Don't block heartbeat completion
