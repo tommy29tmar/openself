@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AuthState } from "@/app/builder/page";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 type BuilderNavBarProps = {
   authState?: AuthState;
@@ -13,6 +14,9 @@ type BuilderNavBarProps = {
   onPresenceOpen?: () => void;
   publishedUsername?: string | null;
   pageName?: string;
+  unreadCount?: number;
+  onActivityOpen?: () => void;
+  bellRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
 export function BuilderNavBar({
@@ -25,6 +29,9 @@ export function BuilderNavBar({
   onPresenceOpen,
   publishedUsername: publishedUsernameProp,
   pageName,
+  unreadCount,
+  onActivityOpen,
+  bellRef,
 }: BuilderNavBarProps) {
   const authenticated = authState?.authenticated ?? false;
   const username = authState?.username ?? null;
@@ -110,6 +117,15 @@ export function BuilderNavBar({
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
+
+      {/* Notification bell */}
+      {onActivityOpen && (
+        <NotificationBell
+          ref={bellRef}
+          count={unreadCount ?? 0}
+          onClick={onActivityOpen}
+        />
+      )}
 
       {/* Publish error */}
       {publishError && (

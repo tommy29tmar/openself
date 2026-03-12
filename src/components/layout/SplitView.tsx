@@ -18,6 +18,8 @@ import { VoiceProvider } from "@/components/voice/VoiceProvider";
 import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
 import { isVoiceEnabled } from "@/lib/voice/feature-flags";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { ActivityDrawer } from "@/components/notifications/ActivityDrawer";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 
 type SplitViewProps = {
   language: string;
@@ -175,6 +177,9 @@ export function SplitView({
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
   const [presenceOpen, setPresenceOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const { count: unreadCount, refresh: refreshUnread } = useUnreadCount();
   const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview">("chat");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
@@ -420,6 +425,13 @@ export function SplitView({
   const handlePresenceClose = useCallback(() => setPresenceOpen(false), []);
   const handleAvatarChange = useCallback(() => { void fetchPreview(); }, [fetchPreview]);
 
+  const handleActivityToggle = useCallback(() => {
+    setActivityOpen(prev => {
+      if (!prev) setPresenceOpen(false); // close presence when opening activity
+      return !prev;
+    });
+  }, []);
+
   // Derive hero name for pill and mobile header
   const heroName = config?.sections?.find((s) => s.type === "hero")?.content?.name as string | undefined;
 
@@ -431,9 +443,15 @@ export function SplitView({
       publishError={publishError}
       onPublish={handlePublish}
       onSignup={() => setSignupOpen(true)}
-      onPresenceOpen={() => setPresenceOpen(true)}
+      onPresenceOpen={() => {
+        setActivityOpen(false); // mutual exclusion
+        setPresenceOpen(true);
+      }}
       pageName={heroName}
       publishedUsername={authState?.publishedUsername ?? null}
+      unreadCount={unreadCount}
+      onActivityOpen={handleActivityToggle}
+      bellRef={bellRef}
     />
   );
 
@@ -520,7 +538,7 @@ export function SplitView({
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            onClick={() => setPresenceOpen(true)}
+            onClick={() => { setActivityOpen(false); setPresenceOpen(true); }}
             style={{
               background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)",
               border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer",
@@ -660,6 +678,15 @@ export function SplitView({
             </div>
           </div>
           {desktopPresence}
+          <ActivityDrawer
+            open={activityOpen}
+            onClose={() => setActivityOpen(false)}
+            language={language}
+            t={t}
+            isMobile={false}
+            onUnreadRefresh={refreshUnread}
+            bellRef={bellRef}
+          />
         </div>
 
         {/* Mobile: bottom tab bar */}
@@ -738,6 +765,15 @@ export function SplitView({
           </div>
 
           {mobilePresence}
+          <ActivityDrawer
+            open={activityOpen}
+            onClose={() => setActivityOpen(false)}
+            language={language}
+            t={t}
+            isMobile={true}
+            onUnreadRefresh={refreshUnread}
+            bellRef={bellRef}
+          />
         </div>
       </>
     </VoiceProvider>
