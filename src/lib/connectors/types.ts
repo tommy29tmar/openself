@@ -5,6 +5,7 @@ export type ConnectorStatus = "connected" | "paused" | "error" | "disconnected";
 export type SyncResult = {
   factsCreated: number;
   factsUpdated: number;
+  factsArchived?: number;
   eventsCreated: number;
   error?: string;
 };

@@ -2,6 +2,7 @@
  * Spotify sync orchestration.
  * Fetches profile + top artists + top tracks → maps to facts → batch writes.
  * Detects taste-shift events by comparing short-term top-5 artists with previous snapshot.
+ * Archives stale sp-artist/sp-track/sp-genre facts after STALE_THRESHOLD consecutive absent syncs.
  */
 
 import {
@@ -13,6 +14,11 @@ import { batchRecordEvents } from "../connector-event-writer";
 import { withTokenRefresh, TokenExpiredError } from "../token-refresh";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { getDraft } from "@/lib/services/page-service";
+import {
+  archiveFact,
+  getActiveFactKeysByPrefix,
+  findFactsByKeyPattern,
+} from "@/lib/services/kb-service";
 import {
   fetchSpotifyProfile,
   fetchTopArtists,
@@ -32,9 +38,33 @@ import { connectors } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 
+/** Number of consecutive syncs a Spotify fact must be absent before archival. */
+export const STALE_THRESHOLD = 3;
+
 type TasteShiftCursor = {
   top5ArtistIds: string[];
+  staleSinceSync?: Record<string, number>;
 };
+
+/**
+ * Track which Spotify fact keys have been absent from the current top list across syncs.
+ * Keys are FULL fact keys (e.g., "sp-artist-abc123") to prevent namespace collisions.
+ *
+ * Returns an updated stale counter map. Keys that reappear are removed (counter reset).
+ * Keys not in currentKeys have their counter incremented.
+ */
+export function computeStaleArchival(
+  staleCounters: Record<string, number>,
+  currentKeys: Set<string>,
+  allTrackedKeys: string[],
+): Record<string, number> {
+  const updated: Record<string, number> = {};
+  for (const key of allTrackedKeys) {
+    if (currentKeys.has(key)) continue; // Reappeared — reset (omit from result)
+    updated[key] = (staleCounters[key] ?? 0) + 1;
+  }
+  return updated;
+}
 
 export async function syncSpotify(
   connectorId: string,
@@ -88,6 +118,57 @@ export async function syncSpotify(
     const genreFacts = mapSpotifyGenres(mediumArtists);
     const allFacts = [...profileFacts, ...artistFacts, ...trackFacts, ...genreFacts];
 
+    // ── Parse previous cursor ──────────────────────────────────────────
+    let previousTop5: string[] = [];
+    let prevStaleCounters: Record<string, number> = {};
+    if (connector.syncCursor) {
+      try {
+        const cursor = JSON.parse(connector.syncCursor) as TasteShiftCursor;
+        previousTop5 = cursor.top5ArtistIds ?? [];
+        prevStaleCounters = cursor.staleSinceSync ?? {};
+      } catch {
+        // Invalid cursor — treat as first sync
+      }
+    }
+
+    // ── Stale fact archival (BEFORE batchCreateFacts) ───────────────────
+    // Collect current fact keys from this sync's mapped facts (sp-artist-*, sp-track-*, sp-genre-*)
+    const currentFactKeys = new Set(allFacts.map((f) => f.key));
+
+    // Query all existing active sp-* fact keys in the DB
+    const existingSpKeys = getActiveFactKeysByPrefix(scope.knowledgePrimaryKey, "sp-");
+
+    // Compute updated stale counters
+    let updatedStaleCounters = computeStaleArchival(
+      prevStaleCounters,
+      currentFactKeys,
+      existingSpKeys,
+    );
+
+    // Archive facts that have been absent for >= STALE_THRESHOLD syncs
+    const keysToArchive = Object.entries(updatedStaleCounters)
+      .filter(([, count]) => count >= STALE_THRESHOLD)
+      .map(([key]) => key);
+
+    let factsArchived = 0;
+    for (const key of keysToArchive) {
+      // Exact key match — use the key as a literal LIKE pattern (no wildcards)
+      const matches = findFactsByKeyPattern(scope.knowledgePrimaryKey, key);
+      for (const match of matches) {
+        if (match.key === key) {
+          const archived = archiveFact(match.id);
+          if (archived) factsArchived++;
+        }
+      }
+      // Remove archived key from stale tracking
+      delete updatedStaleCounters[key];
+    }
+
+    if (factsArchived > 0) {
+      console.log(`[spotify-sync] archived ${factsArchived} stale facts`);
+    }
+
+    // ── Write current facts ─────────────────────────────────────────────
     const username = existingDraft?.username ?? profile.display_name ?? profile.id;
     const report = await batchCreateFacts(
       allFacts,
@@ -98,18 +179,6 @@ export async function syncSpotify(
 
     // ── Taste-shift event detection ───────────────────────────────────
     const currentTop5Ids = shortTermArtists.map((a) => a.id);
-
-    // Parse previous cursor
-    let previousTop5: string[] = [];
-    if (connector.syncCursor) {
-      try {
-        const cursor = JSON.parse(connector.syncCursor) as TasteShiftCursor;
-        previousTop5 = cursor.top5ArtistIds ?? [];
-      } catch {
-        // Invalid cursor — treat as first sync
-      }
-    }
-
     let eventsCreated = 0;
 
     // First sync (no previous cursor): store baseline, no event
@@ -129,7 +198,12 @@ export async function syncSpotify(
     }
 
     // ── Update lastSync + syncCursor ──────────────────────────────────
-    const newCursor: TasteShiftCursor = { top5ArtistIds: currentTop5Ids };
+    const newCursor: TasteShiftCursor = {
+      top5ArtistIds: currentTop5Ids,
+      staleSinceSync: Object.keys(updatedStaleCounters).length > 0
+        ? updatedStaleCounters
+        : undefined,
+    };
 
     db.update(connectors)
       .set({
@@ -143,6 +217,7 @@ export async function syncSpotify(
     return {
       factsCreated: report.factsWritten,
       factsUpdated: 0,
+      factsArchived,
       eventsCreated,
     };
   } catch (error) {
