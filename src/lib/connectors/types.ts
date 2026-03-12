@@ -55,6 +55,7 @@ export type ImportReport = {
   factsWritten: number;
   factsSkipped: number;
   errors: Array<{ file?: string; key?: string; reason: string }>;
+  createdFacts: Array<{ key: string; factId: string }>;
 };
 
 export type ConnectorStatusRow = {

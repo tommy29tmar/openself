@@ -34,6 +34,13 @@ vi.mock("@/lib/connectors/import-event", () => ({
   writeImportEvent: (...args: any[]) => mockWriteImportEvent(...args),
 }));
 
+const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
+const mockCreateConnector = vi.fn().mockReturnValue({ id: "conn-li-1", createdAt: "2026-01-01", updatedAt: "2026-01-01" });
+vi.mock("@/lib/connectors/connector-service", () => ({
+  getConnectorStatus: (...args: any[]) => mockGetConnectorStatus(...args),
+  createConnector: (...args: any[]) => mockCreateConnector(...args),
+}));
+
 const ownerScope = {
   cognitiveOwnerKey: "owner-1",
   knowledgePrimaryKey: "sess-1",
@@ -133,6 +140,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
       ownerScope,
       "alice",
       "en",
+      "conn-li-1",
     );
   });
 
@@ -154,6 +162,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
       ownerScope,
       "bob",
       "en",
+      "conn-li-1",
     );
   });
 
@@ -175,6 +184,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
       ownerScope,
       "draft",
       "en",
+      "conn-li-1",
     );
   });
 
@@ -197,6 +207,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
       ownerScope,
       "alice",
       "it",
+      "conn-li-1",
     );
   });
 
@@ -219,6 +230,7 @@ describe("POST /api/connectors/linkedin-zip/import", () => {
       ownerScope,
       "alice",
       "en",
+      "conn-li-1",
     );
   });
 

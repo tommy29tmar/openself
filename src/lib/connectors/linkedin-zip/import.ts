@@ -1,4 +1,5 @@
 import { fromBuffer } from "yauzl-promise";
+import { randomUUID } from "node:crypto";
 import { parseLinkedInCsv, type CsvRow } from "./parser";
 import {
   mapProfile,
@@ -12,6 +13,7 @@ import {
 } from "./mapper";
 import { batchCreateFacts } from "../connector-fact-writer";
 import { insertEvent } from "@/lib/services/episodic-service";
+import { sqlite } from "@/lib/db";
 import {
   mapCertificationsToEpisodic,
   mapArticlesToEpisodic,
@@ -70,6 +72,7 @@ export async function importLinkedInZip(
   scope: OwnerScope,
   username: string,
   factLanguage: string,
+  connectorId?: string,
 ): Promise<ImportReport> {
   const allFacts: FactInput[] = [];
 
@@ -86,6 +89,7 @@ export async function importLinkedInZip(
           reason: `Invalid ZIP: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
+      createdFacts: [],
     };
   }
 
@@ -146,7 +150,7 @@ export async function importLinkedInZip(
         const events = mapFn(rows);
         for (const input of events) {
           try {
-            insertEvent({
+            const eventId = insertEvent({
               ownerKey: scope.cognitiveOwnerKey,
               sessionId: "connector:linkedin_zip",
               eventAtUnix: input.eventAtUnix,
@@ -156,6 +160,14 @@ export async function importLinkedInZip(
               source: "linkedin_zip",
               externalId: input.externalId,
             });
+            if (connectorId) {
+              sqlite
+                .prepare(
+                  `INSERT OR IGNORE INTO connector_items (id, connector_id, external_id, event_id, last_seen_at)
+                   VALUES (?, ?, ?, ?, datetime('now'))`,
+                )
+                .run(randomUUID(), connectorId, `event:${input.externalId}`, eventId);
+            }
             eventsWritten++;
           } catch (err) {
             // Silently skip duplicate events (UNIQUE constraint on externalId)
@@ -176,17 +188,17 @@ export async function importLinkedInZip(
   }
 
   if (allFacts.length === 0) {
-    return { factsWritten: 0, factsSkipped: 0, errors: [] };
+    return { factsWritten: 0, factsSkipped: 0, errors: [], createdFacts: [] };
   }
 
-  const report = await batchCreateFacts(allFacts, scope, username, factLanguage);
+  const report = await batchCreateFacts(allFacts, scope, username, factLanguage, connectorId);
 
   if (report.factsWritten > 0) {
     const positionCount = allFacts.filter((f) => f.category === "experience").length;
     const skillCount = allFacts.filter((f) => f.category === "skill").length;
     const certCount = allFacts.filter((f) => f.category === "achievement").length;
 
-    insertEvent({
+    const milestoneId = insertEvent({
       ownerKey: scope.cognitiveOwnerKey,
       sessionId: scope.knowledgePrimaryKey,
       eventAtUnix: Math.floor(Date.now() / 1000),
@@ -196,6 +208,14 @@ export async function importLinkedInZip(
       entities: [],
       source: "linkedin_zip",
     });
+    if (connectorId) {
+      sqlite
+        .prepare(
+          `INSERT OR IGNORE INTO connector_items (id, connector_id, external_id, event_id, last_seen_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`,
+        )
+        .run(randomUUID(), connectorId, `event:linkedin-import-${Date.now()}`, milestoneId);
+    }
   }
 
   return report;

@@ -7,6 +7,7 @@ import { acquireImportLock, releaseImportLock } from "@/lib/connectors/idempoten
 import { connectorError } from "@/lib/connectors/api-errors";
 import { writeImportEvent } from "@/lib/connectors/import-event";
 import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
+import { getConnectorStatus, createConnector } from "@/lib/connectors/connector-service";
 
 const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -49,7 +50,17 @@ export async function POST(req: NextRequest) {
     }
 
     const factLanguage = getFactLanguage(scope.knowledgePrimaryKey) ?? "en";
-    const report = await importLinkedInZip(buffer, scope, username, factLanguage);
+
+    // Ensure LinkedIn connector row exists (LinkedIn ZIP never had one)
+    const connectorRows = getConnectorStatus(ownerKey);
+    let linkedinConnector = connectorRows.find(c => c.connectorType === "linkedin_zip");
+    if (!linkedinConnector) {
+      const created = createConnector(ownerKey, "linkedin_zip", {});
+      linkedinConnector = { id: created.id, connectorType: "linkedin_zip", status: "connected", enabled: true, lastSync: null, lastError: null, createdAt: created.createdAt, updatedAt: created.updatedAt };
+    }
+    const connectorId = linkedinConnector.id;
+
+    const report = await importLinkedInZip(buffer, scope, username, factLanguage, connectorId);
 
     // Write pending import event flag for agent reaction
     if (report.factsWritten > 0) {

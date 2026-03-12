@@ -173,6 +173,7 @@ export async function syncSpotify(
       scope,
       username,
       factLanguage,
+      connectorId,
     );
 
     // ── Taste-shift event detection ───────────────────────────────────

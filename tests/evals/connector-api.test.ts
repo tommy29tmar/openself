@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
 const mockDisconnectConnector = vi.fn();
+const mockDisconnectConnectorWithPurge = vi.fn().mockReturnValue({ purgeResult: undefined });
 const mockGetConnectorById = vi.fn().mockReturnValue(null);
 
 vi.mock("@/lib/connectors/route-auth", () => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/connectors/route-auth", () => ({
 vi.mock("@/lib/connectors/connector-service", () => ({
   getConnectorStatus: (...args: any[]) => mockGetConnectorStatus(...args),
   disconnectConnector: (...args: any[]) => mockDisconnectConnector(...args),
+  disconnectConnectorWithPurge: (...args: any[]) => mockDisconnectConnectorWithPurge(...args),
   getConnectorById: (...args: any[]) => mockGetConnectorById(...args),
 }));
 
@@ -28,6 +30,24 @@ vi.mock("@/lib/db/schema", () => ({
     id: "id", ownerKey: "owner_key", connectorType: "connector_type",
     status: "status", enabled: "enabled",
   },
+}));
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getActiveFacts: vi.fn().mockReturnValue([]),
+}));
+vi.mock("@/lib/services/page-service", () => ({
+  getDraft: vi.fn().mockReturnValue(null),
+  upsertDraft: vi.fn(),
+  computeConfigHash: vi.fn().mockReturnValue("hash"),
+}));
+vi.mock("@/lib/services/page-projection", () => ({
+  projectCanonicalConfig: vi.fn().mockReturnValue({}),
+}));
+vi.mock("@/lib/services/preferences-service", () => ({
+  getFactLanguage: vi.fn().mockReturnValue("en"),
+}));
+vi.mock("@/lib/flags", () => ({
+  PROFILE_ID_CANONICAL: true,
 }));
 
 const ownerScope = {
@@ -125,7 +145,7 @@ describe("POST /api/connectors/[id]/disconnect", () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.code).toBe("FORBIDDEN");
-    expect(mockDisconnectConnector).not.toHaveBeenCalled();
+    expect(mockDisconnectConnectorWithPurge).not.toHaveBeenCalled();
   });
 
   it("returns 200 when connector belongs to caller", async () => {
@@ -144,6 +164,6 @@ describe("POST /api/connectors/[id]/disconnect", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(mockDisconnectConnector).toHaveBeenCalledWith("c1");
+    expect(mockDisconnectConnectorWithPurge).toHaveBeenCalledWith("c1", "owner-1", false);
   });
 });

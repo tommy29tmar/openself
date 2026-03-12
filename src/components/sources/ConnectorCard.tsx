@@ -15,6 +15,7 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [feedUrl, setFeedUrl] = useState("");
   const [changingUrl, setChangingUrl] = useState(false);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -54,21 +55,31 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
     }
   };
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = async (purge: boolean) => {
     if (!status?.id || disconnecting) return;
     setDisconnecting(true);
     try {
       const url = definition.disconnectUrl.replace("{id}", String(status.id));
-      const res = await fetch(url, { method: "POST" });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purge }),
+      });
       if (res.ok) {
+        const data = await res.json();
+        if (purge && data.factsRemoved > 0) {
+          showMessage(`Removed ${data.factsRemoved} facts, ${data.eventsRemoved} events`, "success");
+        }
         onRefresh();
       } else {
-        showMessage("Disconnect failed", "error");
+        const data = await res.json().catch(() => ({}));
+        showMessage(data.error ?? "Disconnect failed", "error");
       }
     } catch {
       showMessage("Network error", "error");
     } finally {
       setDisconnecting(false);
+      setConfirmingDisconnect(false);
     }
   };
 
@@ -130,6 +141,50 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
       setLoading(false);
     }
   };
+
+  const disconnectConfirmPanel = (
+    <div style={{
+      padding: "10px 12px",
+      borderRadius: 8,
+      background: "rgba(239,68,68,0.08)",
+      border: "1px solid rgba(239,68,68,0.2)",
+    }}>
+      <p style={{ fontSize: 11, color: "#e8e4de", marginBottom: 8 }}>
+        Remove imported content too?
+        {definition.authType === "zip_upload" && (
+          <span style={{ display: "block", color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+            Data will require re-uploading the ZIP to restore.
+          </span>
+        )}
+      </p>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => handleDisconnect(false)}
+          disabled={disconnecting}
+          style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
+        >
+          {disconnecting ? "\u2026" : "Keep data"}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleDisconnect(true)}
+          disabled={disconnecting}
+          style={{ ...btnStyle("rgba(239,68,68,0.25)", "#f87171"), flex: 1 }}
+        >
+          {disconnecting ? "\u2026" : "Remove all"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirmingDisconnect(false)}
+          disabled={disconnecting}
+          style={btnStyle("transparent", "rgba(255,255,255,0.3)")}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -227,13 +282,16 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
               {loading ? "Syncing\u2026" : "Sync Now"}
             </button>
           )}
-          <button
-            onClick={handleDisconnect}
-            disabled={disconnecting || loading}
-            style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
-          >
-            {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
-          </button>
+          {confirmingDisconnect ? disconnectConfirmPanel : (
+            <button
+              type="button"
+              onClick={() => setConfirmingDisconnect(true)}
+              disabled={disconnecting || loading}
+              style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
+            >
+              Disconnect
+            </button>
+          )}
         </div>
       )}
 
@@ -250,13 +308,16 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
                 {loading ? "Syncing\u2026" : "Sync Now"}
               </button>
             )}
-            <button
-              onClick={handleDisconnect}
-              disabled={disconnecting || loading}
-              style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
-            >
-              {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
-            </button>
+            {confirmingDisconnect ? disconnectConfirmPanel : (
+              <button
+                type="button"
+                onClick={() => setConfirmingDisconnect(true)}
+                disabled={disconnecting || loading}
+                style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
+              >
+                Disconnect
+              </button>
+            )}
           </div>
           {changingUrl ? (
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -314,13 +375,16 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
             >
               Reconnect
             </button>
-            <button
-              onClick={handleDisconnect}
-              disabled={disconnecting}
-              style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
-            >
-              {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
-            </button>
+            {confirmingDisconnect ? disconnectConfirmPanel : (
+              <button
+                type="button"
+                onClick={() => setConfirmingDisconnect(true)}
+                disabled={disconnecting}
+                style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
+              >
+                Disconnect
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -341,13 +405,16 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
                 {loading ? "Syncing\u2026" : "Retry Sync"}
               </button>
             )}
-            <button
-              onClick={handleDisconnect}
-              disabled={disconnecting || loading}
-              style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
-            >
-              {disconnecting ? "Disconnecting\u2026" : "Disconnect"}
-            </button>
+            {confirmingDisconnect ? disconnectConfirmPanel : (
+              <button
+                type="button"
+                onClick={() => setConfirmingDisconnect(true)}
+                disabled={disconnecting || loading}
+                style={btnStyle("rgba(239,68,68,0.15)", "#f87171")}
+              >
+                Disconnect
+              </button>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <input
@@ -382,15 +449,27 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
         </div>
       )}
 
-      {/* Re-import button for zip — only shown when already imported (isConnected) */}
+      {/* Re-import + disconnect for zip — only shown when already imported (isConnected) */}
       {definition.authType === "zip_upload" && isConnected && (
-        <button
-          onClick={handleImport}
-          disabled={loading}
-          style={{ ...btnStyle("rgba(255,255,255,0.06)", "#e8e4de"), marginTop: 8, width: "100%" }}
-        >
-          {loading ? "Importing\u2026" : "Re-import ZIP"}
-        </button>
+        <div style={{ marginTop: 8 }}>
+          <button
+            onClick={handleImport}
+            disabled={loading}
+            style={{ ...btnStyle("rgba(255,255,255,0.06)", "#e8e4de"), width: "100%", marginBottom: 8 }}
+          >
+            {loading ? "Importing\u2026" : "Re-import ZIP"}
+          </button>
+          {confirmingDisconnect ? disconnectConfirmPanel : (
+            <button
+              type="button"
+              onClick={() => setConfirmingDisconnect(true)}
+              disabled={disconnecting || loading}
+              style={{ ...btnStyle("rgba(239,68,68,0.15)", "#f87171"), width: "100%" }}
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
       )}
 
       {message && (

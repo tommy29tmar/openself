@@ -112,7 +112,7 @@ const mockBatchCreateFacts = vi.mocked(batchCreateFacts);
 describe("syncStrava", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockBatchCreateFacts.mockResolvedValue({ factsWritten: 3, factsSkipped: 0, errors: [] });
+    mockBatchCreateFacts.mockResolvedValue({ factsWritten: 3, factsSkipped: 0, errors: [], createdFacts: [] });
     mockBatchRecordEvents.mockResolvedValue({ eventsWritten: 2, eventsSkipped: 0, errors: [] });
   });
 

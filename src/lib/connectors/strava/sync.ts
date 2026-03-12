@@ -96,6 +96,7 @@ export async function syncStrava(
       scope,
       username,
       factLanguage,
+      connectorId,
     );
 
     // ── Episodic events ──────────────────────────────────────────────
