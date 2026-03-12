@@ -21,7 +21,7 @@ export type UpsertStateInput = {
   personalizedContent: string;
   factsHash: string;
   soulHash: string;
-  source: "live" | "proposal";
+  source: "live" | "proposal" | "agent";
 };
 
 function rowToState(row: Record<string, unknown>): SectionCopyStateRow {
