@@ -1,10 +1,12 @@
 import type { OwnerScope } from "@/lib/auth/session";
 import type { ImportReport } from "./types";
-import { createFact, getActiveFacts } from "@/lib/services/kb-service";
+import { createFact, getActiveFacts, getFactByKey } from "@/lib/services/kb-service";
 import { getDraft, upsertDraft, computeConfigHash } from "@/lib/services/page-service";
 import { projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
+import { sqlite } from "@/lib/db";
+import { randomUUID } from "node:crypto";
 
 type FactInput = {
   category: string;
@@ -26,8 +28,10 @@ export async function batchCreateFacts(
   scope: OwnerScope,
   username: string,
   factLanguage: string,
+  connectorId?: string,
 ): Promise<ImportReport> {
-  const report: ImportReport = { factsWritten: 0, factsSkipped: 0, errors: [] };
+  const createdFacts: Array<{ key: string; factId: string }> = [];
+  const report: ImportReport = { factsWritten: 0, factsSkipped: 0, errors: [], createdFacts: [] };
 
   if (inputs.length === 0) return report;
 
@@ -42,21 +46,45 @@ export async function batchCreateFacts(
   // Write facts sequentially (SQLite write contention avoidance)
   for (const input of inputs) {
     try {
-      await createFact(
+      const fact = await createFact(
         { ...input, source: "connector" },
         scope.knowledgePrimaryKey,
         scope.cognitiveOwnerKey,
         { actor: "connector", visibility: "public" },
       );
+      createdFacts.push({ key: input.key, factId: fact.id });
       report.factsWritten++;
     } catch (error) {
       report.factsSkipped++;
+      // Still link existing fact to connector_items (handles re-sync duplicates)
+      if (connectorId) {
+        try {
+          const existing = getFactByKey(scope.knowledgePrimaryKey, input.category, input.key);
+          if (existing) createdFacts.push({ key: input.key, factId: existing.id });
+        } catch { /* best-effort */ }
+      }
       report.errors.push({
         key: input.key,
         reason: error instanceof Error ? error.message : String(error),
       });
     }
   }
+
+  // Write connector_items fact_id linkage
+  if (connectorId) {
+    for (const cf of createdFacts) {
+      sqlite
+        .prepare(
+          `INSERT INTO connector_items (id, connector_id, external_id, fact_id, last_seen_at)
+           VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(connector_id, external_id) DO UPDATE SET
+             fact_id = excluded.fact_id, last_seen_at = excluded.last_seen_at`
+        )
+        .run(randomUUID(), connectorId, `fact:${cf.key}`, cf.factId);
+    }
+  }
+
+  report.createdFacts = createdFacts;
 
   // Single recompose after all facts (mirrors tools.ts recomposeAfterMutation)
   try {

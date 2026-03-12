@@ -86,6 +86,7 @@ export async function importLinkedInZip(
           reason: `Invalid ZIP: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
+      createdFacts: [],
     };
   }
 
@@ -176,7 +177,7 @@ export async function importLinkedInZip(
   }
 
   if (allFacts.length === 0) {
-    return { factsWritten: 0, factsSkipped: 0, errors: [] };
+    return { factsWritten: 0, factsSkipped: 0, errors: [], createdFacts: [] };
   }
 
   const report = await batchCreateFacts(allFacts, scope, username, factLanguage);
