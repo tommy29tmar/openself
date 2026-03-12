@@ -261,6 +261,7 @@ graph TB
     %% Subconscious flows
     T1 -.->|Trigger| SessionCompaction
     SessionCompaction -.->|Distills| T2
+    T2 -.->|PREVIOUS CONTEXT| SessionCompaction
     SessionCompaction -.->|Extracts patterns| T3
 
     T4 -.->|chat events| DreamCycle
