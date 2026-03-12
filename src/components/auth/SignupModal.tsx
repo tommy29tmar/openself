@@ -137,7 +137,7 @@ export function SignupModal({ open, onClose, initialUsername, language = "en" }:
             />
             {username && (
               <p className="mt-1 text-xs text-muted-foreground">
-                openself.dev/{username}
+                /{username}
               </p>
             )}
           </div>
