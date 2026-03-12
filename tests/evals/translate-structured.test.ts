@@ -128,7 +128,7 @@ describe("translatePageContent — structured output (generateObject)", () => {
     ];
 
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
       usage: { promptTokens: 100, completionTokens: 50 },
     } as any);
 
@@ -141,7 +141,7 @@ describe("translatePageContent — structured output (generateObject)", () => {
 
   it("passes a Zod schema to generateObject", async () => {
     mockGenerateObject.mockResolvedValue({
-      object: [],
+      object: { sections: [] },
       usage: { promptTokens: 10, completionTokens: 5 },
     } as any);
 
@@ -170,7 +170,7 @@ describe("translatePageContent — structured output (generateObject)", () => {
     ];
 
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
       usage: { promptTokens: 100, completionTokens: 50 },
     } as any);
 
@@ -203,13 +203,13 @@ describe("translatePageContent — structured output (generateObject)", () => {
     // Verify stripCodeFences is not exported — import would fail
     // We indirectly test this by confirming generateObject is used (no text parsing needed)
     mockGenerateObject.mockResolvedValue({
-      object: [
+      object: { sections: [
         {
           sectionId: "hero-1",
           type: "hero",
           content: { name: "Marco Rossi", tagline: "Welcome" },
         },
-      ],
+      ] },
     } as any);
 
     const config = makeConfig();
@@ -231,7 +231,7 @@ describe("translatePageContent — structured output (generateObject)", () => {
     ];
 
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();

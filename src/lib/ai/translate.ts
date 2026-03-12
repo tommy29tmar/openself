@@ -20,13 +20,15 @@ type SectionPayload = {
 };
 
 /** Zod schema for structured translation output. */
-const TranslationResultSchema = z.array(
-  z.object({
-    sectionId: z.string().min(1),
-    type: z.string().min(1),
-    content: z.record(z.string(), z.unknown()),
-  }),
-);
+export const TranslationResultSchema = z.object({
+  sections: z.array(
+    z.object({
+      sectionId: z.string().min(1),
+      type: z.string().min(1),
+      content: z.record(z.string(), z.unknown()),
+    }),
+  ),
+});
 
 /** Compute SHA-256 hex digest of the translatable sections JSON. */
 function computeContentHash(sections: SectionPayload[]): string {
@@ -204,7 +206,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
       prompt,
     });
 
-    const translated: SectionPayload[] = result.object;
+    const translated: SectionPayload[] = result.object.sections;
 
     // Store in cache (best-effort, don't fail translation on cache write error)
     try {

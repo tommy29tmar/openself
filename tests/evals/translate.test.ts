@@ -164,7 +164,7 @@ describe("translatePageContent", () => {
       },
     ];
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();
@@ -198,7 +198,7 @@ describe("translatePageContent", () => {
     ];
 
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();
@@ -227,7 +227,7 @@ describe("translatePageContent", () => {
   });
 
   it("does not send social and footer sections to the LLM", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
@@ -249,7 +249,7 @@ describe("translatePageContent", () => {
     ];
 
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();
@@ -283,7 +283,7 @@ describe("translatePageContent", () => {
   });
 
   it("preserves presence and style through translation", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig({ surface: "clay", voice: "narrative", light: "night", style: { primaryColor: "#ff0000", layout: "centered" } });
     const result = await translatePageContent(config, "en", "it");
@@ -295,7 +295,7 @@ describe("translatePageContent", () => {
   });
 
   it("includes target and source language names in the prompt", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "de", "it");
@@ -306,7 +306,7 @@ describe("translatePageContent", () => {
   });
 
   it("instructs to keep tech acronyms in English", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "de", "it");
@@ -404,7 +404,7 @@ describe("translatePageContent — cache behavior", () => {
     ];
 
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();
@@ -424,7 +424,7 @@ describe("translatePageContent — cache behavior", () => {
   });
 
   it("logs cache_miss event on cache miss", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
@@ -469,11 +469,11 @@ describe("translatePageContent — cache behavior", () => {
   it("different content triggers new LLM call (cache miss)", async () => {
     // First call: cache miss, LLM called
     mockGenerateObject.mockResolvedValue({
-      object: [{
+      object: { sections: [{
         sectionId: "hero-1",
         type: "hero",
         content: { name: "Marco Rossi", tagline: "Welcome" },
-      }],
+      }] },
     } as any);
 
     const config1 = makeConfig();
@@ -510,7 +510,7 @@ describe("translatePageContent — cache behavior", () => {
       },
     ];
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();
@@ -532,7 +532,7 @@ describe("translatePageContent — cache behavior", () => {
       },
     ];
     mockGenerateObject.mockResolvedValue({
-      object: translatedPayload,
+      object: { sections: translatedPayload },
     } as any);
 
     const config = makeConfig();
@@ -594,11 +594,11 @@ describe("translatePageContent — source language cache isolation", () => {
   it("changing source language causes cache miss even with same content and target", async () => {
     // First call: it→en, cache miss, LLM translates
     mockGenerateObject.mockResolvedValue({
-      object: [{
+      object: { sections: [{
         sectionId: "hero-1",
         type: "hero",
         content: { name: "Marco Rossi", tagline: "Welcome" },
-      }],
+      }] },
     } as any);
 
     const config = makeConfig();
@@ -639,7 +639,7 @@ describe("translatePageContent — source language cache isolation", () => {
   });
 
   it("null source language is normalized to 'unknown' for cache key", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", null);
@@ -658,7 +658,7 @@ describe("translatePageContent — source language cache isolation", () => {
   });
 
   it("cache write uses getModelIdForTier('fast') not getModelId()", async () => {
-    mockGenerateObject.mockResolvedValue({ object: [] } as any);
+    mockGenerateObject.mockResolvedValue({ object: { sections: [] } } as any);
 
     const config = makeConfig();
     await translatePageContent(config, "en", "it");
