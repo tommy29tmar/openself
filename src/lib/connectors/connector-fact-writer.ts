@@ -61,7 +61,9 @@ export async function batchCreateFacts(
         try {
           const existing = getFactByKey(scope.knowledgePrimaryKey, input.category, input.key);
           if (existing) createdFacts.push({ key: input.key, factId: existing.id });
-        } catch { /* best-effort */ }
+        } catch (linkErr) {
+          console.warn("[connector-fact-writer] failed to link existing fact:", linkErr);
+        }
       }
       report.errors.push({
         key: input.key,

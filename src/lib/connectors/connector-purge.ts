@@ -30,6 +30,14 @@ export function purgeConnectorData(
     );
   }
 
+  // Defense-in-depth: verify connector belongs to this owner
+  const connector = sqlite
+    .prepare(`SELECT owner_key FROM connectors WHERE id = ?`)
+    .get(connectorId) as { owner_key: string | null } | undefined;
+  if (!connector || connector.owner_key !== ownerKey) {
+    throw new Error("Connector not found or does not belong to this owner.");
+  }
+
   return sqlite.transaction(() => {
     // 1. Collect IDs to delete
     const factIds = sqlite

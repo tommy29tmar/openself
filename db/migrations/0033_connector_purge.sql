@@ -3,6 +3,9 @@
 -- Creates connector_items rows for all connector-created facts and events
 -- that aren't yet tracked. Uses facts.profile_id = connectors.owner_key join.
 
+-- Index for event_id lookups (mirrors existing idx_connector_items_fact for fact_id)
+CREATE INDEX IF NOT EXISTS idx_connector_items_event ON connector_items(event_id) WHERE event_id IS NOT NULL;
+
 -- Phase 1: Create connector_items for orphan connector facts (all 5 connectors)
 INSERT OR IGNORE INTO connector_items (id, connector_id, external_id, fact_id, last_seen_at)
 SELECT
