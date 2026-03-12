@@ -24,6 +24,7 @@ const dotStyle: React.CSSProperties = {
 
 export function Experience({ content, variant }: SectionProps<ExperienceContent>) {
     const { items = [], title, currentLabel } = content;
+    const badgeLabel = currentLabel || "Current";
 
     if (!items.length) return null;
 
@@ -48,12 +49,12 @@ export function Experience({ content, variant }: SectionProps<ExperienceContent>
                                 <h3 style={{ fontSize: 17, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.25, margin: 0 }}>
                                     {item.title}{item.company ? ` — ${item.company}` : ""}
                                 </h3>
-                                {item.period && (
+                                {(item.period || item.current) && (
                                     <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 4 }}>
                                         {item.period}
-                                        {item.current && (
+                                        {item.current && !(item.period?.trimEnd().endsWith(badgeLabel)) && (
                                             <span style={{ marginLeft: 8, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--page-accent)" }}>
-                                                {currentLabel || "Current"}
+                                                {badgeLabel}
                                             </span>
                                         )}
                                     </div>
@@ -90,9 +91,9 @@ export function Experience({ content, variant }: SectionProps<ExperienceContent>
                                     </h3>
                                     <span className="text-sm text-[var(--page-fg-secondary)] mt-1 md:mt-0 shrink-0">
                                         {item.period}
-                                        {item.current && (
+                                        {item.current && !(item.period?.trimEnd().endsWith(badgeLabel)) && (
                                             <span className="ml-2 text-xs uppercase tracking-widest text-[var(--page-accent)]">
-                                                {currentLabel || "Current"}
+                                                {badgeLabel}
                                             </span>
                                         )}
                                     </span>
