@@ -17,7 +17,10 @@ import {
   getCachedCopy,
   putCachedCopy,
 } from "@/lib/services/section-cache-service";
-import { upsertState } from "@/lib/services/section-copy-state-service";
+import {
+  getActiveCopy,
+  upsertState,
+} from "@/lib/services/section-copy-state-service";
 import { logEvent } from "@/lib/services/event-service";
 
 import { ARCHETYPE_STRATEGIES } from "@/lib/agent/archetypes";
@@ -61,6 +64,12 @@ export async function personalizeSection(
 
   if (!isPersonalizableSection(section.type)) return null;
   if (!soulCompiled) return null;
+
+  // Skip if section already has agent-curated content (don't overwrite explicit edits)
+  const existingState = getActiveCopy(ownerKey, section.type, language);
+  if (existingState?.source === "agent") {
+    return null; // Agent curations are highest priority — never overwrite
+  }
 
   const schema = getPersonalizerSchema(section.type);
   if (!schema) return null;

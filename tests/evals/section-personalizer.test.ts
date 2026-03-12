@@ -7,6 +7,7 @@ const {
   mockGetModelForTier,
   mockGetCachedCopy,
   mockPutCachedCopy,
+  mockGetActiveCopy,
   mockUpsertState,
   mockLogEvent,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   mockGetModelForTier: vi.fn(() => "mock-model"),
   mockGetCachedCopy: vi.fn(),
   mockPutCachedCopy: vi.fn(),
+  mockGetActiveCopy: vi.fn(),
   mockUpsertState: vi.fn(),
   mockLogEvent: vi.fn(),
 }));
@@ -38,6 +40,7 @@ vi.mock("@/lib/services/section-cache-service", () => ({
 
 // Mock state service
 vi.mock("@/lib/services/section-copy-state-service", () => ({
+  getActiveCopy: mockGetActiveCopy,
   upsertState: mockUpsertState,
 }));
 
@@ -97,6 +100,7 @@ beforeEach(() => {
   mockGetModelForTier.mockReset().mockReturnValue("mock-model");
   mockGetCachedCopy.mockReset();
   mockPutCachedCopy.mockReset();
+  mockGetActiveCopy.mockReset();
   mockUpsertState.mockReset();
   mockLogEvent.mockReset();
 });
@@ -185,6 +189,52 @@ describe("personalizeSection", () => {
 
     expect(result).toBeNull();
     expect(mockGenerateObject).not.toHaveBeenCalled();
+  });
+
+  it("skips personalization when section has agent-curated content", async () => {
+    mockGetActiveCopy.mockReturnValue({
+      id: 1,
+      ownerKey: "test-owner",
+      sectionType: "bio",
+      language: "en",
+      personalizedContent: JSON.stringify({ description: "Agent-curated bio." }),
+      factsHash: "abc",
+      soulHash: "def",
+      approvedAt: null,
+      source: "agent",
+    });
+
+    const result = await personalizeSection(makeInput());
+
+    expect(result).toBeNull();
+    // Neither cache nor LLM should be consulted
+    expect(mockGetCachedCopy).not.toHaveBeenCalled();
+    expect(mockGenerateObject).not.toHaveBeenCalled();
+    // getActiveCopy should have been called with correct args
+    expect(mockGetActiveCopy).toHaveBeenCalledWith("test-owner", "bio", "en");
+  });
+
+  it("proceeds normally when existing copy has source=live (not agent)", async () => {
+    mockGetActiveCopy.mockReturnValue({
+      id: 1,
+      ownerKey: "test-owner",
+      sectionType: "bio",
+      language: "en",
+      personalizedContent: JSON.stringify({ description: "Live bio." }),
+      factsHash: "abc",
+      soulHash: "def",
+      approvedAt: null,
+      source: "live",
+    });
+    mockGetCachedCopy.mockReturnValue(null);
+    mockGenerateObject.mockResolvedValue({
+      object: { description: "Fresh LLM bio." },
+    });
+
+    const result = await personalizeSection(makeInput());
+
+    expect(result).toEqual({ description: "Fresh LLM bio." });
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
 
   it("returns null when no relevant facts", async () => {
