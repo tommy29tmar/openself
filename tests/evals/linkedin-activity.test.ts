@@ -17,7 +17,7 @@ describe("mapCertificationsToEpisodic", () => {
     const result = mapCertificationsToEpisodic(rows);
     expect(result.length).toBe(1);
     expect(result[0].actionType).toBe("certification");
-    expect(result[0].source).toBe("linkedin");
+    expect(result[0].source).toBe("linkedin_zip");
     expect(result[0].narrativeSummary).toContain("AWS Solutions Architect");
     expect(result[0].narrativeSummary).toContain("Amazon");
     expect(result[0].eventAtUnix).toBeGreaterThan(0);
@@ -106,7 +106,7 @@ describe("mapArticlesToEpisodic", () => {
     const result = mapArticlesToEpisodic(rows);
     expect(result.length).toBe(1);
     expect(result[0].actionType).toBe("publication");
-    expect(result[0].source).toBe("linkedin");
+    expect(result[0].source).toBe("linkedin_zip");
     expect(result[0].narrativeSummary).toContain("My Tech Journey");
     expect(result[0].externalId).toMatch(/^li:article:/);
   });
