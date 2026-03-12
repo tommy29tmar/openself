@@ -70,6 +70,14 @@ export function purgeConnectorData(
         )
         .run(...chunk);
 
+      // Clean up fact_display_overrides (no FK cascade, would become orphaned)
+      sqlite
+        .prepare(
+          `DELETE FROM fact_display_overrides
+           WHERE fact_id IN (${placeholders})`,
+        )
+        .run(...chunk);
+
       const result = sqlite
         .prepare(
           `DELETE FROM facts WHERE id IN (${placeholders})`,
@@ -90,6 +98,10 @@ export function purgeConnectorData(
         .run(...chunk);
       eventsDeleted += result.changes;
     }
+
+    // Note: episodic_pattern_proposals are NOT cleaned up here because
+    // Dream Cycle only processes source='chat' events — connector events
+    // never generate proposals, so there are no stale proposals to clean.
 
     // 4. Delete connector_items
     const ciResult = sqlite

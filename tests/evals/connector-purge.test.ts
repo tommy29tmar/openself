@@ -88,6 +88,17 @@ testSqlite.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE fact_display_overrides (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    fact_id TEXT NOT NULL,
+    overrides JSON NOT NULL DEFAULT '{}',
+    fact_value_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_fdo_fact ON fact_display_overrides(fact_id);
 `);
 
 vi.mock("@/lib/db", () => ({
@@ -111,6 +122,7 @@ describe("purgeConnectorData", () => {
     testSqlite.exec("DELETE FROM sync_log");
     testSqlite.exec("DELETE FROM connectors");
     testSqlite.exec("DELETE FROM jobs");
+    testSqlite.exec("DELETE FROM fact_display_overrides");
 
     // Seed a connected RSS connector
     testSqlite.prepare(`
@@ -166,7 +178,18 @@ describe("purgeConnectorData", () => {
     `).run(CONNECTOR_ID);
   });
 
-  it("deletes connector facts, events, connector_items, and sync_log", () => {
+  it("deletes connector facts, events, connector_items, sync_log, and display overrides", () => {
+    // Seed a display override for a connector fact
+    testSqlite.prepare(`
+      INSERT INTO fact_display_overrides (id, owner_key, fact_id, overrides, fact_value_hash)
+      VALUES ('fdo1', ?, 'f1', '{"title":"Custom"}', 'hash1')
+    `).run(OWNER);
+    // A display override for a user fact (must NOT be deleted)
+    testSqlite.prepare(`
+      INSERT INTO fact_display_overrides (id, owner_key, fact_id, overrides, fact_value_hash)
+      VALUES ('fdo2', ?, 'f3', '{"title":"User Custom"}', 'hash2')
+    `).run(OWNER);
+
     const result = purgeConnectorData(CONNECTOR_ID, OWNER);
 
     expect(result.factsDeleted).toBe(2);
@@ -189,6 +212,11 @@ describe("purgeConnectorData", () => {
     // sync_log gone
     const logs = testSqlite.prepare("SELECT id FROM sync_log").all();
     expect(logs).toHaveLength(0);
+
+    // Connector fact display overrides gone, user override intact
+    const overrides = testSqlite.prepare("SELECT id FROM fact_display_overrides").all();
+    expect(overrides).toHaveLength(1);
+    expect((overrides[0] as { id: string }).id).toBe("fdo2");
   });
 
   it("resets lastSync and syncCursor on the connector row", () => {
@@ -206,6 +234,62 @@ describe("purgeConnectorData", () => {
     `).run(JSON.stringify({ ownerKey: OWNER }));
 
     expect(() => purgeConnectorData(CONNECTOR_ID, OWNER)).toThrow(/sync.*in progress/i);
+  });
+
+  it("isolates purge to the target connector (cross-connector)", () => {
+    // Add a second connector with its own data
+    const OTHER_CONNECTOR = "conn-spotify-1";
+    testSqlite.prepare(`
+      INSERT INTO connectors (id, connector_type, owner_key, status)
+      VALUES (?, 'spotify', ?, 'connected')
+    `).run(OTHER_CONNECTOR, OWNER);
+
+    testSqlite.prepare(`
+      INSERT INTO facts (id, session_id, profile_id, category, key, value, source)
+      VALUES ('f-sp1', ?, ?, 'music', 'sp-artist-1', '{"title":"Artist"}', 'connector')
+    `).run(OWNER, OWNER);
+    testSqlite.prepare(`
+      INSERT INTO connector_items (id, connector_id, external_id, fact_id)
+      VALUES ('ci-sp1', ?, 'fact:sp-artist-1', 'f-sp1')
+    `).run(OTHER_CONNECTOR);
+
+    testSqlite.prepare(`
+      INSERT INTO episodic_events (id, owner_key, session_id, event_at_unix, event_at_human, action_type, narrative_summary, source, external_id)
+      VALUES ('e-sp1', ?, ?, 1710000010, '2026-03-10T00:00:10Z', 'music', 'Taste shift', 'spotify', 'sp-shift-1')
+    `).run(OWNER, OWNER);
+    testSqlite.prepare(`
+      INSERT INTO connector_items (id, connector_id, external_id, event_id)
+      VALUES ('ci-sp2', ?, 'sp-shift-1', 'e-sp1')
+    `).run(OTHER_CONNECTOR);
+
+    testSqlite.prepare(`
+      INSERT INTO sync_log (id, connector_id, status, facts_created)
+      VALUES ('sl-sp1', ?, 'success', 1)
+    `).run(OTHER_CONNECTOR);
+
+    // Purge only the RSS connector
+    const result = purgeConnectorData(CONNECTOR_ID, OWNER);
+
+    // RSS data gone
+    expect(result.factsDeleted).toBe(2);
+    expect(result.eventsDeleted).toBe(1);
+
+    // Spotify data untouched
+    const spotifyFacts = testSqlite.prepare("SELECT id FROM facts WHERE id = 'f-sp1'").all();
+    expect(spotifyFacts).toHaveLength(1);
+
+    const spotifyEvents = testSqlite.prepare("SELECT id FROM episodic_events WHERE id = 'e-sp1'").all();
+    expect(spotifyEvents).toHaveLength(1);
+
+    const spotifyItems = testSqlite.prepare("SELECT id FROM connector_items WHERE connector_id = ?").all(OTHER_CONNECTOR);
+    expect(spotifyItems).toHaveLength(2);
+
+    const spotifyLogs = testSqlite.prepare("SELECT id FROM sync_log WHERE connector_id = ?").all(OTHER_CONNECTOR);
+    expect(spotifyLogs).toHaveLength(1);
+
+    // User data untouched
+    const userFacts = testSqlite.prepare("SELECT id FROM facts WHERE id = 'f3'").all();
+    expect(userFacts).toHaveLength(1);
   });
 
   it("returns zero counts when connector has no data", () => {

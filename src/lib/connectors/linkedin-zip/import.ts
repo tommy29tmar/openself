@@ -214,7 +214,7 @@ export async function importLinkedInZip(
           `INSERT OR IGNORE INTO connector_items (id, connector_id, external_id, event_id, last_seen_at)
            VALUES (?, ?, ?, ?, datetime('now'))`,
         )
-        .run(randomUUID(), connectorId, `event:linkedin-import-${Date.now()}`, milestoneId);
+        .run(randomUUID(), connectorId, `event:${milestoneId}`, milestoneId);
     }
   }
 

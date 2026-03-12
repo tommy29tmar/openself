@@ -3050,9 +3050,10 @@ by the worker to populate the registry at startup.
 
 **Shared services:**
 - `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`, `updateConnectorCredentials`, `disconnectConnectorWithPurge`)
-- `connector-purge.ts` — `purgeConnectorData()` atomic hard-delete of all connector-imported data (facts, events, connector_items, sync_log) via relational joins on `connector_items`. Chunked deletes (500 per batch), ownership verification, sync-in-progress guard, resets `lastSync`/`syncCursor` for clean reconnect.
+- `connector-purge.ts` — `purgeConnectorData()` atomic hard-delete of all connector-imported data (facts, events, connector_items, sync_log, fact_display_overrides) via relational joins on `connector_items`. Chunked deletes (500 per batch), ownership verification, sync-in-progress guard, resets `lastSync`/`syncCursor` for clean reconnect.
 - `connector-encryption.ts` — AES-256-GCM encrypt/decrypt for OAuth tokens (key from `CONNECTOR_ENCRYPTION_KEY` env var)
-- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", visibility:"public", sequential writes + single recompose. Returns `createdFacts` array (key + factId) and writes `connector_items` provenance rows when `connectorId` is provided. Visibility override respects user-set `private`.
+- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", visibility:"public", sequential writes + single recompose via shared `recomposeDraft()`. Returns `createdFacts` array (key + factId) and writes `connector_items` provenance rows when `connectorId` is provided. Visibility override respects user-set `private`.
+- `recompose-draft.ts` — Shared `recomposeDraft(scope, username, fallbackLang)` helper used by `batchCreateFacts` and disconnect route. Idempotent (skips upsert if config hash matches).
 - `connector-event-writer.ts` — `batchRecordEvents()` with intra-batch dedup, chunked DB dedup (SQLite 999 param limit), per-event error isolation
 - `connector-sync-handler.ts` — Worker job handler, fans out by ownerKey (or single connector via `connectorId`), calls `syncFn` per active connector
 - `token-refresh.ts` — Shared `withTokenRefresh()` wrapper for OAuth connectors (Spotify, Strava). On `TokenExpiredError`: refresh → update encrypted credentials → retry once
@@ -3201,13 +3202,13 @@ When a user disconnects a connector, they can choose to keep their imported data
 **Orchestration** (`disconnectConnectorWithPurge` in `connector-service.ts`):
 1. **Disconnect first** — marks connector as disconnected (invisible to scheduler, prevents race with re-enqueue)
 2. **Purge if requested** — calls `purgeConnectorData()` for atomic data removal
-3. **Recompose** — API route triggers `recomposeAfterMutation()` if facts were deleted
+3. **Recompose** — API route triggers `recomposeDraft()` (shared helper in `recompose-draft.ts`) if facts were deleted
 
 **Purge logic** (`purgeConnectorData` in `connector-purge.ts`):
 ```
 Single SQLite transaction:
 1. Collect factIds + eventIds from connector_items (relational join, no key prefix heuristics)
-2. Hard-delete facts (chunked 500, detach parent_fact_id children first)
+2. Hard-delete facts (chunked 500, detach parent_fact_id children first, clean up fact_display_overrides)
 3. Hard-delete episodic events (chunked 500, FTS5 AFTER DELETE trigger handles cleanup)
 4. Delete connector_items rows
 5. Delete sync_log entries
@@ -3218,8 +3219,10 @@ Single SQLite transaction:
 - **Sync-in-progress:** `hasPendingJob(ownerKey)` check — scheduler jobs are owner-scoped
 - **Ownership verification:** Validates `connector.owner_key === ownerKey` before proceeding
 - **Hard-delete vs soft-delete:** Hard-delete chosen for episodic events because the `episodic_events_fts_ad` AFTER DELETE trigger (migration 0028) handles FTS5 index cleanup; soft-delete via `superseded_by` would not fire the trigger
+- **Orphan cleanup:** `fact_display_overrides` rows are deleted before their parent facts (no FK cascade, would otherwise accumulate as dead rows)
+- **Dream Cycle isolation:** `episodic_pattern_proposals` are NOT cleaned up — Dream Cycle only processes `source='chat'` events, so connector events never generate proposals
 
-**Migration 0033** (`connector_purge.sql`): Three-phase backfill of `connector_items` for orphan data:
+**Migration 0034** (`connector_purge.sql`): Three-phase backfill of `connector_items` for orphan data:
 1. Connector facts (all 5 connectors, matched by key prefix + `source='connector'`)
 2. LinkedIn episodic events (joined on `source='linkedin_zip'`)
 3. GitHub activity events (joined on `source='github'`)

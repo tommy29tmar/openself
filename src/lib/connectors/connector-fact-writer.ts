@@ -1,10 +1,7 @@
 import type { OwnerScope } from "@/lib/auth/session";
 import type { ImportReport } from "./types";
-import { createFact, getActiveFacts, getFactByKey } from "@/lib/services/kb-service";
-import { getDraft, upsertDraft, computeConfigHash } from "@/lib/services/page-service";
-import { projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
-import { getFactLanguage } from "@/lib/services/preferences-service";
-import { PROFILE_ID_CANONICAL } from "@/lib/flags";
+import { createFact, getFactByKey } from "@/lib/services/kb-service";
+import { recomposeDraft } from "./recompose-draft";
 import { sqlite } from "@/lib/db";
 import { randomUUID } from "node:crypto";
 
@@ -34,14 +31,6 @@ export async function batchCreateFacts(
   const report: ImportReport = { factsWritten: 0, factsSkipped: 0, errors: [], createdFacts: [] };
 
   if (inputs.length === 0) return report;
-
-  // Two IDs because facts and drafts use different keying:
-  //   - getActiveFacts: PROFILE_ID_CANONICAL=true → queries by facts.profileId (= cognitiveOwnerKey)
-  //   - getDraft/upsertDraft/getFactLanguage: always keyed by page.id / agentConfig.id = sessionId (= knowledgePrimaryKey)
-  const factsReadId = PROFILE_ID_CANONICAL
-    ? scope.cognitiveOwnerKey
-    : scope.knowledgePrimaryKey;
-  const draftSessionId = scope.knowledgePrimaryKey;
 
   // Write facts sequentially (SQLite write contention avoidance)
   for (const input of inputs) {
@@ -90,42 +79,7 @@ export async function batchCreateFacts(
 
   // Single recompose after all facts (mirrors tools.ts recomposeAfterMutation)
   try {
-    const readKeys = PROFILE_ID_CANONICAL ? undefined : scope.knowledgeReadKeys;
-    const allFacts = getActiveFacts(factsReadId, readKeys);
-    if (allFacts.length === 0) return report;
-
-    const factLang = getFactLanguage(draftSessionId) ?? factLanguage;
-    const currentDraft = getDraft(draftSessionId);
-
-    const draftMeta: DraftMeta | undefined = currentDraft
-      ? {
-          surface: currentDraft.config.surface,
-          voice: currentDraft.config.voice,
-          light: currentDraft.config.light,
-          style: currentDraft.config.style,
-          layoutTemplate: currentDraft.config.layoutTemplate,
-          sections: currentDraft.config.sections,
-        }
-      : undefined;
-
-    const composed = projectCanonicalConfig(
-      allFacts,
-      currentDraft?.username ?? username,
-      factLang,
-      draftMeta,
-      scope.cognitiveOwnerKey,
-    );
-
-    // Idempotency: skip write if hash matches
-    const composedHash = computeConfigHash(composed);
-    if (composedHash === currentDraft?.configHash) return report;
-
-    upsertDraft(
-      currentDraft?.username ?? username,
-      composed,
-      draftSessionId,
-      scope.cognitiveOwnerKey,
-    );
+    recomposeDraft(scope, username, factLanguage);
   } catch (error) {
     console.warn("[connector-fact-writer] recompose failed:", error);
   }

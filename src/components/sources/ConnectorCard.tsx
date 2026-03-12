@@ -179,6 +179,7 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
           onClick={() => setConfirmingDisconnect(false)}
           disabled={disconnecting}
           style={btnStyle("transparent", "rgba(255,255,255,0.3)")}
+          aria-label="Cancel"
         >
           ✕
         </button>

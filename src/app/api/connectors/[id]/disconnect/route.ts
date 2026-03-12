@@ -5,11 +5,7 @@ import {
 } from "@/lib/connectors/connector-service";
 import { connectorError } from "@/lib/connectors/api-errors";
 import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
-import { getActiveFacts } from "@/lib/services/kb-service";
-import { getDraft, upsertDraft, computeConfigHash } from "@/lib/services/page-service";
-import { projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
-import { getFactLanguage } from "@/lib/services/preferences-service";
-import { PROFILE_ID_CANONICAL } from "@/lib/flags";
+import { recomposeDraft } from "@/lib/connectors/recompose-draft";
 
 export async function POST(
   req: Request,
@@ -46,43 +42,7 @@ export async function POST(
     // Recompose draft if purge removed facts
     if (purgeResult && purgeResult.factsDeleted > 0) {
       try {
-        const factsReadId = PROFILE_ID_CANONICAL
-          ? scope.cognitiveOwnerKey
-          : scope.knowledgePrimaryKey;
-        const draftSessionId = scope.knowledgePrimaryKey;
-        const readKeys = PROFILE_ID_CANONICAL ? undefined : scope.knowledgeReadKeys;
-        const allFacts = getActiveFacts(factsReadId, readKeys);
-        const factLang = getFactLanguage(draftSessionId) ?? "en";
-        const currentDraft = getDraft(draftSessionId);
-
-        const draftMeta: DraftMeta | undefined = currentDraft
-          ? {
-              surface: currentDraft.config.surface,
-              voice: currentDraft.config.voice,
-              light: currentDraft.config.light,
-              style: currentDraft.config.style,
-              layoutTemplate: currentDraft.config.layoutTemplate,
-              sections: currentDraft.config.sections,
-            }
-          : undefined;
-
-        const composed = projectCanonicalConfig(
-          allFacts,
-          currentDraft?.username ?? "draft",
-          factLang,
-          draftMeta,
-          scope.cognitiveOwnerKey,
-        );
-
-        const composedHash = computeConfigHash(composed);
-        if (composedHash !== currentDraft?.configHash) {
-          upsertDraft(
-            currentDraft?.username ?? "draft",
-            composed,
-            draftSessionId,
-            scope.cognitiveOwnerKey,
-          );
-        }
+        recomposeDraft(scope, "draft");
       } catch (err) {
         console.warn("[disconnect] recompose after purge failed:", err);
       }
