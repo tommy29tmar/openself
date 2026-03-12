@@ -90,6 +90,7 @@ vi.mock("@/lib/services/fact-display-override-service", () => ({
   }),
   computeFactValueHash: (v: unknown) =>
     require("crypto").createHash("sha256").update(JSON.stringify(v)).digest("hex"),
+  filterEditableFields: (_category: string, fields: Record<string, unknown>) => fields,
 }));
 
 import { createProposalService, type CreateProposalInput } from "@/lib/services/proposal-service";

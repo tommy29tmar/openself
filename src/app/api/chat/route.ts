@@ -278,6 +278,14 @@ export async function POST(req: Request) {
     messageSessionId,
   );
 
+  // --- UAT context monitor (temporary) ---
+  const _sysChars = systemPrompt.length;
+  const _msgChars = trimmedMessages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
+  const _sysTokens = Math.ceil(_sysChars / 4);
+  const _msgTokens = Math.ceil(_msgChars / 4);
+  console.log(`[CTX] mode=${mode} msgs=${trimmedMessages.length} sysPrompt=~${_sysTokens}tok(${_sysChars}ch) msgs=~${_msgTokens}tok(${_msgChars}ch) total=~${_sysTokens + _msgTokens}tok journey=${bootstrap.journeyState}`);
+  // --- end UAT context monitor ---
+
   // Role whitelist: AI SDK expects only these roles
   const VALID_ROLES = new Set(["user", "assistant", "system", "tool"]);
   const safeMessages = trimmedMessages.filter(m => VALID_ROLES.has(m.role)) as CoreMessage[];

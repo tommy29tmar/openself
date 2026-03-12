@@ -12,6 +12,7 @@ import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import {
   getFactDisplayOverrideService,
   computeFactValueHash,
+  filterEditableFields,
 } from "@/lib/services/fact-display-override-service";
 
 export type CreateProposalInput = {
@@ -164,11 +165,20 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
             return { ok: false, error: "FACT_NOT_FOUND" };
           }
 
+          const rawFields = JSON.parse(proposal.proposedContent);
+          const displayFields = filterEditableFields(
+            (fact as { category: string }).category,
+            rawFields,
+          );
+          if (Object.keys(displayFields).length === 0) {
+            return { ok: false, error: "NO_EDITABLE_FIELDS" };
+          }
+
           const overrideService = getFactDisplayOverrideService();
           overrideService.upsertOverride({
             ownerKey: proposal.ownerKey,
             factId,
-            displayFields: JSON.parse(proposal.proposedContent),
+            displayFields,
             factValueHash: computeFactValueHash(fact.value),
             source: "worker",
           });

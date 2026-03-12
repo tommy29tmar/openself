@@ -7,6 +7,7 @@ import { analyzeSectionForCuration } from "@/lib/services/page-curation-service"
 import { SECTION_FACT_CATEGORIES, computeSectionFactsHash, computeHash } from "@/lib/services/personalization-hashing";
 import { filterPublishableFacts, projectCanonicalConfig } from "@/lib/services/page-projection";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
+import { getPreferences } from "@/lib/services/preferences-service";
 import { logEvent } from "@/lib/services/event-service";
 
 export async function handlePageCuration(payload: Record<string, unknown>): Promise<void> {
@@ -20,13 +21,16 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
   const soul = getActiveSoul(scope.cognitiveOwnerKey);
   if (!soul?.compiled) return;
 
+  const preferences = getPreferences(scope.knowledgePrimaryKey);
+  const language = preferences.language ?? preferences.factLanguage ?? "en";
+
   const overrideService = getFactDisplayOverrideService();
   const existingOverrides = overrideService.getOverridesForOwner(scope.cognitiveOwnerKey);
   const agentCuratedFactIds = new Set(
     existingOverrides.filter((o) => o.source === "agent").map((o) => o.factId),
   );
 
-  const page = projectCanonicalConfig(allFacts, "draft", "en", undefined, scope.cognitiveOwnerKey);
+  const page = projectCanonicalConfig(allFacts, "draft", language, undefined, scope.cognitiveOwnerKey);
 
   let totalProposals = 0;
   const MAX_PROPOSALS_PER_RUN = 10;
@@ -34,7 +38,7 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
   for (const [sectionType, categories] of Object.entries(SECTION_FACT_CATEGORIES)) {
     if (totalProposals >= MAX_PROPOSALS_PER_RUN) break;
 
-    const existingState = getActiveCopy(scope.cognitiveOwnerKey, sectionType, "en");
+    const existingState = getActiveCopy(scope.cognitiveOwnerKey, sectionType, language);
     if (existingState?.source === "agent") continue;
 
     const sectionFacts = publishable.filter((f) => categories.includes(f.category));
@@ -68,7 +72,7 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
         createProposal({
           ownerKey: scope.cognitiveOwnerKey,
           sectionType,
-          language: "en",
+          language,
           currentContent: JSON.stringify(fact.value),
           proposedContent: JSON.stringify(suggestion.fields),
           issueType: "curation",
@@ -83,7 +87,7 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
         createProposal({
           ownerKey: scope.cognitiveOwnerKey,
           sectionType,
-          language: "en",
+          language,
           currentContent: JSON.stringify(section.content),
           proposedContent: JSON.stringify(suggestion.fields),
           issueType: "curation",

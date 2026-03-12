@@ -34,4 +34,7 @@ proposals via existing proposal system. Never overwrites agent-curated content.
 - Page composer is untouched — zero risk to existing composition logic.
 - Per-item hash guards prevent cascading invalidation.
 - Existing proposal UI (ProposalBanner) works for worker suggestions.
-- Migration 0032 adds one table + updates job_type CHECK.
+- Migration 0033 adds one table + updates job_type CHECK.
+- Proposal acceptance validates fields via `filterEditableFields` before writing overrides.
+- Worker respects owner's language preference (not hardcoded to English).
+- `curate_content` included in `COMPLETION_CLAIM_BACKING_TOOL_NAMES` for action-claim-guard honesty.

@@ -24,6 +24,7 @@ const COMPLETION_CLAIM_BACKING_TOOL_NAMES = new Set([
   "archive_fact",
   "unarchive_fact",
   "reorder_items",
+  "curate_content",
 ]);
 
 const LEADING_FILLER_PREFIX =
