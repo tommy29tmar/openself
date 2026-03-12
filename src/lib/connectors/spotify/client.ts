@@ -22,7 +22,7 @@ export type SpotifyProfile = {
 export type SpotifyArtist = {
   id: string;
   name: string;
-  genres: string[];
+  genres: string[] | null;
   external_urls: { spotify: string };
 };
 

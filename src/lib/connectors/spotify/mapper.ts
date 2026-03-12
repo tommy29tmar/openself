@@ -31,49 +31,34 @@ export function mapSpotifyProfile(profile: SpotifyProfile): FactInput[] {
 // ── Top Artists ──────────────────────────────────────────────────────
 
 export function mapSpotifyTopArtists(artists: SpotifyArtist[]): FactInput[] {
-  return artists.map((a) => ({
-    category: "interest",
-    key: `sp-artist-${a.id}`,
-    value: {
-      name: a.name,
-      genres: a.genres,
+  return artists.map((a) => {
+    const genres = a.genres ?? [];
+    const value: Record<string, unknown> = {
+      title: a.name,
       url: a.external_urls.spotify,
-    },
-  }));
+    };
+    if (genres.length > 0) {
+      value.note = genres.join(", ");
+    }
+    return {
+      category: "music",
+      key: `sp-artist-${a.id}`,
+      value,
+    };
+  });
 }
 
 // ── Top Tracks ───────────────────────────────────────────────────────
 
 export function mapSpotifyTopTracks(tracks: SpotifyTrack[]): FactInput[] {
   return tracks.map((t) => ({
-    category: "interest",
+    category: "music",
     key: `sp-track-${t.id}`,
     value: {
-      name: t.name,
-      artists: t.artists.map((a) => a.name),
+      title: t.name,
+      artist: t.artists.map((a) => a.name).join(", "),
       url: t.external_urls.spotify,
     },
-  }));
-}
-
-// ── Genre Aggregation ────────────────────────────────────────────────
-
-export function mapSpotifyGenres(artists: SpotifyArtist[]): FactInput[] {
-  const genreCounts = new Map<string, number>();
-  for (const a of artists) {
-    for (const g of a.genres ?? []) {
-      genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
-    }
-  }
-
-  const topGenres = [...genreCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  return topGenres.map(([genre]) => ({
-    category: "interest",
-    key: `sp-genre-${genre.replace(/\s+/g, "-").toLowerCase()}`,
-    value: { name: genre, type: "music_genre" },
   }));
 }
 

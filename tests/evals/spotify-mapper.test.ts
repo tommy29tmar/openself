@@ -4,7 +4,6 @@ import {
   mapSpotifyProfile,
   mapSpotifyTopArtists,
   mapSpotifyTopTracks,
-  mapSpotifyGenres,
   detectTasteShift,
 } from "@/lib/connectors/spotify/mapper";
 import type {
@@ -87,18 +86,48 @@ describe("mapSpotifyProfile", () => {
 });
 
 describe("mapSpotifyTopArtists", () => {
-  it("maps artists to interest facts", () => {
+  it("maps artists to music facts with title/note/url shape", () => {
     const facts = mapSpotifyTopArtists(artists);
     expect(facts).toHaveLength(3);
     expect(facts[0]).toEqual({
-      category: "interest",
+      category: "music",
       key: "sp-artist-a1",
       value: {
-        name: "Radiohead",
-        genres: ["alternative rock", "art rock"],
+        title: "Radiohead",
+        note: "alternative rock, art rock",
         url: "https://open.spotify.com/artist/a1",
       },
     });
+  });
+
+  it("omits note when genres array is empty", () => {
+    const artistNoGenres: SpotifyArtist[] = [
+      {
+        id: "a99",
+        name: "No Genre Artist",
+        genres: [],
+        external_urls: { spotify: "https://open.spotify.com/artist/a99" },
+      },
+    ];
+    const facts = mapSpotifyTopArtists(artistNoGenres);
+    expect(facts[0].category).toBe("music");
+    expect(facts[0].value.title).toBe("No Genre Artist");
+    expect(facts[0].value.note).toBeUndefined();
+  });
+
+  it("omits note when genres is null", () => {
+    const artistNullGenres = [
+      {
+        id: "a98",
+        name: "Null Genre Artist",
+        genres: null as unknown as string[],
+        external_urls: { spotify: "https://open.spotify.com/artist/a98" },
+      },
+    ];
+    const facts = mapSpotifyTopArtists(artistNullGenres);
+    expect(facts[0].category).toBe("music");
+    expect(facts[0].value.title).toBe("Null Genre Artist");
+    expect(facts[0].value.note).toBeUndefined();
   });
 
   it("handles empty list", () => {
@@ -107,21 +136,21 @@ describe("mapSpotifyTopArtists", () => {
 });
 
 describe("mapSpotifyTopTracks", () => {
-  it("maps tracks to interest facts", () => {
+  it("maps tracks to music facts with title/artist/url shape", () => {
     const facts = mapSpotifyTopTracks(tracks);
     expect(facts).toHaveLength(2);
     expect(facts[0]).toEqual({
-      category: "interest",
+      category: "music",
       key: "sp-track-t1",
       value: {
-        name: "Everything In Its Right Place",
-        artists: ["Radiohead"],
+        title: "Everything In Its Right Place",
+        artist: "Radiohead",
         url: "https://open.spotify.com/track/t1",
       },
     });
   });
 
-  it("handles multiple artists per track", () => {
+  it("joins multiple artists with comma", () => {
     const multiArtistTrack: SpotifyTrack[] = [
       {
         id: "t3",
@@ -134,52 +163,11 @@ describe("mapSpotifyTopTracks", () => {
       },
     ];
     const facts = mapSpotifyTopTracks(multiArtistTrack);
-    expect(facts[0].value.artists).toEqual(["Artist A", "Artist B"]);
+    expect(facts[0].category).toBe("music");
+    expect(facts[0].value.artist).toBe("Artist A, Artist B");
   });
 });
 
-describe("mapSpotifyGenres", () => {
-  it("aggregates genres by frequency, returns top 5", () => {
-    const facts = mapSpotifyGenres(artists);
-    // Genres: alternative rock(1), art rock(2), electronic(2), idm(1), experimental(1)
-    // Top by frequency: art rock(2), electronic(2), alternative rock(1), idm(1), experimental(1)
-    expect(facts.length).toBeLessThanOrEqual(5);
-
-    // art rock and electronic have count 2, should be first
-    const genreNames = facts.map((f) => f.value.name);
-    expect(genreNames).toContain("art rock");
-    expect(genreNames).toContain("electronic");
-  });
-
-  it("normalizes genre key", () => {
-    const facts = mapSpotifyGenres([
-      {
-        id: "x",
-        name: "X",
-        genres: ["hip hop"],
-        external_urls: { spotify: "url" },
-      },
-    ]);
-    expect(facts[0].key).toBe("sp-genre-hip-hop");
-    expect(facts[0].value.type).toBe("music_genre");
-  });
-
-  it("handles artists with no genres", () => {
-    const facts = mapSpotifyGenres([
-      {
-        id: "x",
-        name: "X",
-        genres: [],
-        external_urls: { spotify: "url" },
-      },
-    ]);
-    expect(facts).toEqual([]);
-  });
-
-  it("handles empty artist list", () => {
-    expect(mapSpotifyGenres([])).toEqual([]);
-  });
-});
 
 describe("detectTasteShift", () => {
   it("returns null on first sync (empty previous)", () => {
