@@ -3035,6 +3035,7 @@ by the worker to populate the registry at startup.
 6. CSV parsing handles BOM, preamble rows, relaxed column counts
 7. Sensitive files excluded: `Connections.csv`, `messages.csv`, `Endorsement*`, `Recommendations*`
 8. On successful import (`factsWritten > 0`), records a single milestone episodic event via `insertEvent()` with `source: "linkedin_zip"` and summary of imported positions/skills/certifications
+9. Creates a `connectors` row if not already present (ensures LinkedIn appears in SourcesPanel and can be disconnected/purged like other connectors)
 
 **API routes:**
 - `POST /api/connectors/linkedin-zip/import` — Multipart upload (auth-gated, 100MB limit)
@@ -3048,9 +3049,10 @@ by the worker to populate the registry at startup.
 - `episodic_events.source` — Source provenance column: `'chat'|'github'|'linkedin_zip'|'rss'|'spotify'|'strava'`
 
 **Shared services:**
-- `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`, `updateConnectorCredentials`)
+- `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`, `updateConnectorCredentials`, `disconnectConnectorWithPurge`)
+- `connector-purge.ts` — `purgeConnectorData()` atomic hard-delete of all connector-imported data (facts, events, connector_items, sync_log) via relational joins on `connector_items`. Chunked deletes (500 per batch), ownership verification, sync-in-progress guard, resets `lastSync`/`syncCursor` for clean reconnect.
 - `connector-encryption.ts` — AES-256-GCM encrypt/decrypt for OAuth tokens (key from `CONNECTOR_ENCRYPTION_KEY` env var)
-- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", visibility:"public", sequential writes + single recompose. Visibility override respects user-set `private`.
+- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", visibility:"public", sequential writes + single recompose. Returns `createdFacts` array (key + factId) and writes `connector_items` provenance rows when `connectorId` is provided. Visibility override respects user-set `private`.
 - `connector-event-writer.ts` — `batchRecordEvents()` with intra-batch dedup, chunked DB dedup (SQLite 999 param limit), per-event error isolation
 - `connector-sync-handler.ts` — Worker job handler, fans out by ownerKey (or single connector via `connectorId`), calls `syncFn` per active connector
 - `token-refresh.ts` — Shared `withTokenRefresh()` wrapper for OAuth connectors (Spotify, Strava). On `TokenExpiredError`: refresh → update encrypted credentials → retry once
@@ -3182,6 +3184,93 @@ Agent responds          → acknowledges import summary (role, counts)
 - **G3 (TTL):** 24h expiry on pending flags, cleaned up on next consume attempt
 - **G4 (Provenance):** `metadata.source = "auto_import_trigger"` tags auto-triggered messages for telemetry
 - **G5 (Prompt hygiene):** `sanitize()` strips control chars + caps length; `--- BEGIN/END IMPORT CONTEXT ---` delimiters
+
+### 7.13 Disconnect + Purge
+
+When a user disconnects a connector, they can choose to keep their imported data or remove it entirely.
+
+**UI flow** (`ConnectorCard.tsx`):
+1. User clicks Disconnect → confirmation panel appears
+2. Two options: "Keep data" (disconnect only) or "Remove all" (disconnect + purge)
+3. Cancel returns to normal state
+
+**API:** `POST /api/connectors/{id}/disconnect` with optional `{ purge: boolean }` body.
+- Returns `200` with `{ purgeResult }` on success
+- Returns `409` if a sync job is in progress for the owner
+
+**Orchestration** (`disconnectConnectorWithPurge` in `connector-service.ts`):
+1. **Disconnect first** — marks connector as disconnected (invisible to scheduler, prevents race with re-enqueue)
+2. **Purge if requested** — calls `purgeConnectorData()` for atomic data removal
+3. **Recompose** — API route triggers `recomposeAfterMutation()` if facts were deleted
+
+**Purge logic** (`purgeConnectorData` in `connector-purge.ts`):
+```
+Single SQLite transaction:
+1. Collect factIds + eventIds from connector_items (relational join, no key prefix heuristics)
+2. Hard-delete facts (chunked 500, detach parent_fact_id children first)
+3. Hard-delete episodic events (chunked 500, FTS5 AFTER DELETE trigger handles cleanup)
+4. Delete connector_items rows
+5. Delete sync_log entries
+6. Reset lastSync + syncCursor to NULL (clean reconnect)
+```
+
+**Safety guards:**
+- **Sync-in-progress:** `hasPendingJob(ownerKey)` check — scheduler jobs are owner-scoped
+- **Ownership verification:** Validates `connector.owner_key === ownerKey` before proceeding
+- **Hard-delete vs soft-delete:** Hard-delete chosen for episodic events because the `episodic_events_fts_ad` AFTER DELETE trigger (migration 0028) handles FTS5 index cleanup; soft-delete via `superseded_by` would not fire the trigger
+
+**Migration 0033** (`connector_purge.sql`): Three-phase backfill of `connector_items` for orphan data:
+1. Connector facts (all 5 connectors, matched by key prefix + `source='connector'`)
+2. LinkedIn episodic events (joined on `source='linkedin_zip'`)
+3. GitHub activity events (joined on `source='github'`)
+Also adds `idx_connector_items_event` index on `event_id WHERE event_id IS NOT NULL`.
+
+---
+
+## 7b. Activity Feed (Notification System)
+
+A unified notification center that surfaces all background events to the user. **No new `notifications` table** — the feed is derived at query-time from existing tables:
+
+| Source | Table | Category |
+|--------|-------|----------|
+| Connector syncs | `sync_log` | informational |
+| Conformity proposals | `section_copy_proposals` | actionable |
+| Soul proposals | `soul_change_proposals` | actionable |
+| Episodic patterns | `episodic_pattern_proposals` | actionable |
+
+### Read/Unread Tracking
+
+Single `last_feed_viewed_at` column on `profiles` table (migration 0033). Unread count uses 4 lightweight `COUNT` queries — pending proposals are always "unread" regardless of `last_feed_viewed_at` (they require user action). Sync items use a 7-day window (`FEED_WINDOW_DAYS`).
+
+### API Routes
+
+- `GET /api/activity-feed` — paginated feed items (default limit 30, max 100)
+- `GET /api/activity-feed/unread-count` — badge count
+- `POST /api/activity-feed/mark-viewed` — updates `last_feed_viewed_at`
+- `POST /api/episodic/confirm` — accept/reject episodic pattern proposals
+
+### UI Components
+
+- **NotificationBell** (`forwardRef`) — bell icon with red badge counter ("99+" cap), placed in BuilderNavBar
+- **ActivityDrawer** — mobile: fullscreen overlay (z-index 200, safe-area-inset); desktop: 480px right panel (z-index 70) with backdrop. Mutual exclusion with PresencePanel
+- **FeedItem / FeedItemDetail / FeedItemActions** — accordion pattern, per-type detail views, accept/reject buttons with 44px touch targets
+
+### Agent Context
+
+Activity feed summary injected into `pageStateBlock` (steady_state mode only, ~200 tokens):
+```
+RECENT ACTIVITY:
+- Strava synced 2h ago: 3 facts, 2 events
+PENDING ACTIONS: 2 soul proposals, 1 pattern
+```
+
+### Key Files
+
+- `src/lib/services/activity-feed-service.ts` — core service (DI-injectable db for testing)
+- `src/lib/services/activity-feed-types.ts` — `FeedItem` type with discriminated union `FeedItemDetail`
+- `src/lib/services/activity-feed-formatters.ts` — agent context formatter
+- `src/components/notifications/` — all UI components
+- `src/hooks/useUnreadCount.ts` — focus-based revalidation via `visibilitychange`
 
 ---
 
