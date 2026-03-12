@@ -5,7 +5,8 @@ import { NextRequest } from "next/server";
 
 const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockCreateConnector = vi.fn();
-const mockEnqueueJob = vi.fn();
+const mockEnqueueJob = vi.fn().mockReturnValue("mock-job-id");
+const mockRecoverStaleConnectorJobs = vi.fn();
 
 const mockCreateAuthorizationURL = vi.fn().mockReturnValue("https://github.com/login/oauth/authorize?state=test");
 const mockValidateAuthorizationCode = vi.fn().mockResolvedValue({ accessToken: () => "ghp_test123" });
@@ -35,6 +36,10 @@ vi.mock("@/lib/connectors/connector-service", () => ({
 
 vi.mock("@/lib/worker", () => ({
   enqueueJob: (...args: any[]) => mockEnqueueJob(...args),
+}));
+
+vi.mock("@/lib/connectors/idempotency", () => ({
+  recoverStaleConnectorJobs: (...args: any[]) => mockRecoverStaleConnectorJobs(...args),
 }));
 
 vi.mock("@/lib/db", () => ({

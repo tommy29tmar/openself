@@ -276,6 +276,7 @@ export const jobs = sqliteTable(
     lastError: text("last_error"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+    heartbeatAt: text("heartbeat_at"),
   },
   (table) => [index("idx_jobs_due").on(table.status, table.runAfter)],
 );

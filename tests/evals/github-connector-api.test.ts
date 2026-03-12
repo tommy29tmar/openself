@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockResolveAuthenticatedConnectorScope = vi.fn();
 const mockGetConnectorStatus = vi.fn().mockReturnValue([]);
-const mockEnqueueJob = vi.fn();
+const mockEnqueueJob = vi.fn().mockReturnValue("mock-job-id");
 
 vi.mock("@/lib/connectors/route-auth", () => ({
   resolveAuthenticatedConnectorScope: (...args: any[]) =>
@@ -26,10 +26,12 @@ vi.mock("@/lib/db", () => ({
 
 const mockHasPendingJob = vi.fn().mockReturnValue(false);
 const mockIsSyncRateLimited = vi.fn().mockReturnValue(false);
+const mockRecoverStaleConnectorJobs = vi.fn();
 
 vi.mock("@/lib/connectors/idempotency", () => ({
   hasPendingJob: (...args: any[]) => mockHasPendingJob(...args),
   isSyncRateLimited: (...args: any[]) => mockIsSyncRateLimited(...args),
+  recoverStaleConnectorJobs: (...args: any[]) => mockRecoverStaleConnectorJobs(...args),
 }));
 
 vi.mock("@/lib/db/schema", () => ({

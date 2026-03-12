@@ -14,20 +14,39 @@ import { sqlite } from "@/lib/db";
 // Job-level idempotency (DB-backed)
 // ---------------------------------------------------------------------------
 
+const STALE_JOB_TIMEOUT_MINUTES = 10;
+
 const PENDING_JOB_SQL = `
   SELECT 1 FROM jobs
   WHERE job_type = 'connector_sync'
     AND json_extract(payload, '$.ownerKey') = ?
-    AND status IN ('queued', 'running')
+    AND (
+      status = 'queued'
+      OR (status = 'running' AND datetime(COALESCE(heartbeat_at, updated_at)) > datetime('now', '-${STALE_JOB_TIMEOUT_MINUTES} minutes'))
+    )
   LIMIT 1
 `;
 
 /**
- * Returns true if a connector_sync job is already queued or running for this ownerKey.
+ * Returns true if a connector_sync job is already queued or running (and not stale) for this ownerKey.
  */
 export function hasPendingJob(ownerKey: string): boolean {
   const row = sqlite.prepare(PENDING_JOB_SQL).get(ownerKey);
   return row !== undefined;
+}
+
+/**
+ * Marks stale connector_sync jobs as failed.
+ * A job is stale if it has been running for over 10 minutes without a heartbeat update.
+ */
+export function recoverStaleConnectorJobs(ownerKey: string): void {
+  sqlite.prepare(`
+    UPDATE jobs SET status = 'failed', last_error = 'heartbeat timeout', updated_at = ?
+    WHERE job_type = 'connector_sync'
+      AND json_extract(payload, '$.ownerKey') = ?
+      AND status = 'running'
+      AND datetime(COALESCE(heartbeat_at, updated_at)) < datetime('now', '-${STALE_JOB_TIMEOUT_MINUTES} minutes')
+  `).run(new Date().toISOString(), ownerKey);
 }
 
 // ---------------------------------------------------------------------------

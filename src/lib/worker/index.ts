@@ -202,6 +202,14 @@ async function executeJob(job: JobRow): Promise<void> {
     return;
   }
 
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  if (job.jobType === "connector_sync") {
+    heartbeatInterval = setInterval(() => {
+      sqlite.prepare("UPDATE jobs SET heartbeat_at = ? WHERE id = ?")
+        .run(new Date().toISOString(), job.id);
+    }, 30_000);
+  }
+
   try {
     await handler(job.payload as Record<string, unknown>);
 
@@ -258,6 +266,8 @@ async function executeJob(job: JobRow): Promise<void> {
         .where(eq(jobs.id, job.id))
         .run();
     }
+  } finally {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
   }
 }
 
@@ -265,15 +275,24 @@ async function executeJob(job: JobRow): Promise<void> {
  * Atomic claim: mark job as running only if still queued.
  */
 function claimJob(jobId: string): boolean {
+  const now = new Date().toISOString();
   const result = sqlite
     .prepare(
-      "UPDATE jobs SET status = 'running', updated_at = ? WHERE id = ? AND status = 'queued'",
+      "UPDATE jobs SET status = 'running', updated_at = ?, heartbeat_at = ? WHERE id = ? AND status = 'queued'",
     )
-    .run(new Date().toISOString(), jobId);
+    .run(now, now, jobId);
   return result.changes === 1;
 }
 
 export async function processJobs(): Promise<number> {
+  // Recover stale connector_sync jobs that stopped sending heartbeats (crashed worker, OOM, etc.)
+  sqlite.prepare(`
+    UPDATE jobs SET status = 'failed', last_error = 'heartbeat timeout', updated_at = ?
+    WHERE status = 'running'
+      AND job_type = 'connector_sync'
+      AND datetime(COALESCE(heartbeat_at, updated_at)) < datetime('now', '-10 minutes')
+  `).run(new Date().toISOString());
+
   const now = new Date().toISOString();
 
   const dueJobs = db

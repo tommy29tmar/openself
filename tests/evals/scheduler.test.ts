@@ -89,7 +89,8 @@ testSqlite.exec(`
     attempts INTEGER DEFAULT 0,
     last_error TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    heartbeat_at TEXT
   );
   CREATE INDEX idx_jobs_due ON jobs(status, run_after);
 

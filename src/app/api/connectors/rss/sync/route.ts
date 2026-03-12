@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getConnectorStatus } from "@/lib/connectors/connector-service";
-import { hasPendingJob, isSyncRateLimited } from "@/lib/connectors/idempotency";
+import { recoverStaleConnectorJobs, hasPendingJob, isSyncRateLimited } from "@/lib/connectors/idempotency";
 import { enqueueJob } from "@/lib/worker";
 import { connectorError } from "@/lib/connectors/api-errors";
 import { resolveAuthenticatedConnectorScope } from "@/lib/connectors/route-auth";
@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Recover stale jobs before checking for pending ones
+  recoverStaleConnectorJobs(ownerKey);
+
   // Idempotency: reject if a sync job is already queued or running
   if (hasPendingJob(ownerKey)) {
     return connectorError(
@@ -55,7 +58,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  enqueueJob("connector_sync", { ownerKey, connectorId: rss.id });
+  const jobId = enqueueJob("connector_sync", { ownerKey, connectorId: rss.id });
+  if (!jobId) {
+    return connectorError(
+      "ALREADY_SYNCING",
+      "A sync is already in progress.",
+      409,
+      true,
+    );
+  }
 
   return NextResponse.json({ success: true, message: "Sync queued" });
 }
