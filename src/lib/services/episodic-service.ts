@@ -135,9 +135,12 @@ export type QueryEventsInput = {
   actionType?: string; keywords?: string; limit?: number;
 };
 
-/** Sanitize keywords for FTS5 MATCH: phrase-quote to prevent parse errors on C++, (, -, etc. */
+/** Sanitize keywords for FTS5 MATCH: split into individual terms, each double-quoted for safety,
+ *  joined with implicit AND semantics. E.g. "marathon training" → `"marathon" "training"`. */
 function sanitizeFtsKeywords(raw: string): string {
-  return `"${raw.trim().replace(/"/g, "")}"`;
+  const terms = raw.trim().split(/\s+/).filter(t => t.length > 0);
+  if (terms.length === 0) return '""';
+  return terms.map(t => `"${t.replace(/"/g, "")}"`).join(" ");
 }
 
 export function queryEvents(input: QueryEventsInput): EpisodicEventRow[] {
