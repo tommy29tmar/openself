@@ -1,6 +1,6 @@
 # OpenSelf — Deploy Guide (Hetzner + Coolify)
 
-Last updated: 2026-03-02
+Last updated: 2026-03-12
 
 ---
 
@@ -205,18 +205,26 @@ Add these variables (click "New Environment Variable" for each):
 > Each provider is independent: configure only the ones you need.
 > If no OAuth provider is configured, users can still sign up with email+password (when `AUTH_V2=true`).
 
-**Connectors (optional — enable GitHub sync and LinkedIn import):**
+**Connectors (data sources — GitHub, LinkedIn, RSS, Spotify, Strava):**
 
 | Name | Value | How to get it |
 |---|---|---|
 | `CONNECTOR_ENCRYPTION_KEY` | 64 hex chars | Generate: `openssl rand -hex 32`. Used for AES-256-GCM encryption of OAuth tokens stored in SQLite. |
 | `GITHUB_CLIENT_ID` | `Ov23li...` | Same OAuth App used for login (see OAuth section above). The connector reuses the same app with a subdirectory callback: `https://openself.dev/api/auth/github/callback/connector` |
 | `GITHUB_CLIENT_SECRET` | `999219f...` | Same OAuth App as above |
+| `SPOTIFY_CLIENT_ID` | `669bfe...` | [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) → Create App. Redirect URI: `https://openself.dev/api/auth/spotify/callback/connector` |
+| `SPOTIFY_CLIENT_SECRET` | `4f8c42...` | Same app as above → Settings → View client secret |
+| `STRAVA_CLIENT_ID` | `210853` | [Strava API Settings](https://www.strava.com/settings/api) → Create App. Authorization Callback Domain: `openself.dev` |
+| `STRAVA_CLIENT_SECRET` | `079327...` | Same page as above |
 
-> **Note:** `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` are shared between login OAuth and the GitHub connector.
-> The connector callback URL (`/api/auth/github/callback/connector`) is a subdirectory of the login callback
-> (`/api/auth/github/callback`), which GitHub validates automatically.
-> LinkedIn ZIP import requires no additional env vars — it's a file upload connector.
+> **Notes:**
+> - `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` are shared between login OAuth and the GitHub connector.
+>   The connector callback URL (`/api/auth/github/callback/connector`) is a subdirectory of the login callback
+>   (`/api/auth/github/callback`), which GitHub validates automatically.
+> - LinkedIn ZIP import requires no additional env vars — it's a file upload connector.
+> - RSS connector requires no env vars — it uses URL input (no OAuth).
+> - Spotify and Strava env vars must be set on **both** the Web App and Worker services.
+> - All connector env vars must be set at **runtime** (check "Available at Runtime" in Coolify).
 
 Optional cost guardrails (recommended):
 
@@ -664,7 +672,148 @@ npm run worker:dev
 
 ---
 
-## 9. Troubleshooting
+## 9. Connectors Setup
+
+OpenSelf supports 5 data source connectors. Each pulls data from an external service, creates semantic facts (Tier 1 memory) and episodic events (Tier 4 memory).
+
+| Connector | Auth Type | Env Vars Required | User Limit | Token Expiry |
+|---|---|---|---|---|
+| **GitHub** | OAuth | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | Unlimited | No expiry |
+| **LinkedIn** | ZIP upload | None | N/A | N/A |
+| **RSS** | URL input | None | N/A | N/A |
+| **Spotify** | OAuth | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | **25 in dev mode** | 1 hour (auto-refresh) |
+| **Strava** | OAuth | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` | **Varies (default ~10-15)** | 6 hours (auto-refresh) |
+
+All connectors also require `CONNECTOR_ENCRYPTION_KEY` (shared, AES-256-GCM) and `NEXT_PUBLIC_BASE_URL=https://openself.dev`.
+
+### 9.1 GitHub Connector
+
+Already configured as part of login OAuth. No additional setup needed — the connector reuses the same OAuth app with callback `https://openself.dev/api/auth/github/callback/connector`.
+
+### 9.2 LinkedIn Connector
+
+No configuration needed. Users upload a LinkedIn ZIP export directly in the UI.
+
+### 9.3 RSS Connector
+
+No configuration needed. Users paste a feed URL in the ConnectorCard UI. Supported formats: RSS 2.0, Atom 1.0. SSRF protection validates all URLs before fetching.
+
+### 9.4 Spotify Connector
+
+**Step 1 — Create app on Spotify Developer Dashboard:**
+
+1. Go to **https://developer.spotify.com/dashboard**
+2. Log in with your Spotify account
+3. Click **"Create app"**
+4. Fill in:
+   - **App name**: `OpenSelf`
+   - **App description**: `Personal page builder — music taste integration`
+   - **Redirect URI**: `https://openself.dev/api/auth/spotify/callback/connector`
+   - **Which API/SDKs**: select **Web API**
+5. Accept Terms → **Save**
+
+**Step 2 — Copy credentials:**
+
+1. In the app dashboard → **Settings**
+2. Copy **Client ID** and **Client Secret** (click "View client secret")
+
+**Step 3 — Add to Coolify (both Web App + Worker):**
+
+```
+SPOTIFY_CLIENT_ID=<your client id>
+SPOTIFY_CLIENT_SECRET=<your client secret>
+```
+
+**Step 4 — Redeploy** both Web App and Worker.
+
+**Current app credentials:**
+
+| Field | Value |
+|---|---|
+| Client ID | `669bfe104d564417a07f0a43bf4802de` |
+| Client Secret | `4f8c428e92684f369332a4345bb75c6d` |
+| Redirect URI | `https://openself.dev/api/auth/spotify/callback/connector` |
+| Scopes | `user-top-read`, `user-read-recently-played` |
+| Dashboard | https://developer.spotify.com/dashboard |
+
+**Development Mode limits:**
+
+- Spotify apps start in **Development Mode** with a **25-user limit** (only manually added users can authenticate)
+- To add users: Dashboard → your app → **User Management** → add Spotify email addresses
+- To remove the limit: Dashboard → your app → **Extension Request** (takes ~1 week review by Spotify)
+- Extension Request requires: app description, screenshots, privacy policy URL
+- Until approved, only users listed in User Management can connect
+
+**What it syncs:**
+
+- Top artists (short/medium/long term) → `interest/music` facts
+- Top tracks → `interest/music` facts
+- Music genres → `interest/music` facts
+- Taste shift detection: if ≥3 of top-5 artists change between syncs → episodic event
+
+### 9.5 Strava Connector
+
+**Step 1 — Create app on Strava:**
+
+1. Go to **https://www.strava.com/settings/api**
+2. Log in with your Strava account
+3. Fill in:
+   - **Application Name**: `OpenSelf`
+   - **Category**: `Social`
+   - **Website**: `https://openself.dev`
+   - **Authorization Callback Domain**: `openself.dev`
+   - **Description**: `Personal page builder — fitness data integration`
+4. Accept terms → **Create**
+
+**Step 2 — Copy credentials** from the same page (Client ID is numeric, Client Secret is a hex string).
+
+**Step 3 — Add to Coolify (both Web App + Worker):**
+
+```
+STRAVA_CLIENT_ID=<your client id>
+STRAVA_CLIENT_SECRET=<your client secret>
+```
+
+**Step 4 — Redeploy** both Web App and Worker.
+
+**Current app credentials:**
+
+| Field | Value |
+|---|---|
+| Client ID | `210853` |
+| Client Secret | `079327e70dbe0c394cdbfdae7ea3a8781d6dc537` |
+| Callback Domain | `openself.dev` |
+| Redirect URI (built at runtime) | `https://openself.dev/api/auth/strava/callback/connector` |
+| Scopes | `read`, `activity:read_all` |
+| Settings page | https://www.strava.com/settings/api |
+
+**Strava API limits:**
+
+- **Rate limits**: 200 requests/15 minutes, 2000 requests/day (read: 100/15min, 1000/day)
+- **Athlete limit**: starts at ~10-15 athletes. To increase, contact api-support@strava.com with app details.
+- No formal review process like Spotify — just email Strava support
+
+**What it syncs:**
+
+- Athlete profile → `sport/fitness` facts
+- Activities (runs, rides, swims, etc.) → `sport/fitness` facts (max 1000 activities per sync)
+- Aggregate stats → `sport/fitness` facts
+- Workout events → episodic events (`actionType: "workout"`)
+- PR milestones → episodic events (`actionType: "milestone"`)
+- Incremental sync via `syncCursor` (unix timestamp of last activity)
+
+### 9.6 Connector sync behavior
+
+- **First sync (baseline)**: Creates facts only, NO episodic events. Seeds dedup entries in `connector_items` table.
+- **Subsequent syncs**: Creates/updates facts AND generates episodic events for new items.
+- **Automatic sync**: Worker runs a daily connector sync loop (separate from heartbeat). Each connector syncs at most once per calendar day (owner timezone).
+- **Manual sync**: Users can trigger sync via the ConnectorCard "Sync" button (rate-limited to 1/hour).
+- **Token refresh**: OAuth tokens auto-refresh on 401 errors via `withTokenRefresh()` wrapper. Spotify tokens expire every 1 hour, Strava every 6 hours.
+- **Dream Cycle isolation**: Only `source='chat'` events trigger habit pattern proposals. Connector events are excluded to prevent noise.
+
+---
+
+## 10. Troubleshooting
 
 | Problem | Solution |
 |---|---|
@@ -683,10 +832,17 @@ npm run worker:dev
 | "OAuth sign-in failed" on login page | Check Coolify → Logs for `[google-oauth]` or `[github-oauth]` errors. Common causes: expired client secret, wrong callback URL, missing email permission scope. |
 | Worker not processing jobs | Check `DB_BOOTSTRAP_MODE=follower` is set. Check logs for "Schema not ready" errors. Verify the web process has `DB_BOOTSTRAP_MODE=leader` and has started successfully. |
 | Voice/STT not working | 1. Check `curl https://openself.dev/api/transcribe/health` returns `{"available":true}`. 2. If false, SSH in and run `/data/openself/fix-stt-alias.sh` (re-adds network alias after STT redeploy). 3. Check STT container is running: `docker ps | grep cwk80`. 4. Check web → STT connectivity: `docker exec <web-container> wget -qO- http://openself-stt:8080/health`. |
+| Spotify "Connect" button shows "Not Configured" | `SPOTIFY_CLIENT_ID` and/or `SPOTIFY_CLIENT_SECRET` not set. Add to both Web App + Worker env vars in Coolify, redeploy both. |
+| Spotify OAuth "invalid redirect" | Verify the Redirect URI in Spotify Dashboard matches exactly: `https://openself.dev/api/auth/spotify/callback/connector`. No trailing slash. |
+| Spotify "User not registered" error | App is in Development Mode (25-user limit). Add the user's Spotify email in Dashboard → User Management. |
+| Strava "Connect" button shows "Not Configured" | `STRAVA_CLIENT_ID` and/or `STRAVA_CLIENT_SECRET` not set. Add to both Web App + Worker env vars in Coolify, redeploy both. |
+| Strava OAuth "invalid redirect" | Verify Authorization Callback Domain in Strava API Settings is exactly `openself.dev` (no https://, no path). |
+| Connector sync not running automatically | Check Worker logs for "connector sync" entries. Verify connector status is 'connected' or 'error' and `enabled=1` in DB. Sync runs once per day per connector (owner timezone). |
+| Connector shows "error" status | Check Worker logs for the specific error. Common: expired token (auto-refresh failed), API rate limit, network issue. Retry via manual sync button. |
 
 ---
 
-## 10. Key Files in the Repository
+## 11. Key Files in the Repository
 
 | File | Purpose |
 |---|---|
@@ -703,7 +859,7 @@ npm run worker:dev
 
 ---
 
-## 11. Cost Summary
+## 12. Cost Summary
 
 | Item | Cost | Notes |
 |---|---|---|
