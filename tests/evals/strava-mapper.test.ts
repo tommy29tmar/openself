@@ -65,40 +65,22 @@ describe("Strava mapper", () => {
   describe("mapStravaActivities", () => {
     const activities: StravaActivity[] = [
       {
-        id: 1,
-        name: "Morning Run",
-        sport_type: "Run",
-        distance: 10000,
-        moving_time: 3600,
-        elapsed_time: 3700,
-        total_elevation_gain: 50,
-        start_date: "2025-01-01T08:00:00Z",
-        pr_count: 0,
-        achievement_count: 0,
+        id: 1, name: "Morning Run", sport_type: "Run",
+        distance: 10000, moving_time: 3600, elapsed_time: 3700,
+        total_elevation_gain: 50, start_date: "2025-01-01T08:00:00Z",
+        pr_count: 0, achievement_count: 0,
       },
       {
-        id: 2,
-        name: "Afternoon Run",
-        sport_type: "Run",
-        distance: 5000,
-        moving_time: 1800,
-        elapsed_time: 1900,
-        total_elevation_gain: 20,
-        start_date: "2025-01-02T15:00:00Z",
-        pr_count: 1,
-        achievement_count: 2,
+        id: 2, name: "Afternoon Run", sport_type: "Run",
+        distance: 5000, moving_time: 1800, elapsed_time: 1900,
+        total_elevation_gain: 20, start_date: "2025-01-02T15:00:00Z",
+        pr_count: 1, achievement_count: 2,
       },
       {
-        id: 3,
-        name: "Bike Ride",
-        sport_type: "Ride",
-        distance: 50000,
-        moving_time: 7200,
-        elapsed_time: 7500,
-        total_elevation_gain: 200,
-        start_date: "2025-01-03T10:00:00Z",
-        pr_count: 0,
-        achievement_count: 0,
+        id: 3, name: "Bike Ride", sport_type: "Ride",
+        distance: 50000, moving_time: 7200, elapsed_time: 7500,
+        total_elevation_gain: 200, start_date: "2025-01-03T10:00:00Z",
+        pr_count: 0, achievement_count: 0,
       },
     ];
 
@@ -107,44 +89,69 @@ describe("Strava mapper", () => {
       expect(facts).toHaveLength(2); // Run + Ride
     });
 
-    it("creates interest facts with correct keys", () => {
+    it("uses activity category", () => {
       const facts = mapStravaActivities(activities);
-      const runFact = facts.find((f) => f.key === "strava-run");
-      const rideFact = facts.find((f) => f.key === "strava-ride");
-      expect(runFact).toBeDefined();
-      expect(rideFact).toBeDefined();
+      expect(facts.every((f) => f.category === "activity")).toBe(true);
     });
 
-    it("aggregates distance in km", () => {
+    it("creates facts with correct keys", () => {
       const facts = mapStravaActivities(activities);
-      const runFact = facts.find((f) => f.key === "strava-run")!;
-      expect(runFact.value.totalDistance).toBe(15); // (10000 + 5000) / 1000
+      expect(facts.find((f) => f.key === "strava-run")).toBeDefined();
+      expect(facts.find((f) => f.key === "strava-ride")).toBeDefined();
     });
 
-    it("aggregates time in hours", () => {
+    it("includes type sport in value", () => {
       const facts = mapStravaActivities(activities);
       const runFact = facts.find((f) => f.key === "strava-run")!;
-      expect(runFact.value.totalTime).toBe(2); // (3600 + 1800) / 3600 ≈ 1.5 → rounds to 2
+      expect(runFact.value.type).toBe("sport");
     });
 
-    it("counts activities per sport", () => {
+    it("composes description from stats", () => {
       const facts = mapStravaActivities(activities);
       const runFact = facts.find((f) => f.key === "strava-run")!;
-      expect(runFact.value.activityCount).toBe(2);
+      expect(runFact.value.description).toBe("2 activities · 15 km · 2 hrs");
+    });
+
+    it("omits 0 km from description", () => {
+      const zeroDistance: StravaActivity[] = [{
+        id: 10, name: "Yoga", sport_type: "Yoga",
+        distance: 0, moving_time: 3600, elapsed_time: 3600,
+        total_elevation_gain: 0, start_date: "2025-01-01T08:00:00Z",
+        pr_count: 0, achievement_count: 0,
+      }];
+      const facts = mapStravaActivities(zeroDistance);
+      expect(facts[0].value.description).toBe("1 activity · 1 hr");
+    });
+
+    it("omits 0 hrs from description for very short activities", () => {
+      const quickActivity: StravaActivity[] = [{
+        id: 11, name: "Quick Stretch", sport_type: "Yoga",
+        distance: 0, moving_time: 30, elapsed_time: 45,
+        total_elevation_gain: 0, start_date: "2025-01-01T08:00:00Z",
+        pr_count: 0, achievement_count: 0,
+      }];
+      const facts = mapStravaActivities(quickActivity);
+      expect(facts[0].value.description).toBe("1 activity");
+    });
+
+    it("uses singular 'activity' for count 1", () => {
+      const single: StravaActivity[] = [{
+        id: 10, name: "Run", sport_type: "Run",
+        distance: 5000, moving_time: 1800, elapsed_time: 1900,
+        total_elevation_gain: 10, start_date: "2025-01-01T08:00:00Z",
+        pr_count: 0, achievement_count: 0,
+      }];
+      const facts = mapStravaActivities(single);
+      expect(facts[0].value.description).toContain("1 activity");
+      expect(facts[0].value.description).not.toContain("activities");
     });
 
     it("normalizes sport type key (spaces → hyphens, lowercase)", () => {
       const trailRun: StravaActivity = {
-        id: 4,
-        name: "Trail Run",
-        sport_type: "Trail Run",
-        distance: 8000,
-        moving_time: 3000,
-        elapsed_time: 3200,
-        total_elevation_gain: 300,
-        start_date: "2025-01-04T09:00:00Z",
-        pr_count: 0,
-        achievement_count: 0,
+        id: 4, name: "Trail Run", sport_type: "Trail Run",
+        distance: 8000, moving_time: 3000, elapsed_time: 3200,
+        total_elevation_gain: 300, start_date: "2025-01-04T09:00:00Z",
+        pr_count: 0, achievement_count: 0,
       };
       const facts = mapStravaActivities([trailRun]);
       expect(facts[0].key).toBe("strava-trail-run");
