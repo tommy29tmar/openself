@@ -80,7 +80,7 @@ export async function syncRss(
     // Map to facts
     const facts = mapRssFeed(feed, feedUrl);
     const username = existingDraft?.username ?? "draft";
-    const report = await batchCreateFacts(facts, scope, username, factLanguage);
+    const report = await batchCreateFacts(facts, scope, username, factLanguage, connectorId);
 
     // Determine if first sync (baseline)
     const isFirstSync = connector.lastSync === null;

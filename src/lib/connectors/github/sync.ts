@@ -77,6 +77,7 @@ export async function syncGitHub(
       scope,
       username,
       factLanguage,
+      connectorId,
     );
 
     // ── Episodic events for truly new repos ──────────────────────────

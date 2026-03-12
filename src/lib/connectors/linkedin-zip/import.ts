@@ -70,6 +70,7 @@ export async function importLinkedInZip(
   scope: OwnerScope,
   username: string,
   factLanguage: string,
+  connectorId?: string,
 ): Promise<ImportReport> {
   const allFacts: FactInput[] = [];
 
@@ -180,7 +181,7 @@ export async function importLinkedInZip(
     return { factsWritten: 0, factsSkipped: 0, errors: [], createdFacts: [] };
   }
 
-  const report = await batchCreateFacts(allFacts, scope, username, factLanguage);
+  const report = await batchCreateFacts(allFacts, scope, username, factLanguage, connectorId);
 
   if (report.factsWritten > 0) {
     const positionCount = allFacts.filter((f) => f.category === "experience").length;
