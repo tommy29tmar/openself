@@ -401,7 +401,7 @@ Per-block allocation (mutable — shrinkable):
   Facts:              17000 tokens max (top 120, truncated if over)
   Soul (compiled):    13000 tokens max
   Summary (Tier 2):    7000 tokens max
-  Memories (Tier 3):   5500 tokens max (scored by recency × provenance)
+  Memories (Tier 3):   5500 tokens max (scored by recency × provenance × usageBoost)
   Episodic (Tier 4):   5000 tokens max (last 30 days, per-source caps)
   Pending conflicts:   1500 tokens max
   Page state:          1500 tokens max (steady-state profiles only)
@@ -892,7 +892,10 @@ Agent memory implementation:
   `category`, `content_hash` (SHA-256), `confidence`, `is_active`, `user_feedback`,
   `deactivated_at`, `source` ('agent' or 'worker')
 - **Dedup**: SHA-256 content hash prevents duplicate active memories
-- **Quota**: 50 active memories per owner
+- **Quota & Eviction**: 50 active memories per owner. When the limit is reached,
+  `evictLowestScoring()` deactivates the lowest-scored memory — but protects a floor
+  of 5 agent-sourced memories (`AGENT_FLOOR=5`). This ensures human-observed behavioral
+  notes survive even under heavy worker pattern generation.
 - **Cooldown**: 5 writes per 60-second window (DB-based, survives restart). Cooldown applies
   only to agent-sourced writes (`COALESCE(source, 'agent') = 'agent'`).
 - **Worker provenance**: `saveMemoryFromWorker()` bypasses cooldown with `source='worker'`
@@ -902,9 +905,22 @@ Agent memory implementation:
   "wrong" immediately deactivates the memory
 - **Memory types**: `observation` (behavioral notes), `preference` (user likes/dislikes),
   `insight` (inferred understanding), `pattern` (recurring behavior)
-- **Relevance-scored retrieval**: `getActiveMemoriesScored()` ranks memories by
-  `recency × provenance_weight`. Recency uses exponential decay with 14-day half-life.
-  Provenance weights: agent=1.0, worker=0.6. Returns top 15 (was 10, flat recency).
+- **Relevance-scored retrieval**: `getActiveMemoriesScored()` ranks memories by a
+  three-factor scoring formula:
+  - `creationRecency = 0.5 ^ (ageDays / 14)` — 14-day half-life on creation date
+  - `provenanceWeight` — agent: 1.0, worker: 0.6
+  - `usageBoost` — tracks whether the memory was actually referenced in LLM context:
+    - If referenced: `0.5 ^ (daysSinceLastRef / 28)` (28-day half-life)
+    - If never referenced: fixed 0.5 penalty (`NEVER_REFERENCED_PENALTY`)
+  - Final score: `creationRecency × provenanceWeight × usageBoost`
+  - Returns top 15, sorted by score descending.
+- **Async usage tracking**: `updateLastReferencedAt()` updates `last_referenced_at`
+  for all memory IDs that survived context assembly (paired ID tracking through
+  budget truncation). Called asynchronously in `onFinish` of chat route. Migration 0030
+  adds `last_referenced_at TEXT` column to `agent_memory`.
+- **Memory API**: Two REST endpoints for user-facing memory management:
+  - `GET /api/memory` — returns scored active memories via `getActiveMemoriesScored(ownerKey, 50)`
+  - `DELETE /api/memory/[id]` — soft-deactivates a memory (owner-scoped)
 
 Agent memory is stored separately from the KB and used to improve conversation
 quality over time. Like OpenClaw's MEMORY.md — curated, evolving meta-knowledge.
@@ -938,6 +954,28 @@ Design:
   agent memories (up to 3 per window, via `saveMemoryFromWorker()`).
 - **Few-shot prompt guidance** — `patternsObserved` must be behavioral observations
   (HOW user communicates), not facts or topics. Good/bad examples embedded in prompt.
+  Compaction prompt demands behavioral synthesis and explicitly bans mechanical stats
+  (e.g. "create_fact was called 5 times" is rejected).
+
+**Context display format:**
+Memories are displayed in the system prompt as `- [type|category] content` (e.g.,
+`- [observation|layout-preferences] User prefers compact sidebar`). The `type|category`
+prefix helps the LLM understand the nature and domain of each memory. During context
+assembly, a paired ID map (`Map<line, id>`) tracks which memory IDs correspond to which
+output lines through all truncation phases (per-block budget, overflow shrink, final hard
+truncation). The surviving IDs are returned as `referencedMemoryIds: string[]` from
+`assembleContext()` for async usage tracking.
+
+**MEMORY SELF-MANAGEMENT policy:**
+The system prompt includes a dedicated memory management policy block that guides the
+agent on when to save meta-memories vs. when information belongs in other tiers:
+- **Save**: preferences about page/communication style, recurring patterns, context
+  that shapes future interactions
+- **Don't save**: factual information (→ facts), one-time instructions, information
+  already captured in facts or soul profiles, tool usage statistics
+
+A CROSS-TIER AWARENESS instruction tells the agent to naturally connect RECENT EVENTS
+(episodic Tier 4) with KNOWN FACTS (Tier 1) when both are relevant.
 
 ### 4.5.2 Episodic Memory (Tier 4)
 
@@ -948,15 +986,18 @@ that the agent can query and analyze.
 **Schema:** `episodic_events` table with FTS5 full-text search on `narrative_summary`
 and `raw_input`. Events are append-only with correction via `superseded_by` (old event
 points to its replacement). Soft-delete via `archived` flag for retention window cleanup.
-Columns `source` ('chat', 'github', 'linkedin') and `external_id` (stable dedup key for
-connectors) enable multi-source event ingestion with UNIQUE partial index for dedup.
+Columns `source` ('chat', 'github', 'linkedin_zip', 'rss', 'spotify', 'strava') and
+`external_id` (stable dedup key for connectors) enable multi-source event ingestion
+with UNIQUE partial index for dedup.
 
 **Agent tools:**
 - `record_event` — logs a user activity (workout, meal, meeting, etc.) with ISO timestamp,
   summary, and optional details JSON. Enqueues `consolidate_episodes` job.
 - `recall_episodes` — queries events by timeframe (last_24h, last_7_days, last_30_days,
-  last_90_days, all_time), optional `actionType` filter, optional `keywords` FTS5 search.
-  Returns up to 10 events + `countsByType` aggregate + `truncated` flag.
+  last_90_days, all_time), optional `actionType` filter, optional `keywords` FTS5 search
+  with word-split AND semantics (multi-word queries split into terms, each term generates
+  OR across fields, terms combined with AND). Returns up to 10 events + `countsByType`
+  aggregate + `truncated` flag.
 - `confirm_episodic_pattern` — accepts or rejects a pattern proposal. On accept:
   atomic transaction claims proposal, writes activity fact, triggers draft recomposition
   via `acceptEpisodicProposalAsActivity`.
@@ -1006,13 +1047,26 @@ fact extraction:
   compatible with legacy plain-timestamp format). Always-advance cursor strategy.
 
 - **LinkedIn** (`src/lib/connectors/linkedin-zip/activity-mapper.ts`): Maps certifications
-  and articles from ZIP import to episodic events with `source: "linkedin"`. Uses
+  and articles from ZIP import to episodic events with `source: "linkedin_zip"`. Uses
   `normalizeLinkedInDate()` for date parsing and `stableExternalId()` (SHA-256 hash)
   for deterministic dedup across re-imports. Activity extraction runs even if no profile
   facts are found (activity-only imports).
 
-Both connectors use best-effort writes: UNIQUE constraint violations are silently swallowed
-(expected on re-sync), all other failures are logged but non-fatal.
+- **RSS** (`src/lib/connectors/rss/`): Blog post publication events with `source: "rss"`.
+  First-sync seeds `connector_items` for dedup without emitting events.
+
+- **Spotify** (`src/lib/connectors/spotify/`): Musical taste shift events with
+  `source: "spotify"`. Detects taste shift when ≥3 of top 5 artists changed vs previous
+  sync. Stale fact archival: `staleSinceSync` counter tracks consecutive absent syncs,
+  archives `sp-artist-*`/`sp-track-*`/`sp-genre-*` facts after 3 absent syncs.
+
+- **Strava** (`src/lib/connectors/strava/`): Workout completion and PR milestone events
+  with `source: "strava"`. Incremental sync via `syncCursor` unix timestamp.
+
+All connectors use best-effort writes: UNIQUE constraint violations are silently swallowed
+(expected on re-sync), all other failures are logged but non-fatal. GitHub has an explicit
+first-sync guard (`hasActivityBaseline` check) to prevent event emission on initial sync;
+cursor is seeded to establish the baseline.
 
 **Intelligent forgetting (decay + relevance signals):**
 

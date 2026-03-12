@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-03-06
+Last updated: 2026-03-12
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -224,7 +224,7 @@ All sub-phases complete:
 - Layout Template Engine + Architect Layout Refactoring ✅
 - NEXT-16 Sprints 1-5 (Journey Intelligence → Conversation Polish) ✅
 
-Final stats: 2593 automated tests, 225 test files, 28 DB migrations.
+Final stats: 2802 automated tests, 250 test files, 30 DB migrations.
 
 #### Memory Pipeline Fix (Post Phase 1 — Done)
 
@@ -402,7 +402,7 @@ Main deliverables:
 **Sprint 1 — Journey Intelligence (Done):**
 
 Deterministic, zero-LLM detection layer that runs before the LLM sees anything.
-6 journey states, 6 situations, 3 expertise levels. Bootstrap payload exposed via
+6 journey states, 11 situations, 3 expertise levels. Bootstrap payload exposed via
 `GET /api/chat/bootstrap` and wired into `POST /api/chat` for mode-aware prompting.
 Branch: `feature/sprint-1-journey-intelligence`. 7 commits, 70 new tests (892 total, 63 files).
 
@@ -469,6 +469,46 @@ Branch: `feature/sprint-5-conversation-polish`. 3 commits, 81 new tests (1221 to
 - 8 eval scenarios: onboarding-flow, translation, personalization, layout-change, undo-request,
   returning-stale, publish-incomplete, low-signal
 
+### Execution Safety Hardening (Done)
+
+Action Claim Guard (stream-level rewriting of unbacked claims), confirmation system
+with deferred commit pattern, identity delete gate, immutable facts (update_fact removed).
+Filler prefix stripping, session-scoped chat state, multi-session awareness.
+
+### System Prompt Structural Refactor (Done)
+
+Two-layer architecture: universal shared rules (zero-conditional-branching) + state-specific
+journey policies. IMMEDIATE_EXECUTION_RULE as TS constant. Unified FACT RECORDING in TOOL_POLICY.
+
+### Heartbeat Separation & Deep Fact Gate (Done)
+
+Three-tier: global housekeeping + light daily + deep weekly. Deep gated by
+DEEP_HEARTBEAT_MIN_FACTS=25. Non-terminal outcomes don't record runs.
+
+### Budget Enforcement Cleanup (Done)
+
+LLM_HARD_STOP env var (default true). parseEnvBool() helper. checkBudget() rewritten
+with bypass mode. 4 deprecated DB columns annotated. Admin API with serializeLimits().
+
+### Tier 1 Connectors (Done)
+
+RSS (SSRF-protected, fast-xml-parser), Spotify (OAuth, taste-shift, stale archival),
+Strava (OAuth, paginated fetch, PR milestones). Dual-output: facts + episodic events.
+First-sync baseline rule. batchRecordEvents() with dedup + SQLite 999-param chunking.
+2802 tests (250 files), 30 DB migrations.
+
+### Memory Bugfix & Enhancement (Done)
+
+T3 eviction policy (AGENT_FLOOR=5), scoring formula (recency × provenance × usageBoost),
+context format [type|category] with paired ID tracking, Memory API (GET/DELETE),
+T4 FTS word-split AND semantics, MEMORY SELF-MANAGEMENT policy, compaction prompt upgrade.
+Connector bugfixes: GitHub first-sync guard, LinkedIn source unification, Spotify stale archival.
+Migration 0030.
+
+### UAT Browser Bugfixes (Done)
+
+Anti-URL-fabrication safety rule, SignupModal domain fix, Experience double-badge dedup.
+
 ## 5) Now (High Priority — Post Phase 1)
 
 ### Layout Phase 5: Heartbeat + Memory Integration
@@ -497,7 +537,7 @@ Full builder UI state persistence across browser reloads (beyond chat history).
 
 1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
 2. Community component registry enforcement with certified workflow
-3. Additional connectors (Strava, Spotify, Goodreads, ORCID, etc.)
+3. Additional connectors (Goodreads, ORCID, etc.) — Strava, Spotify, RSS already implemented
 4. Advanced theming and design packs
 5. Multi-profile / multi-tenant model if product direction requires it
 
@@ -526,7 +566,7 @@ Outcome:
 - The agent remembers users across sessions and writes personalized page copy
 - Pages from different users are noticeably distinct in tone and narrative
 - OpenSelf is credible as a living-page product, not just onboarding demo
-- Two external data connectors (GitHub + LinkedIn) feed the knowledge base
+- Five data connectors (GitHub, LinkedIn, RSS, Spotify, Strava) feed the knowledge base
 - Public pages auto-translate for international visitors
 
 ### Milestone C — Phase 2 (Not Started)

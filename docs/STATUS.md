@@ -1,6 +1,6 @@
 # OpenSelf - Project Status
 
-Last updated: 2026-03-06
+Last updated: 2026-03-12
 Snapshot owner: engineering
 
 ## 1) Executive Summary
@@ -14,12 +14,19 @@ OpenSelf has a working MVP with a hardened core flow:
 - Chat resilience: no reset on mobile tab switch; DB-backed history restore on page refresh
 - Post-import agent reaction: after LinkedIn import, agent auto-reviews data and asks targeted gap-filling questions
 - Design DNA Full Redesign: Presence System (surface × voice × light) sostituisce theme/colorScheme/fontFamily. PresencePanel (680px drawer desktop + inline mobile Style tab), SourcesPanel/ConnectorCard generic registry, Mobile Bottom Tab Bar (3 tab), Magic Paste URL detection. Legacy SettingsPanel/ConnectorSection/EditorialLayout rimossi. 2196 test (189 file)
+- Journey Intelligence: 6 journey states, 11 situations, 3 expertise levels, composable policy system with per-state policies
+- Execution Safety Hardening: Action Claim Guard, confirmation system with deferred commit, identity delete gate, immutable facts (update_fact removed)
+- System Prompt Structural Refactor: two-layer architecture (universal shared rules + state-specific journey policies)
+- Heartbeat Separation: three-tier (global housekeeping + light daily + deep weekly), deep gated by DEEP_HEARTBEAT_MIN_FACTS=25
+- Tier 1 Connectors: RSS (SSRF-safe), Spotify (OAuth, taste-shift detection), Strava (OAuth, paginated fetch). Dual-output pattern (facts + episodic events)
+- Memory Bugfix & Enhancement: T3 eviction policy (replaces rigid quota, AGENT_FLOOR=5), scoring formula (recency × provenance × usageBoost), context format [type|category], Memory API (GET/DELETE), T4 FTS word-split AND semantics
+- UAT Browser Bugfixes: anti-URL-fabrication safety rule, SignupModal domain fix, Experience double-badge dedup
 - Experience facts without dates: agent now creates experience facts immediately even when the user provides no dates (start/end = null). In the very next turn, the agent asks for dates. Previously the agent silently dropped company names due to a date-gate in SAFETY_POLICY.
 - STT language hint end-to-end: the UI language selection now flows through the entire server fallback pipeline — `useSttProvider` FormData → Next.js proxy → Python Whisper server — so proper nouns (e.g. "Cassa Depositi e Prestiti") are transcribed using the correct Whisper language model instead of auto-detection.
 - Multi-provider tier routing: each model tier (`fast/standard/reasoning`) can use a different provider via `provider:model-id` env var format. Production setup: gemini-2.0-flash (fast) / claude-sonnet-4-6 (standard) / gemini-2.5-pro (reasoning). 2209 tests (189 files).
 - UI Overhaul v10: builder and profile page aligned with design prototype. Desktop builder: full-width dark navbar, chat pane `#0d0d0f`, preview pane `#1a1a1e`, single scroll owner. Mobile: tabs CHAT / PREVIEW / PUBLISH (replaced STYLE); chat header shows hero name; preview sticky bar with Presence + Logout. Profile page: hero left-aligned min-height 480px, section separators via `--page-border`. PresencePanel: 320px single column (no live preview column), SignatureCombos first, mobile fullscreen overlay with 180px MiniPreview on top. BuilderNavBar: always-visible 5-branch pill. Dark message bubbles (gold user / glass AI). VoiceOverlay: gradient and chat button removed.
 - LLM retry with exponential backoff: transparent `withRetry()` Proxy on all model instances. Retries 429/529/503 up to 4 times with jitter. Respects `retry-after` header. Applied in `buildModel()` — zero call-site changes
-- 2601 automated tests passing (226 test files), zero `tsc --noEmit` errors
+- 2802 automated tests passing (250 test files), zero `tsc --noEmit` errors
 - 4-tier memory: Tier 1 facts, Tier 2 summaries (CAS), Tier 3 meta-memories, Tier 4 episodic events (FTS5 + Dream Cycle consolidation). Soul profiles, worker process, SSE preview, fact conflicts, trust ledger
 - Memory pipeline fix: facts read-scope unified via `factsReadScope()` helper for PROFILE_ID_CANONICAL. Episodic provenance wired with session_id + source_message_id. Temporal context block injected into agent context. Memory directives updated to cover all 4 tiers
 - Layout template engine: 4 templates (The Monolith, Cinematic, The Curator, The Architect), slot-based section assignment, widget registry, lock system, validation gates
@@ -453,12 +460,96 @@ asks targeted gap-filling questions. 12 commits, 33 new tests (2110 total, 174 f
 - `fix(avatar)`: `profileId` fallback aligned to `__default__` for consistency across all projection/composition paths.
 - `fix(uat)`: Settings overlay z-index, style persistence after theme change, signup modal validation, quota nudge messaging.
 
+### Journey Intelligence & Conversation Polish (Done)
+
+6 journey states, 11 situations, 3 expertise levels. Composable policy system with
+per-state policies replacing monolithic prompt functions. 5 sprints delivered:
+Sprint 1 (Journey Intelligence), Sprint 2 (Onboarding Rewrite), Sprint 3 (Returning User
+Policies), Sprint 4 (Reliable Execution), Sprint 5 (Conversation Polish).
+
+### Execution Safety Hardening (Done)
+
+Action Claim Guard (stream-level rewriting of unbacked claims), confirmation system with
+deferred commit pattern for batch deletes, identity delete gate, immutable facts
+(update_fact tool removed), filler prefix stripping, session-scoped chat state.
+
+### System Prompt Structural Refactor (Done)
+
+Two-layer architecture: Layer 1 = universal shared rules (zero-conditional-branching),
+Layer 2 = state-specific journey policies. IMMEDIATE_EXECUTION_RULE as TS constant.
+Unified FACT RECORDING in TOOL_POLICY.
+
+### Heartbeat Separation & Deep Fact Gate (Done)
+
+Three-tier heartbeat: global housekeeping + light daily + deep weekly.
+Deep gated by DEEP_HEARTBEAT_MIN_FACTS=25. Non-terminal outcomes don't record runs.
+
+### Tier 1 Connectors (Done)
+
+RSS (SSRF-protected, fast-xml-parser), Spotify (OAuth, taste-shift detection, stale fact
+archival after 3 absent syncs), Strava (OAuth, paginated fetch, PR milestone events).
+Dual-output pattern: facts (Tier 1) + episodic events (Tier 4). First-sync baseline rule.
+batchRecordEvents() with intra-batch dedup + SQLite 999-param chunking. withTokenRefresh()
+generic OAuth wrapper. Magic Paste extended for new connector domains.
+24 tasks, 5 chunks, 17 commits. 2802 tests (250 files).
+
+### Memory Bugfix & Enhancement (Done)
+
+T3 eviction policy replaces rigid quota enforcement — evicts lowest-scored memory when
+50-memory limit reached, protects 5 agent memories (AGENT_FLOOR). Scoring formula:
+creationRecency (14-day half-life) × provenance (agent:1.0, worker:0.6) × usageBoost
+(28-day half-life on last_referenced_at, 0.5 penalty if never referenced). Context format
+changed to [type|category] with paired ID tracking through all truncation phases.
+MEMORY SELF-MANAGEMENT policy + CROSS-TIER AWARENESS in system prompt.
+Compaction prompt upgraded: demands behavioral synthesis, bans mechanical stats.
+T4 FTS word-split AND semantics for multi-word queries.
+Memory API: GET /api/memory (list) + DELETE /api/memory/[id] (deactivate).
+Migration 0030.
+
+Connector bugfixes: BUG-E1 (GitHub first-sync guard), BUG-E2/E3 (dedup baseline items
+block re-emission), BUG-E4 (LinkedIn source unified to 'linkedin_zip'), BUG-F1 (Spotify
+stale fact archival after 3 absent syncs).
+
+### UAT Browser Bugfixes (Done)
+
+3 fixes from UAT:
+1. SignupModal domain — removed hardcoded domain from username preview
+2. Anti-URL-fabrication — new SAFETY_POLICY rule prevents agent from inventing page URLs
+3. Experience double-badge — deduplicate "Attuale"/"Current" badge in Experience component
+
+### Now (High Priority — Post Phase 1)
+
+#### Layout Phase 5: Heartbeat + Memory Integration
+
+Start condition met: Phase 1 is complete and stabilized.
+
+Scope:
+1. Lock-safe heartbeat mutations (`canMutateSection` with actor `heartbeat`)
+2. Memory-backed layout preferences (Tier 3 preference memories)
+3. Proposal-first flow for locked sections (no direct override)
+4. Heartbeat-side layout validation and dedicated observability events
+
+Reference: `docs/ARCHITECTURE.md` section 6.6.2
+
+#### Additional themes — bold, elegant, hacker (NEXT-7)
+
+1. CSS design tokens for each theme (light + dark)
+2. Add to `AVAILABLE_THEMES` constant
+3. Visual QA for all theme × colorScheme combinations
+
+#### Session persistence
+
+Full builder UI state persistence across browser reloads (beyond chat history).
+
+#### Phase 2 Planning
+
+Define scope for Phase 2: community components, advanced theming, multi-tenant model.
+
 ### Later
 1. ~~Auth + CSRF on publish endpoint~~ — Done (signup-before-publish + server-side auth gate)
-2. Full builder UI persistence across browser reloads (beyond chat history)
-3. Community component registry enforcement
-4. Additional connector ecosystem
-5. Multi-profile / multi-tenant model
+2. Community component registry enforcement
+3. Additional connectors (Goodreads, ORCID, etc.) — Strava, Spotify, RSS already implemented
+4. Multi-profile / multi-tenant model
 
 ## 4) Layout Count (Requested Snapshot)
 
@@ -476,7 +567,7 @@ Builder interface layouts (chat experience):
 
 ## 5) Test and Quality Snapshot
 
-- Automated tests: 2196 passed / 2196 total (Vitest, 189 test files)
+- Automated tests: 2802 passed / 2802 total (Vitest, 250 test files)
 - Flaky local lock issue fixed: targeted stress run of parallel DB-writing suites (memory/soul/trust-conflicts) passes consistently after fix.
 - Covered areas:
   1. Fact-to-section composition behavior + role casing + extended builders (32 tests)
