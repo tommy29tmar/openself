@@ -607,7 +607,7 @@ and cognitive state. The user sees a natural conversation. Under the hood, the a
 performing structured actions:
 
 ```
-Available tools (25):
+Available tools (26):
 
 Knowledge Base management:
   create_fact({ category, key, value, confidence? })          # Learn something new (duplicate detection: same value = idempotent, diff value = blocked)
@@ -641,6 +641,9 @@ Episodic memory:
   record_event({ actionType, eventAtHuman, summary, ... })    # Log a user activity event
   recall_episodes({ timeframe, actionType?, keywords? })      # Query past events with FTS5 search
   confirm_episodic_pattern({ proposalId, accept })            # Accept/reject Dream Cycle pattern proposal
+
+Content curation:
+  curate_content({ sectionType, factId?, fields, reason? })   # Polish page content (item-level or section-level)
 ```
 
 **Example of what happens in a single exchange:**
@@ -1058,7 +1061,8 @@ fact extraction:
 - **Spotify** (`src/lib/connectors/spotify/`): Musical taste shift events with
   `source: "spotify"`. Detects taste shift when ≥3 of top 5 artists changed vs previous
   sync. Stale fact archival: `staleSinceSync` counter tracks consecutive absent syncs,
-  archives `sp-artist-*`/`sp-track-*`/`sp-genre-*` facts after 3 absent syncs.
+  archives `sp-artist-*`/`sp-track-*` facts after 3 absent syncs. Genre facts removed
+  (genres embedded as artist `note` field).
 
 - **Strava** (`src/lib/connectors/strava/`): Workout completion and PR milestone events
   with `source: "strava"`. Incremental sync via `syncCursor` unix timestamp.
@@ -2177,6 +2181,50 @@ A two-phase LLM process runs during `heartbeat_deep`:
 - `src/lib/i18n/format-date.ts` — Locale-aware date formatting (`formatFactDate`)
 - `src/lib/services/errors.ts` — `PublishError`, `extractErrorMessage()` — shared error utilities
 
+### 6.3.0 Content Curation Layer (ADR-0017)
+
+> **Status:** Implemented. Two-layer curation architecture for polishing page presentation
+> without modifying immutable facts.
+
+Facts are immutable (ADR: no `update_fact` tool). But page presentation often needs polish —
+fixing capitalization ("openself" → "OpenSelf"), improving wording, adjusting tone.
+The Content Curation Layer separates presentation from data.
+
+**Layer 1 — Fact Display Overrides (pre-composition):**
+- `fact_display_overrides` table stores per-fact presentation adjustments.
+- `applyFactDisplayOverrides()` merges display values in memory BEFORE the page composer runs.
+- Per-fact hash guard (`factValueHash`): if the underlying fact changes, the override is invalidated.
+- Adding a new fact does NOT invalidate other facts' overrides (per-item isolation).
+- `ITEM_EDITABLE_FIELDS` per-category allowlist restricts overridable fields to text only
+  (no dates, URLs, structural data).
+
+**Layer 2 — Section Copy State (post-composition, extended):**
+- `section_copy_state.source` extended with `"agent"` (highest priority: agent > proposal > live).
+- LLM personalizer (`personalizeSections`) skips sections where `source === "agent"`.
+- Agents can write section-level curations directly.
+
+**Unified agent tool:** `curate_content` routes to the appropriate layer:
+- With `factId` → Layer 1 (per-item override via `fact_display_overrides`)
+- Without `factId` → Layer 2 (section-level via `section_copy_state` with source="agent")
+
+**Worker "page curator"** (`curate_page` job, weekly in `heartbeat_deep`):
+- Iterates `SECTION_FACT_CATEGORIES`, skips agent-curated sections.
+- `analyzeSectionForCuration()` — fast-tier LLM suggests improvements.
+- Creates proposals via existing proposal system (never auto-applies).
+- MAX_PROPOSALS_PER_RUN = 10. Uses owner's language from preferences.
+- Orphan cleanup runs in `runGlobalHousekeeping()`.
+
+**Proposal acceptance routing:**
+- If `issueType === "curation"` and reason starts with `[item:factId]`,
+  `acceptProposal()` routes to `fact_display_overrides` (with `filterEditableFields` guard).
+- Other curation proposals route to `section_copy_state` normally.
+
+**Key files:**
+- `src/lib/services/fact-display-override-service.ts` — CRUD, `ITEM_EDITABLE_FIELDS`, `filterEditableFields`
+- `src/lib/services/page-curation-service.ts` — LLM curation analysis (`analyzeSectionForCuration`)
+- `src/lib/worker/handlers/curate-page.ts` — Worker handler for weekly curation
+- `db/migrations/0033_fact_display_overrides.sql` — Table + job type CHECK update
+
 ### 6.3.1 Live Preview Strategy (Onboarding)
 
 To keep the "builds in front of your eyes" experience without runaway LLM cost, onboarding
@@ -3002,7 +3050,7 @@ by the worker to populate the registry at startup.
 **Shared services:**
 - `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`, `updateConnectorCredentials`)
 - `connector-encryption.ts` — AES-256-GCM encrypt/decrypt for OAuth tokens (key from `CONNECTOR_ENCRYPTION_KEY` env var)
-- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", sequential writes + single recompose
+- `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", visibility:"public", sequential writes + single recompose. Visibility override respects user-set `private`.
 - `connector-event-writer.ts` — `batchRecordEvents()` with intra-batch dedup, chunked DB dedup (SQLite 999 param limit), per-event error isolation
 - `connector-sync-handler.ts` — Worker job handler, fans out by ownerKey (or single connector via `connectorId`), calls `syncFn` per active connector
 - `token-refresh.ts` — Shared `withTokenRefresh()` wrapper for OAuth connectors (Spotify, Strava). On `TokenExpiredError`: refresh → update encrypted credentials → retry once
@@ -3039,7 +3087,7 @@ by the worker to populate the registry at startup.
 
 **Sync flow** (`syncSpotify`):
 1. Fetch profile, `medium_term` top artists/tracks via Spotify API
-2. Map to facts: `social/spotify-profile`, `interest/sp-artist-{id}`, `interest/sp-track-{id}`, `interest/sp-genre-{slug}`
+2. Map to facts: `social/spotify-profile`, `music/sp-artist-{id}` (`{title, note?, url}`), `music/sp-track-{id}` (`{title, artist, url}`)
 3. Taste-shift detection: compare `short_term` top-5 artist IDs with previous snapshot (stored in `syncCursor` JSON). If ≥3/5 changed → episodic event `actionType: "music"`
 4. First sync: stores top-5 snapshot, NO taste-shift event
 
@@ -3054,7 +3102,7 @@ by the worker to populate the registry at startup.
 
 **Sync flow** (`syncStrava`):
 1. Fetch athlete profile, paginated activities (`?after={syncCursor}`), aggregate stats
-2. Map to facts: `social/strava-profile`, `interest/strava-{sport}` per sport type, `stat/strava-distance`, `stat/strava-activities`
+2. Map to facts: `social/strava-profile`, `activity/strava-{sport}` per sport type (`{name, type:"sport", activityCount, distanceKm?, timeHrs?}`), `stat/strava-distance`, `stat/strava-activities`
 3. Per-activity episodic events: `actionType: "workout"` (`externalId: "activity-{id}"`)
 4. PR events: `actionType: "milestone"` when `activity.pr_count > 0` (`externalId: "pr-{id}"`)
 5. Incremental via `syncCursor` (unix timestamp). First sync = baseline (facts only, no events).
@@ -4720,7 +4768,7 @@ Runtime behavior:
 
 ### 15.7 Bootstrap Seed (SQL Reference)
 
-Migration files (19 total, `db/migrations/0001-0019`):
+Migration files (33 total, `db/migrations/0001-0033`):
 - `0001`-`0011`: Phase 0 core schema, taxonomy, components, sessions, media, translation cache, etc.
 - `0012`-`0016`: Phase 1a additions — agent memory expansion, conversation summaries,
   soul profiles, fact conflicts, trust ledger, heartbeat tables, jobs rebuild, schema_meta,
@@ -4728,6 +4776,12 @@ Migration files (19 total, `db/migrations/0001-0019`):
 - `0017`: Phase 1b — extended taxonomy (6 new categories, aliases, hobby/hobbies remap)
 - `0018`: Phase 1c — section copy tables (cache, state, proposals)
 - `0019`: Raise `daily_token_limit` from 150k → 500k (backfill for existing DBs)
+- `0020`-`0026`: Phase 1d — connectors, avatar, translation, session compaction
+- `0027`-`0029`: Episodic memory tables, FTS5, source/external_id columns
+- `0030`: Memory summaries (Tier 2 CAS)
+- `0031`: Job heartbeat_at column for stale job recovery
+- `0032`: Connector fact category migration (interest→music/activity)
+- `0033`: Content curation layer (fact_display_overrides table + curate_page job type)
 
 Key bootstrap migrations:
 - `db/migrations/0001_core_schema.sql` (creates taxonomy tables)

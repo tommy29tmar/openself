@@ -493,6 +493,12 @@ batchRecordEvents() with intra-batch dedup + SQLite 999-param chunking. withToke
 generic OAuth wrapper. Magic Paste extended for new connector domains.
 24 tasks, 5 chunks, 17 commits. 2802 tests (250 files).
 
+**Section mapping fix:** Spotify facts now map to `category: "music"` (was `interest`) with
+`{title, note?, url}` value shape. Strava facts map to `category: "activity"` (was `interest`)
+with structured data `{name, type, activityCount, distanceKm?, timeHrs?}` (L10N at composition
+time). Connector facts default to `visibility: "public"` (respects user-set `private`). Genre
+facts removed (embedded as artist `note`). Migration 0033 fixes existing data. 10 commits.
+
 ### Memory Bugfix & Enhancement (Done)
 
 T3 eviction policy replaces rigid quota enforcement — evicts lowest-scored memory when
