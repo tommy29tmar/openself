@@ -34,7 +34,7 @@ export function mapStravaProfile(profile: StravaProfile): FactInput[] {
 // ── Activities → Facts ───────────────────────────────────────────────
 
 /**
- * Group activities by sport type and create one interest fact per sport.
+ * Group activities by sport type and create one activity fact per sport.
  */
 export function mapStravaActivities(
   activities: StravaActivity[],
