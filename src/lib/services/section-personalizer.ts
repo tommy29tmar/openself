@@ -1,5 +1,5 @@
 import { generateObject } from "ai";
-import { getModelForTier } from "@/lib/ai/provider";
+import { getModelForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 import type { FactRow } from "@/lib/services/kb-service";
 import type { Section } from "@/lib/page-config/schema";
 import {
@@ -118,6 +118,7 @@ export async function personalizeSection(
     const { object } = await generateObject({
       model: getModelForTier("fast"),
       schema,
+      providerOptions: getThinkingProviderOptions(),
       prompt: [
         `You are a personal page copywriter. Rewrite the content of a "${section.type}" section for ${username}'s personal page.`,
         `\n## Voice & Tone\n${soulCompiled}`,

@@ -30,6 +30,7 @@ vi.mock("ai", () => ({
 vi.mock("@/lib/ai/provider", () => ({
   getModel: mockGetModel,
   getModelForTier: mockGetModelForTier,
+  getThinkingProviderOptions: vi.fn(() => ({})),
 }));
 
 // Mock cache service

@@ -2,7 +2,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ProviderMetadata } from "ai";
 import { withRetry } from "./retry-model";
 
 type Provider = "google" | "openai" | "anthropic" | "ollama";
@@ -187,4 +187,21 @@ export function getModel(): LanguageModel {
   const provider = getProvider();
   const modelId = process.env.AI_MODEL ?? DEFAULT_MODELS[provider];
   return buildModel(provider, modelId);
+}
+
+/**
+ * Returns providerOptions that enable extended thinking for Anthropic models.
+ * Reads AI_THINKING_BUDGET env var (default 8000). Requires >= 1024 to activate.
+ * Google thinking is explicitly disabled (budget 0).
+ * For non-Anthropic providers, returns empty object.
+ */
+export function getThinkingProviderOptions(): ProviderMetadata {
+  const budget = parseInt(process.env.AI_THINKING_BUDGET ?? "8000", 10) || 0;
+  if (budget < 1024) return {} as ProviderMetadata;
+  return {
+    google: { thinkingConfig: { thinkingBudget: 0 } },
+    anthropic: {
+      thinking: { type: "enabled" as const, budgetTokens: budget },
+    },
+  } as ProviderMetadata;
 }

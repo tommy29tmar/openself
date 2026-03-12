@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModelForTier } from "@/lib/ai/provider";
+import { getModelForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 import { logEvent } from "@/lib/services/event-service";
 import type { SectionCopyStateRow } from "@/lib/services/section-copy-state-service";
 
@@ -43,6 +43,7 @@ export async function analyzeConformity(
     const { object } = await generateObject({
       model: getModelForTier("reasoning"),
       schema: analysisSchema,
+      providerOptions: getThinkingProviderOptions(),
       prompt: [
         `Analyze these page sections for coherence issues.`,
         ``,
@@ -99,6 +100,7 @@ export async function generateRewrite(
     const { object } = await generateObject({
       model: getModelForTier("reasoning"),
       schema: rewriteSchema,
+      providerOptions: getThinkingProviderOptions(),
       prompt: [
         `Rewrite the "${sectionType}" section to fix: ${issue.reason}`,
         ``,

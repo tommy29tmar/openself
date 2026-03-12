@@ -19,6 +19,7 @@ vi.mock("ai", async () => {
 vi.mock("@/lib/ai/provider", () => ({
   getModel: vi.fn(() => "mock-model"),
   getModelForTier: vi.fn(() => "mock-model"),
+  getThinkingProviderOptions: vi.fn(() => ({})),
 }));
 
 import {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { getModelForTier, getModelIdForTier } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 import { db } from "@/lib/db";
 import { translationCache } from "@/lib/db/schema";
 import type { PageConfig } from "@/lib/page-config/schema";
@@ -204,6 +204,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
       model,
       schema: TranslationResultSchema,
       prompt,
+      providerOptions: getThinkingProviderOptions(),
     });
 
     const translated: SectionPayload[] = result.object.sections;

@@ -4,7 +4,7 @@
  */
 import { generateText } from "ai";
 import { randomUUID } from "crypto";
-import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getProviderForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
 import { sqlite } from "@/lib/db";
 import { getActiveFacts } from "@/lib/services/kb-service";
@@ -140,7 +140,7 @@ export async function runSessionCompaction(input: CompactionInput): Promise<Comp
     const model = getModelForTier("fast");
     const modelId = getModelIdForTier("fast");
     const provider = getProviderForTier("fast");
-    const result = await generateText({ model, prompt, maxTokens: 600 });
+    const result = await generateText({ model, prompt, maxTokens: 600, providerOptions: getThinkingProviderOptions() });
 
     const tokensIn = result.usage?.promptTokens ?? 0;
     const tokensOut = result.usage?.completionTokens ?? 0;

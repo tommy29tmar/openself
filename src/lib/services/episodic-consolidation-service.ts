@@ -2,7 +2,7 @@
 import { sqlite } from "@/lib/db";
 import { insertEpisodicProposal, isActionTypeOnCooldown } from "@/lib/services/episodic-service";
 import { generateText } from "ai";
-import { getModelForTier, getModelIdForTier, getProviderForTier } from "@/lib/ai/provider";
+import { getModelForTier, getModelIdForTier, getProviderForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
 
 const MIN_EVENTS = 3;
@@ -93,6 +93,7 @@ async function evaluatePatternWithLLM(candidate: CandidatePattern): Promise<{ wo
 Answer JSON only: { "worthy": true/false, "summary": "one sentence if worthy, empty if not" }
 worthy=true: voluntary, recurring, meaningful. NOT: commuting, groceries, TV. Max 100 chars.`,
       maxTokens: 80,
+      providerOptions: getThinkingProviderOptions(),
     });
     if (usage) recordUsage(provider, modelId, usage.promptTokens ?? 0, usage.completionTokens ?? 0);
     const parsed = JSON.parse(text.trim());

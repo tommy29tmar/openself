@@ -15,7 +15,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { Section } from "@/lib/page-config/schema";
 import type { FactRow } from "@/lib/services/kb-service";
-import { getModelForTier } from "@/lib/ai/provider";
+import { getModelForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 
 export type CoherenceIssue = {
   type: "role_mismatch" | "timeline_overlap" | "skill_gap" | "level_mismatch" | "completeness_gap";
@@ -205,6 +205,7 @@ export async function checkPageCoherence(
       model: getModelForTier("fast"),
       schema: coherenceSchema,
       prompt: buildCoherencePrompt(sections, soulCompiled),
+      providerOptions: getThinkingProviderOptions(),
     }),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("coherence_timeout")), COHERENCE_TIMEOUT_MS),

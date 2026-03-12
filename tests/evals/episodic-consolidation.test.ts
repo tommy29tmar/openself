@@ -17,6 +17,7 @@ vi.mock("@/lib/ai/provider", () => ({
   getModelForTier: vi.fn().mockReturnValue("mock-model"),
   getModelIdForTier: vi.fn().mockReturnValue("mock-model-id"),
   getProviderForTier: vi.fn().mockReturnValue("mock-provider"),
+  getThinkingProviderOptions: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/services/usage-service", () => ({

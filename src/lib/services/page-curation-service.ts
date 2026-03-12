@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModelForTier } from "@/lib/ai/provider";
+import { getModelForTier, getThinkingProviderOptions } from "@/lib/ai/provider";
 
 export type CurationPromptInput = {
   sectionType: string;
@@ -90,6 +90,7 @@ export async function analyzeSectionForCuration(
       model,
       schema: curationResponseSchema,
       prompt,
+      providerOptions: getThinkingProviderOptions(),
     });
     return parseCurationResponse(object, agentCuratedFactIds);
   } catch (error) {

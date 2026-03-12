@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("ai", () => ({ generateText: vi.fn() }));
 vi.mock("@/lib/services/usage-service", () => ({ checkBudget: vi.fn(() => ({ allowed: true })), recordUsage: vi.fn() }));
-vi.mock("@/lib/ai/provider", () => ({ getModelForTier: vi.fn(() => "mock"), getModelIdForTier: vi.fn(() => "gemini-2.5-flash"), getProviderForTier: vi.fn(() => "google") }));
+vi.mock("@/lib/ai/provider", () => ({ getModelForTier: vi.fn(() => "mock"), getModelIdForTier: vi.fn(() => "gemini-2.5-flash"), getProviderForTier: vi.fn(() => "google"), getThinkingProviderOptions: vi.fn(() => ({})) }));
 vi.mock("@/lib/services/kb-service", () => ({ getActiveFacts: vi.fn(() => []) }));
 vi.mock("@/lib/services/summary-service", () => ({ getSummary: vi.fn(() => null) }));
 vi.mock("@/lib/db", () => ({

@@ -26,6 +26,7 @@ vi.mock("@/lib/ai/provider", () => ({
   getModelId: vi.fn(() => "mock-model-id"),
   getModelForTier: vi.fn(() => "mock-model"),
   getModelIdForTier: vi.fn(() => "mock-model-id"),
+  getThinkingProviderOptions: vi.fn(() => ({})),
 }));
 
 // Mock generateObject from the ai package
