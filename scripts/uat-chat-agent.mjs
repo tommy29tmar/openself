@@ -7,11 +7,11 @@
 
 import Database from "better-sqlite3";
 
-const BASE_URL = process.env.UAT_BASE_URL || "http://localhost:3001";
+const BASE_URL = process.env.UAT_BASE_URL || "http://localhost:3000";
 const DB_PATH = "db/openself.db";
 const INVITE_CODE = "code1";
 const LANGUAGE = "it";
-const DELAY_MS = 60_000; // 1 minuto tra messaggi (evita rate limit Anthropic)
+const DELAY_MS = 10_000; // 10 secondi tra messaggi
 const MAX_MESSAGES = 50;
 const MAX_RETRIES = 2;
 

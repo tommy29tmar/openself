@@ -105,11 +105,17 @@ function hasQuestionWith(text, re) {
   return questionSentences(text).some(s => re.test(s));
 }
 
-/** Message-level delete confirmation check */
+/** Message-level delete confirmation check — sentence-scoped.
+ *  A delete-confirmation prompt is a QUESTION sentence that contains a delete verb
+ *  (not a past participle) and is not negated. */
 function isDeleteConfirmPrompt(text) {
-  const hasDeleteContext = /elimin\w*|cancell\w*|rimuov\w*|toglie\w*|toglio|tolgo/i.test(text);
-  const hasConfirmQuestion = hasQuestionWith(text, /conferm\w*|sicur\w*|proced\w*|vuoi/i);
-  return hasDeleteContext && hasConfirmQuestion;
+  return questionSentences(text).some(s => {
+    const tokens = s.match(/\b(elimin\w*|cancell\w*|rimuov\w*|toglie\w*|toglio|tolgo)\b/ig) || [];
+    const completionRe = /^(eliminat[oaie]|cancellat[oaie]|rimoss[oaie]|tolt[oaie])$/i;
+    const hasActiveDeleteVerb = tokens.some(m => !completionRe.test(m));
+    const isNegated = /\b(non|nulla|niente|nessun[oa]?)\b/i.test(s);
+    return hasActiveDeleteVerb && !isNegated;
+  });
 }
 
 // ── State machine ───────────────────────────────────────────────────────────
@@ -401,19 +407,20 @@ function checkAnomalies(res, msgNum, currentPhase) {
     }
   }
 
-  // BUG-6: delete confirm loop (stricter than shared isDeleteConfirmPrompt at line 109)
-  // The shared function matches ANY delete verb form including past participles.
-  // This BUG-6-specific check excludes past participles (completion reports like "Eliminati",
-  // "cancellato") so that post-execution text doesn't trigger false positives.
+  // BUG-6: delete confirm loop — checks if agent re-asks delete confirmation
+  // after the user already confirmed. Uses sentence-scoped detection: only flags
+  // when a QUESTION sentence contains an active delete verb (not past participle)
+  // and is not negated (e.g., "non c'era nulla da togliere" is benign).
   if (STATE.justConfirmedDelete) {
     STATE.justConfirmedDelete = false;
-    // True if text has at least one delete verb that is NOT a past participle
-    const hasDeleteIntent = (t) => {
-      const tokens = t.match(/\b(elimin\w*|cancell\w*|rimuov\w*|toglie\w*|toglio|tolgo)\b/ig) || [];
+    const hasDeleteReask = questionSentences(text).some(s => {
+      const tokens = s.match(/\b(elimin\w*|cancell\w*|rimuov\w*|toglie\w*|toglio|tolgo)\b/ig) || [];
       const completionRe = /^(eliminat[oaie]|cancellat[oaie]|rimoss[oaie]|tolt[oaie])$/i;
-      return tokens.some(m => !completionRe.test(m));
-    };
-    if (hasDeleteIntent(text) && hasQuestionWith(text, /conferm\w*|sicur\w*|proced\w*|vuoi/i)) {
+      const hasActiveVerb = tokens.some(m => !completionRe.test(m));
+      const isNegated = /\b(non|nulla|niente|nessun[oa]?)\b/i.test(s);
+      return hasActiveVerb && !isNegated;
+    });
+    if (hasDeleteReask) {
       anomalies.push({ msg: msgNum, phase: currentPhase, type: "BUG-6_DELETE_CONFIRM_LOOP" });
       console.log("  !! BUG-6: Agent re-asked for delete confirmation after user confirmed!");
     }
@@ -558,19 +565,32 @@ async function runConversation(sessionCookie, history, picker, maxMsgs, phaseLab
 
 function hackDbForStale() {
   console.log("\n================================================================");
-  console.log("  DB TIME-HACK: Setting page.updated_at to 8 days ago");
-  console.log("  This forces active_stale detection for Phase 2");
+  console.log("  DB TIME-HACK: Setting page + messages to 8 days ago");
+  console.log("  This forces active_stale detection AND lastSeenDaysAgo >= 8");
   console.log("================================================================\n");
 
   const db = new Database(DB_PATH);
   const before = db.prepare("SELECT id, status, updated_at FROM page").all();
-  console.log("  Before:");
+  console.log("  Before (pages):");
   for (const p of before) console.log(`    [${p.id}] status=${p.status} updated=${p.updated_at}`);
 
+  // Hack page timestamps
   db.exec(`UPDATE page SET updated_at = datetime('now', '-8 days') WHERE status = 'published'`);
 
+  // Hack message timestamps so lastSeenDaysAgo reads 8+ days
+  const msgCount = db.prepare("SELECT COUNT(*) as c FROM messages").get().c;
+  db.exec(`UPDATE messages SET created_at = datetime('now', '-8 days')`);
+  console.log(`  Messages shifted: ${msgCount} rows → 8 days ago`);
+
+  // Also hack session timestamps for consistency
+  db.exec(`UPDATE sessions SET created_at = datetime('now', '-8 days')`);
+
+  // Clear journey state pin so it re-detects as active_stale
+  db.exec(`UPDATE sessions SET journey_state = NULL`);
+  console.log("  Journey state pins cleared (will re-detect as active_stale)");
+
   const after = db.prepare("SELECT id, status, updated_at FROM page").all();
-  console.log("  After:");
+  console.log("  After (pages):");
   for (const p of after) console.log(`    [${p.id}] status=${p.status} updated=${p.updated_at}`);
 
   db.close();
@@ -705,7 +725,9 @@ async function main() {
   console.log(`Stale greeting (used name):     ${usedName ? "PASS" : "FAIL — agent didn't use Marco's name"}`);
 
   // Explicit elapsed-time phrases only. "bentornato" alone does NOT pass — must reference time.
-  const ackedTimeGap = /da un po'|è passato|sono passat|been a while|it's been|da qualche|da tanto|quanto tempo|(?:da|dopo|sono passat[ioe]?\s+\w*\s*)(?:giorni?|settiman[ae]?)/i.test(phase2FirstAgent);
+  // Matches: "da un po'", "è passato", "sono passati X giorni", "una settimana fa",
+  // "settimana che non ci sentiamo", "giorni fa", "a while", "it's been", etc.
+  const ackedTimeGap = /da un po'|è passato|sono passat|been a while|it's been|da qualche|da tanto|quanto tempo|(?:da|dopo|sono passat[ioe]?\s+\w*\s*)(?:giorni?|settiman[ae]?)|\bsettiman[ae]\b.{0,15}\b(fa|che\s+non)\b|\bgiorni?\b.{0,10}\bfa\b/i.test(phase2FirstAgent);
   console.log(`Stale greeting (time ack):      ${ackedTimeGap ? "PASS" : "FAIL — no time gap acknowledgment"}`);
 
   // Check if Phase 2 updates were saved (Condé Nast, bouldering, Bologna After Dark)
