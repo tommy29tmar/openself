@@ -139,7 +139,7 @@ export async function syncSpotify(
     const existingSpKeys = getActiveFactKeysByPrefix(scope.knowledgePrimaryKey, "sp-");
 
     // Compute updated stale counters
-    let updatedStaleCounters = computeStaleArchival(
+    const updatedStaleCounters = computeStaleArchival(
       prevStaleCounters,
       currentFactKeys,
       existingSpKeys,

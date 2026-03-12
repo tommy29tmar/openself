@@ -1145,7 +1145,7 @@ export function createAgentTools(
             }
           : undefined;
 
-        let styled = projectCanonicalConfig(
+        const styled = projectCanonicalConfig(
           facts,
           username,
           factLang,
