@@ -35,6 +35,33 @@ export type DraftMeta = {
 };
 
 /**
+ * Apply fact display overrides to facts in memory (pre-composition).
+ * Returns a new array with overridden fact values — original array is not mutated.
+ * Only fields present in the override are replaced; all other fact value fields preserved.
+ */
+export function applyFactDisplayOverrides(
+  facts: FactRow[],
+  overrides: Map<string, Record<string, unknown>>,
+): FactRow[] {
+  if (overrides.size === 0) return facts;
+
+  return facts.map((fact) => {
+    const override = overrides.get(fact.id);
+    if (!override) return fact;
+
+    const currentValue =
+      typeof fact.value === "object" && fact.value !== null
+        ? (fact.value as Record<string, unknown>)
+        : {};
+
+    return {
+      ...fact,
+      value: { ...currentValue, ...override },
+    };
+  });
+}
+
+/**
  * Project a canonical config from facts — ALL sections, no completeness filter.
  * Used by preview (builder) to show all sections including incomplete ones.
  */
