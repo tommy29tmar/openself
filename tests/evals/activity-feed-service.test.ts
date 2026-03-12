@@ -356,7 +356,7 @@ describe("getSoulFeedItems", () => {
     expect(items).toHaveLength(1);
     expect(items[0].type).toBe("soul_proposal");
     expect(items[0].category).toBe("actionable");
-    expect(items[0].id).toBe("sp1");
+    expect(items[0].id).toBe("soul_sp1");
     const detail = items[0].detail as import("@/lib/services/activity-feed-types").SoulDetail;
     expect(detail.proposedOverlay).toEqual({ voice: "casual" });
   });
@@ -475,7 +475,7 @@ describe("getActivityFeed", () => {
     const items = getActivityFeed("owner1", undefined, db);
     const syncItems = items.filter((i) => i.type === "connector_sync");
     expect(syncItems).toHaveLength(1);
-    expect(syncItems[0].id).toBe("sl-new");
+    expect(syncItems[0].id).toBe("sync_sl-new");
   });
 
   it("returns empty array when no items exist", () => {

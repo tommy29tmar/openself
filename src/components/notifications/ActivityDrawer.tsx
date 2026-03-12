@@ -118,6 +118,8 @@ export function ActivityDrawer({
     <>
       {!isMobile && (
         <div
+          onClick={onClose}
+          aria-hidden="true"
           style={{
             position: "fixed",
             inset: 0,

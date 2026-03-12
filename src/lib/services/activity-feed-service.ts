@@ -67,7 +67,7 @@ export function getSyncFeedItems(
         lastSuccessfulSync: null,
       };
       return {
-        id: row.id,
+        id: `sync_${row.id}`,
         type: "connector_error" as const,
         category: "informational" as const,
         connectorType: row.connectorType,
@@ -85,7 +85,7 @@ export function getSyncFeedItems(
         eventsCreated: row.eventsCreated ?? 0,
       };
       return {
-        id: row.id,
+        id: `sync_${row.id}`,
         type: "connector_sync" as const,
         category: "informational" as const,
         connectorType: row.connectorType,
@@ -137,7 +137,7 @@ export function getConformityFeedItems(
       proposedContent: row.proposedContent,
     };
     return {
-      id: String(row.id),
+      id: `conformity_${row.id}`,
       type: "conformity_proposal" as const,
       category: "actionable" as const,
       title: "",
@@ -196,7 +196,7 @@ export function getSoulFeedItems(
       reason: row.reason ?? null,
     };
     return {
-      id: row.id,
+      id: `soul_${row.id}`,
       type: "soul_proposal" as const,
       category: "actionable" as const,
       title: "",
@@ -239,7 +239,7 @@ export function getEpisodicFeedItems(
       eventCount: row.eventCount,
     };
     return {
-      id: row.id,
+      id: `episodic_${row.id}`,
       type: "episodic_pattern" as const,
       category: "actionable" as const,
       title: "",

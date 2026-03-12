@@ -14,7 +14,8 @@ export async function GET(req: Request) {
   const ownerKey = scope?.cognitiveOwnerKey ?? "__default__";
 
   const url = new URL(req.url);
-  const limit = parseInt(url.searchParams.get("limit") ?? "30", 10);
+  const rawLimit = parseInt(url.searchParams.get("limit") ?? "30", 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 30;
 
   const items = getActivityFeed(ownerKey, { limit });
   return NextResponse.json({ success: true, items });
