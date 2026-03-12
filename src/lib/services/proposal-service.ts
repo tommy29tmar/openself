@@ -9,6 +9,10 @@ import { filterPublishableFacts } from "@/lib/services/page-projection";
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
+import {
+  getFactDisplayOverrideService,
+  computeFactValueHash,
+} from "@/lib/services/fact-display-override-service";
 
 export type CreateProposalInput = {
   ownerKey: string;
@@ -142,6 +146,45 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
       const proposal = svc.getProposal(id, ownerKey);
       if (!proposal || proposal.status !== "pending") {
         return { ok: false, error: "PROPOSAL_NOT_FOUND" };
+      }
+
+      // --- Item-level curation: route to fact_display_overrides ---
+      if (proposal.issueType === "curation" && proposal.reason.startsWith("[item:")) {
+        const factIdMatch = proposal.reason.match(/^\[item:([^\]]+)\]/);
+        if (factIdMatch) {
+          const factId = factIdMatch[1];
+
+          const scope = resolveOwnerScopeForWorker(proposal.ownerKey);
+          const facts = getActiveFacts(
+            scope.knowledgePrimaryKey,
+            scope.knowledgeReadKeys,
+          );
+          const fact = facts.find((f: { id: string }) => f.id === factId);
+          if (!fact) {
+            return { ok: false, error: "FACT_NOT_FOUND" };
+          }
+
+          const overrideService = getFactDisplayOverrideService();
+          overrideService.upsertOverride({
+            ownerKey: proposal.ownerKey,
+            factId,
+            displayFields: JSON.parse(proposal.proposedContent),
+            factValueHash: computeFactValueHash(fact.value),
+            source: "worker",
+          });
+
+          db.update(sectionCopyProposals)
+            .set({ status: "accepted", reviewedAt: new Date().toISOString() })
+            .where(
+              and(
+                eq(sectionCopyProposals.id, id),
+                eq(sectionCopyProposals.ownerKey, proposal.ownerKey),
+              ),
+            )
+            .run();
+
+          return { ok: true };
+        }
       }
 
       // Guard 1: STALE_PROPOSAL — facts or soul changed
