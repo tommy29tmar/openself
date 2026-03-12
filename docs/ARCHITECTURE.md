@@ -4770,6 +4770,19 @@ agent operations require the same model capability.
 
 **Implementation:** `getModelForTier(tier)` in `src/lib/ai/provider.ts` accepts `"fast" | "standard" | "reasoning"` (legacy aliases: `cheap→fast`, `medium→standard`, `capable→reasoning`). Parses optional `provider:model-id` prefix in `AI_MODEL_FAST/STANDARD/REASONING` env vars — recognized prefixes are `google|openai|anthropic|ollama`. If a known prefix is found, that provider's SDK is instantiated regardless of `AI_PROVIDER`. Unknown prefixes (e.g. `llama3.2:latest`) fall through as plain model IDs. `getProviderForTier(tier)` returns the effective provider for usage recording.
 
+**Extended Thinking:** `getThinkingProviderOptions(opts?)` in `provider.ts` returns `ProviderMetadata` that enables Anthropic extended thinking when `AI_THINKING_BUDGET` ≥ 1024 (default: 8000). Google thinking is explicitly disabled (budget 0). The function accepts an optional `{ structured: true }` flag — Anthropic rejects thinking when `tool_choice` forces tool use (which `generateObject` does internally), so all `generateObject` callers pass `structured: true` to skip Anthropic thinking. Applied to all 8 LLM call sites:
+
+| Call site | SDK function | Thinking |
+|---|---|---|
+| Chat (`chat/route.ts`) | `streamText` | Anthropic ✓ |
+| Episodic consolidation | `generateText` | Anthropic ✓ |
+| Session compaction | `generateText` | Anthropic ✓ |
+| Section personalizer | `generateObject` | Anthropic ✗ (structured) |
+| Coherence check | `generateObject` | Anthropic ✗ (structured) |
+| Conformity analyzer (×2) | `generateObject` | Anthropic ✗ (structured) |
+| Translation | `generateObject` | Anthropic ✗ (structured) |
+| Page curation | `generateObject` | Anthropic ✗ (structured) |
+
 **Trade-off:** More complex provider layer. But the cost savings compound: a
 system that runs 80% of operations on a cheap model costs 5-10x less than one
 that uses a capable model for everything.
