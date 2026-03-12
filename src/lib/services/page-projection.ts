@@ -10,6 +10,10 @@ import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import { SENSITIVE_CATEGORIES } from "@/lib/visibility/policy";
 import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { filterCompleteSections } from "@/lib/page-config/section-completeness";
+import {
+  getFactDisplayOverrideService,
+  computeFactValueHash,
+} from "@/lib/services/fact-display-override-service";
 
 /**
  * Single filter used by BOTH projection AND promote loop.
@@ -75,7 +79,22 @@ export function projectCanonicalConfig(
   // 1. Filter to publishable facts only
   const publishable = filterPublishableFacts(facts);
 
-  // 2. Build draftSlots map for slot carry-over (soft-pin).
+  // 2. Apply fact display overrides pre-composition
+  let displayFacts = publishable;
+  if (profileId) {
+    const overrideService = getFactDisplayOverrideService();
+    const factHashes = publishable.map((f) => ({
+      id: f.id,
+      valueHash: computeFactValueHash(f.value),
+    }));
+    const validOverrides = overrideService.getValidOverrides(
+      profileId,
+      factHashes,
+    );
+    displayFacts = applyFactDisplayOverrides(publishable, validOverrides);
+  }
+
+  // 3. Build draftSlots map for slot carry-over (soft-pin).
   //    When a draft exists, we preserve each section's current slot assignment
   //    so that recomposition doesn't shuffle layout positions. The map is passed
   //    to assignSlotsFromFacts() which uses it as a preference hint — sections
@@ -88,9 +107,9 @@ export function projectCanonicalConfig(
     }
   }
 
-  // 3. Compose in factLanguage (canonical, no translation)
+  // 4. Compose in factLanguage (canonical, no translation)
   const composed = composeOptimisticPage(
-    publishable,
+    displayFacts,
     username,
     factLanguage,
     draftMeta?.layoutTemplate,
@@ -98,7 +117,7 @@ export function projectCanonicalConfig(
     profileId,
   );
 
-  // 4. Preserve metadata from draft (surface, voice, light, style, layout)
+  // 5. Preserve metadata from draft (surface, voice, light, style, layout)
   let config = draftMeta
     ? {
         ...composed,
@@ -110,7 +129,7 @@ export function projectCanonicalConfig(
       }
     : composed;
 
-  // 5. Preserve section order + locks from draft (metadata only, not content)
+  // 6. Preserve section order + locks from draft (metadata only, not content)
   if (draftMeta && draftMeta.sections.length > 0) {
     const draftOrder = draftMeta.sections.map((s) => s.id);
     const composedMap = new Map(config.sections.map((s) => [s.id, s]));
