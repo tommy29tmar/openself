@@ -82,7 +82,7 @@ export async function fetchAllActivities(
     );
     const batch: StravaActivity[] = await res.json();
     all.push(...batch);
-    if (batch.length < perPage) break;
+    if (batch.length < perPage || page >= 20) break;
     page++;
   }
   return all;

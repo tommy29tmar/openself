@@ -2766,30 +2766,44 @@ connectors, using conversation alone.
 │  External     │     │   CONNECTOR      │     │  Knowledge   │
 │  Service      │────▶│   DEFINITION     │────▶│  Base        │
 │  (GitHub API, │     │                  │     │              │
-│   LinkedIn    │     │  - Authenticate  │     │  (new facts  │
-│   ZIP export) │     │  - Fetch/Parse   │     │   via batch  │
-│               │     │  - Map to facts  │     │   writer)    │
-│               │     │  - syncFn /      │     │              │
-│               │     │    importFn      │     │              │
+│   Spotify,    │     │  - Authenticate  │     │  Facts (T1)  │
+│   Strava,     │     │  - Fetch/Parse   │     │  via batch   │
+│   RSS feed,   │     │  - Map to facts  │     │  writer      │
+│   LinkedIn    │     │  - syncFn /      │     │              │
+│   ZIP export) │     │    importFn      │     │  Events (T4) │
+│               │     │                  │     │  via event   │
+│               │     │                  │     │  writer      │
 └───────────────┘     └──────────────────┘     └──────────────┘
                               │
                       ┌───────┴────────┐
                       │  WORKER JOB    │
                       │ connector_sync │
-                      │  (periodic)    │
+                      │  (daily, per   │
+                      │   owner)       │
                       └────────────────┘
 ```
 
-Two connector modes:
-1. **Sync connectors** (e.g., GitHub) — periodic worker-based sync via `syncFn`. OAuth authentication, cursor-based incremental updates, scheduled via `connector_sync` job.
-2. **Import connectors** (e.g., LinkedIn ZIP) — one-shot user-initiated import via API upload. No OAuth, no scheduling.
+Three connector modes:
+1. **Sync connectors** (GitHub, RSS, Spotify, Strava) — periodic worker-based sync via `syncFn`. OAuth or URL-based authentication, cursor-based incremental updates, scheduled daily via `connector_sync` job.
+2. **Import connectors** (LinkedIn ZIP) — one-shot user-initiated import via API upload. No OAuth, no scheduling.
+3. **URL input connectors** (RSS) — user provides a feed URL (no OAuth). Syncs periodically like OAuth connectors.
 
-Each connector:
-1. **Authenticates** with the external service (OAuth) or receives data directly (file upload)
-2. **Fetches/parses** relevant data (API calls, ZIP extraction, CSV parsing)
+Each connector produces **dual output**:
+1. **Facts (Tier 1 memory)** — structured knowledge via `batchCreateFacts()` with `actor: "connector"`
+2. **Episodic events (Tier 4 memory)** — timeline events via `batchRecordEvents()` with source provenance
+
+The connector pipeline:
+1. **Authenticates** with the external service (OAuth, URL input) or receives data directly (file upload)
+2. **Fetches/parses** relevant data (API calls, XML parsing, ZIP extraction)
 3. **Maps** raw data into facts using connector-specific mappers
-4. **Writes** facts to the KB via `batchCreateFacts()` with `actor: "connector"`
-5. **Tracks provenance** via `connector_items` table (connector_id → fact_id mapping)
+4. **Writes** facts to the KB via `batchCreateFacts()`
+5. **Generates episodic events** for significant activities (new repos, blog posts, workouts, taste shifts)
+6. **Writes** events via `batchRecordEvents()` with intra-batch dedup, DB dedup, per-event error isolation
+7. **Tracks provenance** via `connector_items` table (connector_id → fact_id + event_id mapping)
+
+**First-sync baseline rule:** On a connector's first sync (`lastSync` is null), facts are created but NO episodic events are emitted. This prevents flooding the user's timeline with pre-existing data. Event dedup entries are seeded in `connector_items` so subsequent syncs correctly detect truly new items.
+
+**Dream Cycle isolation:** Connector-sourced events (`source != 'chat'`) are excluded from Dream Cycle pattern detection. Only chat-originated events trigger habit/pattern proposals.
 
 ### 7.2 Connector Definition
 
@@ -2797,16 +2811,18 @@ Every connector registers a `ConnectorDefinition` in the registry:
 
 ```typescript
 type ConnectorDefinition = {
-  type: string;              // e.g., "github", "linkedin_zip"
-  displayName: string;       // e.g., "GitHub", "LinkedIn ZIP"
-  supportsSync: boolean;     // periodic worker sync (GitHub)
+  type: string;              // e.g., "github", "rss", "spotify", "strava", "linkedin_zip"
+  displayName: string;       // e.g., "GitHub", "Blog / RSS"
+  supportsSync: boolean;     // periodic worker sync
   supportsImport: boolean;   // one-shot import (LinkedIn ZIP)
   syncFn?: (connectorId: string, ownerKey: string) => Promise<SyncResult>;
+  eventMapperFn?: (newFacts: FactInput[], ctx: EventMapperContext) => EpisodicEventInput[];
 };
 
 type SyncResult = {
   factsCreated: number;
   factsUpdated: number;
+  eventsCreated: number;
   error?: string;
 };
 ```
@@ -2816,10 +2832,13 @@ by the worker to populate the registry at startup.
 
 ### 7.3 Implemented Connectors
 
-| Connector | Mode | Data Produced | Auth | Status |
-|---|---|---|---|---|
-| **GitHub** | Sync | Profile, repos, languages, skills, stats | OAuth (`read:user`) | Implemented |
-| **LinkedIn ZIP** | Import | Profile, positions, education, skills, languages, certifications, causes | File upload (.zip) | Implemented |
+| Connector | Mode | Facts Produced | Episodic Events | Auth | Status |
+|---|---|---|---|---|---|
+| **GitHub** | Sync | Profile, repos, languages, skills, stats | New repo creation | OAuth (`read:user`) | Implemented |
+| **LinkedIn ZIP** | Import | Profile, positions, education, skills, languages, certifications, causes | Import milestone | File upload (.zip) | Implemented |
+| **RSS / Blog** | Sync | Feed link, blog posts, post count | Blog post publication | URL input | Implemented |
+| **Spotify** | Sync | Profile, top artists, top tracks, genres | Musical taste shift (≥3/5 top artists changed) | OAuth (`user-top-read`) | Implemented |
+| **Strava** | Sync | Profile, sport activities, aggregate stats | Workout completion, personal records | OAuth (`read,activity:read_all`) | Implemented |
 
 ### 7.4 GitHub Connector
 
@@ -2838,7 +2857,9 @@ by the worker to populate the registry at startup.
    - `skill/gh-{language}` aggregated across repos
    - `stat/github-repos` (total count)
 4. Write facts via `batchCreateFacts()` (sequential writes + single recompose)
-5. Record provenance in `connector_items`, update `lastSync`/`syncCursor`
+5. Generate episodic events for truly new repos (not forks, not in connector_items). `actionType: "work"`, `externalId: "repo-{node_id}"`. First sync = baseline (no events).
+6. Write events via `batchRecordEvents()` with source `"github"`
+7. Record provenance in `connector_items`, update `lastSync`/`syncCursor`
 
 **API routes:**
 - `GET /api/connectors/github/connect` — Initiates OAuth flow
@@ -2864,42 +2885,95 @@ by the worker to populate the registry at startup.
 5. Date normalization handles 5 LinkedIn formats (ISO, "Mon YYYY", "DD Mon YYYY", US short, year-only)
 6. CSV parsing handles BOM, preamble rows, relaxed column counts
 7. Sensitive files excluded: `Connections.csv`, `messages.csv`, `Endorsement*`, `Recommendations*`
+8. On successful import (`factsWritten > 0`), records a single milestone episodic event via `insertEvent()` with `source: "linkedin_zip"` and summary of imported positions/skills/certifications
 
 **API routes:**
 - `POST /api/connectors/linkedin-zip/import` — Multipart upload (auth-gated, 100MB limit)
 
 ### 7.6 Connector Infrastructure
 
-**Database tables** (migration 0016):
+**Database tables** (migrations 0016, 0029):
 - `connectors` — Registered connector instances per owner (id, type, status, encrypted credentials, config, sync cursor)
-- `connector_items` — Provenance tracking (connector_id → fact_id mapping)
-- `sync_log` — Per-sync audit trail (status, facts created/updated, errors)
+- `connector_items` — Provenance tracking (connector_id → fact_id + event_id mapping)
+- `sync_log` — Per-sync audit trail (status, facts created/updated, events created, errors)
+- `episodic_events.source` — Source provenance column: `'chat'|'github'|'linkedin_zip'|'rss'|'spotify'|'strava'`
 
 **Shared services:**
-- `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`)
+- `connector-service.ts` — CRUD for connector rows (`createConnector`, `getActiveConnectors`, `updateConnectorStatus`, `updateConnectorCredentials`)
 - `connector-encryption.ts` — AES-256-GCM encrypt/decrypt for OAuth tokens (key from `CONNECTOR_ENCRYPTION_KEY` env var)
 - `connector-fact-writer.ts` — `batchCreateFacts()` with actor:"connector", sequential writes + single recompose
-- `connector-sync-handler.ts` — Worker job handler, fans out by ownerKey, calls `syncFn` per active connector
+- `connector-event-writer.ts` — `batchRecordEvents()` with intra-batch dedup, chunked DB dedup (SQLite 999 param limit), per-event error isolation
+- `connector-sync-handler.ts` — Worker job handler, fans out by ownerKey (or single connector via `connectorId`), calls `syncFn` per active connector
+- `token-refresh.ts` — Shared `withTokenRefresh()` wrapper for OAuth connectors (Spotify, Strava). On `TokenExpiredError`: refresh → update encrypted credentials → retry once
 - `register-all.ts` — Side-effect module that registers all connector definitions at import time
+- `magic-paste.ts` — `detectConnectorUrls()` detects GitHub, LinkedIn, Spotify, Strava, RSS/Substack/Medium/dev.to URLs in chat messages
 
 **Worker integration:**
 - `connector_sync` job type in worker handlers
 - Worker imports `register-all.ts` to populate the registry
-- Manual sync enqueues via `enqueueJob("connector_sync", { ownerKey })`
+- Daily scheduler enqueues `connector_sync` for all owners with active connectors (separate loop from heartbeat, per-connector `lastSync` daily guard using owner timezone)
+- Manual sync enqueues via `enqueueJob("connector_sync", { ownerKey, connectorId })` for targeted single-connector sync
 
-### 7.7 Planned Connectors (Future)
+### 7.7 RSS Connector
+
+**Auth:** URL input (user provides feed URL, no OAuth). One feed per user.
+
+**Sync flow** (`syncRss`):
+1. Validate feed URL (SSRF protection: private IP blocklist, DNS resolution check, per-hop redirect validation)
+2. Fetch with manual redirect following (max 3 hops), streaming body size limit (5MB)
+3. Parse XML via `fast-xml-parser` (supports RSS 2.0 and Atom 1.0)
+4. Map to facts: `social/rss-feed`, `project/rss-{hash}` per post, `stat/rss-posts`
+5. Map to episodic events: `actionType: "writing"` per new post (`externalId: "rss-post-{hash}"`)
+6. First sync = baseline (facts only, seeds connector_items for dedup)
+
+**SSRF defense layers:** URL validation (protocol, port, private IP regex) → DNS resolution check (resolve4+resolve6, all addresses) → per-hop redirect validation → streaming body size limit. TOCTOU DNS rebinding is documented as open risk (full mitigation requires custom fetch agent with pinned DNS).
+
+**API routes:**
+- `POST /api/connectors/rss/subscribe` — Subscribe to feed (validates URL, creates connector, enqueues sync)
+- `POST /api/connectors/rss/sync` — Manual sync (accepts both 'connected' and 'error' status)
+
+### 7.8 Spotify Connector
+
+**Auth:** OAuth (`user-top-read user-read-recently-played`). Token refresh via shared `withTokenRefresh()` (1h expiry).
+
+**Sync flow** (`syncSpotify`):
+1. Fetch profile, `medium_term` top artists/tracks via Spotify API
+2. Map to facts: `social/spotify-profile`, `interest/sp-artist-{id}`, `interest/sp-track-{id}`, `interest/sp-genre-{slug}`
+3. Taste-shift detection: compare `short_term` top-5 artist IDs with previous snapshot (stored in `syncCursor` JSON). If ≥3/5 changed → episodic event `actionType: "music"`
+4. First sync: stores top-5 snapshot, NO taste-shift event
+
+**API routes:**
+- `GET /api/connectors/spotify/connect` — Initiates OAuth
+- `GET /api/auth/spotify/callback/connector` — OAuth callback
+- `POST /api/connectors/spotify/sync` — Manual sync
+
+### 7.9 Strava Connector
+
+**Auth:** OAuth (`read,activity:read_all`). Token refresh via shared `withTokenRefresh()` (6h expiry).
+
+**Sync flow** (`syncStrava`):
+1. Fetch athlete profile, paginated activities (`?after={syncCursor}`), aggregate stats
+2. Map to facts: `social/strava-profile`, `interest/strava-{sport}` per sport type, `stat/strava-distance`, `stat/strava-activities`
+3. Per-activity episodic events: `actionType: "workout"` (`externalId: "activity-{id}"`)
+4. PR events: `actionType: "milestone"` when `activity.pr_count > 0` (`externalId: "pr-{id}"`)
+5. Incremental via `syncCursor` (unix timestamp). First sync = baseline (facts only, no events).
+
+**API routes:**
+- `GET /api/connectors/strava/connect` — Initiates OAuth
+- `GET /api/auth/strava/callback/connector` — OAuth callback
+- `POST /api/connectors/strava/sync` — Manual sync
+
+### 7.10 Planned Connectors (Future)
 
 | Connector | Category | Auth | Priority |
 |---|---|---|---|
-| **Strava** | Sports | OAuth | Phase 2 |
-| **Spotify** | Music | OAuth | Phase 2 |
-| **Goodreads** | Reading | OAuth/scrape | Phase 2 |
-| **Google Scholar** | Academic | Public API | Phase 2 |
-| **ORCID** | Academic | Public API | Phase 2 |
-| **Chess.com** | Gaming | Public API | Phase 2 |
-| **Last.fm** | Music | API key | Phase 2 |
+| **Goodreads** | Reading | OAuth/scrape | Phase 3 |
+| **Google Scholar** | Academic | Public API | Phase 3 |
+| **ORCID** | Academic | Public API | Phase 3 |
+| **Chess.com** | Gaming | Public API | Phase 3 |
+| **Last.fm** | Music | API key | Phase 3 |
 
-### 7.8 How Connectors Feed the Agent
+### 7.11 How Connectors Feed the Agent
 
 Connectors create facts that the agent reasons about during page composition:
 
@@ -2917,7 +2991,7 @@ The page composer then:
   - Connector facts appear in preview immediately via SSE
 ```
 
-### 7.9 Post-Import Agent Reaction
+### 7.12 Post-Import Agent Reaction
 
 After a connector import (currently LinkedIn ZIP), the agent automatically reacts with a
 brief review of imported data and asks targeted questions to fill gaps that connectors

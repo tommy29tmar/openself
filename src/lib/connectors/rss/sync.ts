@@ -6,6 +6,7 @@
  * Seeds connector_items for dedup on subsequent syncs.
  */
 
+import { createHash } from "node:crypto";
 import {
   getConnectorWithCredentials,
   updateConnectorStatus,
@@ -227,6 +228,5 @@ async function readBodyWithLimit(response: Response, maxBytes: number): Promise<
 }
 
 function hashGuid(guid: string): string {
-  const { createHash } = require("node:crypto");
   return createHash("sha256").update(guid).digest("hex").slice(0, 12);
 }
