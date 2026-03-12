@@ -393,7 +393,7 @@ export function buildSystemPrompt(
 
   // Budget guard: the system prompt must leave room for context (facts, memory,
   // soul, summaries, conflicts) which lives in contextParts assembled separately.
-  // TOTAL_TOKEN_BUDGET in context.ts is 65000. Reserve at least 13000 for context.
+  // TOTAL_TOKEN_BUDGET in context.ts is 75000. Reserve at least 13000 for context.
   // Nominal sizes by path (as of Sprint 6 refactor):
   //   first_visit ~7900, draft_ready ~7600, active_fresh/stale ~7600,
   //   returning_no_page ~9900 (full schema). Budget set to 10000 to catch

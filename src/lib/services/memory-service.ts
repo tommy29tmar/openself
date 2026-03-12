@@ -26,6 +26,8 @@ export type MemoryRow = {
   source?: string;
 };
 
+export type ScoredMemoryRow = MemoryRow & { score: number };
+
 function computeContentHash(content: string): string {
   return createHash("sha256").update(content.trim().toLowerCase()).digest("hex");
 }
@@ -175,7 +177,7 @@ const RECENCY_HALF_LIFE_DAYS = 14;
  * Relevance-scored retrieval: recency × provenance_weight.
  * Replaces flat getActiveMemories(ownerKey, 10) for context injection.
  */
-export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): MemoryRow[] {
+export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): ScoredMemoryRow[] {
   const rows = sqlite
     .prepare(
       `SELECT id, owner_key, content, memory_type, category, content_hash,
@@ -222,7 +224,7 @@ export function getActiveMemoriesScored(ownerKey: string, limit: number = 15): M
 }
 
 /**
- * Get active memories for an owner (ordered by recency, limited).
+ * @deprecated Use getActiveMemoriesScored() instead. Kept for test compatibility.
  */
 export function getActiveMemories(ownerKey: string, limit: number = 20): MemoryRow[] {
   return db
