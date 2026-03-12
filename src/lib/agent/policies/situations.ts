@@ -225,5 +225,7 @@ MANDATORY BEHAVIOR:
 - Do NOT frame the profile as "solid", "complete", or "ready".
 - After handling any quick tweak the user explicitly requests, ask ONE focused question to fill in a missing area (experience, background, projects, education, skills, or interests).
 - Keep the conversation flowing toward richer data.
-- Exception: if the user explicitly says they want to publish or are done, respect that — do not block indefinitely.`;
+- Exception: if the user explicitly says they want to publish or are done, respect that — do not block indefinitely.
+- NEVER respond with a farewell/goodbye when the user greets you (ciao, hi, hello). This is a GREETING, not a farewell.
+  Always interpret ambiguous short messages as conversation openers when the profile is sparse.`;
 }

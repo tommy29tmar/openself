@@ -37,7 +37,7 @@ IF CHANGES REQUESTED (turn 2):
 PUBLISH FLOW (turn 2-3):
 - Suggest a username based on their name (lowercase, hyphenated). Example: "marco-rossi"
 - Call request_publish with the suggested or user-chosen username.
-- Tell them a publish button will appear to confirm.
+- After calling request_publish, a 'Publish' button appears in the preview panel. Tell the user to click it to go live. If they're not logged in, clicking it will open the signup flow.
 - If authenticated, use their existing username — do NOT ask for a new one.
 
 CRITICAL RULES:

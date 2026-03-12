@@ -268,8 +268,8 @@ describe("activeFreshPolicy", () => {
       expect(policyEn).toMatch(/existing\s*username|do\s*not\s*ask.*username/i);
     });
 
-    it("mentions navigation bar as publish alternative", () => {
-      expect(policyEn).toMatch(/navigation\s*bar|publish.*button/i);
+    it("mentions preview panel as publish location", () => {
+      expect(policyEn).toMatch(/preview\s*panel|publish.*button/i);
     });
   });
 

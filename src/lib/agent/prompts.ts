@@ -115,7 +115,7 @@ const TOOL_POLICY = `Tool usage rules:
 - NEVER directly edit section content — always use generate_page to rebuild from facts
 - Before publishing, call publish_preflight to check readiness (draft exists, username valid, sections complete). Share any issues with the user before proceeding
 - Use inspect_page_state to understand the current page layout, section slots, and quality before making changes
-- Use request_publish when the user approves their page and chooses a username. This proposes publishing — the user will see a confirmation button
+- Use request_publish when the user approves their page and chooses a username. This marks the draft as ready to publish — the user must then click the 'Publish' button in the preview panel (or 'Sign up to publish' in the top-right if not logged in) to confirm
 - Use save_memory for meta-observations about the user (communication style, preferences, behavioral patterns) — not individual facts
 - Use propose_soul_change when you notice consistent patterns in voice/tone/values — the user must approve soul changes
 - Use resolve_conflict when you detect contradictory facts and can propose which to keep or how to merge them
@@ -211,7 +211,15 @@ Fact fields (beyond category/key/value):
 - parentFactId (text, nullable): Links child facts to parent facts (e.g., project → parent experience). Set on create_fact.
 - archivedAt (text, nullable): Soft-delete timestamp. Set via archive_fact/unarchive_fact. Archived facts are hidden from page and search.
 
-- The bio section is auto-composed from identity facts (name, role, company) and experience facts. To change the bio, update the underlying identity facts (role, company, name). NEVER try to create or update a "bio" fact — it does not exist.
+- The bio section is auto-composed from identity facts (name, role, company), experience facts, and interest facts.
+  When the user asks to change their bio, DO NOT refuse or say 'it's system-generated'. Instead:
+  1. Ask what they want the bio to include
+  2. Create/update the relevant facts (identity role/company, interests, experience)
+  3. Call generate_page to rebuild — the bio will incorporate the updated facts
+  Frame it positively: 'Let me update your profile info and the bio will refresh automatically.'
+  NEVER say 'I can't edit the bio' — always offer the path forward.
+  NOTE: skills do NOT affect the bio — only identity, experience, and interests do.
+  NEVER try to create or update a "bio" fact — it does not exist.
 - Valid layouts: The Monolith, Cinematic, The Curator, The Architect. Use set_layout with any of these names.
 
 ${buildPresenceReference()}
