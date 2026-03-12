@@ -23,6 +23,8 @@ import { detectConnectorUrls } from "@/lib/connectors/magic-paste";
 import type { PageConfig } from "@/lib/page-config/schema";
 import { getFactsReadScope } from "@/lib/agent/facts-read-scope";
 import type { PendingConfirmation } from "@/lib/services/confirmation-service";
+import { getActivityFeed } from "@/lib/services/activity-feed-service";
+import { formatFeedForContext } from "@/lib/services/activity-feed-formatters";
 
 /**
  * Sort facts for context injection:
@@ -391,6 +393,19 @@ export function assembleContext(
       const presenceLine = `surface:${cfg.surface ?? "?"} voice:${cfg.voice ?? "?"} light:${cfg.light ?? "?"}`;
       const layoutLine = cfg.layoutTemplate ? `layoutTemplate: ${cfg.layoutTemplate}` : "layoutTemplate: (default)";
       pageStateBlock = `CURRENT DRAFT PAGE:\n${layoutLine}\npresence: ${presenceLine}\nsections:\n${sections || "  (none)"}`;
+      pageStateBlock = truncateToTokenBudget(pageStateBlock, profile.pageState.budget ?? BUDGET.pageState);
+    }
+  }
+
+  // Activity feed context — only for steady_state modes
+  if (mode === "steady_state" && profile?.pageState.include) {
+    const feedItems = getActivityFeed(scope.knowledgePrimaryKey, {
+      limit: 15,
+      since: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    });
+    const activityContext = formatFeedForContext(feedItems);
+    if (activityContext) {
+      pageStateBlock += "\n\n" + activityContext;
       pageStateBlock = truncateToTokenBudget(pageStateBlock, profile.pageState.budget ?? BUDGET.pageState);
     }
   }
