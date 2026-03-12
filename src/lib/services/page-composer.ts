@@ -1246,6 +1246,7 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
           volunteering: t.activityVolunteering,
           mentoring: t.activityMentoring,
           hobby: t.activityHobby,
+          sport: t.activitySport,
         };
         item.activityType = (ACTIVITY_TYPE_L10N[activityType] ?? activityType) as ActivityItem["activityType"];
       }

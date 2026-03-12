@@ -46,7 +46,7 @@ export async function batchCreateFacts(
         { ...input, source: "connector" },
         scope.knowledgePrimaryKey,
         scope.cognitiveOwnerKey,
-        { actor: "connector" },
+        { actor: "connector", visibility: "public" },
       );
       report.factsWritten++;
     } catch (error) {

@@ -34,7 +34,7 @@ export function mapStravaProfile(profile: StravaProfile): FactInput[] {
 // ── Activities → Facts ───────────────────────────────────────────────
 
 /**
- * Group activities by sport type and create one interest fact per sport.
+ * Group activities by sport type and create one activity fact per sport.
  */
 export function mapStravaActivities(
   activities: StravaActivity[],
@@ -46,21 +46,31 @@ export function mapStravaActivities(
     sportGroups.set(a.sport_type, group);
   }
 
-  return [...sportGroups.entries()].map(([sport, acts]) => ({
-    category: "interest",
-    key: `strava-${sport.toLowerCase().replace(/\s+/g, "-")}`,
-    value: {
-      name: sport,
-      type: "sport",
-      activityCount: acts.length,
-      totalDistance: Math.round(
-        acts.reduce((sum, a) => sum + a.distance, 0) / 1000,
-      ), // km
-      totalTime: Math.round(
-        acts.reduce((sum, a) => sum + a.moving_time, 0) / 3600,
-      ), // hours
-    },
-  }));
+  return [...sportGroups.entries()].map(([sport, acts]) => {
+    const totalDistKm = Math.round(
+      acts.reduce((sum, a) => sum + a.distance, 0) / 1000,
+    );
+    const totalTimeHrs = Math.round(
+      acts.reduce((sum, a) => sum + a.moving_time, 0) / 3600,
+    );
+    const count = acts.length;
+
+    // Compose human-readable description from stats
+    const parts: string[] = [];
+    parts.push(`${count} ${count === 1 ? "activity" : "activities"}`);
+    if (totalDistKm > 0) parts.push(`${totalDistKm} km`);
+    if (totalTimeHrs > 0) parts.push(`${totalTimeHrs} ${totalTimeHrs === 1 ? "hr" : "hrs"}`);
+
+    return {
+      category: "activity",
+      key: `strava-${sport.toLowerCase().replace(/\s+/g, "-")}`,
+      value: {
+        name: sport,
+        type: "sport",
+        description: parts.join(" · "),
+      },
+    };
+  });
 }
 
 // ── Stats → Facts ────────────────────────────────────────────────────

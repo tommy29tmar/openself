@@ -76,7 +76,7 @@ describe("connector-fact-writer", () => {
     currentSessionId: "anchor-sess",
   };
 
-  it("writes facts with source='connector' and actor='connector'", async () => {
+  it("writes facts with source='connector', actor='connector', visibility='public'", async () => {
     const report = await batchCreateFacts(
       [{ category: "skill", key: "ts", value: { name: "TypeScript" } }],
       scope,
@@ -91,6 +91,7 @@ describe("connector-fact-writer", () => {
     // `source: input.source ?? "chat"` (kb-service.ts:176)
     expect(input.source).toBe("connector");
     expect(options?.actor).toBe("connector");
+    expect(options?.visibility).toBe("public");
     expect(sessionId).toBe("anchor-sess");
     expect(profileId).toBe("prof-1");
     expect(report.factsWritten).toBe(1);

@@ -66,6 +66,7 @@ export interface UiStrings {
   activityVolunteering: string;
   activityMentoring: string;
   activityHobby: string;
+  activitySport: string;
 
   // Proposal banner
   improvementsReady: string;
@@ -178,6 +179,7 @@ const en: UiStrings = {
   activityVolunteering: "volunteering",
   activityMentoring: "mentoring",
   activityHobby: "hobby",
+  activitySport: "sport",
   improvementsReady: "improvements ready",
   review: "Review",
   pageImprovements: "Page improvements",
@@ -276,6 +278,7 @@ const it: UiStrings = {
   activityVolunteering: "volontariato",
   activityMentoring: "mentoring",
   activityHobby: "hobby",
+  activitySport: "sport",
   improvementsReady: "miglioramenti disponibili",
   review: "Rivedi",
   pageImprovements: "Miglioramenti pagina",
@@ -374,6 +377,7 @@ const de: UiStrings = {
   activityVolunteering: "Ehrenamt",
   activityMentoring: "Mentoring",
   activityHobby: "Hobby",
+  activitySport: "Sport",
   improvementsReady: "Verbesserungen verfügbar",
   review: "Überprüfen",
   pageImprovements: "Seitenverbesserungen",
@@ -472,6 +476,7 @@ const fr: UiStrings = {
   activityVolunteering: "bénévolat",
   activityMentoring: "mentorat",
   activityHobby: "loisir",
+  activitySport: "sport",
   improvementsReady: "améliorations disponibles",
   review: "Examiner",
   pageImprovements: "Améliorations de la page",
@@ -570,6 +575,7 @@ const es: UiStrings = {
   activityVolunteering: "voluntariado",
   activityMentoring: "mentoría",
   activityHobby: "afición",
+  activitySport: "deporte",
   improvementsReady: "mejoras disponibles",
   review: "Revisar",
   pageImprovements: "Mejoras de la página",
@@ -668,6 +674,7 @@ const pt: UiStrings = {
   activityVolunteering: "voluntariado",
   activityMentoring: "mentoria",
   activityHobby: "hobby",
+  activitySport: "esporte",
   improvementsReady: "melhorias disponíveis",
   review: "Rever",
   pageImprovements: "Melhorias da página",
@@ -766,6 +773,7 @@ const ja: UiStrings = {
   activityVolunteering: "ボランティア",
   activityMentoring: "メンタリング",
   activityHobby: "趣味",
+  activitySport: "スポーツ",
   improvementsReady: "件の改善提案",
   review: "確認",
   pageImprovements: "ページの改善",
@@ -864,6 +872,7 @@ const zh: UiStrings = {
   activityVolunteering: "志愿服务",
   activityMentoring: "指导",
   activityHobby: "爱好",
+  activitySport: "运动",
   improvementsReady: "项改进可用",
   review: "查看",
   pageImprovements: "页面改进",

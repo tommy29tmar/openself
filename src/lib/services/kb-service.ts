@@ -95,7 +95,7 @@ export async function createFact(
   input: CreateFactInput,
   sessionId: string = "__default__",
   profileId?: string,
-  options?: { actor?: Actor },
+  options?: { actor?: Actor; visibility?: Visibility },
 ): Promise<FactRow> {
   // Validate fact value before persisting
   validateFactValue(input.category, input.key, input.value);
@@ -156,7 +156,7 @@ export async function createFact(
     }
   }
 
-  const visibility = initialVisibility({
+  const visibility = options?.visibility ?? initialVisibility({
     mode: "onboarding",
     category: normalized.canonical,
     confidence,
@@ -190,7 +190,9 @@ export async function createFact(
         source: input.source ?? "chat",
         confidence,
         profileId: effectiveProfileId,
-        visibility: sql`CASE WHEN ${facts.visibility} = 'private' THEN ${visibility} ELSE ${facts.visibility} END`,
+        visibility: options?.visibility
+          ? sql`${options.visibility}`
+          : sql`CASE WHEN ${facts.visibility} = 'private' THEN ${visibility} ELSE ${facts.visibility} END`,
         archivedAt: null,
         updatedAt: now,
       },
