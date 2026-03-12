@@ -68,6 +68,12 @@ export interface UiStrings {
   activityHobby: string;
   activitySport: string;
 
+  // Strava stats description (structured → localized)
+  activityCountSingular: string;
+  activityCountPlural: string;
+  hourSingular: string;
+  hourPlural: string;
+
   // Proposal banner
   improvementsReady: string;
   review: string;
@@ -180,6 +186,10 @@ const en: UiStrings = {
   activityMentoring: "mentoring",
   activityHobby: "hobby",
   activitySport: "sport",
+  activityCountSingular: "activity",
+  activityCountPlural: "activities",
+  hourSingular: "hr",
+  hourPlural: "hrs",
   improvementsReady: "improvements ready",
   review: "Review",
   pageImprovements: "Page improvements",
@@ -279,6 +289,10 @@ const it: UiStrings = {
   activityMentoring: "mentoring",
   activityHobby: "hobby",
   activitySport: "sport",
+  activityCountSingular: "attività",
+  activityCountPlural: "attività",
+  hourSingular: "ora",
+  hourPlural: "ore",
   improvementsReady: "miglioramenti disponibili",
   review: "Rivedi",
   pageImprovements: "Miglioramenti pagina",
@@ -378,6 +392,10 @@ const de: UiStrings = {
   activityMentoring: "Mentoring",
   activityHobby: "Hobby",
   activitySport: "Sport",
+  activityCountSingular: "Aktivität",
+  activityCountPlural: "Aktivitäten",
+  hourSingular: "Std",
+  hourPlural: "Std",
   improvementsReady: "Verbesserungen verfügbar",
   review: "Überprüfen",
   pageImprovements: "Seitenverbesserungen",
@@ -477,6 +495,10 @@ const fr: UiStrings = {
   activityMentoring: "mentorat",
   activityHobby: "loisir",
   activitySport: "sport",
+  activityCountSingular: "activité",
+  activityCountPlural: "activités",
+  hourSingular: "h",
+  hourPlural: "h",
   improvementsReady: "améliorations disponibles",
   review: "Examiner",
   pageImprovements: "Améliorations de la page",
@@ -576,6 +598,10 @@ const es: UiStrings = {
   activityMentoring: "mentoría",
   activityHobby: "afición",
   activitySport: "deporte",
+  activityCountSingular: "actividad",
+  activityCountPlural: "actividades",
+  hourSingular: "h",
+  hourPlural: "h",
   improvementsReady: "mejoras disponibles",
   review: "Revisar",
   pageImprovements: "Mejoras de la página",
@@ -675,6 +701,10 @@ const pt: UiStrings = {
   activityMentoring: "mentoria",
   activityHobby: "hobby",
   activitySport: "esporte",
+  activityCountSingular: "atividade",
+  activityCountPlural: "atividades",
+  hourSingular: "h",
+  hourPlural: "h",
   improvementsReady: "melhorias disponíveis",
   review: "Rever",
   pageImprovements: "Melhorias da página",
@@ -774,6 +804,10 @@ const ja: UiStrings = {
   activityMentoring: "メンタリング",
   activityHobby: "趣味",
   activitySport: "スポーツ",
+  activityCountSingular: "件",
+  activityCountPlural: "件",
+  hourSingular: "時間",
+  hourPlural: "時間",
   improvementsReady: "件の改善提案",
   review: "確認",
   pageImprovements: "ページの改善",
@@ -873,6 +907,10 @@ const zh: UiStrings = {
   activityMentoring: "指导",
   activityHobby: "爱好",
   activitySport: "运动",
+  activityCountSingular: "项活动",
+  activityCountPlural: "项活动",
+  hourSingular: "小时",
+  hourPlural: "小时",
   improvementsReady: "项改进可用",
   review: "查看",
   pageImprovements: "页面改进",

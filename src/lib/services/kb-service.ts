@@ -191,7 +191,7 @@ export async function createFact(
         confidence,
         profileId: effectiveProfileId,
         visibility: options?.visibility
-          ? sql`${options.visibility}`
+          ? sql`CASE WHEN ${facts.visibility} = 'private' THEN ${facts.visibility} ELSE ${options.visibility} END`
           : sql`CASE WHEN ${facts.visibility} = 'private' THEN ${visibility} ELSE ${facts.visibility} END`,
         archivedAt: null,
         updatedAt: now,

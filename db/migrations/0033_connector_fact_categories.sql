@@ -50,6 +50,34 @@ WHERE category = 'interest'
       AND f2.key = facts.key
   );
 
+-- Spotify artists: fix value shape (name → title)
+-- Old mapper stored {name, genres, url}; new mapper stores {title, note?, url}
+UPDATE facts SET
+  value = json_set(json_remove(value, '$.name'), '$.title', json_extract(value, '$.name')),
+  updated_at = datetime('now')
+WHERE key LIKE 'sp-artist-%'
+  AND category = 'music'
+  AND json_extract(value, '$.name') IS NOT NULL
+  AND json_extract(value, '$.title') IS NULL
+  AND archived_at IS NULL;
+
+-- Spotify tracks: fix value shape (name → title)
+-- Old mapper stored {name, artists[], url}; new mapper stores {title, artist(string), url}
+UPDATE facts SET
+  value = json_set(json_remove(value, '$.name'), '$.title', json_extract(value, '$.name')),
+  updated_at = datetime('now')
+WHERE key LIKE 'sp-track-%'
+  AND category = 'music'
+  AND json_extract(value, '$.name') IS NOT NULL
+  AND json_extract(value, '$.title') IS NULL
+  AND archived_at IS NULL;
+
+-- Strava activities: add structured fields for L10N
+-- Old mapper stored {name, type, description:"2 activities · 15 km · 2 hrs"}
+-- New mapper stores {name, type, activityCount, distanceKm?, timeHrs?}
+-- We can't reliably parse the description string back into numbers,
+-- so old facts keep their description field and page-composer falls back to it.
+
 -- Upgrade all connector facts visibility: proposed → public
 -- Scope: ALL connector types (GitHub, LinkedIn, RSS, Spotify, Strava)
 -- Rationale: user explicitly connected each service = implicit consent for public

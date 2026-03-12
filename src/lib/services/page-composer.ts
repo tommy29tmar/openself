@@ -1260,8 +1260,21 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
         };
         item.frequency = FREQ_L10N[frequency.toLowerCase()] ?? frequency;
       }
-      const description = str(v.description);
-      if (description) item.description = description;
+      // Structured Strava data → localized description; fallback to raw description
+      const actCount = typeof v.activityCount === "number" ? v.activityCount : undefined;
+      if (actCount !== undefined) {
+        const t = getUiL10n(language);
+        const parts: string[] = [];
+        parts.push(`${actCount} ${actCount === 1 ? t.activityCountSingular : t.activityCountPlural}`);
+        const km = typeof v.distanceKm === "number" ? v.distanceKm : undefined;
+        if (km && km > 0) parts.push(`${km} km`);
+        const hrs = typeof v.timeHrs === "number" ? v.timeHrs : undefined;
+        if (hrs && hrs > 0) parts.push(`${hrs} ${hrs === 1 ? t.hourSingular : t.hourPlural}`);
+        item.description = parts.join(" · ");
+      } else {
+        const description = str(v.description);
+        if (description) item.description = description;
+      }
       return item;
     })
     .filter((item): item is ActivityItem => item !== null);

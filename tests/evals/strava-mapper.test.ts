@@ -106,13 +106,15 @@ describe("Strava mapper", () => {
       expect(runFact.value.type).toBe("sport");
     });
 
-    it("composes description from stats", () => {
+    it("stores structured stats in value", () => {
       const facts = mapStravaActivities(activities);
       const runFact = facts.find((f) => f.key === "strava-run")!;
-      expect(runFact.value.description).toBe("2 activities · 15 km · 2 hrs");
+      expect(runFact.value.activityCount).toBe(2);
+      expect(runFact.value.distanceKm).toBe(15);
+      expect(runFact.value.timeHrs).toBe(2);
     });
 
-    it("omits 0 km from description", () => {
+    it("omits distanceKm when 0", () => {
       const zeroDistance: StravaActivity[] = [{
         id: 10, name: "Yoga", sport_type: "Yoga",
         distance: 0, moving_time: 3600, elapsed_time: 3600,
@@ -120,10 +122,12 @@ describe("Strava mapper", () => {
         pr_count: 0, achievement_count: 0,
       }];
       const facts = mapStravaActivities(zeroDistance);
-      expect(facts[0].value.description).toBe("1 activity · 1 hr");
+      expect(facts[0].value.activityCount).toBe(1);
+      expect(facts[0].value.distanceKm).toBeUndefined();
+      expect(facts[0].value.timeHrs).toBe(1);
     });
 
-    it("omits 0 hrs from description for very short activities", () => {
+    it("omits timeHrs when 0 for very short activities", () => {
       const quickActivity: StravaActivity[] = [{
         id: 11, name: "Quick Stretch", sport_type: "Yoga",
         distance: 0, moving_time: 30, elapsed_time: 45,
@@ -131,10 +135,12 @@ describe("Strava mapper", () => {
         pr_count: 0, achievement_count: 0,
       }];
       const facts = mapStravaActivities(quickActivity);
-      expect(facts[0].value.description).toBe("1 activity");
+      expect(facts[0].value.activityCount).toBe(1);
+      expect(facts[0].value.distanceKm).toBeUndefined();
+      expect(facts[0].value.timeHrs).toBeUndefined();
     });
 
-    it("uses singular 'activity' for count 1", () => {
+    it("stores correct count for single activity", () => {
       const single: StravaActivity[] = [{
         id: 10, name: "Run", sport_type: "Run",
         distance: 5000, moving_time: 1800, elapsed_time: 1900,
@@ -142,8 +148,7 @@ describe("Strava mapper", () => {
         pr_count: 0, achievement_count: 0,
       }];
       const facts = mapStravaActivities(single);
-      expect(facts[0].value.description).toContain("1 activity");
-      expect(facts[0].value.description).not.toContain("activities");
+      expect(facts[0].value.activityCount).toBe(1);
     });
 
     it("normalizes sport type key (spaces → hyphens, lowercase)", () => {

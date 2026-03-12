@@ -60,7 +60,7 @@ describe("connector section mapping", () => {
       fakeFact({
         category: "activity",
         key: "strava-run",
-        value: { name: "Run", type: "sport", description: "5 activities · 15 km · 2 hrs" },
+        value: { name: "Run", type: "sport", activityCount: 5, distanceKm: 15, timeHrs: 2 },
       }),
     ];
     const page = composeOptimisticPage(facts, "testuser", "en");

@@ -1,4 +1,4 @@
--- db/migrations/0032_fact_display_overrides.sql
+-- db/migrations/0033_fact_display_overrides.sql
 -- Part 1: fact_display_overrides table for content curation layer.
 -- Part 2: Add 'curate_page' to jobs.job_type CHECK constraint (table rebuild).
 

@@ -55,20 +55,18 @@ export function mapStravaActivities(
     );
     const count = acts.length;
 
-    // Compose human-readable description from stats
-    const parts: string[] = [];
-    parts.push(`${count} ${count === 1 ? "activity" : "activities"}`);
-    if (totalDistKm > 0) parts.push(`${totalDistKm} km`);
-    if (totalTimeHrs > 0) parts.push(`${totalTimeHrs} ${totalTimeHrs === 1 ? "hr" : "hrs"}`);
+    const value: Record<string, unknown> = {
+      name: sport,
+      type: "sport",
+      activityCount: count,
+    };
+    if (totalDistKm > 0) value.distanceKm = totalDistKm;
+    if (totalTimeHrs > 0) value.timeHrs = totalTimeHrs;
 
     return {
       category: "activity",
       key: `strava-${sport.toLowerCase().replace(/\s+/g, "-")}`,
-      value: {
-        name: sport,
-        type: "sport",
-        description: parts.join(" · "),
-      },
+      value,
     };
   });
 }
