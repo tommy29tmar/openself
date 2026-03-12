@@ -61,7 +61,7 @@ export function mapSpotifyTopTracks(tracks: SpotifyTrack[]): FactInput[] {
 export function mapSpotifyGenres(artists: SpotifyArtist[]): FactInput[] {
   const genreCounts = new Map<string, number>();
   for (const a of artists) {
-    for (const g of a.genres) {
+    for (const g of a.genres ?? []) {
       genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
     }
   }
