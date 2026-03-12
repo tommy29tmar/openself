@@ -80,6 +80,7 @@
     .tier-card.critical { border-color: #00b894; }
     .tier-card.medium { border-color: #fdcb6e; }
     .tier-card.low { border-color: #d63031; }
+    .tier-card.improved { border-color: #0984e3; }
     .tier-card h3 { margin: 0 0 0.5rem 0; font-size: 1rem; }
     .tier-card .badge {
         display: inline-block;
@@ -93,6 +94,7 @@
     .badge.critical { background: #00b894; color: #000; }
     .badge.medium { background: #fdcb6e; color: #000; }
     .badge.low { background: #d63031; color: #fff; }
+    .badge.improved { background: #0984e3; color: #fff; }
     .tier-card p { margin: 0.3rem 0; font-size: 0.85rem; line-height: 1.5; color: #b2bec3; }
     .tier-card strong { color: #dfe6e9; }
     .tier-card code { background: #2d3436; padding: 1px 5px; border-radius: 3px; font-size: 0.8rem; }
@@ -100,13 +102,38 @@
     th { background: #2d3436; padding: 0.6rem; text-align: left; color: #74b9ff; border-bottom: 2px solid #4a69bd; }
     td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #2d3436; color: #b2bec3; }
     tr:hover td { background: #1a1a3e; }
+    .bug-card {
+        background: #1a1a3e;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.8rem;
+        border-left: 4px solid;
+    }
+    .bug-card.high { border-color: #d63031; }
+    .bug-card.med { border-color: #fdcb6e; }
+    .bug-card.low-sev { border-color: #636e72; }
+    .bug-card h4 { margin: 0 0 0.3rem 0; font-size: 0.9rem; color: #dfe6e9; }
+    .bug-card p { margin: 0.2rem 0; font-size: 0.8rem; line-height: 1.4; color: #b2bec3; }
+    .bug-card code { background: #2d3436; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; }
+    .sev-badge {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-left: 0.3rem;
+    }
+    .sev-badge.high { background: #d63031; color: #fff; }
+    .sev-badge.med { background: #fdcb6e; color: #000; }
+    .sev-badge.low-sev { background: #636e72; color: #fff; }
   </style>
 </head>
 <body>
   <!-- MAIN ARCHITECTURE DIAGRAM -->
   <div class="container">
     <h1>OPENSELF SYSTEM ARCHITECTURE</h1>
-    <div class="subtitle">Last updated: 2026-03-11 &mdash; Phase 1d complete (2656 tests, 24 tools, 11 worker jobs)</div>
+    <div class="subtitle">Last updated: 2026-03-12 &mdash; Phase 1d complete + Memory Bugfix &amp; Enhancement (2802 tests, 250 files, 24 tools, 11 worker jobs, 30 migrations)</div>
     <div class="mermaid">
 graph TB
     classDef ui fill:#2d3436,stroke:#636e72,stroke-width:1px,color:#fff,rx:8px,ry:8px
@@ -125,8 +152,8 @@ graph TB
         User((User))
         Chat[Chat UI]:::ui
         STT[Voice / STT\nWhisper]:::ui
-        Connectors[Connectors\nGitHub OAuth\nLinkedIn ZIP]:::ui
-        MagicPaste[Magic Paste\nURL Detection]:::ui
+        Connectors[5 Connectors\nGitHub OAuth\nLinkedIn ZIP\nRSS URL\nSpotify OAuth\nStrava OAuth]:::ui
+        MagicPaste[Magic Paste\nURL Detection\n5 domains]:::ui
     end
 
     %% GRUPPO 2: IL CERVELLO
@@ -135,32 +162,32 @@ graph TB
         subgraph JI ["Journey Intelligence"]
             direction LR
             JState[6 States\n11 Situations\n3 Expertise]:::journey
-            Policies[Policy Engine\nShared Rules + Per-State]:::journey
+            Policies[Policy Engine\nShared Rules + Per-State\n2-Layer Architecture]:::journey
         end
         subgraph AGENT ["Agent Pipeline"]
             direction TB
-            Orchestrator[Orchestrator\nConstraints-by-Construction]:::core
+            Orchestrator[Orchestrator\nConstraints-by-Construction\n75k context budget]:::core
             LLMRouter{Multi-Provider LLM\nfast / standard / reasoning}:::core
             ExtThinking[Extended Thinking\nBudget: 8k tokens]:::core
             Tools[Tool Engine\n24 Tools]:::core
         end
         subgraph SAFETY ["Safety Layer"]
             direction TB
-            ClaimGuard[Action Claim Guard\nStream Rewriter]:::safety
-            ConfirmSys[Confirmation System\nDeferred Commit]:::safety
-            ToolHonesty[Tool Honesty\nTOOL_POLICY]:::safety
+            ClaimGuard[Action Claim Guard\nStream Rewriter\nPer-tool fallbacks]:::safety
+            ConfirmSys[Confirmation System\nDeferred Commit\nconfirmationId + deleteGate]:::safety
+            ToolHonesty[Tool Honesty\nTOOL_POLICY\nImmutable Facts]:::safety
         end
     end
 
     %% GRUPPO 3: LA MEMORIA (4 TIERS)
-    subgraph MEMORY ["3. Memory System"]
+    subgraph MEMORY ["3. Memory System (75k total budget)"]
         direction LR
         subgraph Tiers ["4-Tier Memory"]
             direction TB
             T1[(Tier 1: Chat History\n20 turns, 22k budget)]:::data
-            T2[(Tier 2: Summaries\nCAS, 7k budget)]:::data
-            T3[(Tier 3: KB + Soul\nFacts 17k + Soul 13k\n+ Meta-Mem 3.5k)]:::data
-            T4[(Tier 4: Episodic\nFTS5, 0 budget\nPull-only via tools)]:::data
+            T2[(Tier 2: Summaries\nCursor-CAS, 5-7k budget)]:::data
+            T3[(Tier 3: KB + Soul\nFacts 13-17k + Soul 3-13k\n+ Meta-Mem 5.5k)]:::data
+            T4[(Tier 4: Episodic\nFTS5 + Smart Inject\n3-5k budget, 30d window)]:::data
         end
         Trust[Trust Ledger\nAudit + Undo\nReverse Ops]:::data
         Conflicts[Conflict Detection\n1.5k budget]:::data
@@ -169,13 +196,14 @@ graph TB
     %% GRUPPO 4: BACKGROUND WORKERS
     subgraph SUBCONSCIOUS ["4. Background Processing (11 jobs)"]
         direction TB
-        SessionCompaction[Session Compaction\nRowid cursor\nAnti-burn drainer]:::worker
-        DreamCycle[Dream Cycle\nPattern thresholds\nLLM evaluation]:::worker
+        SessionCompaction[Session Compaction\nRowid cursor, Anti-burn\n5-window drainer\nExtracts T3 patterns]:::worker
+        DreamCycle[Dream Cycle\nPattern thresholds\nLLM evaluation\nchat-only source filter]:::worker
+        ConnSync[Connector Sync\nPer-connector daily\nDual-output: facts+events\nFirst-sync baseline]:::worker
         subgraph HB ["Heartbeat (3-tier)"]
             direction LR
             HBGlobal[Global\n5min]:::worker
-            HBLight[Light\nDaily]:::worker
-            HBDeep[Deep\nWeekly]:::worker
+            HBLight[Light\nDaily\nJournal patterns]:::worker
+            HBDeep[Deep\nWeekly\nMin 25 facts gate]:::worker
         end
     end
 
@@ -184,16 +212,16 @@ graph TB
         direction TB
         subgraph COMPOSE ["Composition"]
             direction TB
-            Base[Stage 1: Deterministic\nFacts to Schema]:::engine
-            Hybrid[Stage 2: LLM Personalizer\nPer-section copy]:::engine
+            Base[Stage 1: Deterministic\nFacts to Schema\n18 section types]:::engine
+            Hybrid[Stage 2: LLM Personalizer\nPer-section copy cache\nHash guard]:::engine
         end
         subgraph RENDER ["Delivery"]
             direction TB
             Presence[Presence System\nSurface x Voice x Light\n9 Signature Combos]:::presence
-            Config([Page Config JSON]):::engine
+            Config([Page Config JSON\n3 layout templates\n5 widgets]):::engine
             SSE[SSE Preview Stream\nDual-hash guard]:::engine
             Publish[Publish Pipeline\nAtomic promote\nHash + Username guard]:::engine
-            L10N[Translation\n8 Languages]:::engine
+            L10N[Translation\n8 Languages\nauto-translate on publish]:::engine
         end
     end
 
@@ -203,7 +231,8 @@ graph TB
     STT -->|Transcript| Chat
     Chat <--> Orchestrator
     MagicPaste -->|URL hints| Orchestrator
-    Connectors -->|Import| T3
+    Connectors -->|Dual output| T3
+    Connectors -->|Events| T4
 
     %% Journey controlla orchestrator
     JState -->|State + Situations| Policies
@@ -222,21 +251,25 @@ graph TB
     %% Memory access
     Tools -->|Read/Write| MEMORY
 
-    %% Context assembly
+    %% Context assembly (all 4 tiers push into context)
     T1 -->|Recent turns| Orchestrator
     T2 -->|Rolling summary| Orchestrator
-    T3 -->|Facts + Soul| Orchestrator
+    T3 -->|Facts + Soul + Meta-Mem| Orchestrator
+    T4 -->|Smart inject 30d| Orchestrator
     Conflicts -->|Open conflicts| Orchestrator
 
     %% Subconscious flows
     T1 -.->|Trigger| SessionCompaction
     SessionCompaction -.->|Distills| T2
-    SessionCompaction -.->|Extracts| T3
+    SessionCompaction -.->|Extracts patterns| T3
 
-    T4 -.->|Events| DreamCycle
+    T4 -.->|chat events| DreamCycle
     DreamCycle -.->|Proposes activity facts| T3
 
-    HBLight -.->|Maintains| MEMORY
+    ConnSync -.->|Facts| T3
+    ConnSync -.->|Events| T4
+
+    HBLight -.->|Journal patterns| T3
     HBDeep -.->|Coherence + Conformity| MEMORY
 
     %% Page Engine flows
@@ -255,51 +288,67 @@ graph TB
 
   <!-- MEMORY TIER ANALYSIS -->
   <div class="analysis">
-    <h2>MEMORY TIER ANALYSIS: Valore reale per LLM</h2>
+    <h2>MEMORY TIER ANALYSIS: Valore reale per LLM (audit 2026-03-12)</h2>
 
     <div class="tier-card critical">
       <h3>Tier 1: Chat History (20 turns) <span class="badge critical">CRITICAL</span></h3>
-      <p><strong>Budget:</strong> 22,000 token &mdash; <strong>Storage:</strong> <code>messages</code> table &mdash; <strong>Injection:</strong> Sempre presente nel context</p>
-      <p><strong>Come funziona:</strong> Ultimi 20 turni (user+assistant+tool calls) caricati da <code>assembleContext()</code>. Walk backwards fino a saturare il budget. Minimo 2 messaggi sempre inclusi.</p>
+      <p><strong>Budget:</strong> 22,000 token (88k chars) &mdash; <strong>Storage:</strong> <code>messages</code> table &mdash; <strong>Injection:</strong> Sempre presente nel context</p>
+      <p><strong>Come funziona:</strong> Ultimi 20 turni (user+assistant+tool calls) caricati da <code>assembleContext()</code>. Walk backwards fino a saturare il budget. Minimo 2 messaggi sempre inclusi. Role whitelist filtering prima di inviare all'LLM.</p>
       <p><strong>Valore reale:</strong> Massimo. L'LLM vede la conversazione corrente, mantiene coerenza, capisce il contesto immediato. Senza questo tier l'agente sarebbe senza memoria a breve termine.</p>
     </div>
 
     <div class="tier-card critical">
-      <h3>Tier 3A: Knowledge Base &mdash; Facts (fino a 120 facts) <span class="badge critical">CRITICAL</span></h3>
-      <p><strong>Budget:</strong> 13,000-17,000 token &mdash; <strong>Storage:</strong> <code>facts</code> table &mdash; <strong>Injection:</strong> Sempre nel context (anche first_visit)</p>
-      <p><strong>Come funziona:</strong> Facts immutabili (delete+create per correzioni). Ordinati da <code>sortFactsForContext()</code>: 5 pi&ugrave; recenti garantiti + resto per rilevanza (confidence &times; recency &times; children count). Dedup via <code>stableDeepEqual</code>. Formato: <code>[category/key]: {value}</code>.</p>
-      <p><strong>Valore reale:</strong> Core assoluto. &Egrave; la source of truth dell'identit&agrave; utente. Tutta la generazione pagina, personalizzazione, e comprensione dell'agente parte dai facts. Budget alto e giustificato.</p>
+      <h3>Tier 1b: Knowledge Base &mdash; Facts (fino a 120 facts) <span class="badge critical">CRITICAL</span></h3>
+      <p><strong>Budget:</strong> 13,000-17,000 token (varia per state) &mdash; <strong>Storage:</strong> <code>facts</code> table &mdash; <strong>Injection:</strong> Sempre nel context (anche first_visit)</p>
+      <p><strong>Come funziona:</strong> Facts immutabili al livello agent (delete+create per correzioni). DB layer usa upsert per connector re-sync. Ordinati da <code>sortFactsForContext()</code>: 5 pi&ugrave; recenti garantiti + resto per rilevanza (confidence &times; recency &times; children count). Dedup via <code>stableDeepEqual</code> (key-order-independent JSON comparison). Formato: <code>[category/key]: {value}</code>. 5 connectors alimentano facts: GitHub (repos, skills, social), LinkedIn (experience, education, skills), RSS (articles), Spotify (artists, tracks, genres), Strava (sports, stats).</p>
+      <p><strong>Valore reale:</strong> Core assoluto. Source of truth dell'identit&agrave; utente. Tutta la generazione pagina, personalizzazione, e comprensione dell'agente parte dai facts. Budget alto e giustificato. <strong>Privacy:</strong> L'agente vede TUTTI i facts (inclusi private), il filtro <code>filterPublishableFacts()</code> si applica solo alla pagina.</p>
     </div>
 
     <div class="tier-card medium">
-      <h3>Tier 3B: Soul Profiles <span class="badge medium">MEDIUM</span></h3>
-      <p><strong>Budget:</strong> 8,500-13,000 token &mdash; <strong>Storage:</strong> <code>soulProfiles</code> table &mdash; <strong>Injection:</strong> Assente per first_visit e blocked</p>
-      <p><strong>Come funziona:</strong> Versioned overlay JSON (<code>voice, tone, values, selfDescription, communicationStyle</code>). Compilato in prosa dall'agente. Richiede approvazione utente via <code>propose_soul_change</code>.</p>
-      <p><strong>Valore reale:</strong> Medio-alto per utenti attivi. Influenza il tono e la voce dell'agente + personalizzazione pagina (Stage 2 compiler). Ma l'agente funziona anche senza soul &mdash; non &egrave; bloccante. <strong>Sottoutilizzato nella fase iniziale</strong>: per first_visit il budget &egrave; 0.</p>
+      <h3>Tier 1c: Soul Profiles <span class="badge medium">MEDIUM-HIGH</span></h3>
+      <p><strong>Budget:</strong> 3,000-13,000 token (varia per state, runtime gate &ge;10 facts per first_visit) &mdash; <strong>Storage:</strong> <code>soulProfiles</code> table &mdash; <strong>Injection:</strong> Condizionale: disabled per blocked, runtime-gated per first_visit</p>
+      <p><strong>Come funziona:</strong> Versioned overlay JSON (<code>voice, tone, values, selfDescription, communicationStyle</code>). Compilato in prosa dall'agente. Richiede approvazione utente via <code>propose_soul_change</code>. Per <code>first_visit</code>: <code>include: false</code> ma <code>budget: 3000</code> &mdash; attivabile runtime quando publishable facts &ge; 10.</p>
+      <p><strong>Valore reale:</strong> Medio-alto per utenti attivi. Influenza tono/voce dell'agente + personalizzazione pagina (Stage 2 compiler). <code>draft_ready</code> ha il budget massimo (13k) per garantire personalit&agrave; nella pagina.</p>
     </div>
 
     <div class="tier-card medium">
-      <h3>Tier 2: Conversation Summaries <span class="badge medium">MEDIUM</span></h3>
-      <p><strong>Budget:</strong> 7,000 token &mdash; <strong>Storage:</strong> <code>conversation_summaries</code> table (CAS) &mdash; <strong>Injection:</strong> Solo returning_no_page, active_fresh, active_stale</p>
-      <p><strong>Come funziona:</strong> Generato async dal worker (<code>memory_summary</code> job). Trigger: &ge;5 messaggi non summarizzati. Cursor-based incrementale. CAS pattern anti-race. Usa modello "standard" (Claude Sonnet).</p>
-      <p><strong>Valore reale:</strong> Medio-alto per utenti di ritorno. Comprime la storia conversazionale oltre i 20 turni in un sommario strutturato. Riduce la pressione sul Tier 1. <strong>Ma assente per first_visit e draft_ready</strong> &mdash; i nuovi utenti non ne beneficiano.</p>
+      <h3>Tier 2: Conversation Summaries <span class="badge medium">MEDIUM-HIGH</span></h3>
+      <p><strong>Budget:</strong> 5,000-7,000 token &mdash; <strong>Storage:</strong> <code>conversation_summaries</code> table (cursor-CAS, 1 row/owner) &mdash; <strong>Injection:</strong> 4/6 states (esclusi first_visit e blocked)</p>
+      <p><strong>Come funziona:</strong> Generato async dal worker (<code>memory_summary</code> job, triggered dopo ogni chat turn). Threshold: &ge;5 messaggi non summarizzati. Rolling merge incrementale (non replace-all). CAS via compound cursor (<code>cursor_created_at</code> + <code>cursor_message_id</code>). Usa modello "standard" (Claude Sonnet), <code>maxTokens: 800</code>. Include <code>buildJournalDigest()</code> con tool usage. Prompt: third person, &lt;500 words.</p>
+      <p><strong>Valore reale:</strong> Medio-alto per utenti di ritorno. Comprime la storia conversazionale oltre i 20 turni. <code>draft_ready</code> include summary a 5k (budget ridotto vs 7k standard per lasciare spazio al soul 13k). <strong>Feed-forward:</strong> Il summary alimenta anche il prompt di session compaction come <code>PREVIOUS CONTEXT</code>.</p>
+      <p><strong>Limiti noti:</strong> Nessuna validazione qualit&agrave; output (solo empty-string check). <code>message_count</code> stores only current window count (non cumulativo). Nessun TTL/cleanup su righe vecchie.</p>
     </div>
 
-    <div class="tier-card low">
-      <h3>Tier 3C: Meta-Memories (Agent Memories) <span class="badge low">LOW</span></h3>
-      <p><strong>Budget:</strong> 3,500 token &mdash; <strong>Storage:</strong> <code>agent_memory</code> table &mdash; <strong>Injection:</strong> Solo returning, active_fresh, active_stale (top 10)</p>
-      <p><strong>Come funziona:</strong> Richiede che l'agente chiami esplicitamente <code>save_memory()</code>. 4 tipi: observation, preference, insight, pattern. Cooldown 5 writes/60s. Quota max 50. Dedup via content hash.</p>
-      <p><strong>Valore reale: BASSO.</strong> L'agente quasi mai chiama <code>save_memory()</code> spontaneamente. Top 10 su max 50 = pochissimo contenuto. Budget 3.5k irrisorio ma adeguato al poco contenuto. <strong>Problemi:</strong> (1) nessun prompt esplicito che spinga l'agente a salvare memories; (2) la distinzione observation/preference/insight non &egrave; chiara per l'LLM; (3) il valore aggiunto rispetto ai facts e summaries &egrave; marginale.</p>
+    <div class="tier-card improved">
+      <h3>Tier 3: Meta-Memories (Agent Memories) <span class="badge improved">IMPROVED</span></h3>
+      <p><strong>Budget:</strong> 5,500 token &mdash; <strong>Storage:</strong> <code>agent_memory</code> table &mdash; <strong>Injection:</strong> 4/6 states (esclusi first_visit e blocked), top 15 scored</p>
+      <p><strong>Come funziona:</strong> Due path di scrittura: (1) Agent via <code>save_memory()</code> tool (source="agent", cooldown 5/60s, confidence 1.0); (2) Worker via <code>saveMemoryFromWorker()</code> (source="worker", no cooldown, confidence 0.8, "pattern" type). Quota max 50 attive con <strong>eviction policy</strong>. Dedup via SHA-256 content hash (trim+lowercase). 4 tipi: observation, preference, insight, pattern.</p>
+      <p><strong>Eviction Policy:</strong> Quando la quota 50 &egrave; raggiunta, <code>evictLowestScoring()</code> disattiva la memory con punteggio pi&ugrave; basso &mdash; ma protegge un minimo di 5 agent memories (<code>AGENT_FLOOR=5</code>). Sostituisce il rigid quota enforcement. ADR-0015.</p>
+      <p><strong>Scoring:</strong> <code>getActiveMemoriesScored()</code> &mdash; <code>score = creationRecency &times; provenanceWeight &times; usageBoost</code>:<br/>
+        &bull; <code>creationRecency = 0.5^(age_days/14)</code> (half-life 14gg)<br/>
+        &bull; <code>provenanceWeight = {agent: 1.0, worker: 0.6}</code><br/>
+        &bull; <code>usageBoost</code>: se referenziata <code>= 0.5^(days_since_last_ref/28)</code> (half-life 28gg); se mai referenziata <code>= 0.5</code> (<code>NEVER_REFERENCED_PENALTY</code>)<br/>
+        Pre-fetch 50 pi&ugrave; recenti, score, top 15 returned. Format nel context: <code>- [type|category] content</code> (e.g. <code>- [observation|layout-preferences] User prefers compact sidebar</code>).</p>
+      <p><strong>Usage tracking:</strong> <code>updateLastReferencedAt(ownerKey, memoryIds)</code> aggiorna <code>last_referenced_at</code> per tutti gli ID memory che sopravvivono al context assembly. Chiamata async in <code>onFinish</code> del chat route. Paired ID tracking (<code>Map&lt;line, id&gt;</code>) attraverso tutte le fasi di truncation. Migration 0030 aggiunge colonna <code>last_referenced_at TEXT</code>. Defensive cap: chunked queries per rispettare il limite 999 parametri SQLite.</p>
+      <p><strong>Memory API:</strong> <code>GET /api/memory</code> (lista scored active memories) + <code>DELETE /api/memory/[id]</code> (soft-deactivate, owner-scoped).</p>
+      <p><strong>MEMORY SELF-MANAGEMENT policy:</strong> Blocco dedicato nel system prompt. Salva: preferenze stile/comunicazione, pattern ricorrenti. NON salvare: info fattuali (&rarr; facts), istruzioni one-time, tool usage stats. CROSS-TIER AWARENESS: quando RECENT EVENTS e KNOWN FACTS sono correlati, menzionare la connessione naturalmente.</p>
+      <p><strong>Worker extraction:</strong> Session compaction estrae fino a 3 <code>patternsObserved</code> per window (LLM fast tier, few-shot prompt, behavioral synthesis obbligatoria, ban mechanical stats). Light heartbeat estrae journal patterns (deterministic: repeated_tool, tool_sequence, correction_pattern).</p>
+      <p><strong>Miglioramenti vs design precedente:</strong> Budget 3.5k &rarr; 5.5k. Top 10 &rarr; top 15. Worker path no-cooldown. Scoring 2-factor &rarr; 3-factor (+ usageBoost). Rigid quota &rarr; eviction con AGENT_FLOOR. Formato <code>[memoryType]</code> &rarr; <code>[type|category]</code>. Memory API + SELF-MANAGEMENT policy.</p>
+      <p><strong>Limiti aperti:</strong> (1) <code>saveMemoryFromWorker</code> usa raw SQL (bypass Drizzle type safety); (2) Nessuna UI frontend per gestire memories (solo API REST).</p>
     </div>
 
-    <div class="tier-card low">
-      <h3>Tier 4: Episodic Memory (Life Journal) <span class="badge low">LOW</span></h3>
-      <p><strong>Budget:</strong> <strong>0 token</strong> (zero) &mdash; <strong>Storage:</strong> <code>episodic_events</code> + FTS5 &mdash; <strong>Injection:</strong> MAI automatica, solo pull via <code>recall_episodes()</code></p>
-      <p><strong>Come funziona:</strong> Append-only event ledger. L'agente registra eventi via <code>record_event()</code>. Dream Cycle worker consolida pattern (&ge;3 eventi/60gg) e propone activity facts. <code>has_pending_episodic_patterns</code> situation segnala pattern pendenti. Ma i dati episodici <strong>non entrano mai nel system prompt</strong>.</p>
-      <p><strong>Valore reale: BASSO.</strong> Sistema completamente "pull": l'agente deve ricordarsi di chiamare <code>recall_episodes()</code>, cosa che non fa spontaneamente. Il Dream Cycle funziona ma i suoi output (proposals) diventano facts (Tier 3) solo dopo approvazione. <strong>Problemi:</strong> (1) 0 token di budget = l'LLM non vede MAI gli episodi nel contesto; (2) nessun prompt che suggerisca all'agente di consultare gli episodi; (3) il valore aggiunto &egrave; indiretto (solo via Dream Cycle → facts).</p>
+    <div class="tier-card improved">
+      <h3>Tier 4: Episodic Memory (Life Journal) <span class="badge improved">IMPROVED</span></h3>
+      <p><strong>Budget:</strong> 3,000-5,000 token &mdash; <strong>Storage:</strong> <code>episodic_events</code> + FTS5 + <code>episodic_pattern_proposals</code> &mdash; <strong>Injection:</strong> <strong>PUSH automatica</strong> via <code>getRecentEventsForContext()</code></p>
+      <p><strong>Come funziona:</strong> Append-only event ledger con source provenance (<code>chat</code>, <code>github</code>, <code>linkedin_zip</code>, <code>rss</code>, <code>spotify</code>, <code>strava</code>). Smart context injection: 30-day window, per-source caps (chat: 10, connector: 3 each, total: 15). Block label: <code>RECENT EVENTS (last 30 days, N events)</code>. Mutable block (partecipa al budget shrink loop).</p>
+      <p><strong>FTS5 word-split:</strong> <code>recall_episodes</code> usa AND semantics per query multi-word: split via <code>.split(/\s+/)</code>, ogni termine genera OR (category, key, value), termini combinati con AND. Stesso pattern di <code>searchFacts</code>.</p>
+      <p><strong>Connector dual-write:</strong> GitHub (new repos + activity stream, first-sync guard via <code>hasActivityBaseline</code>), LinkedIn (certifications + articles, source <code>"linkedin_zip"</code>), RSS (new articles), Spotify (taste-shift detection &ge;3/5 top-5 changed + stale fact archival dopo 3 sync assenti via <code>staleSinceSync</code>), Strava (workout + PR milestones). First-sync baseline rule: solo facts, zero events (seeds <code>connector_items</code> per dedup). ADR-0016.</p>
+      <p><strong>Dream Cycle:</strong> <code>consolidate_episodes</code> worker: <code>checkPatternThresholds</code> (&ge;3 events/60d, recency 30d, <code>source='chat'</code> only) &rarr; <code>evaluatePatternWithLLM</code> (fast tier) &rarr; <code>insertEpisodicProposal</code> (30d TTL). Acceptance: atomic SQLite transaction (claim + write activity fact + logEvent). Rejection: 90-day cooldown.</p>
+      <p><strong>Agent tools:</strong> <code>record_event</code> (insert + enqueue consolidation), <code>recall_episodes</code> (FTS5 word-split AND semantics, max 20), <code>confirm_episodic_pattern</code> (accept/reject proposals, recomposes draft).</p>
+      <p><strong>Miglioramenti vs design precedente:</strong> Budget 0 &rarr; 3-5k. Pull-only &rarr; push automatica. Nessun connector event &rarr; 5 connectors dual-write. <code>has_pending_episodic_patterns</code> situation per surfacing. FTS word-split AND semantics. GitHub first-sync guard. LinkedIn source unificato a <code>"linkedin_zip"</code>. Spotify stale fact archival.</p>
     </div>
 
-    <h2>CONTEXT BUDGET PER JOURNEY STATE</h2>
+    <h2>CONTEXT BUDGET PER JOURNEY STATE (verified 2026-03-12)</h2>
     <table>
       <thead>
         <tr>
@@ -308,6 +357,7 @@ graph TB
           <th>Soul</th>
           <th>Summary</th>
           <th>Meta-Mem</th>
+          <th>Episodic</th>
           <th>Conflicts</th>
           <th>PageState</th>
           <th>Total Mutable</th>
@@ -317,55 +367,61 @@ graph TB
         <tr>
           <td><strong>first_visit</strong></td>
           <td>17k</td>
+          <td>3k*</td>
           <td>&mdash;</td>
           <td>&mdash;</td>
           <td>&mdash;</td>
           <td>&mdash;</td>
           <td>&mdash;</td>
-          <td>17k</td>
+          <td>17-20k</td>
         </tr>
         <tr>
           <td><strong>returning_no_page</strong></td>
           <td>17k</td>
           <td>7k</td>
           <td>7k</td>
-          <td>3.5k</td>
+          <td>5.5k</td>
+          <td>5k</td>
           <td>1.5k</td>
           <td>&mdash;</td>
-          <td>36k</td>
+          <td>43k</td>
         </tr>
         <tr>
           <td><strong>draft_ready</strong></td>
           <td>13k</td>
           <td>13k</td>
-          <td>&mdash;</td>
-          <td>&mdash;</td>
+          <td>5k</td>
+          <td>5.5k</td>
+          <td>3k</td>
           <td>1.5k</td>
           <td>1.5k</td>
-          <td>29k</td>
+          <td>42.5k</td>
         </tr>
         <tr>
           <td><strong>active_fresh</strong></td>
           <td>13k</td>
           <td>8.5k</td>
           <td>7k</td>
-          <td>3.5k</td>
+          <td>5.5k</td>
+          <td>5k</td>
           <td>1.5k</td>
           <td>1.5k</td>
-          <td>35k</td>
+          <td>42k</td>
         </tr>
         <tr>
           <td><strong>active_stale</strong></td>
           <td>17k</td>
           <td>8.5k</td>
           <td>7k</td>
-          <td>3.5k</td>
+          <td>5.5k</td>
+          <td>5k</td>
           <td>1.5k</td>
           <td>1.5k</td>
-          <td>39k</td>
+          <td>46k</td>
         </tr>
         <tr>
           <td><strong>blocked</strong></td>
+          <td>&mdash;</td>
           <td>&mdash;</td>
           <td>&mdash;</td>
           <td>&mdash;</td>
@@ -377,24 +433,168 @@ graph TB
       </tbody>
     </table>
     <p style="font-size: 0.8rem; color: #636e72; margin-top: 0.5rem;">
-      + Chat History (22k fissi) + Static blocks (policies, tools schema, shared rules). Total context budget: 65k tokens. Tier 4 (Episodic): 0 in tutti gli stati.
+      * first_visit soul: <code>include: false</code> ma <code>budget: 3000</code> &mdash; attivabile runtime quando publishable facts &ge; 10 (<code>SPARSE_PROFILE_FACT_THRESHOLD</code>).<br/>
+      + Chat History (22k fissi) + Static blocks (policies, tools schema, shared rules, temporal context, auth, exploration, layout intelligence, pending ops, coherence, magic paste, quota).<br/>
+      Total context budget: <strong>75,000 tokens</strong>. Token estimation: <code>Math.ceil(text.length / 4)</code>. Overflow: iterative shrink loop (20 iterations, largest block &rarr; 80%, then static fallback).
     </p>
 
-    <h2>DIAGNOSI E RACCOMANDAZIONI</h2>
+    <h2>BUGS TROVATI &amp; RISOLTI (audit 2026-03-12)</h2>
 
-    <div class="tier-card" style="border-color: #74b9ff;">
-      <h3 style="color: #74b9ff;">Tier 3C (Meta-Memories): come renderlo utile</h3>
-      <p>1. <strong>Auto-save nel prompt:</strong> Aggiungere istruzione esplicita nel TOOL_POLICY: "Dopo ogni sessione significativa, salva 1-2 observations su preferenze o pattern emersi".</p>
-      <p>2. <strong>Trigger nel session compaction:</strong> Il worker che compatta le sessioni potrebbe estrarre meta-memories automaticamente, senza dipendere dall'agente.</p>
-      <p>3. <strong>Ridurre la complessit&agrave;:</strong> Unificare i 4 tipi (observation/preference/insight/pattern) in un solo tipo generico. L'LLM non distingue bene tra questi.</p>
+    <div class="bug-card low-sev" style="border-color: #00b894;">
+      <h4>BUG-E1: GitHub first-sync episodic violation <span class="sev-badge" style="background: #00b894; color: #fff;">FIXED</span></h4>
+      <p><strong>Fix:</strong> <code>ff8883a</code> &mdash; Aggiunto <code>hasActivityBaseline</code> guard al path B di <code>github/sync.ts</code>. Cursor seeded al first-sync. Nessun evento emesso alla prima connessione.</p>
+    </div>
+
+    <div class="bug-card low-sev" style="border-color: #00b894;">
+      <h4>BUG-E2/E3: RSS + Strava dedup gap <span class="sev-badge" style="background: #00b894; color: #fff;">FIXED</span></h4>
+      <p><strong>Fix:</strong> <code>cc7c8a3</code> &mdash; Rimosso filtro <code>event_id IS NOT NULL</code> dal dedup check. I <code>connector_items</code> baseline ora bloccano la ri-emissione di eventi al secondo sync.</p>
+    </div>
+
+    <div class="bug-card low-sev" style="border-color: #00b894;">
+      <h4>BUG-E4: LinkedIn source inconsistency <span class="sev-badge" style="background: #00b894; color: #fff;">FIXED</span></h4>
+      <p><strong>Fix:</strong> <code>43b078d</code> &mdash; Source unificato a <code>"linkedin_zip"</code> in <code>activity-mapper.ts</code>. Niente pi&ugrave; bucketing separato.</p>
+    </div>
+
+    <div class="bug-card low-sev" style="border-color: #00b894;">
+      <h4>BUG-F1: Stale Spotify interest facts accumulation <span class="sev-badge" style="background: #00b894; color: #fff;">FIXED</span></h4>
+      <p><strong>Fix:</strong> <code>f3dc194</code> &mdash; <code>staleSinceSync</code> counter traccia sync consecutivi assenti. Dopo 3 assenze, i facts <code>sp-artist-*</code>/<code>sp-track-*</code>/<code>sp-genre-*</code> vengono archiviati. Archival eseguito <em>prima</em> di <code>batchCreateFacts</code>.</p>
+    </div>
+
+    <div class="bug-card low-sev">
+      <h4>BUG-M1: Stale budget comment in prompts.ts <span class="sev-badge low-sev">LOW</span></h4>
+      <p><strong>File:</strong> <code>src/lib/agent/prompts.ts:395</code> &mdash; commento dice <code>65000</code> ma il valore reale &egrave; <code>75000</code>.</p>
+    </div>
+
+    <div class="bug-card low-sev">
+      <h4>BUG-M2: Dead code &mdash; updateFact still exported <span class="sev-badge low-sev">LOW</span></h4>
+      <p><strong>File:</strong> <code>src/lib/services/kb-service.ts:229</code> &mdash; funzione <code>@deprecated</code> ma ancora esportata e callable. Contraddice il design "immutable facts".</p>
+    </div>
+
+    <div class="bug-card low-sev">
+      <h4>BUG-M3: Dead code &mdash; getActiveMemories unused in production <span class="sev-badge low-sev">LOW</span></h4>
+      <p><strong>File:</strong> <code>src/lib/services/memory-service.ts:227</code> &mdash; sostituita da <code>getActiveMemoriesScored()</code>, usata solo nei test.</p>
+    </div>
+
+    <h2>TEST COVERAGE (344 test su 2802 totali, 12%)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Area</th>
+          <th>File</th>
+          <th>Test ~</th>
+          <th>Copertura</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Tier 1: Facts</strong></td>
+          <td>18</td>
+          <td>170</td>
+          <td>Eccellente. Validation (52 test), batch confirm (18), identity gate, word-split, session isolation, dedup</td>
+        </tr>
+        <tr>
+          <td><strong>Tier 2: Summaries</strong></td>
+          <td>2</td>
+          <td>22</td>
+          <td>Buona. Test real-SQLite aggiunto (<code>session-compaction-real-db</code>). CAS race condition non testata</td>
+        </tr>
+        <tr>
+          <td><strong>Tier 3: Meta-mem</strong></td>
+          <td>5</td>
+          <td>40+</td>
+          <td>Buona. saveMemory, scoring formula (3-factor), eviction policy, worker path, feedback, Memory API. Nuovi: memory-scoring-formula, memory-eviction test</td>
+        </tr>
+        <tr>
+          <td><strong>Tier 4: Episodic</strong></td>
+          <td>10</td>
+          <td>90+</td>
+          <td>Buona. CRUD, tools, consolidation, injection, situations, FTS word-split, connector dedup, GitHub first-sync guard, Spotify stale cleanup. Nuovi: episodic-fts-wordsplit, batch-record-events, github-firstsync-guard, spotify-stale-cleanup, connector-dedup-baseline</td>
+        </tr>
+        <tr>
+          <td><strong>Context Assembly</strong></td>
+          <td>8</td>
+          <td>65</td>
+          <td>Buona. Budget enforcement, message trimming, per-state profiles, static blocks. Gap: detectConnectorUrls sempre mocked</td>
+        </tr>
+        <tr>
+          <td><strong>Integration E2E</strong></td>
+          <td>1</td>
+          <td>8</td>
+          <td>Debole. Nessun test pipeline completo (chat &rarr; compaction &rarr; summary &rarr; meta-memory &rarr; episodic). Compaction real-DB test aggiunto (<code>session-compaction-real-db</code>)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>ARCHITETTURA CONTEXT ASSEMBLY (13 system prompt blocks + 8 mutable + 9 static)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Block</th>
+          <th>Type</th>
+          <th>Budget</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>CORE_CHARTER</td><td>System</td><td>&mdash;</td><td>Identity, personality, register, language, response length</td></tr>
+        <tr><td>2</td><td>SAFETY_POLICY</td><td>System</td><td>&mdash;</td><td>Privacy/safety rules</td></tr>
+        <tr><td>3</td><td>TOOL_POLICY + FACT RECORDING</td><td>System</td><td>&mdash;</td><td>Tool usage rules, episodic routing</td></tr>
+        <tr><td>4</td><td>Schema blocks</td><td>System</td><td>&mdash;</td><td>full / minimal / none per schemaMode</td></tr>
+        <tr><td>5</td><td>OUTPUT_CONTRACT</td><td>System</td><td>&mdash;</td><td>Response format</td></tr>
+        <tr><td>6</td><td>Journey policy</td><td>System</td><td>&mdash;</td><td>State-specific (6 variants)</td></tr>
+        <tr><td>7</td><td>Situation directives</td><td>System</td><td>&mdash;</td><td>Conditional (11 possible situations)</td></tr>
+        <tr><td>8</td><td>Expertise calibration</td><td>System</td><td>&mdash;</td><td>novice / familiar / expert</td></tr>
+        <tr><td>9</td><td>Turn management</td><td>System</td><td>&mdash;</td><td>R1/R2/R4 rules</td></tr>
+        <tr><td>10</td><td>Shared behavioral rules</td><td>System</td><td>&mdash;</td><td>1-question, 2-strike, IMMEDIATE_EXECUTION</td></tr>
+        <tr><td>11</td><td>Memory directives</td><td>System</td><td>&mdash;</td><td>4-tier documentation per agent</td></tr>
+        <tr><td>12</td><td>Planning protocol</td><td>System</td><td>&mdash;</td><td>STRUCTURAL guidance</td></tr>
+        <tr><td>13</td><td>Undo awareness</td><td>System</td><td>&mdash;</td><td>Conflict undo policy</td></tr>
+        <tr><td colspan="5" style="color: #74b9ff; font-weight: 600;">Mutable blocks (subject to iterative shrink)</td></tr>
+        <tr><td>M1</td><td>KNOWN FACTS</td><td>Mutable</td><td>13-17k</td><td>sortFactsForContext, 120 cap</td></tr>
+        <tr><td>M2</td><td>SOUL PROFILE</td><td>Mutable</td><td>3-13k</td><td>Runtime gate per first_visit</td></tr>
+        <tr><td>M3</td><td>CONVERSATION SUMMARY</td><td>Mutable</td><td>5-7k</td><td>Rolling merge, cursor-CAS</td></tr>
+        <tr><td>M4</td><td>AGENT MEMORIES</td><td>Mutable</td><td>5.5k</td><td>Top 15 scored (recency &times; provenance &times; usageBoost), format [type|category]</td></tr>
+        <tr><td>M5</td><td>RECENT EVENTS</td><td>Mutable</td><td>3-5k</td><td>30d window, per-source caps</td></tr>
+        <tr><td>M6</td><td>PENDING CONFLICTS</td><td>Mutable</td><td>1.5k</td><td>Open conflicts</td></tr>
+        <tr><td>M7</td><td>CURRENT DRAFT PAGE</td><td>Mutable</td><td>1.5k</td><td>Steady-state only</td></tr>
+        <tr><td colspan="5" style="color: #74b9ff; font-weight: 600;">Static blocks (shrinkable as last resort)</td></tr>
+        <tr><td>S1</td><td>auth</td><td>Static</td><td>&mdash;</td><td>Username + publish guidance</td></tr>
+        <tr><td>S2</td><td>temporalContext</td><td>Static</td><td>&mdash;</td><td>Current ISO timestamp</td></tr>
+        <tr><td>S3</td><td>exploration</td><td>Static</td><td>&mdash;</td><td>Archetype + priorities</td></tr>
+        <tr><td>S4</td><td>layout</td><td>Static</td><td>&mdash;</td><td>Layout intelligence (draft_ready, active_fresh)</td></tr>
+        <tr><td>S5</td><td>pendingOps</td><td>Static</td><td>&mdash;</td><td>INCOMPLETE_OPERATION from previous turn</td></tr>
+        <tr><td>S6</td><td>coherence</td><td>Static</td><td>&mdash;</td><td>Warnings/infos from session meta</td></tr>
+        <tr><td>S7</td><td>pendingConfirmations</td><td>Static</td><td>&mdash;</td><td>bulk_delete confirmationIds (5min TTL)</td></tr>
+        <tr><td>S8</td><td>quota</td><td>Static</td><td>&mdash;</td><td>Anon user quota warning (remaining &le; 3)</td></tr>
+        <tr><td>S9</td><td>magicPaste</td><td>Static</td><td>&mdash;</td><td>DETECTED SOURCE URLS hint</td></tr>
+      </tbody>
+    </table>
+
+    <h2>RACCOMANDAZIONI APERTE</h2>
+
+    <div class="tier-card" style="border-color: #00b894;">
+      <h3 style="color: #00b894;">Tier 3 (Meta-Memories): completati</h3>
+      <p>1. <del>Implementare <code>frequency_referenced</code></del> &rarr; <strong>DONE:</strong> Implementato come <code>usageBoost</code> nella scoring formula (3-factor: recency &times; provenance &times; usageBoost). <code>last_referenced_at</code> tracciato async via paired ID tracking.</p>
+      <p>2. <del>Sub-quota agent/worker</del> &rarr; <strong>DONE:</strong> Eviction policy con <code>AGENT_FLOOR=5</code> protegge le agent memories. Non serve sub-quota rigida. ADR-0015.</p>
+      <p>3. <del>Renderizzare <code>category</code> nel context</del> &rarr; <strong>DONE:</strong> Formato ora <code>- [type|category] content</code>.</p>
+      <p>4. <del>API per gestione memories</del> &rarr; <strong>DONE:</strong> <code>GET /api/memory</code> + <code>DELETE /api/memory/[id]</code>. UI frontend non ancora implementata.</p>
+    </div>
+
+    <div class="tier-card" style="border-color: #00b894;">
+      <h3 style="color: #00b894;">Tier 4 (Episodic): tutti i fix completati</h3>
+      <p>1. <del>BUG-E1</del> &rarr; <strong>FIXED</strong> (<code>ff8883a</code>): <code>hasActivityBaseline</code> guard + cursor seeding.</p>
+      <p>2. <del>BUG-E2/E3</del> &rarr; <strong>FIXED</strong> (<code>cc7c8a3</code>): rimosso <code>event_id IS NOT NULL</code>, baseline items bloccano ri-emissione.</p>
+      <p>3. <del>BUG-E4</del> &rarr; <strong>FIXED</strong> (<code>43b078d</code>): source unificato a <code>"linkedin_zip"</code>.</p>
+      <p>4. <del>FTS word-split</del> &rarr; <strong>DONE</strong> (<code>a077b13</code>): AND semantics per multi-word queries in <code>recall_episodes</code>.</p>
     </div>
 
     <div class="tier-card" style="border-color: #74b9ff;">
-      <h3 style="color: #74b9ff;">Tier 4 (Episodic): come renderlo utile</h3>
-      <p>1. <strong>Budget dedicato:</strong> Allocare 2-3k token per un blocco "RECENT EPISODES" nel context di active_fresh/active_stale. Iniettare top 5 eventi pi&ugrave; recenti.</p>
-      <p>2. <strong>Push, non pull:</strong> L'agente non dovrebbe dover chiamare <code>recall_episodes()</code> per vedere i propri dati. I dati dovrebbero essere gi&agrave; nel contesto.</p>
-      <p>3. <strong>Cross-reference con facts:</strong> Quando un episodio &egrave; rilevante per un fact esistente, annotarlo. "Last workout: 3 days ago (from episodic)" accanto al fact attivit&agrave;.</p>
-      <p>4. <strong>Il Dream Cycle funziona</strong> ma il suo valore &egrave; indiretto: il pattern diventa un fact solo dopo approvazione. Il percorso episodio → proposal → approvazione → fact → pagina &egrave; troppo lungo per essere percepito dall'utente.</p>
+      <h3 style="color: #74b9ff;">Generale: test coverage gaps rimanenti</h3>
+      <p>1. <del>Session compaction real-SQLite</del> &rarr; <strong>DONE:</strong> test <code>session-compaction-real-db</code> aggiunto.</p>
+      <p>2. <del><code>batchRecordEvents</code> unit test</del> &rarr; <strong>DONE:</strong> test <code>batch-record-events</code> aggiunto (intra-batch dedup, chunking).</p>
+      <p>3. <del><code>evaluatePatternWithLLM</code></del> &rarr; <strong>DONE:</strong> test aggiunto per Dream Cycle prompt.</p>
+      <p>4. <strong>Pipeline E2E:</strong> Ancora mancante. Serve un test che tracci il flusso completo da chat turn a meta-memory extraction.</p>
     </div>
   </div>
 </body>
