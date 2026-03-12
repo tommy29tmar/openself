@@ -276,17 +276,8 @@ export function createAgentTools(
     | { requiresConfirmation: true; message: string }
     | { allowed: true; commit: () => void; consumeOnly?: () => void };
 
-  function deleteGate(factId: string): DeleteGateResult | null {
-    if (_deleteBlockedThisTurn) {
-      const existingPending = pendings.find(p => p.type === "bulk_delete" && !p.confirmationId);
-      if (existingPending?.factIds && !existingPending.factIds.includes(factId)) {
-        existingPending.factIds.push(factId);
-        mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-      }
-      return { requiresConfirmation: true, message: "Further deletions blocked this turn — wait for user confirmation in a new message." };
-    }
-
-    // Check pending (confirmed delete from previous turn) — defer until outcome known
+  function deleteGate(factId: string, opts?: { preConfirmed?: boolean }): DeleteGateResult | null {
+    // Consume any existing pending for this factId regardless of preConfirmed
     const matchIdx = pendings.findIndex(p => p.type === "bulk_delete" && !p.confirmationId && p.factIds?.includes(factId));
     if (matchIdx >= 0) {
       const pending = pendings[matchIdx];
@@ -299,11 +290,38 @@ export function createAgentTools(
         mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length ? pendings : null });
       };
 
+      if (opts?.preConfirmed) {
+        consumePending();
+        return {
+          allowed: true,
+          commit: () => { _deletionCountThisTurn++; },
+          consumeOnly: () => {},
+        };
+      }
+
       return {
         allowed: true,
         commit: () => { consumePending(); _deletionCountThisTurn++; },
         consumeOnly: () => { consumePending(); },
       };
+    }
+
+    // Pre-confirmed: skip all gating, just allow
+    if (opts?.preConfirmed) {
+      return {
+        allowed: true,
+        commit: () => { _deletionCountThisTurn++; },
+        consumeOnly: () => {},
+      };
+    }
+
+    if (_deleteBlockedThisTurn) {
+      const existingPending = pendings.find(p => p.type === "bulk_delete" && !p.confirmationId);
+      if (existingPending?.factIds && !existingPending.factIds.includes(factId)) {
+        existingPending.factIds.push(factId);
+        mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
+      }
+      return { requiresConfirmation: true, message: "Further deletions blocked this turn — wait for user confirmation in a new message." };
     }
 
     // Unconfirmed: allow first, block 2nd+
@@ -769,11 +787,13 @@ export function createAgentTools(
             return { success: false, error: "No facts found for category/key: " + factId, hint: "Use search_facts to find available facts." };
           }
           if (matching.length === 1) {
+            let identityAlreadyConfirmed = false;
             if (cat === "identity") {
               const identityBlocked = identityDeleteGate(cat, key);
               if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
+              identityAlreadyConfirmed = true;
             }
-            const dResult = deleteGate(matching[0].id);
+            const dResult = deleteGate(matching[0].id, { preConfirmed: identityAlreadyConfirmed });
             if (dResult && "requiresConfirmation" in dResult) return { success: false, code: "REQUIRES_CONFIRMATION", ...dResult };
             const ok = deleteFact(matching[0].id, sessionId, readKeys);
             if (!ok) {
@@ -801,11 +821,13 @@ export function createAgentTools(
 
         // UUID path
         const factToDelete = getFactById(factId, sessionId, readKeys);
+        let identityAlreadyConfirmed = false;
         if (factToDelete?.category === "identity") {
           const identityBlocked = identityDeleteGate(factToDelete.category, factToDelete.key);
           if (identityBlocked) return { success: false, code: "REQUIRES_CONFIRMATION", ...identityBlocked };
+          identityAlreadyConfirmed = true;
         }
-        const dResult = deleteGate(factId);
+        const dResult = deleteGate(factId, { preConfirmed: identityAlreadyConfirmed });
         if (dResult && "requiresConfirmation" in dResult) return { success: false, code: "REQUIRES_CONFIRMATION", ...dResult };
         const ok = deleteFact(factId, sessionId, readKeys);
         if (!ok) {
@@ -1101,48 +1123,35 @@ export function createAgentTools(
           return { success: false, error: "No facts in knowledge base yet", hint: "Ensure facts exist before generating. Use create_fact first." };
         }
         // Preserve user's style customizations (theme, colors, font) from
-        // the existing draft. composeOptimisticPage always uses defaults.
+        // the existing draft, AND preserve section order/locks from any
+        // prior reorder_sections / move_section call.
+        // Same pattern as recomposeAfterMutation — delegates to
+        // projectCanonicalConfig which handles order, locks, slots, style.
         const currentDraft = getDraft(sessionId);
         // Always compose in the fact language so values and templates are
         // in the same language, then translate the coherent result.
         const targetLang = language ?? sessionLanguage;
         const factLang = getFactLanguage(sessionId) ?? targetLang;
-        const existingTemplate = currentDraft?.config.layoutTemplate;
-        // Build slot map once from previous draft for carry-over in both compose and assign
-        const previousSlots = new Map<string, string>();
-        if (currentDraft) {
-          for (const s of currentDraft.config.sections) {
-            if (s.slot) previousSlots.set(s.id, s.slot);
-          }
-        }
-        const slotsArg = previousSlots.size > 0 ? previousSlots : undefined;
-        const composed = composeOptimisticPage(
-          facts,
-          username,
-          factLang,
-          existingTemplate,
-          slotsArg,
-          effectiveOwnerKey,
-        );
-        let styled: PageConfig = currentDraft
+
+        // Build DraftMeta for order/lock/style preservation (same pattern as recomposeAfterMutation)
+        const draftMeta: DraftMeta | undefined = currentDraft
           ? {
-              ...composed,
               surface: currentDraft.config.surface,
               voice: currentDraft.config.voice,
               light: currentDraft.config.light,
               style: currentDraft.config.style,
+              layoutTemplate: currentDraft.config.layoutTemplate,
+              sections: currentDraft.config.sections,
             }
-          : composed;
-        // Preserve layoutTemplate and re-assign slots with locks (carry over existing slot assignments)
-        if (existingTemplate && currentDraft) {
-          styled.layoutTemplate = existingTemplate;
-          const template = getLayoutTemplate(existingTemplate);
-          const locks = extractLocks(currentDraft.config.sections);
-          const { sections } = assignSlotsFromFacts(
-            template, styled.sections, locks, undefined, slotsArg,
-          );
-          styled = { ...styled, sections };
-        }
+          : undefined;
+
+        let styled = projectCanonicalConfig(
+          facts,
+          username,
+          factLang,
+          draftMeta,
+          effectiveOwnerKey,
+        );
 
         const config = await translatePageContent(styled, targetLang, factLang);
 

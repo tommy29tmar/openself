@@ -11,33 +11,38 @@ const {
   mockLogEvent,
   mockGetActiveSoul,
   mockFilterPublishableFacts,
+  mockProjectCanonicalConfig,
   mockDetectImpactedSections,
   mockComputeHash,
   mockPersonalizeSection,
-} = vi.hoisted(() => ({
-  mockGetActiveFacts: vi.fn().mockReturnValue([
-    { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
-  ]),
-  mockGetDraft: vi.fn().mockReturnValue(null),
-  mockUpsertDraft: vi.fn(),
-  mockComposeOptimisticPage: vi.fn().mockReturnValue({
+} = vi.hoisted(() => {
+  const defaultPageConfig = {
     version: 1,
     username: "test",
     theme: "minimal",
     style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
     sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
-  }),
-  mockGetFactLanguage: vi.fn().mockReturnValue("en"),
-  mockTranslatePageContent: vi.fn().mockImplementation((config: unknown) => Promise.resolve(config)),
-  mockLogEvent: vi.fn(),
-  mockGetActiveSoul: vi.fn().mockReturnValue(null),
-  mockFilterPublishableFacts: vi.fn().mockReturnValue([
-    { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
-  ]),
-  mockDetectImpactedSections: vi.fn().mockReturnValue([]),
-  mockComputeHash: vi.fn().mockReturnValue("soul-hash-abc"),
-  mockPersonalizeSection: vi.fn().mockResolvedValue({ title: "Personalized" }),
-}));
+  };
+  return {
+    mockGetActiveFacts: vi.fn().mockReturnValue([
+      { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
+    ]),
+    mockGetDraft: vi.fn().mockReturnValue(null),
+    mockUpsertDraft: vi.fn(),
+    mockComposeOptimisticPage: vi.fn().mockReturnValue(defaultPageConfig),
+    mockGetFactLanguage: vi.fn().mockReturnValue("en"),
+    mockTranslatePageContent: vi.fn().mockImplementation((config: unknown) => Promise.resolve(config)),
+    mockLogEvent: vi.fn(),
+    mockGetActiveSoul: vi.fn().mockReturnValue(null),
+    mockFilterPublishableFacts: vi.fn().mockReturnValue([
+      { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
+    ]),
+    mockProjectCanonicalConfig: vi.fn().mockReturnValue(defaultPageConfig),
+    mockDetectImpactedSections: vi.fn().mockReturnValue([]),
+    mockComputeHash: vi.fn().mockReturnValue("soul-hash-abc"),
+    mockPersonalizeSection: vi.fn().mockResolvedValue({ title: "Personalized" }),
+  };
+});
 
 // Mock all tool dependencies
 vi.mock("@/lib/services/kb-service", () => ({
@@ -100,6 +105,7 @@ vi.mock("@/lib/services/section-personalizer", () => ({
 }));
 vi.mock("@/lib/services/page-projection", () => ({
   filterPublishableFacts: mockFilterPublishableFacts,
+  projectCanonicalConfig: mockProjectCanonicalConfig,
 }));
 vi.mock("@/lib/services/personalization-impact", () => ({
   detectImpactedSections: mockDetectImpactedSections,
@@ -122,17 +128,19 @@ import { createAgentTools } from "@/lib/agent/tools";
 describe("generate_page fire-and-forget personalization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetActiveFacts.mockReturnValue([
-      { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
-    ]);
-    mockGetDraft.mockReturnValue(null);
-    mockComposeOptimisticPage.mockReturnValue({
+    const defaultPageConfig = {
       version: 1,
       username: "test",
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
       sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
-    });
+    };
+    mockGetActiveFacts.mockReturnValue([
+      { id: "f1", category: "identity", key: "name", value: { full: "Test" }, visibility: "public", confidence: 1 },
+    ]);
+    mockGetDraft.mockReturnValue(null);
+    mockComposeOptimisticPage.mockReturnValue(defaultPageConfig);
+    mockProjectCanonicalConfig.mockReturnValue(defaultPageConfig);
     mockTranslatePageContent.mockImplementation((config: unknown) => Promise.resolve(config));
     mockGetActiveSoul.mockReturnValue(null);
     mockDetectImpactedSections.mockReturnValue([]);
@@ -269,7 +277,7 @@ describe("generate_page fire-and-forget personalization", () => {
   it("personalizes multiple impacted sections", async () => {
     mockGetActiveSoul.mockReturnValue({ compiled: "warm voice", id: "s1" });
     mockDetectImpactedSections.mockReturnValue(["hero", "bio"]);
-    mockComposeOptimisticPage.mockReturnValue({
+    const multiSectionConfig = {
       version: 1,
       username: "test",
       theme: "minimal",
@@ -278,7 +286,9 @@ describe("generate_page fire-and-forget personalization", () => {
         { id: "hero", type: "hero", content: { name: "Test" } },
         { id: "bio", type: "bio", content: { text: "Bio text" } },
       ],
-    });
+    };
+    mockComposeOptimisticPage.mockReturnValue(multiSectionConfig);
+    mockProjectCanonicalConfig.mockReturnValue(multiSectionConfig);
 
     const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     await tools.generate_page.execute(
@@ -295,13 +305,15 @@ describe("generate_page fire-and-forget personalization", () => {
     mockGetActiveSoul.mockReturnValue({ compiled: "warm voice", id: "s1" });
     mockDetectImpactedSections.mockReturnValue(["hero", "skills"]);
     // config only has hero, not skills
-    mockComposeOptimisticPage.mockReturnValue({
+    const heroOnlyConfig = {
       version: 1,
       username: "test",
       theme: "minimal",
       style: { colorScheme: "light", primaryColor: "#000", fontFamily: "sans-serif", layout: "centered" },
       sections: [{ id: "hero", type: "hero", content: { name: "Test" } }],
-    });
+    };
+    mockComposeOptimisticPage.mockReturnValue(heroOnlyConfig);
+    mockProjectCanonicalConfig.mockReturnValue(heroOnlyConfig);
 
     const { tools } = createAgentTools("en", "session1", "owner1", "req1", ["session1"], "steady_state");
     await tools.generate_page.execute(
