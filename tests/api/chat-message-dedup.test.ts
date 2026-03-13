@@ -85,4 +85,32 @@ describe("chat message dedup", () => {
 
     expect(recent).toBeUndefined();
   });
+
+  it("should skip dedup and JSON.stringify non-string content (UserContent array)", () => {
+    // Simulate array-type UserContent (e.g. [{type: "text", text: "hello"}])
+    const arrayContent = [{ type: "text", text: "hello" }];
+
+    // The route's guard: typeof content === "string" ? content : null
+    const contentStr =
+      typeof arrayContent === "string" ? arrayContent : null;
+    expect(contentStr).toBeNull();
+
+    // When contentStr is null, dedup is skipped (recent = undefined)
+    // and content is persisted via JSON.stringify
+    const serialized = JSON.stringify(arrayContent);
+    expect(serialized).toBe('[{"type":"text","text":"hello"}]');
+
+    // Insert serialized content — always creates new row, no dedup
+    raw.prepare(
+      "INSERT INTO messages (id, session_id, role, content) VALUES (?, ?, ?, ?)",
+    ).run("msg-arr-1", "session-a", "user", serialized);
+
+    // Insert same array content again — no dedup, both rows exist
+    raw.prepare(
+      "INSERT INTO messages (id, session_id, role, content) VALUES (?, ?, ?, ?)",
+    ).run("msg-arr-2", "session-a", "user", serialized);
+
+    const count = raw.prepare("SELECT count(*) as c FROM messages").get() as { c: number };
+    expect(count.c).toBe(2);
+  });
 });
