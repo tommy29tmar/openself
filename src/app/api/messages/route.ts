@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { inArray, asc } from "drizzle-orm";
+import { and, inArray, asc, gt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messages } from "@/lib/db/schema";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
+import { getSessionTtlMinutes } from "@/lib/services/session-activity";
 
 /**
  * GET /api/messages
  *
- * Returns chat history for the current profile/session.
- * Uses knowledgeReadKeys to span all sessions linked to the profile.
- * Messages are always session-keyed — read via knowledgeReadKeys, dedup by id.
+ * Returns chat history for the current active session window.
+ * Messages older than SESSION_TTL are excluded (concierge model: clean chat on return).
  */
 export async function GET(req: Request) {
   const scope = resolveOwnerScope(req);
@@ -24,6 +24,13 @@ export async function GET(req: Request) {
 
   const readKeys = scope?.knowledgeReadKeys ?? ["__default__"];
 
+  // Compute temporal cutoff in SQLite-compatible format (YYYY-MM-DD HH:MM:SS, UTC)
+  // IMPORTANT: SQLite CURRENT_TIMESTAMP stores "YYYY-MM-DD HH:MM:SS" (no T, no Z).
+  // toISOString() produces "YYYY-MM-DDTHH:MM:SS.000Z" — string comparison would fail.
+  const ttlMinutes = getSessionTtlMinutes();
+  const cutoffDate = new Date(Date.now() - ttlMinutes * 60 * 1000);
+  const cutoffSql = cutoffDate.toISOString().replace("T", " ").split(".")[0];
+
   const rows = db
     .select({
       id: messages.id,
@@ -32,11 +39,16 @@ export async function GET(req: Request) {
       createdAt: messages.createdAt,
     })
     .from(messages)
-    .where(inArray(messages.sessionId, readKeys))
+    .where(
+      and(
+        inArray(messages.sessionId, readKeys),
+        gt(messages.createdAt, cutoffSql),
+      ),
+    )
     .orderBy(asc(messages.createdAt), asc(messages.id))
     .all();
 
-  // Dedup by id (safety net — should not be needed with proper scoping)
+  // Dedup by id (safety net)
   const seen = new Set<string>();
   const deduped = rows.filter((r) => {
     if (seen.has(r.id)) return false;

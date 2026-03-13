@@ -127,13 +127,14 @@ export function SplitView({
   const [chatDataReady, setChatDataReady] = useState(false);
 
   useEffect(() => {
+    setChatDataReady(false);
     let cancelled = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     (async () => {
       try {
         const [bRes, mRes] = await Promise.all([
-          fetch("/api/chat/bootstrap", { cache: "no-store", signal: controller.signal }),
+          fetch(`/api/chat/bootstrap?language=${language}`, { cache: "no-store", signal: controller.signal }),
           fetch("/api/messages", { cache: "no-store", signal: controller.signal }),
         ]);
         if (cancelled) return;

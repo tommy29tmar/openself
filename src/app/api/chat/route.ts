@@ -33,6 +33,7 @@ import {
   sanitizeUnbackedActionClaim,
 } from "@/lib/agent/action-claim-guard";
 import { classifyChatError, formatChatErrorResponse } from "@/lib/services/chat-errors";
+import { updateLastMessageAt } from "@/lib/services/session-activity";
 
 /**
  * Per-profile message quota for authenticated users.
@@ -95,6 +96,20 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const { messages, language } = body;
+
+  // Lazy greeting persistence: if the client sends a greeting message from bootstrap,
+  // persist it as the first message of this session window.
+  const rawGreeting = body.greetingMessage as { id: string; content: string } | undefined;
+  const greetingMessage =
+    rawGreeting &&
+    typeof rawGreeting.id === "string" &&
+    rawGreeting.id.startsWith("greeting-") &&
+    rawGreeting.id.length <= 30 &&
+    typeof rawGreeting.content === "string" &&
+    rawGreeting.content.length > 0 &&
+    rawGreeting.content.length <= 500
+      ? rawGreeting
+      : undefined;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return new Response("messages is required", { status: 400 });
@@ -292,6 +307,22 @@ export async function POST(req: Request) {
   const VALID_ROLES = new Set(["user", "assistant", "system", "tool"]);
   const safeMessages = trimmedMessages.filter(m => VALID_ROLES.has(m.role)) as CoreMessage[];
 
+  // Persist greeting if provided (lazy persistence — only on first user message)
+  if (greetingMessage?.id && greetingMessage?.content) {
+    try {
+      db.insert(messagesTable)
+        .values({
+          id: greetingMessage.id,
+          sessionId: messageSessionId,
+          role: "assistant",
+          content: greetingMessage.content,
+        })
+        .run();
+    } catch {
+      // Ignore duplicate — greeting may already be persisted (idempotent)
+    }
+  }
+
   // Persist the latest user message
   const lastMessage = messages[messages.length - 1];
   let latestUserMessageId: string | undefined;
@@ -305,6 +336,11 @@ export async function POST(req: Request) {
         content: lastMessage.content,
       })
       .run();
+  }
+
+  // Update session activity timestamp for concierge TTL
+  try { updateLastMessageAt(messageSessionId); } catch (e) {
+    console.warn("[chat] pre-stream updateLastMessageAt failed:", e);
   }
 
   const provider = getProviderForTier("standard");
@@ -482,6 +518,14 @@ export async function POST(req: Request) {
           }
         } catch (e) {
           console.warn("[chat] Failed to update memory references:", e);
+        }
+
+        // Update session activity timestamp — unconditional so that step-exhaustion
+        // synthetic messages also keep the session alive.
+        try {
+          updateLastMessageAt(messageSessionId);
+        } catch (e) {
+          console.warn("[chat] updateLastMessageAt failed:", e);
         }
       },
     });

@@ -68,6 +68,7 @@ export const sessions = sqliteTable("sessions", {
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
   journeyState: text("journey_state"),
   metadata: text("metadata").notNull().default("{}"),
+  lastMessageAt: text("last_message_at"),
 });
 
 // -- Facts

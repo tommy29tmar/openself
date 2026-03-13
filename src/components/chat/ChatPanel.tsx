@@ -10,47 +10,16 @@ import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { friendlyError, chatFriendlyError, parseChatErrorJson } from "@/lib/i18n/error-messages";
 import { useVoice } from "@/components/voice/VoiceProvider";
 
-/**
- * Welcome messages for first-time visitors.
- * These ask the user's name as the very first interaction.
- */
-const FIRST_VISIT_WELCOME: Record<string, string> = {
-  en: "Hi! I create personal pages from a conversation. What's your name?",
-  it: "Ciao! Creo pagine personali partendo da una conversazione. Come ti chiami?",
-  de: "Hallo! Ich erstelle persönliche Seiten aus einem Gespräch. Wie heißt du?",
-  fr: "Salut\u00a0! Je crée des pages personnelles à partir d'une conversation. Comment tu t'appelles\u00a0?",
-  es: "¡Hola! Creo páginas personales a partir de una conversación. ¿Cómo te llamas?",
-  pt: "Olá! Crio páginas pessoais a partir de uma conversa. Como te chamas?",
-  ja: "こんにちは！会話からパーソナルページを作ります。お名前は？",
-  zh: "你好！我通过对话创建个人页面。你叫什么名字？",
-};
-
-/**
- * Welcome messages for returning users with no page yet.
- */
-const RETURNING_WELCOME: Record<string, string> = {
-  en: "Welcome back! Ready to pick up where we left off?",
-  it: "Bentornato! Riprendiamo da dove eravamo rimasti?",
-  de: "Willkommen zurück! Sollen wir weitermachen, wo wir aufgehört haben?",
-  fr: "Re-bonjour\u00a0! On reprend là où on en était\u00a0?",
-  es: "¡Bienvenido de nuevo! ¿Seguimos donde lo dejamos?",
-  pt: "Bem-vindo de volta! Continuamos de onde parámos?",
-  ja: "おかえりなさい！前回の続きから始めましょうか？",
-  zh: "欢迎回来！我们继续之前的对话吧？",
-};
-
-/**
- * Welcome messages for users with a draft page ready.
- */
-const DRAFT_READY_WELCOME: Record<string, string> = {
-  en: "Welcome back! Your page is ready for review — take a look on the right. Want to make any changes?",
-  it: "Bentornato! La tua pagina è pronta — dai un'occhiata a destra. Vuoi modificare qualcosa?",
-  de: "Willkommen zurück! Deine Seite ist fertig — schau rechts. Möchtest du etwas ändern?",
-  fr: "Re-bonjour\u00a0! Ta page est prête — jette un œil à droite. Tu veux modifier quelque chose\u00a0?",
-  es: "¡Bienvenido! Tu página está lista — mira a la derecha. ¿Quieres cambiar algo?",
-  pt: "Bem-vindo! A tua página está pronta — vê à direita. Queres mudar alguma coisa?",
-  ja: "おかえりなさい！ページの準備ができています — 右側をご覧ください。変更はありますか？",
-  zh: "欢迎回来！你的页面已准备好——看看右边。想做什么修改吗？",
+/** Neutral fallback when bootstrap fails to return a greeting. */
+const NEUTRAL_FALLBACK: Record<string, string> = {
+  en: "Hey! What would you like to work on?",
+  it: "Ciao! Su cosa vuoi lavorare?",
+  de: "Hey! Woran möchtest du arbeiten?",
+  fr: "Salut\u00a0! Sur quoi veux-tu travailler\u00a0?",
+  es: "¡Hola! ¿En qué quieres trabajar?",
+  pt: "Olá! Em que queres trabalhar?",
+  ja: "こんにちは！何に取り組みますか？",
+  zh: "你好！想做什么？",
 };
 
 const LIMIT_MESSAGES: Record<string, string> = {
@@ -69,63 +38,9 @@ type BootstrapResponse = {
   userName?: string | null;
   publishedUsername?: string | null;
   language?: string;
+  greeting?: string;
+  isActiveSession?: boolean;
 };
-
-function buildWelcomeMessage(
-  language: string,
-  bootstrap: BootstrapResponse | null,
-): StoredMessage {
-  const lang = language || "en";
-
-  if (!bootstrap) {
-    // Neutral fallback — NOT first-visit copy (returning users would get confused)
-    const neutral: Record<string, string> = {
-      en: "Hey! What would you like to work on?",
-      it: "Ciao! Su cosa vuoi lavorare?",
-      de: "Hey! Woran möchtest du arbeiten?",
-      fr: "Salut\u00a0! Sur quoi veux-tu travailler\u00a0?",
-      es: "¡Hola! ¿En qué quieres trabajar?",
-      pt: "Olá! Em que queres trabalhar?",
-      ja: "こんにちは！何に取り組みますか？",
-      zh: "你好！想做什么？",
-    };
-    return { id: "welcome", role: "assistant", content: neutral[lang] ?? neutral.en };
-  }
-
-  switch (bootstrap.journeyState) {
-    case "first_visit":
-      return { id: "welcome", role: "assistant", content: FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en };
-
-    case "returning_no_page":
-      return { id: "welcome", role: "assistant", content: RETURNING_WELCOME[lang] ?? RETURNING_WELCOME.en };
-
-    case "draft_ready":
-      return { id: "welcome", role: "assistant", content: DRAFT_READY_WELCOME[lang] ?? DRAFT_READY_WELCOME.en };
-
-    case "blocked": {
-      return { id: "welcome", role: "assistant", content: LIMIT_MESSAGES[lang] ?? LIMIT_MESSAGES.en };
-    }
-
-    case "active_fresh":
-    case "active_stale": {
-      const name = bootstrap.userName;
-      const templates: Record<string, string> = {
-        en: name ? `Hey ${name}! What would you like to update?` : "Hey! What would you like to update?",
-        it: name ? `Ciao ${name}! Cosa vuoi aggiornare?` : "Ciao! Cosa vuoi aggiornare?",
-        de: name ? `Hey ${name}! Was möchtest du aktualisieren?` : "Hey! Was möchtest du aktualisieren?",
-        fr: name ? `Salut ${name}\u00a0! Que veux-tu mettre à jour\u00a0?` : "Salut\u00a0! Que veux-tu mettre à jour\u00a0?",
-        es: name ? `¡Hola ${name}! ¿Qué quieres actualizar?` : "¡Hola! ¿Qué quieres actualizar?",
-        pt: name ? `Olá ${name}! O que queres atualizar?` : "Olá! O que queres atualizar?",
-        ja: name ? `${name}さん！何を更新しますか？` : "何を更新しますか？",
-        zh: name ? `${name}，你好！想更新什么？` : "你好！想更新什么？",
-      };
-      return { id: "welcome", role: "assistant", content: templates[lang] ?? templates.en };
-    }
-
-    default:
-      return { id: "welcome", role: "assistant", content: FIRST_VISIT_WELCOME[lang] ?? FIRST_VISIT_WELCOME.en };
-  }
-}
 
 const LIMIT_AUTHENTICATED_MESSAGES: Record<string, string> = {
   en: "You've reached the message limit.",
@@ -329,6 +244,8 @@ type ChatPanelInnerProps = {
   authState?: AuthState;
   onSignupRequest?: () => void;
   isPrimaryVoiceConsumer?: boolean;
+  pendingGreeting?: { id: string; content: string } | null;
+  onGreetingChange?: (greeting: { id: string; content: string } | null) => void;
 };
 
 function ChatPanelLoading() {
@@ -342,122 +259,86 @@ function ChatPanelLoading() {
 }
 
 export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer }: ChatPanelProps) {
-  const [initialMessages, setInitialMessages] = useState<StoredMessage[]>(() => [
-    buildWelcomeMessage(language, null),
-  ]);
+  const [initialMessages, setInitialMessages] = useState<StoredMessage[]>([]);
+  const greetingRef = useRef<{ id: string; content: string } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   useEffect(() => {
     if (disableInitialFetch) {
-      // Use pre-fetched data from parent
       const bootstrap = initialBootstrap as BootstrapResponse | null;
-      const smartWelcome = buildWelcomeMessage(language, bootstrap);
+      const greetingText = bootstrap?.greeting;
+      const isActive = bootstrap?.isActiveSession ?? false;
 
       const restoredMessages: StoredMessage[] = (propMessages ?? [])
         .filter((m): m is {id: string; role: string; content: string} =>
           (m.role === "user" || m.role === "assistant"))
         .map((m) => ({ id: m.id, role: m.role as StoredMessage["role"], content: m.content }));
 
-      if (restoredMessages.length === 0) {
-        setInitialMessages([smartWelcome]);
+      if (isActive && restoredMessages.length > 0) {
+        setInitialMessages(restoredMessages);
       } else {
-        const welcomeAlreadyStored = restoredMessages.some(m => m.role === "assistant" && m.id === "welcome");
-        setInitialMessages(welcomeAlreadyStored ? restoredMessages : [smartWelcome, ...restoredMessages]);
+        const greeting: StoredMessage = {
+          id: `greeting-${Date.now()}`,
+          role: "assistant",
+          content: greetingText || NEUTRAL_FALLBACK[language] || NEUTRAL_FALLBACK.en,
+        };
+        setInitialMessages([greeting]);
+        greetingRef.current = { id: greeting.id, content: greeting.content };
       }
       setHistoryLoaded(true);
       return;
     }
 
     let cancelled = false;
-
     const load = async () => {
-      // Fetch bootstrap and history in parallel
       let bootstrap: BootstrapResponse | null = null;
-      let historyRes: Response | null = null;
+      let historyMessages: StoredMessage[] = [];
 
       try {
         const [bootstrapRes, messagesRes] = await Promise.all([
-          fetch("/api/chat/bootstrap", { cache: "no-store" }),
+          fetch(`/api/chat/bootstrap?language=${language}`, { cache: "no-store" }),
           fetch("/api/messages", { cache: "no-store" }),
         ]);
-        if (bootstrapRes.ok) {
-          bootstrap = await bootstrapRes.json();
-        }
-        historyRes = messagesRes;
-      } catch {
-        // Fetch failed — will use static fallback for bootstrap, no history
-      }
-
-      // Compute smart welcome based on bootstrap
-      const smartWelcome = buildWelcomeMessage(language, bootstrap);
-
-      try {
-        const res = historyRes ?? await fetch("/api/messages", { cache: "no-store" });
-        if (res.status === 401) {
+        if (bootstrapRes.ok) bootstrap = await bootstrapRes.json();
+        if (messagesRes.status === 401) {
           window.location.href = "/invite";
           return;
         }
-        if (!res.ok) {
-          if (!cancelled) {
-            setInitialMessages([smartWelcome]);
-            setHistoryLoaded(true);
+        if (messagesRes.ok) {
+          const data = await messagesRes.json() as MessagesResponse;
+          if (data.success && Array.isArray(data.messages)) {
+            historyMessages = data.messages
+              .filter((m): m is { id: string; role: string; content: string } =>
+                typeof m.id === "string" && typeof m.role === "string" && typeof m.content === "string")
+              .filter((m) => m.role === "user" || m.role === "assistant")
+              .map((m) => ({ id: m.id, role: m.role as StoredMessage["role"], content: m.content }));
           }
-          return;
         }
-
-        const data = (await res.json()) as MessagesResponse;
-        if (!data.success || !Array.isArray(data.messages)) {
-          if (!cancelled) {
-            setInitialMessages([smartWelcome]);
-            setHistoryLoaded(true);
-          }
-          return;
-        }
-
-        const restoredMessages: StoredMessage[] = data.messages
-          .filter(
-            (m): m is { id: string; role: string; content: string } =>
-              typeof m.id === "string" &&
-              typeof m.role === "string" &&
-              typeof m.content === "string",
-          )
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({
-            id: m.id,
-            role: m.role as StoredMessage["role"],
-            content: m.content,
-          }));
-
-        if (cancelled) return;
-
-        setInitialMessages(() => {
-          if (restoredMessages.length === 0) return [smartWelcome];
-
-          const welcomeAlreadyStored = restoredMessages.some(
-            (message) => message.role === "assistant" && message.id === "welcome",
-          );
-
-          if (welcomeAlreadyStored) {
-            return restoredMessages;
-          }
-
-          return [smartWelcome, ...restoredMessages];
-        });
       } catch {
-        if (!cancelled) {
-          setInitialMessages([smartWelcome]);
-        }
-      } finally {
-        if (!cancelled) {
-          setHistoryLoaded(true);
-        }
+        // Fetch failed — use fallback
       }
+
+      if (cancelled) return;
+
+      const isActive = bootstrap?.isActiveSession ?? false;
+      const greetingText = bootstrap?.greeting;
+
+      if (isActive && historyMessages.length > 0) {
+        setInitialMessages(historyMessages);
+      } else {
+        const greeting: StoredMessage = {
+          id: `greeting-${Date.now()}`,
+          role: "assistant",
+          content: greetingText || NEUTRAL_FALLBACK[language] || NEUTRAL_FALLBACK.en,
+        };
+        setInitialMessages([greeting]);
+        greetingRef.current = { id: greeting.id, content: greeting.content };
+      }
+      setHistoryLoaded(true);
     };
 
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [language, disableInitialFetch, initialBootstrap, propMessages]);
 
   if (!historyLoaded) {
@@ -466,12 +347,15 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
 
   return (
     <ChatPanelInner
+      key={language}
       language={language}
       authV2={authV2}
       initialMessages={initialMessages}
       authState={authState}
       onSignupRequest={onSignupRequest}
       isPrimaryVoiceConsumer={isPrimaryVoiceConsumer}
+      pendingGreeting={greetingRef.current}
+      onGreetingChange={(g) => { greetingRef.current = g; }}
     />
   );
 }
@@ -483,6 +367,8 @@ function ChatPanelInner({
   authState,
   onSignupRequest,
   isPrimaryVoiceConsumer,
+  pendingGreeting,
+  onGreetingChange,
 }: ChatPanelInnerProps) {
   const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -502,11 +388,15 @@ function ChatPanelInner({
   const isPrimaryRef = useRef(false);
   const voiceSpeakRef = useRef<(text: string) => void>(() => {});
 
+  const pendingGreetingRef = useRef(pendingGreeting);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append, error: streamError } =
     useChat({
       api: "/api/chat",
-      body: { language },
+      body: {
+        language,
+        ...(pendingGreetingRef.current ? { greetingMessage: pendingGreetingRef.current } : {}),
+      },
       initialMessages,
       onResponse: (response) => {
         if (response.status === 401) {
@@ -521,6 +411,9 @@ function ChatPanelInner({
           setLimitReached(true);
         }
         setChatError(null);
+
+        // After first message sent, clear the pending greeting
+        pendingGreetingRef.current = null;
       },
       onError: (error) => {
         const msg = error.message ?? "";
@@ -589,20 +482,33 @@ function ChatPanelInner({
           role: m.role as StoredMessage["role"],
           content: m.content,
         }));
-      const welcomeAlreadyStored = restored.some(
-        (msg) => msg.role === "assistant" && msg.id === "welcome",
-      );
-      const welcome = buildWelcomeMessage(language, null);
-      const normalizedMessages = welcomeAlreadyStored ? restored : [welcome, ...restored];
-      setMessages(normalizedMessages);
+      if (restored.length === 0) {
+        // Session expired during recovery — fetch fresh greeting from bootstrap
+        try {
+          const bRes = await fetch(`/api/chat/bootstrap?language=${language}`, { cache: "no-store" });
+          if (bRes.ok) {
+            const boot = await bRes.json();
+            if (boot.greeting) {
+              const greetingMsg = { id: `greeting-${Date.now()}`, role: "assistant" as const, content: boot.greeting };
+              setMessages([greetingMsg]);
+              // Track for lazy persistence so the greeting gets persisted on next user message
+              pendingGreetingRef.current = { id: greetingMsg.id, content: greetingMsg.content };
+              onGreetingChange?.({ id: greetingMsg.id, content: greetingMsg.content });
+              setChatError(null);
+              return true;
+            }
+          }
+        } catch { /* fall through */ }
+        return false;
+      }
+      setMessages(restored);
       setChatError(null);
-      const lastAssistant = [...normalizedMessages].reverse().find(m => m.role === "assistant");
+      const lastAssistant = [...restored].reverse().find(m => m.role === "assistant");
       return !!(lastAssistant?.content?.trim());
     } catch {
-      // Keep current state if refresh fails
       return false;
     }
-  }, [language, setMessages]);
+  }, [language, setMessages, onGreetingChange]);
 
   // Keep ref in sync for onFinish closure
   refreshChatRef.current = refreshChat;
