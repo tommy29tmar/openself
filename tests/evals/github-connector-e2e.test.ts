@@ -26,6 +26,18 @@ vi.mock("@/lib/services/kb-service", () => ({
   getFactByKey: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock("@/lib/services/fact-cluster-service", () => ({
+  getProjectedFacts: (...args: any[]) =>
+    mockGetActiveFacts(...args).map((f: any) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [f.id],
+    })),
+  tryAssignCluster: vi.fn().mockReturnValue(null),
+}));
+
 const mockResolveOwnerScopeForWorker = vi.fn().mockReturnValue({
   cognitiveOwnerKey: "owner-1",
   knowledgeReadKeys: ["sess-1"],

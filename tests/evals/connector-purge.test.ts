@@ -26,6 +26,15 @@ testSqlite.exec(`
   CREATE UNIQUE INDEX idx_connectors_owner_type ON connectors(owner_key, connector_type)
     WHERE owner_key IS NOT NULL;
 
+  CREATE TABLE fact_clusters (
+    id TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    category TEXT NOT NULL,
+    canonical_key TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE facts (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -40,7 +49,8 @@ testSqlite.exec(`
     parent_fact_id TEXT,
     archived_at TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    cluster_id TEXT REFERENCES fact_clusters(id) ON DELETE SET NULL
   );
 
   CREATE TABLE connector_items (
@@ -117,7 +127,9 @@ describe("purgeConnectorData", () => {
 
   beforeEach(() => {
     testSqlite.exec("DELETE FROM connector_items");
+    testSqlite.exec("UPDATE facts SET cluster_id = NULL");
     testSqlite.exec("DELETE FROM facts");
+    testSqlite.exec("DELETE FROM fact_clusters");
     testSqlite.exec("DELETE FROM episodic_events");
     testSqlite.exec("DELETE FROM sync_log");
     testSqlite.exec("DELETE FROM connectors");

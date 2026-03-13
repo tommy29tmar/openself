@@ -61,7 +61,8 @@ testSqlite.exec(`
     parent_fact_id TEXT,
     archived_at TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    cluster_id TEXT
   );
   CREATE UNIQUE INDEX uniq_facts_session_category_key ON facts(session_id, category, key);
 
