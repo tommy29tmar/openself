@@ -210,6 +210,7 @@ function LimitReachedUI({
           <span className="font-semibold">{authState.username}</span>
         </p>
         <button
+          type="button"
           onClick={() => handleRequestPublish()}
           disabled={requestingPublish}
           className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
@@ -257,6 +258,7 @@ function LimitReachedUI({
             }}
           />
           <button
+            type="button"
             onClick={() => handleRequestPublish(oauthUsername.trim())}
             disabled={requestingPublish || !oauthUsername.trim()}
             className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
@@ -282,6 +284,7 @@ function LimitReachedUI({
         {LIMIT_MESSAGES[language] ?? LIMIT_MESSAGES.en}
       </p>
       <button
+        type="button"
         onClick={() => onSignupRequest?.()}
         disabled={!onSignupRequest}
         className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
@@ -520,8 +523,9 @@ function ChatPanelInner({
         setChatError(null);
       },
       onError: (error) => {
-        // Check if it's a 429 with limit info
-        if (error.message?.includes("Message limit reached")) {
+        // Check for structured MESSAGE_LIMIT code first, string match as fallback
+        const errParsed = parseChatErrorJson(error.message ?? "");
+        if (errParsed?.code === "MESSAGE_LIMIT" || error.message?.includes("Message limit reached")) {
           setLimitReached(true);
           return;
         }
@@ -531,9 +535,8 @@ function ChatPanelInner({
           return;
         }
 
-        // Try to parse structured JSON from server (bypass extractErrorMessage which strips code/requestId)
-        const parsed = parseChatErrorJson(error.message ?? "");
-        setChatError(chatFriendlyError(parsed?.code ?? null, language, parsed?.requestId));
+        // Use already-parsed structured JSON (or re-parse if MESSAGE_LIMIT check didn't match)
+        setChatError(chatFriendlyError(errParsed?.code ?? null, language, errParsed?.requestId));
       },
       onFinish: (message) => {
         // Step exhaustion recovery: if the final assistant message has no text,
@@ -733,8 +736,9 @@ function ChatPanelInner({
               </button>
               <button
                 type="button"
+                disabled={isLoading}
                 onClick={refreshChat}
-                className="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900"
+                className="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900"
               >
                 {t.chatRefresh}
               </button>

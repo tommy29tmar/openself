@@ -26,11 +26,16 @@ export function classifyChatError(error: unknown): ChatErrorCode {
     if (statusCode === 429) return "AI_RATE_LIMITED";
     if (statusCode === 408) return "AI_TIMEOUT";
     if (statusCode === 413) return "CONTEXT_TOO_LONG";
+    if (statusCode === 401 || statusCode === 403) return "MODEL_NOT_CONFIGURED";
     if (statusCode != null && statusCode >= 500) return "AI_PROVIDER_UNAVAILABLE";
     // Check for content filter in error data (provider-specific)
     const data = error.data as Record<string, unknown> | undefined;
     const errType = (data?.error as Record<string, unknown>)?.type;
     if (errType === "content_filter" || errType === "content_policy_violation") {
+      return "CONTENT_FILTERED";
+    }
+    // Anthropic content policy errors surface as 400 with message text (no structured type)
+    if (error.message?.toLowerCase().includes("content policy")) {
       return "CONTENT_FILTERED";
     }
     return "CHAT_INTERNAL_ERROR";
@@ -54,7 +59,6 @@ export function classifyChatError(error: unknown): ChatErrorCode {
     msg.includes("econnrefused") ||
     msg.includes("fetch failed") ||
     msg.includes("enotfound") ||
-    msg.includes("network") ||
     msg.includes("socket hang up")
   )
     return "AI_PROVIDER_UNAVAILABLE";

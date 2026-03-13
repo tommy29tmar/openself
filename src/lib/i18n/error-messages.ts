@@ -52,20 +52,9 @@ export function parseChatErrorJson(raw: string): { code: string; requestId?: str
   return null;
 }
 
-// Error codes that have specific, actionable messages (no requestId appended)
-const SPECIFIC_ERROR_CODES = new Set([
-  "AI_PROVIDER_UNAVAILABLE",
-  "AI_RATE_LIMITED",
-  "AI_TIMEOUT",
-  "BUDGET_EXCEEDED",
-  "MODEL_NOT_CONFIGURED",
-  "CONTEXT_TOO_LONG",
-  "CONTENT_FILTERED",
-]);
-
 /**
  * Map a chat error code to a user-friendly localized message.
- * Generic fallback includes requestId for support traceability.
+ * Specific codes get actionable messages; everything else gets generic + requestId for traceability.
  */
 export function chatFriendlyError(code: string | null, language: string, requestId?: string): string {
   const t = getUiL10n(language);
@@ -81,11 +70,12 @@ export function chatFriendlyError(code: string | null, language: string, request
     // AI_NO_CONTENT intentionally omitted — falls through to generic+requestId for traceability
   };
 
+  // Specific code matched — return actionable message (no requestId needed)
   if (code && map[code]) return map[code];
 
   // Generic fallback — append requestId for traceability
   const generic = t.chatErrorGeneric;
-  if (requestId && (!code || !SPECIFIC_ERROR_CODES.has(code))) {
+  if (requestId) {
     return `${generic} Ref: ${requestId}`;
   }
   return generic;

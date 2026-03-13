@@ -127,6 +127,59 @@ describe("classifyChatError", () => {
     expect(classifyChatError(null)).toBe("CHAT_INTERNAL_ERROR");
   });
 
+  it("classifies APICallError with 401 as MODEL_NOT_CONFIGURED", () => {
+    const err = new APICallError({
+      message: "Unauthorized",
+      statusCode: 401,
+      url: "https://api.openai.com/v1/chat",
+      requestBodyValues: {},
+      isRetryable: false,
+    });
+    expect(classifyChatError(err)).toBe("MODEL_NOT_CONFIGURED");
+  });
+
+  it("classifies APICallError with 403 as MODEL_NOT_CONFIGURED", () => {
+    const err = new APICallError({
+      message: "Forbidden",
+      statusCode: 403,
+      url: "https://api.anthropic.com/v1/messages",
+      requestBodyValues: {},
+      isRetryable: false,
+    });
+    expect(classifyChatError(err)).toBe("MODEL_NOT_CONFIGURED");
+  });
+
+  it("classifies APICallError with content_policy_violation as CONTENT_FILTERED", () => {
+    const err = new APICallError({
+      message: "Content policy violation",
+      statusCode: 400,
+      url: "https://api.openai.com/v1/chat",
+      requestBodyValues: {},
+      isRetryable: false,
+      data: { error: { type: "content_policy_violation" } },
+    });
+    expect(classifyChatError(err)).toBe("CONTENT_FILTERED");
+  });
+
+  it("classifies APICallError with undefined statusCode as CHAT_INTERNAL_ERROR", () => {
+    const err = new APICallError({
+      message: "Unknown error",
+      url: "https://api.example.com",
+      requestBodyValues: {},
+    });
+    expect(classifyChatError(err)).toBe("CHAT_INTERNAL_ERROR");
+  });
+
+  it("classifies APICallError with Anthropic content policy message as CONTENT_FILTERED", () => {
+    const err = new APICallError({
+      message: "Your request was rejected due to content policy violations",
+      statusCode: 400,
+      url: "https://api.anthropic.com/v1/messages",
+      requestBodyValues: {},
+    });
+    expect(classifyChatError(err)).toBe("CONTENT_FILTERED");
+  });
+
   // --- formatChatErrorResponse ---
   describe("formatChatErrorResponse", () => {
     it("returns JSON with code and requestId", () => {
@@ -134,6 +187,21 @@ describe("classifyChatError", () => {
       const parsed = JSON.parse(result);
       expect(parsed).toHaveProperty("code");
       expect(parsed).toHaveProperty("requestId", "req-123");
+    });
+
+    it("does not leak error message, stack, or provider details", () => {
+      const err = new APICallError({
+        message: "Sensitive: API key sk-1234 expired",
+        url: "https://api.openai.com/v1/chat",
+        requestBodyValues: { model: "gpt-4" },
+        statusCode: 401,
+      });
+      const result = formatChatErrorResponse(err, "req-456");
+      expect(result).not.toContain("sk-1234");
+      expect(result).not.toContain("Sensitive");
+      expect(result).not.toContain("gpt-4");
+      const parsed = JSON.parse(result);
+      expect(Object.keys(parsed).sort()).toEqual(["code", "requestId"]);
     });
   });
 });

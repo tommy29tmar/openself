@@ -1046,7 +1046,7 @@ const pt: UiStrings = {
   chatErrorModelConfig: "Problema de configuração de IA. Verifique a configuração.",
   chatErrorContextTooLong: "A conversa é muito longa. Tente iniciar um novo chat.",
   chatErrorContentFiltered: "A mensagem não pôde ser processada. Tente reformular.",
-  chatRetry: "Repetir",
+  chatRetry: "Tentar novamente",
   chatRefresh: "Atualizar chat",
 };
 
