@@ -133,7 +133,7 @@ export function SplitView({
     (async () => {
       try {
         const [bRes, mRes] = await Promise.all([
-          fetch("/api/chat/bootstrap", { cache: "no-store", signal: controller.signal }),
+          fetch(`/api/chat/bootstrap?language=${language}`, { cache: "no-store", signal: controller.signal }),
           fetch("/api/messages", { cache: "no-store", signal: controller.signal }),
         ]);
         if (cancelled) return;
