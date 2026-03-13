@@ -93,7 +93,10 @@ vi.mock("@/lib/agent/tool-filter", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })) },
+  db: {
+    insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })),
+    select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn(() => ({ limit: vi.fn(() => ({ get: vi.fn(() => undefined) })) })) })) })) })),
+  },
   sqlite: {
     prepare: vi.fn(() => ({
       run: vi.fn(() => ({ changes: 1 })),
