@@ -351,3 +351,125 @@ export function tryAssignCluster(
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// projectClusteredFacts
+// ---------------------------------------------------------------------------
+
+/** Source priority for projection (lower = higher priority) */
+const SOURCE_PRIORITY: Record<string, number> = {
+  user: 0,
+  chat: 1,
+  worker: 2,
+  connector: 3,
+};
+
+function getSourcePriority(source: string | null): number {
+  return SOURCE_PRIORITY[source ?? "chat"] ?? 2;
+}
+
+export type ProjectedFact = FactRow & {
+  sources: string[];
+  clusterSize: number;
+  clusterId: string | null;
+  memberIds: string[];  // ALL fact IDs in this cluster (or [self] if unclustered)
+};
+
+type ClusterRow = {
+  id: string;
+  ownerKey: string;
+  category: string;
+  canonicalKey: string | null;
+};
+
+/**
+ * Project clustered facts into virtual enriched facts.
+ * Each cluster becomes a single ProjectedFact with merged fields.
+ * Unclustered facts pass through as-is.
+ */
+export function projectClusteredFacts(
+  allFacts: (FactRow & { clusterId: string | null })[],
+  clusters: ClusterRow[],
+): ProjectedFact[] {
+  const clusterMap = new Map<string, typeof allFacts>();
+  const unclustered: typeof allFacts = [];
+
+  for (const fact of allFacts) {
+    if (fact.clusterId) {
+      const list = clusterMap.get(fact.clusterId) ?? [];
+      list.push(fact);
+      clusterMap.set(fact.clusterId, list);
+    } else {
+      unclustered.push(fact);
+    }
+  }
+
+  const projected: ProjectedFact[] = [];
+
+  // Unclustered → pass through
+  for (const fact of unclustered) {
+    projected.push({
+      ...fact,
+      sources: [fact.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [fact.id],
+    });
+  }
+
+  // Clustered → project
+  for (const [clusterId, clusterFacts] of clusterMap) {
+    const cluster = clusters.find((c) => c.id === clusterId);
+
+    // Sort by source priority (highest priority first)
+    const sorted = [...clusterFacts].sort(
+      (a, b) => getSourcePriority(a.source) - getSourcePriority(b.source),
+    );
+    const primary = sorted[0];
+
+    // Per-field resolution: highest-priority source with non-empty value wins
+    const mergedValue: Record<string, unknown> = {};
+    for (const fact of sorted) {
+      const val =
+        typeof fact.value === "object" && fact.value !== null
+          ? (fact.value as Record<string, unknown>)
+          : {};
+      for (const [field, value] of Object.entries(val)) {
+        if (
+          mergedValue[field] === undefined ||
+          mergedValue[field] === null ||
+          mergedValue[field] === ""
+        ) {
+          mergedValue[field] = value;
+        }
+      }
+    }
+
+    // Visibility resolution: private wins, then public, then proposed
+    const visibility = resolveClusterVisibility(clusterFacts);
+
+    projected.push({
+      ...primary,
+      key: cluster?.canonicalKey ?? primary.key,
+      value: mergedValue,
+      visibility,
+      sources: [...new Set(clusterFacts.map((f) => f.source ?? "chat"))],
+      clusterSize: clusterFacts.length,
+      clusterId,
+      memberIds: clusterFacts.map((f) => f.id),
+    });
+  }
+
+  return projected.sort(
+    (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
+  );
+}
+
+function resolveClusterVisibility(
+  clusterFacts: Array<{ visibility: string | null }>,
+): string {
+  const visibilities = clusterFacts.map((f) => f.visibility ?? "proposed");
+  if (visibilities.includes("private")) return "private";
+  if (visibilities.includes("public")) return "public";
+  return "proposed";
+}
