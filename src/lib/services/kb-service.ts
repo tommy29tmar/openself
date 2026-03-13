@@ -355,8 +355,10 @@ export function archiveFact(factId: string): boolean {
   if (result.changes > 0 && existing?.cluster_id) {
     try {
       // Dynamic import to avoid circular dependency (kb-service ↔ fact-cluster-service)
-      const { cleanupSingletonCluster } = require("@/lib/services/fact-cluster-service");
-      cleanupSingletonCluster(existing.cluster_id);
+      // Fire-and-forget: archiveFact is sync, cleanup is non-fatal
+      import("@/lib/services/fact-cluster-service").then(({ cleanupSingletonCluster }) =>
+        cleanupSingletonCluster(existing!.cluster_id!)
+      );
     } catch {
       // Non-fatal — housekeeping will catch it later
     }
