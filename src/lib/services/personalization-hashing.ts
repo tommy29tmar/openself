@@ -32,7 +32,11 @@ export const SECTION_FACT_CATEGORIES: Record<string, string[]> = {
 /**
  * Compute a per-section hash from publishable facts filtered to relevant categories.
  * Visibility is excluded from the hash (promote proposed→public doesn't invalidate).
- * Facts are sorted by id for deterministic output.
+ * Facts are sorted by key for deterministic output.
+ *
+ * NOTE: `id` is intentionally excluded — for clustered facts the primary id can
+ * change when a higher-priority source joins the cluster, which would falsely
+ * invalidate section copy state even though the visible content is unchanged.
  */
 export function computeSectionFactsHash(
   publishableFacts: FactRow[],
@@ -41,12 +45,11 @@ export function computeSectionFactsHash(
   const categories = SECTION_FACT_CATEGORIES[sectionType] ?? [];
   const relevant = publishableFacts
     .filter((f) => categories.includes(f.category))
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort((a, b) => a.key.localeCompare(b.key));
 
   return computeHash(
     JSON.stringify(
       relevant.map((f) => ({
-        id: f.id,
         category: f.category,
         key: f.key,
         value: f.value,

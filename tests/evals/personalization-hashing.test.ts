@@ -70,11 +70,19 @@ describe("computeSectionFactsHash", () => {
     expect(h1).toBe(h2);
   });
 
-  it("sorts by id for deterministic output", () => {
+  it("sorts by key for deterministic output", () => {
     const f1 = makeFact({ id: "aaa", category: "skill", key: "a" });
     const f2 = makeFact({ id: "bbb", category: "skill", key: "b" });
     const h1 = computeSectionFactsHash([f1, f2], "skills");
     const h2 = computeSectionFactsHash([f2, f1], "skills");
+    expect(h1).toBe(h2);
+  });
+
+  it("excludes id from hash — cluster primary changes don't invalidate", () => {
+    const f1 = makeFact({ id: "primary-old", category: "skill", key: "ts", value: { name: "TypeScript" } });
+    const f2 = makeFact({ id: "primary-new", category: "skill", key: "ts", value: { name: "TypeScript" } });
+    const h1 = computeSectionFactsHash([f1], "skills");
+    const h2 = computeSectionFactsHash([f2], "skills");
     expect(h1).toBe(h2);
   });
 

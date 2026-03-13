@@ -8,6 +8,7 @@ import {
   getActiveFacts,
   getFactById,
   setFactVisibility,
+  archiveFact as archiveFactService,
   VisibilityTransitionError,
   factExistsAcrossReadKeys,
   findFactsByOwnerCategoryKey,
@@ -374,7 +375,9 @@ export function createAgentTools(
     if (_recomposing) return;
     _recomposing = true;
     try {
-      const allFacts = getActiveFacts(sessionId, readKeys);
+      // Use projected facts (cluster-resolved) to avoid duplicates in preview.
+      // All other read paths (publish, context, curation) already use getProjectedFacts.
+      const allFacts = getProjectedFacts(effectiveOwnerKey, readKeys);
       if (allFacts.length === 0) return;
       const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
       const currentDraft = getDraft(sessionId);
@@ -1876,8 +1879,8 @@ Do NOT call in a loop.`,
         const existing = getFactById(factId, sessionId, readKeys);
         if (!existing) return { success: false, error: "FACT_NOT_FOUND" };
         if (existing.archivedAt) return { success: true, factId, alreadyArchived: true };
-        const now = new Date().toISOString();
-        db.update(facts).set({ archivedAt: now, updatedAt: now }).where(eq(facts.id, factId)).run();
+        // Use archiveFact service which handles cluster cleanup (singleton dissolution)
+        archiveFactService(factId);
         // Orphan children
         db.update(facts).set({ parentFactId: null }).where(eq(facts.parentFactId, factId)).run();
         logTrustAction(effectiveOwnerKey, "archive_fact", `Archived fact ${factId}`, {
