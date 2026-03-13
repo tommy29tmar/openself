@@ -7,6 +7,12 @@ import {
 } from "@/lib/services/session-service";
 import { assembleBootstrapPayload } from "@/lib/agent/journey";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
+import { computeGreeting } from "@/lib/agent/greeting";
+import {
+  getLastMessageAt,
+  getSessionTtlMinutes,
+  isSessionActive,
+} from "@/lib/services/session-activity";
 
 export async function GET(req: Request) {
   // Rate limiting (same as POST /api/chat)
@@ -56,8 +62,30 @@ export async function GET(req: Request) {
 
   const { payload } = assembleBootstrapPayload(effectiveScope, language, authInfo);
 
-  return new Response(JSON.stringify(payload), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
+  // Session activity detection
+  const sessionId = effectiveScope.currentSessionId;
+  const lastMessageAt = getLastMessageAt(sessionId);
+  const ttl = getSessionTtlMinutes();
+  const activeSession = isSessionActive(lastMessageAt, ttl);
+
+  // Compute greeting
+  const greeting = computeGreeting({
+    journeyState: payload.journeyState,
+    language: payload.language,
+    userName: payload.userName,
+    lastSeenDaysAgo: payload.lastSeenDaysAgo,
+    situations: payload.situations,
   });
+
+  return new Response(
+    JSON.stringify({
+      ...payload,
+      greeting,
+      isActiveSession: activeSession,
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
