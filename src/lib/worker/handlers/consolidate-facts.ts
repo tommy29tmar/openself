@@ -58,12 +58,16 @@ export async function handleConsolidateFacts(
         source: fact.source ?? "chat",
         ownerKey: scope.cognitiveOwnerKey,
         sessionId: scope.knowledgePrimaryKey,
+        sessionIds: scope.knowledgeReadKeys,
       });
 
       if (result) {
         factsAssigned++;
         if (result.isNew) clustersCreated++;
         (fact as any)._assigned = true;
+        // Also mark the matched partner to prevent redundant re-clustering
+        const partner = categoryFacts.find(f => f.id === result.matchedFactId);
+        if (partner) (partner as any)._assigned = true;
       }
     }
   }

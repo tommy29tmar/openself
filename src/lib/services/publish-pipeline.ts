@@ -202,10 +202,11 @@ export async function prepareAndPublish(
       setProfileUsername(opts.claimProfileId, username);
     }
 
-    // Promote all proposed publishable facts to public
+    // Promote all proposed publishable facts to public (including cluster companions)
     for (const fact of publishable) {
-      if (fact.visibility === "proposed") {
-        setFactVisibility(fact.id, "public", "user", sessionId, readKeys);
+      const ids = (fact as any).memberIds ?? [fact.id];
+      for (const memberId of ids) {
+        setFactVisibility(memberId, "public", "user", sessionId, readKeys);
       }
     }
 

@@ -26,6 +26,7 @@ type ClusterAssignInput = {
   source: string;
   ownerKey: string;
   sessionId: string;
+  sessionIds?: string[];
 };
 
 export type ClusterAssignResult = {
@@ -219,14 +220,24 @@ export function pickCanonicalKey(
 
 /**
  * Update the canonical key of a cluster if a better key is now available.
+ * Re-reads the existing fact key from DB to avoid TOCTOU with stale in-memory data.
  */
 export function updateCanonicalKey(
   clusterId: string,
   newSource: string,
   newFactKey: string,
-  existingFact: FactRow
+  existingFactId: string
 ): void {
-  const preferred = pickCanonicalKey(newSource, newFactKey, existingFact);
+  // Re-read the existing fact's key from DB (authoritative, avoids stale data)
+  const freshExisting = db
+    .select()
+    .from(facts)
+    .where(eq(facts.id, existingFactId))
+    .get() as FactRow | undefined;
+
+  if (!freshExisting) return;
+
+  const preferred = pickCanonicalKey(newSource, newFactKey, freshExisting);
 
   // Get the current canonical key from the cluster
   const cluster = db
@@ -260,7 +271,7 @@ export function updateCanonicalKey(
 export function tryAssignCluster(
   input: ClusterAssignInput
 ): ClusterAssignResult {
-  const { factId, factKey, category, value, source, ownerKey, sessionId } = input;
+  const { factId, factKey, category, value, source, ownerKey, sessionId, sessionIds } = input;
 
   // Identity facts are never clustered
   if (category === "identity") return null;
@@ -268,7 +279,9 @@ export function tryAssignCluster(
   // Build the where clause depending on flag
   const ownerFilter = PROFILE_ID_CANONICAL
     ? eq(facts.profileId, ownerKey)
-    : eq(facts.sessionId, sessionId);
+    : sessionIds && sessionIds.length > 0
+      ? inArray(facts.sessionId, sessionIds)
+      : eq(facts.sessionId, sessionId);
 
   // Query active facts in same category, excluding self
   const candidates = db
@@ -303,7 +316,7 @@ export function tryAssignCluster(
           .where(eq(facts.id, factId))
           .run();
 
-        updateCanonicalKey(clusterId, source, factKey, candidate);
+        updateCanonicalKey(clusterId, source, factKey, candidate.id);
 
         // Read back canonical key
         const cluster = db
@@ -356,6 +369,35 @@ export function tryAssignCluster(
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// cleanupSingletonCluster
+// ---------------------------------------------------------------------------
+
+/**
+ * After a fact is deleted, check if its former cluster is now a singleton or empty.
+ * If so, detach the remaining fact and delete the cluster.
+ * This prevents stale canonical keys from leaking into page composition.
+ */
+export function cleanupSingletonCluster(clusterId: string): void {
+  const remaining = db
+    .select()
+    .from(facts)
+    .where(and(eq(facts.clusterId, clusterId), isNull(facts.archivedAt)))
+    .all();
+
+  if (remaining.length <= 1) {
+    // Detach any remaining fact from the cluster
+    if (remaining.length === 1) {
+      db.update(facts)
+        .set({ clusterId: null })
+        .where(eq(facts.id, remaining[0].id))
+        .run();
+    }
+    // Delete the now-empty cluster
+    db.delete(factClusters).where(eq(factClusters.id, clusterId)).run();
+  }
 }
 
 // ---------------------------------------------------------------------------

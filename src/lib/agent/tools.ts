@@ -474,7 +474,7 @@ export function createAgentTools(
           key,
           value,
           confidence,
-        }, sessionId, effectiveOwnerKey);
+        }, sessionId, effectiveOwnerKey, { sessionIds: readKeys });
         let recomposeOk = true;
         try { recomposeAfterMutation(); } catch (e) {
           recomposeOk = false;
@@ -680,6 +680,7 @@ export function createAgentTools(
                 },
                 sessionId,
                 effectiveOwnerKey,
+                { sessionIds: readKeys },
               );
               reverseOps.push({ action: "delete", factId: result.id });
               created++;
@@ -717,7 +718,7 @@ export function createAgentTools(
                   const { id, ...rest } = old;
                   reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
                 }
-                const didDelete = deleteFact(resolvedId, sessionId, readKeys);
+                const didDelete = await deleteFact(resolvedId, sessionId, readKeys);
                 if (didDelete) {
                   deleted++;
                   _deletionCountThisTurn++;
@@ -736,7 +737,7 @@ export function createAgentTools(
                   const { id, ...rest } = old;
                   reverseOps.push({ action: "recreate", factId: id, previousFact: rest as Record<string, unknown> });
                 }
-                const didDelete = deleteFact(resolvedId, sessionId, readKeys);
+                const didDelete = await deleteFact(resolvedId, sessionId, readKeys);
                 if (didDelete) {
                   deleted++;
                   if (dResult && "commit" in dResult) dResult.commit();
@@ -825,7 +826,7 @@ export function createAgentTools(
             }
             const dResult = deleteGate(matching[0].id, { preConfirmed: identityAlreadyConfirmed });
             if (dResult && "requiresConfirmation" in dResult) return { success: false, code: "REQUIRES_CONFIRMATION", ...dResult };
-            const ok = deleteFact(matching[0].id, sessionId, readKeys);
+            const ok = await deleteFact(matching[0].id, sessionId, readKeys);
             if (!ok) {
               if (dResult && "consumeOnly" in dResult && dResult.consumeOnly) dResult.consumeOnly();
               return { success: false, error: "Fact not found after lookup" };
@@ -859,7 +860,7 @@ export function createAgentTools(
         }
         const dResult = deleteGate(factId, { preConfirmed: identityAlreadyConfirmed });
         if (dResult && "requiresConfirmation" in dResult) return { success: false, code: "REQUIRES_CONFIRMATION", ...dResult };
-        const ok = deleteFact(factId, sessionId, readKeys);
+        const ok = await deleteFact(factId, sessionId, readKeys);
         if (!ok) {
           if (dResult && "consumeOnly" in dResult && dResult.consumeOnly) dResult.consumeOnly();
           return { success: false, error: "Fact not found", hint: "Use search_facts to find the correct factId, or use category/key format like 'education/dams-torino'." };

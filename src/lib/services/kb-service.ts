@@ -97,7 +97,7 @@ export async function createFact(
   input: CreateFactInput,
   sessionId: string = "__default__",
   profileId?: string,
-  options?: { actor?: Actor; visibility?: Visibility },
+  options?: { actor?: Actor; visibility?: Visibility; sessionIds?: string[] },
 ): Promise<FactRow & { _clusterResult?: ClusterAssignResult }> {
   // Validate fact value before persisting
   validateFactValue(input.category, input.key, input.value);
@@ -237,6 +237,7 @@ export async function createFact(
       source: input.source ?? "chat",
       ownerKey: profileId ?? sessionId,
       sessionId,
+      sessionIds: options?.sessionIds,
     });
   } catch (err) {
     // Non-fatal — fact is created, clustering is best-effort
@@ -369,11 +370,11 @@ export function findFactsByKeyPattern(knowledgeKey: string, pattern: string): Ar
 /**
  * Delete a fact. Accepts knowledgeReadKeys to enable cross-session deletes.
  */
-export function deleteFact(
+export async function deleteFact(
   factId: string,
   sessionId: string = "__default__",
   readKeys?: string[],
-): boolean {
+): Promise<boolean> {
   let existing;
   if (readKeys && readKeys.length > 0) {
     existing = db
@@ -391,6 +392,8 @@ export function deleteFact(
 
   if (!existing) return false;
 
+  const deletedClusterId = (existing as any).clusterId as string | null;
+
   db.delete(facts).where(eq(facts.id, factId)).run();
 
   // Orphan cleanup: detach children
@@ -398,6 +401,18 @@ export function deleteFact(
     .set({ parentFactId: null })
     .where(eq(facts.parentFactId, factId))
     .run();
+
+  // Cluster cleanup: if deleted fact was in a cluster, check if the cluster
+  // is now a singleton (1 member) or empty. If so, detach the remaining fact
+  // and delete the cluster to avoid stale canonical keys.
+  if (deletedClusterId) {
+    try {
+      const { cleanupSingletonCluster } = await import("@/lib/services/fact-cluster-service");
+      cleanupSingletonCluster(deletedClusterId);
+    } catch {
+      // Non-fatal — housekeeping will catch it later
+    }
+  }
 
   logEvent({
     eventType: "fact_deleted",

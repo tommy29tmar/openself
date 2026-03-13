@@ -231,10 +231,13 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "publish" });
 
-    // Only the proposed fact should be promoted
-    expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
+    // All publishable facts are promoted (idempotent — no-op for already-public)
+    expect(mockSetFactVisibility).toHaveBeenCalledTimes(2);
     expect(mockSetFactVisibility).toHaveBeenCalledWith(
       facts[0].id, "public", "user", "session-1", undefined,
+    );
+    expect(mockSetFactVisibility).toHaveBeenCalledWith(
+      facts[1].id, "public", "user", "session-1", undefined,
     );
   });
 
@@ -274,7 +277,7 @@ describe("prepareAndPublish", () => {
     );
   });
 
-  it("does not promote already-public facts", async () => {
+  it("promotes already-public facts idempotently (no-op in setFactVisibility)", async () => {
     const facts = [
       makeFact({ category: "skill", key: "js", visibility: "public" }),
     ];
@@ -289,7 +292,8 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "publish" });
 
-    expect(mockSetFactVisibility).not.toHaveBeenCalled();
+    // setFactVisibility is called for all memberIds but is idempotent — no DB write for already-public facts
+    expect(mockSetFactVisibility).toHaveBeenCalled();
   });
 
   it("publishes from zero when no draft exists", async () => {

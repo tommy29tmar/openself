@@ -365,16 +365,21 @@ describe("tryAssignCluster", () => {
     const updateChain = makeChain({ run: mockRun });
     mockRun.mockReturnValue(undefined);
 
-    // Second select: read back cluster canonical key → get()
-    const selectCluster = makeChain({ get: mockGet });
-    mockGet.mockReturnValueOnce({ canonicalKey: "skill-typescript" });
+    // Second select inside updateCanonicalKey: re-read existing fact → get()
+    const selectFreshFact = makeChain({ get: mockGet });
+    mockGet.mockReturnValueOnce({ key: "skill-typescript" });
 
     // Third select inside updateCanonicalKey: get current canonical → get()
     const selectCanonical = makeChain({ get: mockGet });
     mockGet.mockReturnValueOnce({ canonicalKey: "skill-typescript" });
 
+    // Fourth select: read back cluster canonical key → get()
+    const selectCluster = makeChain({ get: mockGet });
+    mockGet.mockReturnValueOnce({ canonicalKey: "skill-typescript" });
+
     mockDb.select
       .mockReturnValueOnce(selectCandidates)   // candidates query
+      .mockReturnValueOnce(selectFreshFact)     // updateCanonicalKey → re-read existing fact
       .mockReturnValueOnce(selectCanonical)     // updateCanonicalKey → get cluster
       .mockReturnValueOnce(selectCluster);      // read back after update
 
