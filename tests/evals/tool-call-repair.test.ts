@@ -82,6 +82,11 @@ describe("repairJsonValue", () => {
     expect(result).toEqual({ end: null });
   });
 
+  it("handles extra whitespace around values", () => {
+    const result = JSON.parse(repairJsonValue('{  role :  "designer"  }'));
+    expect(result).toEqual({ role: "designer" });
+  });
+
   it("returns original if repair fails", () => {
     const garbage = "not json at all";
     expect(repairJsonValue(garbage)).toBe(garbage);

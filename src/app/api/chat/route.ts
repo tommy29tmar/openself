@@ -329,19 +329,24 @@ export async function POST(req: Request) {
   let latestUserMessageId: string | undefined;
   if (lastMessage?.role === "user") {
     // Dedup: check if identical content was persisted in same session within last 30s
-    const recent = db
-      .select({ id: messagesTable.id, createdAt: messagesTable.createdAt })
-      .from(messagesTable)
-      .where(
-        and(
-          eq(messagesTable.sessionId, messageSessionId),
-          eq(messagesTable.role, "user"),
-          eq(messagesTable.content, lastMessage.content),
-        ),
-      )
-      .orderBy(desc(messagesTable.createdAt))
-      .limit(1)
-      .get();
+    // UserContent can be string or array — only dedup plain text messages
+    const contentStr =
+      typeof lastMessage.content === "string" ? lastMessage.content : null;
+    const recent = contentStr
+      ? db
+          .select({ id: messagesTable.id, createdAt: messagesTable.createdAt })
+          .from(messagesTable)
+          .where(
+            and(
+              eq(messagesTable.sessionId, messageSessionId),
+              eq(messagesTable.role, "user"),
+              eq(messagesTable.content, contentStr),
+            ),
+          )
+          .orderBy(desc(messagesTable.createdAt))
+          .limit(1)
+          .get()
+      : undefined;
 
     // CURRENT_TIMESTAMP produces "YYYY-MM-DD HH:MM:SS" format
     const thirtySecondsAgo = new Date(Date.now() - 30_000)
@@ -358,7 +363,8 @@ export async function POST(req: Request) {
           id: latestUserMessageId,
           sessionId: messageSessionId,
           role: "user",
-          content: lastMessage.content,
+          content:
+            contentStr ?? JSON.stringify(lastMessage.content),
         })
         .run();
     }

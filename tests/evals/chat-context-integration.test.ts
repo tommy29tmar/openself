@@ -5,6 +5,7 @@
  * trimmedMessages (not raw) to the LLM.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockDrizzleSelect } from "../helpers/mock-db-select";
 
 // --- Track assembleContext calls ---
 const assembleContextMock = vi.fn();
@@ -43,7 +44,7 @@ vi.mock("@/lib/agent/tool-filter", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })),
-    select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn(() => ({ limit: vi.fn(() => ({ get: vi.fn(() => undefined) })) })) })) })) })),
+    select: mockDrizzleSelect(),
   },
   sqlite: {
     prepare: vi.fn(() => ({

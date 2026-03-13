@@ -5,6 +5,7 @@
  * Follows the same mock structure as chat-route-bootstrap.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockDrizzleSelect } from "../helpers/mock-db-select";
 
 // --- Mocks (hoisted, matching real route.ts imports) ---
 
@@ -95,7 +96,7 @@ vi.mock("@/lib/agent/tool-filter", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })),
-    select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn(() => ({ limit: vi.fn(() => ({ get: vi.fn(() => undefined) })) })) })) })) })),
+    select: mockDrizzleSelect(),
   },
   sqlite: { prepare: vi.fn(() => ({ run: vi.fn(), get: vi.fn(() => ({ count: 0 })) })) },
 }));
