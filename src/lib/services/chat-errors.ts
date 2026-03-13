@@ -51,8 +51,7 @@ export function classifyChatError(error: unknown): ChatErrorCode {
   if (
     msg.includes("timeout") ||
     msg.includes("aborted") ||
-    msg.includes("aborterror") ||
-    (error instanceof DOMException && error.name === "AbortError")
+    msg.includes("aborterror")
   )
     return "AI_TIMEOUT";
   if (

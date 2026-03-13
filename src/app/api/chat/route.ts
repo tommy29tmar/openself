@@ -506,7 +506,7 @@ export async function POST(req: Request) {
     }
     const code = classifyChatError(error);
     return new Response(
-      JSON.stringify({ error: "Internal error", code, requestId }),
+      formatChatErrorResponse(error, requestId),
       { status: code === "AI_RATE_LIMITED" || code === "BUDGET_EXCEEDED" ? 429 : 500, headers: { "Content-Type": "application/json", "X-Request-Id": requestId } },
     );
   }

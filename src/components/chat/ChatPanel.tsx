@@ -523,14 +523,15 @@ function ChatPanelInner({
         setChatError(null);
       },
       onError: (error) => {
+        const msg = error.message ?? "";
         // Check for structured MESSAGE_LIMIT code first, string match as fallback
-        const errParsed = parseChatErrorJson(error.message ?? "");
-        if (errParsed?.code === "MESSAGE_LIMIT" || error.message?.includes("Message limit reached")) {
+        const errParsed = parseChatErrorJson(msg);
+        if (errParsed?.code === "MESSAGE_LIMIT" || msg.includes("Message limit reached")) {
           setLimitReached(true);
           return;
         }
 
-        if (error.message && /unauthorized/i.test(error.message)) {
+        if (msg && /unauthorized/i.test(msg)) {
           window.location.href = "/invite";
           return;
         }
