@@ -20,7 +20,7 @@ function makeState(type: string, content: string): SectionCopyStateRow {
     ownerKey: "owner1",
     sectionType: type,
     language: "en",
-    personalizedContent: JSON.stringify({ description: content }),
+    personalizedContent: JSON.stringify({ title: content }),
     factsHash: "fh",
     soulHash: "sh",
     approvedAt: "2026-01-01",
@@ -121,7 +121,7 @@ describe("generateRewrite", () => {
 
   it("returns rewritten content on success", async () => {
     mockGenerateObject.mockResolvedValue({
-      object: { rewrittenContent: { description: "Better bio text" } },
+      object: { rewrittenContent: { text: "Better bio text" } },
     });
     const issue: ConformityIssue = {
       sectionType: "bio",
@@ -135,7 +135,7 @@ describe("generateRewrite", () => {
       issue,
       "Warm tone",
     );
-    expect(result).toEqual({ description: "Better bio text" });
+    expect(result).toEqual({ text: "Better bio text" });
   });
 
   it("returns null on LLM error", async () => {

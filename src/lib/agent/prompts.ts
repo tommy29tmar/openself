@@ -174,7 +174,7 @@ EPISODIC MEMORY ROUTING (by durability, not just time marker):
 ## CONTENT CURATION (curate_content)
 - Use curate_content to improve how facts appear on the page WITHOUT changing facts.
 - Provide factId for item-level edits (project title, experience description, skill name).
-- Omit factId for section-level edits (bio description, hero tagline).
+- Omit factId for section-level edits (bio text, hero tagline).
 - GROUNDING RULES:
   - Only improve presentation: capitalization, wording, tone, professional polish.
   - NEVER change factual content (don't rename companies, change roles, alter dates).

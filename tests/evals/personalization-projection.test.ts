@@ -73,15 +73,15 @@ describe("mergeActiveSectionCopy", () => {
 
   it("returns config unchanged when no active copies exist", () => {
     const config = makeConfig([
-      makeSection("bio", { description: "Original bio." }),
-      makeSection("skills", { description: "Skill desc.", items: [{ name: "TS" }] }),
+      makeSection("bio", { text: "Original bio." }),
+      makeSection("skills", { title: "Skills", items: [{ name: "TS" }] }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
     expect(result.sections).toHaveLength(2);
-    expect(result.sections[0].content.description).toBe("Original bio.");
-    expect(result.sections[1].content.description).toBe("Skill desc.");
+    expect(result.sections[0].content.text).toBe("Original bio.");
+    expect(result.sections[1].content.title).toBe("Skills");
   });
 
   it("merges personalized text fields when hashes match", () => {
@@ -91,7 +91,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "A creative soul who builds." }),
+        personalizedContent: JSON.stringify({ text: "A creative soul who builds." }),
         factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -100,12 +100,12 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("bio", { description: "Original bio.", items: [{ name: "TS" }] }),
+      makeSection("bio", { text: "Original bio.", items: [{ name: "TS" }] }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
-    expect(result.sections[0].content.description).toBe("A creative soul who builds.");
+    expect(result.sections[0].content.text).toBe("A creative soul who builds.");
     // Non-personalizable fields preserved
     expect(result.sections[0].content.items).toEqual([{ name: "TS" }]);
   });
@@ -117,7 +117,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Stale personalized text." }),
+        personalizedContent: JSON.stringify({ text: "Stale personalized text." }),
         factsHash: "old-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -126,13 +126,13 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("bio", { description: "Deterministic bio." }),
+      makeSection("bio", { text: "Deterministic bio." }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
     // Stale — deterministic content preserved
-    expect(result.sections[0].content.description).toBe("Deterministic bio.");
+    expect(result.sections[0].content.text).toBe("Deterministic bio.");
   });
 
   it("keeps deterministic content when soul hash does not match (stale)", () => {
@@ -142,7 +142,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Stale personalized text." }),
+        personalizedContent: JSON.stringify({ text: "Stale personalized text." }),
         factsHash: "mock-facts-hash",
         soulHash: "old-soul-hash",
         approvedAt: null,
@@ -151,12 +151,12 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("bio", { description: "Deterministic bio." }),
+      makeSection("bio", { text: "Deterministic bio." }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
-    expect(result.sections[0].content.description).toBe("Deterministic bio.");
+    expect(result.sections[0].content.text).toBe("Deterministic bio.");
   });
 
   it("does not modify non-personalizable sections", () => {
@@ -191,7 +191,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Personalized bio." }),
+        personalizedContent: JSON.stringify({ text: "Personalized bio." }),
         factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -202,7 +202,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "skills",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Personalized skills." }),
+        personalizedContent: JSON.stringify({ title: "My Expertise" }),
         factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -211,15 +211,15 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("bio", { description: "Original bio.", items: [] }),
-      makeSection("skills", { description: "Original skills.", items: [{ name: "TS" }] }),
+      makeSection("bio", { text: "Original bio.", items: [] }),
+      makeSection("skills", { title: "Skills", items: [{ name: "TS" }] }),
       makeSection("footer", { links: [] }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
-    expect(result.sections[0].content.description).toBe("Personalized bio.");
-    expect(result.sections[1].content.description).toBe("Personalized skills.");
+    expect(result.sections[0].content.text).toBe("Personalized bio.");
+    expect(result.sections[1].content.title).toBe("My Expertise");
     // footer untouched
     expect(result.sections[2].content.links).toEqual([]);
   });
@@ -231,7 +231,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Personalized." }),
+        personalizedContent: JSON.stringify({ text: "Personalized." }),
         factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -240,17 +240,17 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("bio", { description: "Original." }),
+      makeSection("bio", { text: "Original." }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
-    expect(config.sections[0].content.description).toBe("Original.");
-    expect(result.sections[0].content.description).toBe("Personalized.");
+    expect(config.sections[0].content.text).toBe("Original.");
+    expect(result.sections[0].content.text).toBe("Personalized.");
   });
 
   it("passes ownerKey and language to getAllActiveCopies", () => {
-    const config = makeConfig([makeSection("bio", { description: "Test." })]);
+    const config = makeConfig([makeSection("bio", { text: "Test." })]);
 
     mergeActiveSectionCopy(config, "owner-abc", "it");
 
@@ -264,7 +264,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "profile-1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Personalized bio." }),
+        personalizedContent: JSON.stringify({ text: "Personalized bio." }),
         factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -272,7 +272,7 @@ describe("mergeActiveSectionCopy", () => {
       },
     ]);
 
-    const config = makeConfig([makeSection("bio", { description: "Original." })]);
+    const config = makeConfig([makeSection("bio", { text: "Original." })]);
     const readKeys = ["session-anchor", "session-rotated"];
 
     mergeActiveSectionCopy(config, "profile-1", "en", readKeys);
@@ -289,7 +289,7 @@ describe("mergeActiveSectionCopy", () => {
         ownerKey: "owner1",
         sectionType: "bio",
         language: "en",
-        personalizedContent: JSON.stringify({ description: "Personalized bio." }),
+        personalizedContent: JSON.stringify({ text: "Personalized bio." }),
         factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash",
         approvedAt: null,
@@ -298,13 +298,13 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("skills", { description: "Original skills." }),
+      makeSection("skills", { title: "Skills" }),
     ]);
 
     const result = mergeActiveSectionCopy(config, "owner1", "en");
 
     // No copy for skills, stays unchanged
-    expect(result.sections[0].content.description).toBe("Original skills.");
+    expect(result.sections[0].content.title).toBe("Skills");
   });
 
   it("handles invalid JSON in personalizedContent gracefully", () => {
@@ -323,12 +323,12 @@ describe("mergeActiveSectionCopy", () => {
     ]);
 
     const config = makeConfig([
-      makeSection("bio", { description: "Original." }),
+      makeSection("bio", { text: "Original." }),
     ]);
 
     // Should not throw, should fall back to deterministic
     const result = mergeActiveSectionCopy(config, "owner1", "en");
-    expect(result.sections[0].content.description).toBe("Original.");
+    expect(result.sections[0].content.text).toBe("Original.");
   });
 
   it("uses soul compiled string for soul hash computation", () => {
@@ -336,12 +336,12 @@ describe("mergeActiveSectionCopy", () => {
     mockGetAllActiveCopies.mockReturnValue([
       {
         id: 1, ownerKey: "owner1", sectionType: "bio", language: "en",
-        personalizedContent: '{"description":"P"}', factsHash: "mock-facts-hash",
+        personalizedContent: '{"text":"P"}', factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash", approvedAt: null, source: "live",
       },
     ]);
 
-    const config = makeConfig([makeSection("bio", { description: "Bio." })]);
+    const config = makeConfig([makeSection("bio", { text: "Bio." })]);
     mergeActiveSectionCopy(config, "owner1", "en");
 
     expect(mockGetActiveSoul).toHaveBeenCalledWith("owner1");
@@ -353,12 +353,12 @@ describe("mergeActiveSectionCopy", () => {
     mockGetAllActiveCopies.mockReturnValue([
       {
         id: 1, ownerKey: "owner1", sectionType: "bio", language: "en",
-        personalizedContent: '{"description":"P"}', factsHash: "mock-facts-hash",
+        personalizedContent: '{"text":"P"}', factsHash: "mock-facts-hash",
         soulHash: "mock-soul-hash", approvedAt: null, source: "live",
       },
     ]);
 
-    const config = makeConfig([makeSection("bio", { description: "Bio." })]);
+    const config = makeConfig([makeSection("bio", { text: "Bio." })]);
     mergeActiveSectionCopy(config, "owner1", "en");
 
     expect(mockComputeHash).toHaveBeenCalledWith("");
@@ -367,7 +367,7 @@ describe("mergeActiveSectionCopy", () => {
   it("preserves all non-section config properties", () => {
     mockGetAllActiveCopies.mockReturnValue([]);
 
-    const config = makeConfig([makeSection("bio", { description: "Bio." })]);
+    const config = makeConfig([makeSection("bio", { text: "Bio." })]);
     config.surface = "clay";
     config.layoutTemplate = "curator";
 

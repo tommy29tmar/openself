@@ -2048,7 +2048,7 @@ Do NOT call in a loop.`,
         .optional()
         .describe(
           "Fact UUID for item-level curation (e.g., a specific project). " +
-          "Omit for section-level curation (e.g., bio description).",
+          "Omit for section-level curation (e.g., bio text, section title).",
         ),
       fields: z
         .record(z.string())

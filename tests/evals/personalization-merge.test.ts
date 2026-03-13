@@ -2,15 +2,15 @@ import { describe, it, expect } from "vitest";
 import { mergePersonalized } from "@/lib/services/personalization-merge";
 
 describe("mergePersonalized", () => {
-  it("overwrites personalizable text field (bio description)", () => {
+  it("overwrites personalizable text field (bio text)", () => {
     const original = {
-      description: "Original bio text.",
+      text: "Original bio text.",
       items: [{ name: "TypeScript" }],
     };
-    const personalized = { description: "A creative soul building open-source tools." };
+    const personalized = { text: "A creative soul building open-source tools." };
     const result = mergePersonalized(original, personalized, "bio");
 
-    expect(result.description).toBe("A creative soul building open-source tools.");
+    expect(result.text).toBe("A creative soul building open-source tools.");
     // Non-personalizable field preserved
     expect(result.items).toEqual([{ name: "TypeScript" }]);
   });
@@ -26,16 +26,16 @@ describe("mergePersonalized", () => {
 
   it("ignores non-personalizable fields in personalized input", () => {
     const original = {
-      description: "Old",
+      text: "Old",
       items: [{ name: "JavaScript" }],
     };
     const personalized = {
-      description: "New description",
+      text: "New text",
       items: [{ name: "HACKED" }],
     };
     const result = mergePersonalized(original, personalized, "bio");
 
-    expect(result.description).toBe("New description");
+    expect(result.text).toBe("New text");
     // items is NOT in PERSONALIZABLE_FIELDS for bio, so must be preserved
     expect(result.items).toEqual([{ name: "JavaScript" }]);
   });
@@ -57,35 +57,39 @@ describe("mergePersonalized", () => {
   });
 
   it("returns original when personalized is empty", () => {
-    const original = { description: "Stays the same." };
+    const original = { text: "Stays the same." };
     const result = mergePersonalized(original, {}, "bio");
 
-    expect(result.description).toBe("Stays the same.");
+    expect(result.text).toBe("Stays the same.");
   });
 
   it("ignores non-string values in personalized fields", () => {
-    const original = { description: "Original" };
-    const personalized = { description: 42 };
+    const original = { text: "Original" };
+    const personalized = { text: 42 };
     const result = mergePersonalized(original, personalized, "bio");
 
-    expect(result.description).toBe("Original");
+    expect(result.text).toBe("Original");
   });
 
   it("does not mutate the original object", () => {
-    const original = { description: "Immutable" };
-    const personalized = { description: "Changed" };
+    const original = { text: "Immutable" };
+    const personalized = { text: "Changed" };
     mergePersonalized(original, personalized, "bio");
 
-    expect(original.description).toBe("Immutable");
+    expect(original.text).toBe("Immutable");
   });
 
   it("works for all personalizable section types", () => {
+    const fieldMap: Record<string, string> = {
+      hero: "tagline",
+      bio: "text",
+    };
     const types = [
       "hero", "bio", "skills", "projects", "interests",
       "achievements", "experience", "education", "reading", "music", "activities",
     ];
     for (const type of types) {
-      const field = type === "hero" ? "tagline" : "description";
+      const field = fieldMap[type] ?? "title";
       const original = { [field]: "old" };
       const personalized = { [field]: "new" };
       const result = mergePersonalized(original, personalized, type);

@@ -151,7 +151,7 @@ function makeSectionCopyStateRow(
     ownerKey: "owner1",
     sectionType: overrides.sectionType,
     language: overrides.language ?? "en",
-    personalizedContent: overrides.personalizedContent ?? JSON.stringify({ description: "Personalized content." }),
+    personalizedContent: overrides.personalizedContent ?? JSON.stringify({ text: "Personalized content." }),
     factsHash: overrides.factsHash ?? "facts-hash-abc",
     soulHash: overrides.soulHash ?? "soul-hash-xyz",
     approvedAt: overrides.approvedAt ?? "2026-01-01T00:00:00Z",
@@ -216,7 +216,7 @@ describe("personalizer pipeline (integration)", () => {
     mockComputeSectionFactsHash.mockReturnValue("facts-hash-abc");
 
     // Mock active copy with matching hashes — personalized bio section
-    const personalizedBio = { description: "Alice is a passionate TypeScript expert building open-source tools." };
+    const personalizedBio = { text: "Alice is a passionate TypeScript expert building open-source tools." };
     const bioCopy = makeSectionCopyStateRow({
       sectionType: "bio",
       factsHash: "facts-hash-abc",
@@ -227,7 +227,7 @@ describe("personalizer pipeline (integration)", () => {
 
     // Canonical config with a bio section containing original deterministic text
     const originalBioSection = makeSection("bio", {
-      description: "Alice Maker is a developer with TypeScript expertise.",
+      text: "Alice Maker is a developer with TypeScript expertise.",
     });
     const canonical = makePageConfig([originalBioSection]);
 
@@ -238,7 +238,7 @@ describe("personalizer pipeline (integration)", () => {
     expect(result.sections).toHaveLength(1);
     const bioResult = result.sections[0];
     expect(bioResult.type).toBe("bio");
-    expect(bioResult.content.description).toBe(personalizedBio.description);
+    expect(bioResult.content.text).toBe(personalizedBio.text);
 
     // Other non-content fields should be preserved
     expect(bioResult.id).toBe(originalBioSection.id);
@@ -258,7 +258,7 @@ describe("personalizer pipeline (integration)", () => {
       sectionType: "bio",
       factsHash: "STALE-facts-hash",    // old hash
       soulHash: "soul-hash-xyz",         // soul hash matches
-      personalizedContent: JSON.stringify({ description: "Stale personalized text." }),
+      personalizedContent: JSON.stringify({ text: "Stale personalized text." }),
     });
     mockGetAllActiveCopies.mockReturnValue([staleBioCopy]);
 
@@ -278,15 +278,15 @@ describe("personalizer pipeline (integration)", () => {
     });
 
     // Canonical config with original deterministic text
-    const originalContent = { description: "Original deterministic bio text." };
+    const originalContent = { text: "Original deterministic bio text." };
     const canonical = makePageConfig([makeSection("bio", originalContent)]);
 
     // Act
     const result = mergeActiveSectionCopy(canonical, "owner1", "en");
 
     // Assert: personalized content NOT merged — stale copy discarded
-    expect(result.sections[0].content.description).toBe("Original deterministic bio text.");
-    expect(result.sections[0].content.description).not.toBe("Stale personalized text.");
+    expect(result.sections[0].content.text).toBe("Original deterministic bio text.");
+    expect(result.sections[0].content.text).not.toBe("Stale personalized text.");
   });
 
   it("impact detector flags changed sections", () => {

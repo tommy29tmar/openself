@@ -84,7 +84,7 @@ function makeSection(type: string, content: Record<string, unknown> = {}): Secti
 
 function makeInput(overrides: Partial<PersonalizeSectionInput> = {}): PersonalizeSectionInput {
   return {
-    section: overrides.section ?? makeSection("bio", { description: "Original bio text." }),
+    section: overrides.section ?? makeSection("bio", { text: "Original bio text." }),
     ownerKey: overrides.ownerKey ?? "test-owner",
     language: overrides.language ?? "en",
     publishableFacts: overrides.publishableFacts ?? [
@@ -108,12 +108,12 @@ beforeEach(() => {
 
 describe("personalizeSection", () => {
   it("returns cached copy on cache hit (no LLM call)", async () => {
-    const cachedContent = JSON.stringify({ description: "Cached personalized bio." });
+    const cachedContent = JSON.stringify({ text: "Cached personalized bio." });
     mockGetCachedCopy.mockReturnValue(cachedContent);
 
     const result = await personalizeSection(makeInput());
 
-    expect(result).toEqual({ description: "Cached personalized bio." });
+    expect(result).toEqual({ text: "Cached personalized bio." });
     // LLM should NOT be called
     expect(mockGenerateObject).not.toHaveBeenCalled();
     // State should still be updated
@@ -128,7 +128,7 @@ describe("personalizeSection", () => {
 
   it("calls LLM on cache miss, writes to cache + state", async () => {
     mockGetCachedCopy.mockReturnValue(null);
-    const llmResult = { description: "A creative developer building the future." };
+    const llmResult = { text: "A creative developer building the future." };
     mockGenerateObject.mockResolvedValue({ object: llmResult });
 
     const result = await personalizeSection(makeInput());
@@ -198,7 +198,7 @@ describe("personalizeSection", () => {
       ownerKey: "test-owner",
       sectionType: "bio",
       language: "en",
-      personalizedContent: JSON.stringify({ description: "Agent-curated bio." }),
+      personalizedContent: JSON.stringify({ text: "Agent-curated bio." }),
       factsHash: "abc",
       soulHash: "def",
       approvedAt: null,
@@ -221,7 +221,7 @@ describe("personalizeSection", () => {
       ownerKey: "test-owner",
       sectionType: "bio",
       language: "en",
-      personalizedContent: JSON.stringify({ description: "Live bio." }),
+      personalizedContent: JSON.stringify({ text: "Live bio." }),
       factsHash: "abc",
       soulHash: "def",
       approvedAt: null,
@@ -229,12 +229,12 @@ describe("personalizeSection", () => {
     });
     mockGetCachedCopy.mockReturnValue(null);
     mockGenerateObject.mockResolvedValue({
-      object: { description: "Fresh LLM bio." },
+      object: { text: "Fresh LLM bio." },
     });
 
     const result = await personalizeSection(makeInput());
 
-    expect(result).toEqual({ description: "Fresh LLM bio." });
+    expect(result).toEqual({ text: "Fresh LLM bio." });
     expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
 
@@ -243,7 +243,7 @@ describe("personalizeSection", () => {
 
     // skills section needs "skill" category facts, but we provide "identity"
     const input = makeInput({
-      section: makeSection("skills", { description: "Skills here." }),
+      section: makeSection("skills", { title: "Skills" }),
       publishableFacts: [
         makeFact({ category: "identity", key: "full-name" }),
       ],
@@ -278,11 +278,11 @@ describe("personalizeSection", () => {
   it("includes relevant facts in LLM prompt", async () => {
     mockGetCachedCopy.mockReturnValue(null);
     mockGenerateObject.mockResolvedValue({
-      object: { description: "Skilled developer." },
+      object: { title: "My Expertise" },
     });
 
     const input = makeInput({
-      section: makeSection("skills", { description: "Default skills." }),
+      section: makeSection("skills", { title: "Skills" }),
       publishableFacts: [
         makeFact({ category: "skill", key: "typescript", value: { name: "TypeScript", level: "expert" } }),
         makeFact({ category: "identity", key: "full-name", value: { full: "Alice" } }),
@@ -322,12 +322,12 @@ describe("personalizeSection", () => {
   it("falls through to LLM when cached JSON is invalid", async () => {
     mockGetCachedCopy.mockReturnValue("not-valid-json{{{");
     mockGenerateObject.mockResolvedValue({
-      object: { description: "Fresh copy." },
+      object: { text: "Fresh copy." },
     });
 
     const result = await personalizeSection(makeInput());
 
-    expect(result).toEqual({ description: "Fresh copy." });
+    expect(result).toEqual({ text: "Fresh copy." });
     expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
 });

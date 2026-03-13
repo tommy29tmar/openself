@@ -7,8 +7,8 @@ import {
 } from "@/lib/services/personalizer-schemas";
 
 describe("PERSONALIZABLE_FIELDS", () => {
-  it("includes bio with description field", () => {
-    expect(PERSONALIZABLE_FIELDS.bio).toContain("description");
+  it("includes bio with text field", () => {
+    expect(PERSONALIZABLE_FIELDS.bio).toContain("text");
   });
 
   it("includes hero with tagline field", () => {
@@ -71,7 +71,7 @@ describe("getPersonalizerSchema", () => {
   it("returns a Zod schema for bio", () => {
     const schema = getPersonalizerSchema("bio");
     expect(schema).not.toBeNull();
-    const result = schema!.safeParse({ description: "A creative developer." });
+    const result = schema!.safeParse({ text: "A creative developer." });
     expect(result.success).toBe(true);
   });
 
@@ -85,7 +85,7 @@ describe("getPersonalizerSchema", () => {
   it("rejects extra fields (strict mode)", () => {
     const schema = getPersonalizerSchema("bio");
     expect(schema).not.toBeNull();
-    const result = schema!.safeParse({ description: "ok", extra: "nope" });
+    const result = schema!.safeParse({ text: "ok", extra: "nope" });
     expect(result.success).toBe(false);
   });
 

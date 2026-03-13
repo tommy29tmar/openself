@@ -6,17 +6,17 @@ import { z, type ZodObject } from "zod";
  */
 export const PERSONALIZABLE_FIELDS: Record<string, string[]> = {
   hero: ["tagline"],
-  bio: ["description"],
-  skills: ["description"],
-  projects: ["description"],
-  interests: ["description"],
-  achievements: ["description"],
-  experience: ["description"],
-  education: ["description"],
-  reading: ["description"],
-  music: ["description"],
-  activities: ["description"],
-  "at-a-glance": ["description"],
+  bio: ["text"],
+  skills: ["title"],
+  projects: ["title"],
+  interests: ["title"],
+  achievements: ["title"],
+  experience: ["title"],
+  education: ["title"],
+  reading: ["title"],
+  music: ["title"],
+  activities: ["title"],
+  "at-a-glance": ["title"],
 };
 
 /**
