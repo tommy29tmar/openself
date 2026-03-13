@@ -500,7 +500,7 @@ function ChatPanelInner({
   const voiceSpeakRef = useRef<(text: string) => void>(() => {});
 
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append } =
+  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append, error: streamError } =
     useChat({
       api: "/api/chat",
       body: { language },
@@ -555,6 +555,14 @@ function ChatPanelInner({
         }
       },
     });
+
+  // Defense-in-depth: onError handles all error paths today, but useChat's error
+  // state is the canonical source. This guard ensures display if SDK behavior changes.
+  useEffect(() => {
+    if (!streamError) return;
+    const parsed = parseChatErrorJson(streamError.message ?? "");
+    setChatError(chatFriendlyError(parsed?.code ?? null, language, parsed?.requestId));
+  }, [streamError, language]);
 
   // Re-sync messages from the server DB to recover from stream errors.
   // Returns true if the last assistant message has non-empty content.
