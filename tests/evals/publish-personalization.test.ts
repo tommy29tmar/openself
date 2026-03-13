@@ -74,6 +74,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
+  bulkPromoteToPublic: vi.fn(),
 }));
 vi.mock("@/lib/services/fact-cluster-service", () => ({
   getProjectedFacts: (...args: any[]) =>

@@ -604,6 +604,31 @@ export function setFactVisibility(
 }
 
 /**
+ * Bulk-promote facts to public by ID. Used by publish pipeline for cluster memberIds.
+ * Bypasses session scoping — caller must have already verified ownership.
+ * Idempotent: skips facts already public, sensitive, or not found.
+ */
+export function bulkPromoteToPublic(factIds: string[]): void {
+  if (factIds.length === 0) return;
+  const now = new Date().toISOString();
+  for (const factId of factIds) {
+    const existing = db
+      .select()
+      .from(facts)
+      .where(eq(facts.id, factId))
+      .get();
+    if (!existing) continue;
+    const vis = (existing.visibility ?? "private") as Visibility;
+    if (vis === "public") continue;
+    if (isSensitiveCategory(existing.category)) continue;
+    db.update(facts)
+      .set({ visibility: "public", updatedAt: now })
+      .where(eq(facts.id, factId))
+      .run();
+  }
+}
+
+/**
  * Get a single fact by ID (scoped to readKeys).
  */
 /**

@@ -146,12 +146,11 @@ export function identityMatch(
     }
 
     case "contact": {
-      return (
-        str(a.type) === str(b.type) &&
-        str(a.type) !== "" &&
-        str(a.value) === str(b.value) &&
-        str(a.value) !== ""
-      );
+      const typeA = slugifyForMatch(str(a.type));
+      const typeB = slugifyForMatch(str(b.type));
+      const valA = str(a.value);
+      const valB = str(b.value);
+      return typeA !== "" && typeA === typeB && valA !== "" && valA === valB;
     }
 
     case "achievement": {
@@ -219,26 +218,15 @@ export function pickCanonicalKey(
 }
 
 /**
- * Update the canonical key of a cluster if a better key is now available.
- * Re-reads the existing fact key from DB to avoid TOCTOU with stale in-memory data.
+ * Update the canonical key of a cluster if the new fact's key is better.
+ * Compares newFactKey against cluster.canonicalKey (not candidate.key) to
+ * prevent downgrading a non-connector canonical key to a connector-prefixed one.
  */
 export function updateCanonicalKey(
   clusterId: string,
-  newSource: string,
+  _newSource: string,
   newFactKey: string,
-  existingFactId: string
 ): void {
-  // Re-read the existing fact's key from DB (authoritative, avoids stale data)
-  const freshExisting = db
-    .select()
-    .from(facts)
-    .where(eq(facts.id, existingFactId))
-    .get() as FactRow | undefined;
-
-  if (!freshExisting) return;
-
-  const preferred = pickCanonicalKey(newSource, newFactKey, freshExisting);
-
   // Get the current canonical key from the cluster
   const cluster = db
     .select()
@@ -246,11 +234,15 @@ export function updateCanonicalKey(
     .where(eq(factClusters.id, clusterId))
     .get() as { canonicalKey: string | null } | undefined;
 
-  if (!cluster) return;
+  if (!cluster || !cluster.canonicalKey) return;
 
-  if (cluster.canonicalKey !== preferred) {
+  const currentIsConnector = CONNECTOR_KEY_PREFIX_RE.test(cluster.canonicalKey);
+  const newIsConnector = CONNECTOR_KEY_PREFIX_RE.test(newFactKey);
+
+  // Only upgrade: non-connector key replaces connector key
+  if (!newIsConnector && currentIsConnector) {
     db.update(factClusters)
-      .set({ canonicalKey: preferred, updatedAt: new Date().toISOString() })
+      .set({ canonicalKey: newFactKey, updatedAt: new Date().toISOString() })
       .where(eq(factClusters.id, clusterId))
       .run();
   }
@@ -316,7 +308,7 @@ export function tryAssignCluster(
           .where(eq(facts.id, factId))
           .run();
 
-        updateCanonicalKey(clusterId, source, factKey, candidate.id);
+        updateCanonicalKey(clusterId, source, factKey);
 
         // Read back canonical key
         const cluster = db
@@ -381,23 +373,25 @@ export function tryAssignCluster(
  * This prevents stale canonical keys from leaking into page composition.
  */
 export function cleanupSingletonCluster(clusterId: string): void {
-  const remaining = db
-    .select()
-    .from(facts)
-    .where(and(eq(facts.clusterId, clusterId), isNull(facts.archivedAt)))
-    .all();
+  sqlite.transaction(() => {
+    const remaining = db
+      .select()
+      .from(facts)
+      .where(and(eq(facts.clusterId, clusterId), isNull(facts.archivedAt)))
+      .all();
 
-  if (remaining.length <= 1) {
-    // Detach any remaining fact from the cluster
-    if (remaining.length === 1) {
-      db.update(facts)
-        .set({ clusterId: null })
-        .where(eq(facts.id, remaining[0].id))
-        .run();
+    if (remaining.length <= 1) {
+      // Detach any remaining fact from the cluster
+      if (remaining.length === 1) {
+        db.update(facts)
+          .set({ clusterId: null })
+          .where(eq(facts.id, remaining[0].id))
+          .run();
+      }
+      // Delete the now-empty cluster
+      db.delete(factClusters).where(eq(factClusters.id, clusterId)).run();
     }
-    // Delete the now-empty cluster
-    db.delete(factClusters).where(eq(factClusters.id, clusterId)).run();
-  }
+  })();
 }
 
 // ---------------------------------------------------------------------------

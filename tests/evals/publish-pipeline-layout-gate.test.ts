@@ -14,6 +14,7 @@ const mockGetActiveFactsForGate = vi.fn();
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFactsForGate(...args),
   setFactVisibility: vi.fn(),
+  bulkPromoteToPublic: vi.fn(),
 }));
 
 vi.mock("@/lib/services/fact-cluster-service", () => ({

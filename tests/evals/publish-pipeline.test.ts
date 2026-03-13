@@ -11,11 +11,11 @@ vi.mock("@/lib/services/event-service", () => ({
 }));
 
 const mockGetActiveFacts = vi.fn();
-const mockSetFactVisibility = vi.fn();
+const mockBulkPromoteToPublic = vi.fn();
 
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
-  setFactVisibility: (...args: any[]) => mockSetFactVisibility(...args),
+  bulkPromoteToPublic: (...args: any[]) => mockBulkPromoteToPublic(...args),
 }));
 
 vi.mock("@/lib/services/fact-cluster-service", () => ({
@@ -161,7 +161,7 @@ function makeFact(overrides: { category: string; key: string; visibility?: strin
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockSetFactVisibility.mockReturnValue(undefined);
+  mockBulkPromoteToPublic.mockReturnValue(undefined);
 });
 
 describe("prepareAndPublish", () => {
@@ -231,13 +231,10 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "publish" });
 
-    // All publishable facts are promoted (idempotent — no-op for already-public)
-    expect(mockSetFactVisibility).toHaveBeenCalledTimes(2);
-    expect(mockSetFactVisibility).toHaveBeenCalledWith(
-      facts[0].id, "public", "user", "session-1", undefined,
-    );
-    expect(mockSetFactVisibility).toHaveBeenCalledWith(
-      facts[1].id, "public", "user", "session-1", undefined,
+    // All publishable memberIds are promoted via bulkPromoteToPublic
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledTimes(1);
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledWith(
+      [facts[0].id, facts[1].id],
     );
   });
 
@@ -268,16 +265,12 @@ describe("prepareAndPublish", () => {
       "en",
       readKeys,
     );
-    expect(mockSetFactVisibility).toHaveBeenCalledWith(
-      facts[0].id,
-      "public",
-      "user",
-      "session-anchor",
-      readKeys,
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledWith(
+      [facts[0].id],
     );
   });
 
-  it("promotes already-public facts idempotently (no-op in setFactVisibility)", async () => {
+  it("promotes already-public facts idempotently (no-op in bulkPromoteToPublic)", async () => {
     const facts = [
       makeFact({ category: "skill", key: "js", visibility: "public" }),
     ];
@@ -292,8 +285,8 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "publish" });
 
-    // setFactVisibility is called for all memberIds but is idempotent — no DB write for already-public facts
-    expect(mockSetFactVisibility).toHaveBeenCalled();
+    // bulkPromoteToPublic is called with all memberIds — handles idempotency internally
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledWith([facts[0].id]);
   });
 
   it("publishes from zero when no draft exists", async () => {
@@ -398,7 +391,7 @@ describe("prepareAndPublish", () => {
     }
 
     // No visibility changes should have happened
-    expect(mockSetFactVisibility).not.toHaveBeenCalled();
+    expect(mockBulkPromoteToPublic).not.toHaveBeenCalled();
     // No draft should have been written
     expect(upsertDraft).not.toHaveBeenCalled();
     expect(requestPublish).not.toHaveBeenCalled();
@@ -454,9 +447,9 @@ describe("prepareAndPublish", () => {
     await prepareAndPublish("testuser", "session-1", { mode: "register" });
 
     // Only the skill fact should be promoted (compensation is sensitive, excluded by filterPublishableFacts)
-    expect(mockSetFactVisibility).toHaveBeenCalledTimes(1);
-    expect(mockSetFactVisibility).toHaveBeenCalledWith(
-      facts[1].id, "public", "user", "session-1", undefined,
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledTimes(1);
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledWith(
+      [facts[1].id],
     );
   });
 });

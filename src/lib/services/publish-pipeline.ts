@@ -1,5 +1,5 @@
 import { sqlite } from "@/lib/db";
-import { setFactVisibility } from "@/lib/services/kb-service";
+import { bulkPromoteToPublic } from "@/lib/services/kb-service";
 import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import {
   getDraft,
@@ -202,13 +202,13 @@ export async function prepareAndPublish(
       setProfileUsername(opts.claimProfileId, username);
     }
 
-    // Promote all proposed publishable facts to public (including cluster companions)
-    for (const fact of publishable) {
-      const ids = (fact as any).memberIds ?? [fact.id];
-      for (const memberId of ids) {
-        setFactVisibility(memberId, "public", "user", sessionId, readKeys);
-      }
-    }
+    // Promote all publishable facts to public (including cluster companions).
+    // Uses bulkPromoteToPublic (ID-only lookup, no session scope) because cluster
+    // companions may be stored under a different sessionId than the publishing user.
+    const allMemberIds = publishable.flatMap(
+      (f) => (f as any).memberIds ?? [f.id],
+    );
+    bulkPromoteToPublic(allMemberIds);
 
     // Persist rendered (translated) config and publish
     upsertDraft(username, renderedConfig, sessionId);
