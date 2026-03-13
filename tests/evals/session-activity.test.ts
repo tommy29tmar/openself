@@ -76,6 +76,14 @@ describe("isSessionActive — edge cases", () => {
   it("returns false for empty string", () => {
     expect(isSessionActive("", 120)).toBe(false);
   });
+
+  it("returns false for malformed timestamp", () => {
+    expect(isSessionActive("not-a-date", 120)).toBe(false);
+  });
+
+  it("returns false for partial timestamp", () => {
+    expect(isSessionActive("2026-13-45 99:99:99", 120)).toBe(false);
+  });
 });
 
 describe("updateLastMessageAt", () => {

@@ -10,6 +10,18 @@ import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { friendlyError, chatFriendlyError, parseChatErrorJson } from "@/lib/i18n/error-messages";
 import { useVoice } from "@/components/voice/VoiceProvider";
 
+/** Neutral fallback when bootstrap fails to return a greeting. */
+const NEUTRAL_FALLBACK: Record<string, string> = {
+  en: "Hey! What would you like to work on?",
+  it: "Ciao! Su cosa vuoi lavorare?",
+  de: "Hey! Woran möchtest du arbeiten?",
+  fr: "Salut\u00a0! Sur quoi veux-tu travailler\u00a0?",
+  es: "¡Hola! ¿En qué quieres trabajar?",
+  pt: "Olá! Em que queres trabalhar?",
+  ja: "こんにちは！何に取り組みますか？",
+  zh: "你好！想做什么？",
+};
+
 const LIMIT_MESSAGES: Record<string, string> = {
   en: "You\u2019ve used all your messages. Pick a username to publish your page!",
   it: "Hai esaurito i messaggi. Scegli un username per pubblicare la tua pagina!",
@@ -264,7 +276,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
         const greeting: StoredMessage = {
           id: `greeting-${Date.now()}`,
           role: "assistant",
-          content: greetingText || "Hey! What would you like to work on?",
+          content: greetingText || NEUTRAL_FALLBACK[language] || NEUTRAL_FALLBACK.en,
         };
         setInitialMessages([greeting]);
         greetingRef.current = { id: greeting.id, content: greeting.content };
@@ -313,7 +325,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
         const greeting: StoredMessage = {
           id: `greeting-${Date.now()}`,
           role: "assistant",
-          content: greetingText || "Hey! What would you like to work on?",
+          content: greetingText || NEUTRAL_FALLBACK[language] || NEUTRAL_FALLBACK.en,
         };
         setInitialMessages([greeting]);
         greetingRef.current = { id: greeting.id, content: greeting.content };

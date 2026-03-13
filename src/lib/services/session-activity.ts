@@ -36,6 +36,7 @@ export function isSessionActive(
   // Appending "Z" forces UTC interpretation, matching SQLite's actual timezone.
   const normalized = lastMessageAt.endsWith("Z") ? lastMessageAt : lastMessageAt + "Z";
   const lastMs = new Date(normalized).getTime();
+  if (isNaN(lastMs)) return false; // Malformed timestamp — treat as expired
   const cutoffMs = Date.now() - ttlMinutes * 60 * 1000;
   return lastMs > cutoffMs;
 }

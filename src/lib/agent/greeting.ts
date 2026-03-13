@@ -200,8 +200,11 @@ export function computeGreeting(ctx: GreetingContext): string {
       base = buildActiveStale(lang, userName, lastSeenDaysAgo);
       break;
 
-    default:
+    default: {
+      const _exhaustive: never = journeyState;
+      console.warn(`[greeting] unhandled journey state: ${_exhaustive}`);
       return FIRST_VISIT[lang] ?? FIRST_VISIT.en;
+    }
   }
 
   // Append situation hints (max 1 to keep greeting concise)
