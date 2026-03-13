@@ -242,6 +242,7 @@ type ChatPanelInnerProps = {
   onSignupRequest?: () => void;
   isPrimaryVoiceConsumer?: boolean;
   pendingGreeting?: { id: string; content: string } | null;
+  onGreetingChange?: (greeting: { id: string; content: string } | null) => void;
 };
 
 function ChatPanelLoading() {
@@ -351,6 +352,7 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
       onSignupRequest={onSignupRequest}
       isPrimaryVoiceConsumer={isPrimaryVoiceConsumer}
       pendingGreeting={greetingRef.current}
+      onGreetingChange={(g) => { greetingRef.current = g; }}
     />
   );
 }
@@ -363,6 +365,7 @@ function ChatPanelInner({
   onSignupRequest,
   isPrimaryVoiceConsumer,
   pendingGreeting,
+  onGreetingChange,
 }: ChatPanelInnerProps) {
   const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -486,6 +489,7 @@ function ChatPanelInner({
               setMessages([greetingMsg]);
               // Track for lazy persistence so the greeting gets persisted on next user message
               pendingGreetingRef.current = { id: greetingMsg.id, content: greetingMsg.content };
+              onGreetingChange?.({ id: greetingMsg.id, content: greetingMsg.content });
               setChatError(null);
               return true;
             }
@@ -500,7 +504,7 @@ function ChatPanelInner({
     } catch {
       return false;
     }
-  }, [language, setMessages]);
+  }, [language, setMessages, onGreetingChange]);
 
   // Keep ref in sync for onFinish closure
   refreshChatRef.current = refreshChat;
