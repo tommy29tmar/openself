@@ -335,14 +335,33 @@ export function updateFact(
 /**
  * Soft-archive a fact (sets archived_at). Returns true if the fact was found and archived.
  * Used by connector sync to retire stale facts before re-creating updated ones.
+ *
+ * If the archived fact belonged to a cluster, runs singleton cleanup so the
+ * cluster doesn't become stale before the next housekeeping cycle.
  */
 export function archiveFact(factId: string): boolean {
+  // Read clusterId BEFORE archiving so we can clean up the cluster afterwards
+  const existing = sqlite
+    .prepare(`SELECT cluster_id FROM facts WHERE id = ? AND archived_at IS NULL`)
+    .get(factId) as { cluster_id: string | null } | undefined;
+
   const result = sqlite
     .prepare(
       `UPDATE facts SET archived_at = datetime('now'), updated_at = datetime('now')
        WHERE id = ? AND archived_at IS NULL`
     )
     .run(factId);
+
+  if (result.changes > 0 && existing?.cluster_id) {
+    try {
+      // Dynamic import to avoid circular dependency (kb-service ↔ fact-cluster-service)
+      const { cleanupSingletonCluster } = require("@/lib/services/fact-cluster-service");
+      cleanupSingletonCluster(existing.cluster_id);
+    } catch {
+      // Non-fatal — housekeeping will catch it later
+    }
+  }
+
   return result.changes > 0;
 }
 

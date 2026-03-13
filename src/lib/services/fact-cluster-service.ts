@@ -469,20 +469,20 @@ export function projectClusteredFacts(
     );
     const primary = sorted[0];
 
-    // Per-field resolution: highest-priority source with non-empty value wins
+    // Per-field resolution: highest-priority source wins unconditionally.
+    // If a user-source fact has field="" or null, that's intentional — don't
+    // overwrite with a lower-priority connector value.
     const mergedValue: Record<string, unknown> = {};
+    const claimedFields = new Set<string>();
     for (const fact of sorted) {
       const val =
         typeof fact.value === "object" && fact.value !== null
           ? (fact.value as Record<string, unknown>)
           : {};
       for (const [field, value] of Object.entries(val)) {
-        if (
-          mergedValue[field] === undefined ||
-          mergedValue[field] === null ||
-          mergedValue[field] === ""
-        ) {
+        if (!claimedFields.has(field)) {
           mergedValue[field] = value;
+          claimedFields.add(field);
         }
       }
     }
@@ -490,10 +490,17 @@ export function projectClusteredFacts(
     // Visibility resolution: private wins, then public, then proposed
     const visibility = resolveClusterVisibility(clusterFacts);
 
+    // Use earliest position (min sortOrder) so clustering doesn't push items
+    // to the end when a newly-created user fact joins an existing connector fact.
+    const minSortOrder = Math.min(
+      ...clusterFacts.map((f) => f.sortOrder ?? 0),
+    );
+
     projected.push({
       ...primary,
       key: cluster?.canonicalKey ?? primary.key,
       value: mergedValue,
+      sortOrder: minSortOrder,
       visibility,
       sources: [...new Set(clusterFacts.map((f) => f.source ?? "chat"))],
       clusterSize: clusterFacts.length,
