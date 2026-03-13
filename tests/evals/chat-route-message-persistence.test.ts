@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockDrizzleSelect } from "../helpers/mock-db-select";
 
 const insertedRows: Array<Record<string, unknown>> = [];
 let mockAssistantText = "Assistant reply";
@@ -142,6 +143,7 @@ vi.mock("@/lib/db", () => ({
         }),
       })),
     })),
+    select: mockDrizzleSelect(),
   },
   sqlite: {
     prepare: vi.fn(() => ({

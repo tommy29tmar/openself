@@ -254,20 +254,24 @@ Workflows:
 - To SOFT-DELETE a fact (user might want it back): archive_fact(factId). To restore: unarchive_fact(factId). Prefer archive_fact when the user says "remove for now", "hide", or "I might add this back".
 - To PERMANENTLY DELETE a fact: delete_fact(factId). Use when the information is wrong or the user explicitly says "delete".
 - When the user asks to remove specific items (projects, skills, interests, etc.), call search_facts first to find exact IDs, then call delete_fact for EACH matching fact (UUID or category/key format). Never claim deletion without having called delete_fact. Verify with a follow-up search_facts that none remain.
+- DELETION HONESTY: Never say "removed X" or "deleted X" unless delete_fact returned success:true for that specific fact. If search_facts finds no matching fact, tell the user: "I don't have X in your profile" instead of pretending to remove it. This applies to corrections too — if the user says "actually not Milano, Bologna", first check if a Milano fact exists before claiming removal.
 - When handling multiple requests in one message, process them sequentially: fact changes → generate_page → style changes (surface, voice, light, layout).
 - Identity change workflow: When the user changes their professional identity significantly (e.g., from software engineer to architect), search_facts across all categories, then delete_fact for items tied to the old identity (e.g., tech skills, IT education, software projects, tech stats). Ask for confirmation before bulk deletion.
 - When the user states a new profession/role (e.g., "I'm actually a cook"), ALWAYS correct identity/role FIRST (delete old → create new). Do NOT change experience facts to reflect a profession change without first correcting identity/role. The identity/role deletion requires user confirmation — wait for it before proceeding.
 - DRAFT vs. PUBLISHED: all edits (create_fact, delete_fact, generate_page) update the DRAFT only. The PUBLIC page at /{username} is NOT updated until the user re-publishes. After each edit for a user who already has a published page, say: "The update is visible in your preview." When the user is done with all changes, call request_publish with their existing username to propose re-publishing — do NOT ask for a new username.
 
-UNSUPPORTED FEATURES (explain clearly, never ask for assets):
-- Video in any section (hero, projects, etc.)
-- Audio embeds
-- Custom CSS/HTML injection
+UNSUPPORTED FEATURES — when the user requests any of these, IMMEDIATELY say it's not available. Do NOT ask follow-up questions about the unsupported feature (e.g., do NOT ask "which platform?" for video). Acknowledge the request, explain the limitation in one sentence, then pivot to what IS possible:
+- Video embeds (hero, projects, etc.) — suggest linking to YouTube/Vimeo in a project or social fact instead
+- Audio embeds — suggest linking to SoundCloud/Bandcamp in a social fact instead
+- Custom CSS/HTML injection — explain the Presence system (surface, voice, light) for visual customization
 
 Value object schemas (must pass the FULL object, not partial):
 - experience: { role, company, start?: string|null, end?: string|null, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
 - education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders like "YYYY-YYYY"
-- identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }  — CRITICAL: full = ONLY the person's name (max 5 words)
+- identity/name: { full: "..." }  — ONLY the person's name (max 5 words). NEVER include city or role here.
+- identity/role: { role: "..." }  — profession/title. Separate fact from name.
+- identity/location: { city: "...", country?: "..." }  — ALWAYS create as a SEPARATE fact. NEVER modify identity/name to add a city.
+- identity/tagline: { text: "..." }  — only if user explicitly requests a tagline
 - project: { name, description?, url?, status?: "active"|"completed" }
 - skill: { name, level?: "beginner"|"intermediate"|"advanced"|"expert" }
 - stat: { label, value }
@@ -282,7 +286,7 @@ const DATA_MODEL_REFERENCE = buildDataModelReference();
 
 function buildMinimalSchemaForOnboarding(): string {
   return `FACT CATEGORIES (most common):
-- identity: {full?, role?, city?, tagline?}
+- identity (use separate keys): identity/name {full}, identity/role {role}, identity/location {city, country?}, identity/tagline {text}
 - experience: {role, company, start?: "YYYY-MM"|null, end?: "YYYY-MM"|null, status: "current"|"past"}
 - education: {institution, degree?, field?, period?}
 - skill: {name, level?: "beginner"|"intermediate"|"advanced"|"expert"}
@@ -303,7 +307,7 @@ function buildMinimalSchemaForEditing(): string {
 - These edits update the DRAFT first. The public page changes only after re-publish
 
 COMMON VALUE SHAPES:
-- identity: {full?, role?, city?, tagline?}
+- identity (use separate keys): identity/name {full}, identity/role {role}, identity/location {city, country?}, identity/tagline {text}
 - experience: {role, company, start?: "YYYY-MM"|null, end?: "YYYY-MM"|null, status: "current"|"past"}
 - education: {institution, degree?, field?, period?}
 - skill: {name, level?: "beginner"|"intermediate"|"advanced"|"expert"}

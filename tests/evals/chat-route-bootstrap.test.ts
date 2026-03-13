@@ -8,6 +8,7 @@
  *   - assembleContext returns { systemPrompt, trimmedMessages, mode } — NOT contextParts/messages
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockDrizzleSelect } from "../helpers/mock-db-select";
 
 // --- Mocks (hoisted, matching real route.ts imports) ---
 
@@ -93,7 +94,10 @@ vi.mock("@/lib/agent/tool-filter", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })) },
+  db: {
+    insert: vi.fn(() => ({ values: vi.fn(() => ({ run: vi.fn() })) })),
+    select: mockDrizzleSelect(),
+  },
   sqlite: {
     prepare: vi.fn(() => ({
       run: vi.fn(() => ({ changes: 1 })),

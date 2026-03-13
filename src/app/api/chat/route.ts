@@ -6,6 +6,7 @@ import { createAgentTools } from "@/lib/agent/tools";
 import { filterToolsByJourneyState } from "@/lib/agent/tool-filter";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
@@ -27,7 +28,7 @@ import { analyzeImportGaps, type ImportGapReport } from "@/lib/connectors/import
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { STEP_EXHAUSTION_FALLBACK } from "@/lib/agent/step-exhaustion-fallback";
 import { updateLastReferencedAt } from "@/lib/services/memory-service";
-import { stringifyToolArgsForRepair, stripMarkdownCodeFences } from "@/lib/agent/tool-call-repair";
+import { stringifyToolArgsForRepair, stripMarkdownCodeFences, repairJsonValue } from "@/lib/agent/tool-call-repair";
 import {
   createUnbackedActionClaimTransform,
   sanitizeUnbackedActionClaim,
@@ -323,19 +324,50 @@ export async function POST(req: Request) {
     }
   }
 
-  // Persist the latest user message
+  // Persist the latest user message (with dedup guard)
   const lastMessage = messages[messages.length - 1];
   let latestUserMessageId: string | undefined;
   if (lastMessage?.role === "user") {
-    latestUserMessageId = randomUUID();
-    db.insert(messagesTable)
-      .values({
-        id: latestUserMessageId,
-        sessionId: messageSessionId,
-        role: "user",
-        content: lastMessage.content,
-      })
-      .run();
+    // Dedup: check if identical content was persisted in same session within last 30s
+    // UserContent can be string or array — only dedup plain text messages
+    const contentStr =
+      typeof lastMessage.content === "string" ? lastMessage.content : null;
+    const recent = contentStr
+      ? db
+          .select({ id: messagesTable.id, createdAt: messagesTable.createdAt })
+          .from(messagesTable)
+          .where(
+            and(
+              eq(messagesTable.sessionId, messageSessionId),
+              eq(messagesTable.role, "user"),
+              eq(messagesTable.content, contentStr),
+            ),
+          )
+          .orderBy(desc(messagesTable.createdAt))
+          .limit(1)
+          .get()
+      : undefined;
+
+    // CURRENT_TIMESTAMP produces "YYYY-MM-DD HH:MM:SS" format
+    const thirtySecondsAgo = new Date(Date.now() - 30_000)
+      .toISOString()
+      .replace("T", " ")
+      .replace(/\.\d+Z$/, "");
+    if (recent?.createdAt && recent.createdAt > thirtySecondsAgo) {
+      // Reuse existing message ID — this is a retry/resend
+      latestUserMessageId = recent.id;
+    } else {
+      latestUserMessageId = randomUUID();
+      db.insert(messagesTable)
+        .values({
+          id: latestUserMessageId,
+          sessionId: messageSessionId,
+          role: "user",
+          content:
+            contentStr ?? JSON.stringify(lastMessage.content),
+        })
+        .run();
+    }
   }
 
   // Update session activity timestamp for concierge TTL
@@ -383,14 +415,25 @@ export async function POST(req: Request) {
         stepCounter++;
       },
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
-        // Fast path: strip markdown code fences that Gemini sometimes wraps around JSON
+        // Fast path 1: strip markdown code fences that Gemini sometimes wraps around JSON
         const rawArgs = stringifyToolArgsForRepair(toolCall.args);
         const stripped = stripMarkdownCodeFences(rawArgs);
         try {
           JSON.parse(stripped);
           return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: stripped };
         } catch {
-          // Fall through to LLM repair
+          // Fall through
+        }
+
+        // Fast path 2: repair common JSON malformations (unquoted keys/values)
+        const repaired = repairJsonValue(stripped);
+        if (repaired !== stripped) {
+          try {
+            JSON.parse(repaired);
+            return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: repaired };
+          } catch {
+            // Fall through to LLM repair
+          }
         }
 
         const schema = parameterSchema({ toolName: toolCall.toolName });

@@ -22,3 +22,39 @@ export function stripMarkdownCodeFences(text: string): string {
     .replace(/\s*```\s*$/m, "")
     .trim();
 }
+
+/**
+ * Attempt to repair common JSON malformations from LLM output.
+ * Handles: unquoted keys, unquoted string values.
+ * Returns repaired JSON string, or original if repair fails.
+ */
+export function repairJsonValue(raw: string): string {
+  // If already valid JSON, return as-is
+  try {
+    JSON.parse(raw);
+    return raw;
+  } catch {
+    // Continue to repair
+  }
+
+  try {
+    // Fix 1: Add quotes around unquoted keys  ({role: "x"} → {"role": "x"})
+    let fixed = raw.replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g, '$1"$2":');
+
+    // Fix 2: Add quotes around unquoted string values
+    // Strategy: match values that start with a letter (not digit, quote, brace, bracket, or minus)
+    // and exclude JSON keywords (true, false, null) via negative lookahead.
+    // Using [a-zA-Z] as first char avoids the \s* backtracking bug where
+    // space characters could pass through a negative-lookahead charset.
+    fixed = fixed.replace(
+      /:\s*(?!true\b|false\b|null\b)([a-zA-Z][^,}\]"]*?)(?=[,}\]])/g,
+      (_, val) => `:"${val.trim()}"`,
+    );
+
+    // Validate the repaired JSON
+    JSON.parse(fixed);
+    return fixed;
+  } catch {
+    return raw;
+  }
+}

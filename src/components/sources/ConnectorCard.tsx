@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { CSSProperties } from "react";
 import type { ConnectorUIDefinition, ConnectorStatusRow } from "@/lib/connectors/types";
+import { preflightConnectCheck } from "@/lib/connectors/preflight";
 
 type ConnectorCardProps = {
   definition: ConnectorUIDefinition;
@@ -33,8 +34,19 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
   const isConnected = status?.status === "connected";
   const hasError = status?.status === "error";
 
-  const handleConnect = () => {
-    if (definition.connectUrl) window.location.href = definition.connectUrl;
+  const handleConnect = async () => {
+    if (!definition.connectUrl || loading) return;
+    setLoading(true);
+    try {
+      const result = await preflightConnectCheck(definition.connectUrl);
+      if (!result.ok) {
+        showMessage(result.error, "error");
+        return;
+      }
+      window.location.href = definition.connectUrl;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSync = async () => {
@@ -225,8 +237,15 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
 
       {/* Not connected */}
       {!isConnected && !hasError && definition.authType === "oauth" && (
-        <button onClick={handleConnect} style={btnStyle("#c9a96e", "#111")}>
-          Connect {definition.displayName}
+        <button
+          onClick={handleConnect}
+          disabled={loading}
+          style={{
+            ...btnStyle("#c9a96e", "#111"),
+            opacity: loading ? 0.5 : 1,
+          }}
+        >
+          {loading ? "Connecting\u2026" : `Connect ${definition.displayName}`}
         </button>
       )}
       {!isConnected && !hasError && definition.authType === "zip_upload" && (
@@ -372,9 +391,10 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={handleConnect}
-              style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
+              disabled={loading}
+              style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1, opacity: loading ? 0.5 : 1 }}
             >
-              Reconnect
+              {loading ? "Connecting\u2026" : "Reconnect"}
             </button>
             {confirmingDisconnect ? disconnectConfirmPanel : (
               <button
