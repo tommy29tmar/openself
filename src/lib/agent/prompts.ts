@@ -267,7 +267,10 @@ UNSUPPORTED FEATURES (explain clearly, never ask for assets):
 Value object schemas (must pass the FULL object, not partial):
 - experience: { role, company, start?: string|null, end?: string|null, description?, status?: "current"|"past", type?: "employment"|"freelance"|"client" }
 - education: { institution, degree, field?, period? }  — use real years like "2018-2022", never placeholders like "YYYY-YYYY"
-- identity: { full?: "...", role?: "...", city?: "...", tagline?: "..." }  — CRITICAL: full = ONLY the person's name (max 5 words)
+- identity/name: { full: "..." }  — ONLY the person's name (max 5 words). NEVER include city or role here.
+- identity/role: { role: "..." }  — profession/title. Separate fact from name.
+- identity/location: { city: "...", country?: "..." }  — ALWAYS create as a SEPARATE fact. NEVER modify identity/name to add a city.
+- identity/tagline: { text: "..." }  — only if user explicitly requests a tagline
 - project: { name, description?, url?, status?: "active"|"completed" }
 - skill: { name, level?: "beginner"|"intermediate"|"advanced"|"expert" }
 - stat: { label, value }
@@ -282,7 +285,7 @@ const DATA_MODEL_REFERENCE = buildDataModelReference();
 
 function buildMinimalSchemaForOnboarding(): string {
   return `FACT CATEGORIES (most common):
-- identity: {full?, role?, city?, tagline?}
+- identity (use separate keys): identity/name {full}, identity/role {role}, identity/location {city, country?}, identity/tagline {text}
 - experience: {role, company, start?: "YYYY-MM"|null, end?: "YYYY-MM"|null, status: "current"|"past"}
 - education: {institution, degree?, field?, period?}
 - skill: {name, level?: "beginner"|"intermediate"|"advanced"|"expert"}
@@ -303,7 +306,7 @@ function buildMinimalSchemaForEditing(): string {
 - These edits update the DRAFT first. The public page changes only after re-publish
 
 COMMON VALUE SHAPES:
-- identity: {full?, role?, city?, tagline?}
+- identity (use separate keys): identity/name {full}, identity/role {role}, identity/location {city, country?}, identity/tagline {text}
 - experience: {role, company, start?: "YYYY-MM"|null, end?: "YYYY-MM"|null, status: "current"|"past"}
 - education: {institution, degree?, field?, period?}
 - skill: {name, level?: "beginner"|"intermediate"|"advanced"|"expert"}
