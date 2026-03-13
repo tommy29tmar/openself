@@ -2042,7 +2042,12 @@ Do NOT call in a loop.`,
     parameters: z.object({
       sectionType: z
         .string()
-        .describe("Section type to curate (e.g., 'projects', 'bio', 'experience')"),
+        .optional()
+        .describe(
+          "Section type (e.g., 'bio', 'experience'). " +
+          "Required for section-level curation (when factId is omitted). " +
+          "Not needed for item-level curation (when factId is provided).",
+        ),
       factId: z
         .string()
         .optional()
@@ -2096,6 +2101,12 @@ Do NOT call in a loop.`,
         };
       } else {
         // --- SECTION-LEVEL: route to section_copy_state ---
+        if (!sectionType) {
+          return {
+            success: false,
+            error: "sectionType is required for section-level curation (when factId is omitted)",
+          };
+        }
         const allowed = PERSONALIZABLE_FIELDS[sectionType];
         if (!allowed) {
           return { success: false, error: `Section '${sectionType}' does not support curation` };
