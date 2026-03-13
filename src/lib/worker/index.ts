@@ -15,6 +15,7 @@ import { runSessionCompaction, persistCompactionLog, getLastCompactionRowid } fr
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { consolidateEpisodesHandler } from "@/lib/worker/handlers/consolidate-episodes";
 import { handlePageCuration } from "@/lib/worker/handlers/curate-page";
+import { handleConsolidateFacts } from "@/lib/worker/handlers/consolidate-facts";
 import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import "@/lib/connectors/register-all";
 
@@ -169,6 +170,7 @@ const handlers: Record<string, JobHandler> = {
   },
   consolidate_episodes: consolidateEpisodesHandler,
   curate_page: handlePageCuration,
+  consolidate_facts: handleConsolidateFacts,
 };
 
 export function getHandlerCount(): number {

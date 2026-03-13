@@ -84,6 +84,15 @@ export async function handleConnectorSync(
         updateConnectorStatus(connector.id, "error", result.error);
       } else {
         updateConnectorStatus(connector.id, "connected");
+        // Post-sync: trigger fact consolidation if new facts were created
+        if (result.factsCreated > 0) {
+          try {
+            const { enqueueJob } = await import("@/lib/worker/index");
+            enqueueJob("consolidate_facts", { ownerKey });
+          } catch (err) {
+            console.warn("[connector-sync] Failed to enqueue consolidate_facts:", err);
+          }
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

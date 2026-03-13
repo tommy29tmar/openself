@@ -122,6 +122,30 @@ export function purgeConnectorData(
       )
       .run(connectorId);
 
+    // 7. Clear cluster_id from facts in single-member clusters for this connector's owner
+    sqlite
+      .prepare(
+        `UPDATE facts SET cluster_id = NULL
+         WHERE archived_at IS NULL AND cluster_id IN (
+           SELECT fc.id FROM fact_clusters fc
+           LEFT JOIN facts f ON f.cluster_id = fc.id AND f.archived_at IS NULL
+           WHERE fc.owner_key = ?
+           GROUP BY fc.id
+           HAVING COUNT(f.id) <= 1
+         )`,
+      )
+      .run(ownerKey);
+
+    // 8. Delete empty/single-member clusters for this owner
+    sqlite
+      .prepare(
+        `DELETE FROM fact_clusters WHERE owner_key = ? AND id NOT IN (
+           SELECT DISTINCT cluster_id FROM facts
+           WHERE cluster_id IS NOT NULL AND archived_at IS NULL
+         )`,
+      )
+      .run(ownerKey);
+
     return {
       factsDeleted,
       eventsDeleted,

@@ -49,6 +49,17 @@ vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
 
+vi.mock("@/lib/services/fact-cluster-service", () => ({
+  getProjectedFacts: (...args: any[]) =>
+    mockGetActiveFacts(...args).map((f: any) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [f.id],
+    })),
+}));
+
 // Mock soul-service
 vi.mock("@/lib/services/soul-service", () => ({
   getActiveSoul: (...args: any[]) => mockGetActiveSoul(...args),
@@ -246,7 +257,9 @@ describe("personalizer pipeline (integration)", () => {
     // Verify the mocked services were called correctly
     expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "en");
     expect(mockGetActiveFacts).toHaveBeenCalledWith("owner1", undefined);
-    expect(mockFilterPublishableFacts).toHaveBeenCalledWith(allFacts);
+    expect(mockFilterPublishableFacts).toHaveBeenCalledWith(
+      expect.arrayContaining(allFacts.map((f: any) => expect.objectContaining({ id: f.id }))),
+    );
     expect(mockGetActiveSoul).toHaveBeenCalledWith("owner1");
     expect(mockComputeHash).toHaveBeenCalledWith("Warm, creative, and enthusiastic about open source.");
     expect(mockComputeSectionFactsHash).toHaveBeenCalledWith(publishableFacts, "bio");

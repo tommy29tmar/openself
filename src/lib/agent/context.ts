@@ -1,5 +1,6 @@
 import type { OwnerScope } from "@/lib/auth/session";
 import { getActiveFacts, countFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { hasAnyPublishedPage, getDraft } from "@/lib/services/page-service";
 import { getSummary } from "@/lib/services/summary-service";
 import { getActiveMemoriesScored } from "@/lib/services/memory-service";
@@ -291,7 +292,7 @@ export function assembleContext(
   let factsBlock = "";
   if (!profile || profile.facts.include) {
     existingFacts = bootstrapData?.facts
-      ?? getActiveFacts(factsReadId, factsReadKeys);
+      ?? getProjectedFacts(factsReadId, factsReadKeys);
     const childCountMap = bootstrapData?.childCountMap ?? new Map<string, number>();
     const topFacts = sortFactsForContext(existingFacts, childCountMap, 120);
     factsBlock =

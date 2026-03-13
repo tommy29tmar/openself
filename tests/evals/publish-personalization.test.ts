@@ -75,6 +75,16 @@ vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: mockGetActiveFacts,
   setFactVisibility: mockSetFactVisibility,
 }));
+vi.mock("@/lib/services/fact-cluster-service", () => ({
+  getProjectedFacts: (...args: any[]) =>
+    mockGetActiveFacts(...args).map((f: any) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [f.id],
+    })),
+}));
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: mockGetDraft,
   upsertDraft: mockUpsertDraft,

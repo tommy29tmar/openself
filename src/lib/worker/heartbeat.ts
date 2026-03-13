@@ -25,6 +25,7 @@ import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { DEEP_HEARTBEAT_MIN_FACTS } from "@/lib/agent/thresholds";
 import { handlePageCuration } from "@/lib/worker/handlers/curate-page";
+import { enqueueJob } from "@/lib/worker/index";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -80,6 +81,42 @@ export function runGlobalHousekeeping(): void {
     }
   } catch {
     // Non-fatal — orphans will be cleaned next cycle
+  }
+
+  // Clean up empty fact clusters (no active facts referencing them)
+  try {
+    // Step 1: Null out cluster_id on facts in single-member clusters
+    const nulled = sqlite
+      .prepare(
+        `UPDATE facts SET cluster_id = NULL
+         WHERE archived_at IS NULL AND cluster_id IN (
+           SELECT fc.id FROM fact_clusters fc
+           LEFT JOIN facts f ON f.cluster_id = fc.id AND f.archived_at IS NULL
+           GROUP BY fc.id
+           HAVING COUNT(f.id) <= 1
+         )`,
+      )
+      .run();
+
+    // Step 2: Delete clusters with no active fact references
+    const deleted = sqlite
+      .prepare(
+        `DELETE FROM fact_clusters WHERE id NOT IN (
+           SELECT DISTINCT cluster_id FROM facts
+           WHERE cluster_id IS NOT NULL AND archived_at IS NULL
+         )`,
+      )
+      .run();
+
+    if (nulled.changes > 0 || deleted.changes > 0) {
+      logEvent({
+        eventType: "housekeeping",
+        actor: "worker",
+        payload: { action: "cluster_cleanup", nulled: nulled.changes, deleted: deleted.changes },
+      });
+    }
+  } catch {
+    // Non-fatal — empty clusters will be cleaned next cycle
   }
 }
 
@@ -300,6 +337,18 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
       payload: { ownerKey, error: String(error) },
     });
     // Non-fatal: curation failure doesn't block heartbeat recording
+  }
+
+  // --- Substep 4: Fact consolidation (enqueue, don't call directly — dedup safety) ---
+  try {
+    enqueueJob("consolidate_facts", { ownerKey });
+  } catch (error) {
+    logEvent({
+      eventType: "consolidate_facts_error",
+      actor: "worker",
+      payload: { ownerKey, error: String(error) },
+    });
+    // Non-fatal: consolidation failure doesn't block heartbeat recording
   }
 
   // Only record a successful run if both substeps completed (or were trivially skipped).

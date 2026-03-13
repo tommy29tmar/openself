@@ -1476,6 +1476,7 @@ It is the single source of truth from which the page is generated.
 │  source      TEXT DEFAULT 'chat'  (chat|github|strava|…) │
 │  confidence  REAL DEFAULT 1.0     (0.0 to 1.0)           │
 │  visibility  TEXT DEFAULT 'private' (private|proposed|public|archived)│
+│  cluster_id  TEXT REFERENCES fact_clusters(id) ON DELETE SET NULL │
 │  created_at  DATETIME                                     │
 │  updated_at  DATETIME                                     │
 ├──────────────────────────────────────────────────────────┤
@@ -1608,6 +1609,85 @@ Rules:
 - Public page rendering includes only facts with `visibility='public'`.
 - Onboarding preview may include `visibility='proposed'` facts above threshold.
 - Confirmations, connector corroboration, or repeated evidence can raise confidence.
+
+### 5.8 Fact Clustering
+
+When facts arrive from multiple sources (chat, connectors, worker), the same real-world entity
+can produce separate fact rows (e.g., a "TypeScript" skill from chat and another from GitHub).
+Fact clustering groups these duplicates at write time and resolves them into a single enriched
+view at read time — without mutating the original facts.
+
+**Architecture:**
+
+```
+Write path                          Read path
+─────────                          ─────────
+createFact() ─┐                   getProjectedFacts()
+               ├─► tryAssignCluster()    │
+batchFacts() ──┘         │               ▼
+                         ▼        projectClusteredFacts()
+                  identityMatch()        │
+                         │               ▼
+                  ┌──────┴───────┐  ProjectedFact[]
+                  │ fact_clusters │  (merged value, sources[], memberIds[])
+                  └──────────────┘
+```
+
+**Identity Matching** (`identityMatch()`): Category-specific rules determine whether two fact
+values refer to the same real-world entity. All comparisons use `slugifyForMatch()` (NFD
+normalization, strip accents, lowercase, collapse whitespace). 13 categories supported:
+
+| Category | Identity Fields |
+|----------|----------------|
+| education | institution + degree |
+| experience/position | company + role |
+| skill, activity, language | name |
+| social | platform |
+| music | title + artist |
+| project | name OR url |
+| contact | type + value |
+| achievement, stat | title/label |
+| reading | title + author |
+| identity | always false (never clustered) |
+
+**Write-Path Clustering** (`tryAssignCluster()`): Called inside `createFact()` after row
+insertion. Queries active facts in the same category for the same owner, runs identity
+matching against each candidate. If a match is found:
+- If the matched fact already has a `cluster_id` → assign new fact to that cluster.
+- If neither fact has a cluster → create a new `fact_clusters` row, assign both facts.
+All mutations wrapped in `sqlite.transaction()`.
+
+**Canonical Key Selection** (`pickCanonicalKey()`): Each cluster stores a `canonical_key` —
+the preferred fact key for page composition. Non-connector keys (from chat/user) are preferred
+over connector-prefixed keys (`li-`, `gh-`, `sp-`, `strava-`, `rss-`).
+
+**Read-Path Projection** (`projectClusteredFacts()`): Collapses each cluster into a single
+`ProjectedFact` with:
+- **Per-field value merge**: highest-priority source with a non-empty value wins.
+  Source priority: `user(0) > chat(1) > worker(2) > connector(3)`.
+- **Visibility resolution**: `private` wins, then `public`, then `proposed`.
+- **Metadata**: `sources[]`, `clusterSize`, `memberIds[]` (all fact IDs in cluster).
+
+`getProjectedFacts()` is the drop-in replacement for `getActiveFacts()` on all read paths
+(preview, publish, draft/style, personalization, journey detection).
+
+**Cluster Cleanup**: Two housekeeping paths keep clusters consistent:
+1. **Connector purge** (`purgeConnectorData()`): After deleting connector facts, clears
+   single-member cluster references and deletes empty clusters — all within the same transaction.
+2. **Global housekeeping** (heartbeat): Periodically nulls out `cluster_id` on facts that are
+   the sole remaining member of a cluster, then deletes unreferenced `fact_clusters` rows.
+
+**Worker Consolidation**: The `consolidate_facts` job (enqueued by deep heartbeat) runs
+`tryAssignCluster()` on all unclustered active facts to catch any missed matches. Uses a
+dedicated dedup index (`uniq_jobs_dedup_consolidate_facts`, `status='queued'` only) to allow
+re-enqueue while a previous run is still executing.
+
+**Schema** (migration 0035):
+- `fact_clusters` table: `id`, `owner_key`, `category`, `canonical_key`, `created_at`, `updated_at`
+- `facts.cluster_id` FK with `ON DELETE SET NULL` (self-healing)
+- Indexed: `idx_fact_clusters_owner`, `idx_fact_clusters_owner_category`, `idx_facts_cluster_id`
+
+**Service**: `src/lib/services/fact-cluster-service.ts`
 
 ---
 

@@ -9,13 +9,23 @@ vi.mock("@/lib/db", () => ({
   sqlite: { transaction: vi.fn((fn: () => void) => fn) },
 }));
 
-vi.mock("@/lib/services/kb-service", () => {
-  const mockGetActiveFacts = vi.fn();
-  return {
-    getActiveFacts: mockGetActiveFacts,
-    setFactVisibility: vi.fn(),
-  };
-});
+const mockGetActiveFactsForGate = vi.fn();
+
+vi.mock("@/lib/services/kb-service", () => ({
+  getActiveFacts: (...args: any[]) => mockGetActiveFactsForGate(...args),
+  setFactVisibility: vi.fn(),
+}));
+
+vi.mock("@/lib/services/fact-cluster-service", () => ({
+  getProjectedFacts: (...args: any[]) =>
+    (mockGetActiveFactsForGate(...args) ?? []).map((f: any) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [f.id],
+    })),
+}));
 
 vi.mock("@/lib/services/page-service", () => ({
   getDraft: vi.fn(),
@@ -96,7 +106,6 @@ vi.mock("@/lib/services/session-service", () => ({
   getSession: vi.fn(() => null),
 }));
 
-import { getActiveFacts } from "@/lib/services/kb-service";
 import { getDraft } from "@/lib/services/page-service";
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 
@@ -143,7 +152,7 @@ function makeFacts() {
 describe("prepareAndPublish layout gate status mapping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getActiveFacts).mockReturnValue(makeFacts() as any);
+    mockGetActiveFactsForGate.mockReturnValue(makeFacts() as any);
     vi.mocked(getDraft).mockReturnValue(makeDraft() as any);
   });
 

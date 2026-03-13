@@ -9,7 +9,8 @@
  */
 
 import { sqlite } from "@/lib/db";
-import { countFacts, getActiveFacts, type FactRow } from "@/lib/services/kb-service";
+import { countFacts, type FactRow } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { hasAnyPublishedPage, getDraft, getPublishedUsername } from "@/lib/services/page-service";
 import { getActiveSoul, proposeSoulChange, getPendingProposals } from "@/lib/services/soul-service";
 import { getOpenConflicts, type ConflictRow } from "@/lib/services/conflict-service";
@@ -462,7 +463,7 @@ export function assembleBootstrapPayload(
 
   const journeyState = getOrDetectJourneyState(scope, authInfo);
 
-  const facts = getActiveFacts(factsReadId, factsReadKeys);
+  const facts = getProjectedFacts(factsReadId, factsReadKeys);
 
   // Pre-compute shared data (used by both detectSituations and payload fields)
   const pendingProposalCount = createProposalService().getPendingProposals(ownerKey).length;

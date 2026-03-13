@@ -54,6 +54,7 @@ export type ConnectorRow = {
 export type ImportReport = {
   factsWritten: number;
   factsSkipped: number;
+  factsClustered?: number;  // NEW — optional
   errors: Array<{ file?: string; key?: string; reason: string }>;
   createdFacts: Array<{ key: string; factId: string }>;
 };
