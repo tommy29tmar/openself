@@ -47,6 +47,7 @@ import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { validateUsernameFormat } from "@/lib/page-config/usernames";
 import { personalizeSection, prioritizeSections } from "@/lib/services/section-personalizer";
 import { filterPublishableFacts, projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { detectImpactedSections } from "@/lib/services/personalization-impact";
 import { computeHash, SECTION_FACT_CATEGORIES } from "@/lib/services/personalization-hashing";
 import { updateJourneyStatePin } from "@/lib/agent/journey";
@@ -2092,8 +2093,12 @@ Do NOT call in a loop.`,
     execute: async ({ sectionType, factId, fields }) => {
       if (factId) {
         // --- ITEM-LEVEL: route to fact_display_overrides ---
-        const allFacts = getActiveFacts(sessionId, readKeys);
-        const fact = allFacts.find((f: { id: string }) => f.id === factId);
+        // Use projected facts so the hash matches what getValidOverrides computes.
+        // Also search memberIds so curations work for both primary and secondary cluster members.
+        const projectedFacts = getProjectedFacts(effectiveOwnerKey, readKeys);
+        const fact = projectedFacts.find(
+          (f: any) => f.id === factId || (f.memberIds ?? []).includes(factId),
+        );
         if (!fact) {
           return { success: false, error: `Fact ${factId} not found` };
         }
@@ -2107,10 +2112,11 @@ Do NOT call in a loop.`,
           };
         }
 
+        // Store override against the primary (projected) fact ID with merged value hash
         const service = getFactDisplayOverrideService();
         service.upsertOverride({
           ownerKey: effectiveOwnerKey,
-          factId,
+          factId: fact.id,
           displayFields: editableFields,
           factValueHash: computeFactValueHash(fact.value),
           source: "agent",
@@ -2151,8 +2157,11 @@ Do NOT call in a loop.`,
           };
         }
 
-        const allFacts = getActiveFacts(sessionId, readKeys);
-        const factsHash = computeSectionFactsHash(allFacts, sectionType);
+        // Use projected facts + publishable filter to match what mergeActiveSectionCopy
+        // computes — raw getActiveFacts produces different hashes when facts are clustered.
+        const projectedFacts = getProjectedFacts(effectiveOwnerKey, readKeys);
+        const publishableFacts = filterPublishableFacts(projectedFacts);
+        const factsHash = computeSectionFactsHash(publishableFacts, sectionType);
         const soul = getActiveSoul(effectiveOwnerKey);
         const soulHash = computeHash(soul?.compiled ?? "");
 

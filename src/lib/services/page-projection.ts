@@ -89,10 +89,16 @@ export function projectCanonicalConfig(
   let displayFacts = publishable;
   if (profileId) {
     const overrideService = getFactDisplayOverrideService();
-    const factHashes = publishable.map((f) => ({
-      id: f.id,
-      valueHash: computeFactValueHash(f.value),
-    }));
+    // Build hash entries for all member IDs (not just primary) so overrides
+    // stored against secondary cluster members are discoverable.
+    const factHashes: { id: string; valueHash: string }[] = [];
+    for (const f of publishable) {
+      const hash = computeFactValueHash(f.value);
+      const memberIds: string[] = (f as any).memberIds ?? [f.id];
+      for (const mid of memberIds) {
+        factHashes.push({ id: mid, valueHash: hash });
+      }
+    }
     const validOverrides = overrideService.getValidOverrides(
       profileId,
       factHashes,

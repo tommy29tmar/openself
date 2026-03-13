@@ -3,6 +3,7 @@ import { db, sqlite } from "@/lib/db";
 import { factConflicts, facts } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { logTrustAction } from "@/lib/services/trust-ledger-service";
+import { cleanupSingletonCluster } from "@/lib/services/fact-cluster-service";
 
 // Source precedence: higher wins
 const SOURCE_PRECEDENCE: Record<string, number> = {
@@ -162,13 +163,18 @@ export function resolveConflict(
     const factB = conflict.factBId ? getFactSnapshot(conflict.factBId) : undefined;
 
     // Apply resolution and capture the inverse operation for trust-ledger undo.
+    // Track cluster IDs of deleted facts for cleanup (nested txn via savepoint).
+    const clusterIdsToCleanup = new Set<string>();
+
     if (resolution === "keep_a" && conflict.factBId) {
       const recreateFactB = buildRecreateOp(factB);
       if (recreateFactB) reverseOps.push(recreateFactB);
+      if ((factB as any)?.clusterId) clusterIdsToCleanup.add((factB as any).clusterId);
       sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factBId);
     } else if (resolution === "keep_b") {
       const recreateFactA = buildRecreateOp(factA);
       if (recreateFactA) reverseOps.push(recreateFactA);
+      if ((factA as any)?.clusterId) clusterIdsToCleanup.add((factA as any).clusterId);
       sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factAId);
     } else if (resolution === "merge" && mergedValue) {
       if (factA) {
@@ -184,8 +190,14 @@ export function resolveConflict(
       if (conflict.factBId) {
         const recreateFactB = buildRecreateOp(factB);
         if (recreateFactB) reverseOps.push(recreateFactB);
+        if ((factB as any)?.clusterId) clusterIdsToCleanup.add((factB as any).clusterId);
         sqlite.prepare("DELETE FROM facts WHERE id = ?").run(conflict.factBId);
       }
+    }
+
+    // Cleanup singleton clusters left by deleted facts (nested savepoint)
+    for (const cid of clusterIdsToCleanup) {
+      try { cleanupSingletonCluster(cid); } catch { /* non-fatal */ }
     }
 
     sqlite

@@ -1,4 +1,4 @@
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { getFactDisplayOverrideService } from "@/lib/services/fact-display-override-service";
 import { getActiveCopy } from "@/lib/services/section-copy-state-service";
@@ -13,7 +13,7 @@ import { logEvent } from "@/lib/services/event-service";
 export async function handlePageCuration(payload: Record<string, unknown>): Promise<void> {
   const { ownerKey } = payload as { ownerKey: string };
   const scope = resolveOwnerScopeForWorker(ownerKey);
-  const allFacts = getActiveFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
+  const allFacts = getProjectedFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
   const publishable = filterPublishableFacts(allFacts);
 
   if (publishable.length === 0) return;
