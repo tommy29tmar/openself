@@ -172,6 +172,18 @@ export interface UiStrings {
   activityProposed: string;
   activityReason: string;
   activitySeverity: string;
+
+  // Chat errors
+  chatErrorGeneric: string;
+  chatErrorProviderDown: string;
+  chatErrorRateLimit: string;
+  chatErrorTimeout: string;
+  chatErrorBudget: string;
+  chatErrorModelConfig: string;
+  chatErrorContextTooLong: string;
+  chatErrorContentFiltered: string;
+  chatRetry: string;
+  chatRefresh: string;
 }
 
 const en: UiStrings = {
@@ -306,6 +318,16 @@ const en: UiStrings = {
   activityProposed: "Proposed",
   activityReason: "Reason",
   activitySeverity: "Severity",
+  chatErrorGeneric: "Something went wrong. Please try again.",
+  chatErrorProviderDown: "The AI service is temporarily unavailable. Please try again shortly.",
+  chatErrorRateLimit: "Too many requests — please wait a moment and try again.",
+  chatErrorTimeout: "The response took too long. Please try again.",
+  chatErrorBudget: "Monthly usage limit reached.",
+  chatErrorModelConfig: "AI configuration issue. Please check your setup.",
+  chatErrorContextTooLong: "The conversation is too long. Try starting a new chat.",
+  chatErrorContentFiltered: "The message could not be processed. Try rephrasing.",
+  chatRetry: "Retry",
+  chatRefresh: "Refresh chat",
 };
 
 const it: UiStrings = {
@@ -440,6 +462,16 @@ const it: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravità",
+  chatErrorGeneric: "Qualcosa è andato storto. Riprova.",
+  chatErrorProviderDown: "Il servizio AI non è al momento disponibile. Riprova tra poco.",
+  chatErrorRateLimit: "Troppe richieste — attendi un momento e riprova.",
+  chatErrorTimeout: "La risposta ha impiegato troppo. Riprova.",
+  chatErrorBudget: "Limite di utilizzo mensile raggiunto.",
+  chatErrorModelConfig: "Problema di configurazione AI. Verifica la configurazione.",
+  chatErrorContextTooLong: "La conversazione è troppo lunga. Prova ad avviarne una nuova.",
+  chatErrorContentFiltered: "Il messaggio non è stato elaborato. Prova a riformulare.",
+  chatRetry: "Riprova",
+  chatRefresh: "Aggiorna chat",
 };
 
 const de: UiStrings = {
@@ -574,6 +606,16 @@ const de: UiStrings = {
   activityProposed: "Vorgeschlagen",
   activityReason: "Grund",
   activitySeverity: "Schweregrad",
+  chatErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+  chatErrorProviderDown: "Der KI-Dienst ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
+  chatErrorRateLimit: "Zu viele Anfragen — bitte warte einen Moment und versuche es erneut.",
+  chatErrorTimeout: "Die Antwort hat zu lange gedauert. Bitte versuche es erneut.",
+  chatErrorBudget: "Monatliches Nutzungslimit erreicht.",
+  chatErrorModelConfig: "KI-Konfigurationsproblem. Bitte überprüfe die Einstellungen.",
+  chatErrorContextTooLong: "Die Unterhaltung ist zu lang. Versuche einen neuen Chat zu starten.",
+  chatErrorContentFiltered: "Die Nachricht konnte nicht verarbeitet werden. Versuche sie umzuformulieren.",
+  chatRetry: "Erneut versuchen",
+  chatRefresh: "Chat aktualisieren",
 };
 
 const fr: UiStrings = {
@@ -708,6 +750,16 @@ const fr: UiStrings = {
   activityProposed: "Proposé",
   activityReason: "Raison",
   activitySeverity: "Gravité",
+  chatErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
+  chatErrorProviderDown: "Le service IA est temporairement indisponible. Réessayez dans un instant.",
+  chatErrorRateLimit: "Trop de requêtes — veuillez patienter un moment et réessayer.",
+  chatErrorTimeout: "La réponse a pris trop de temps. Veuillez réessayer.",
+  chatErrorBudget: "Limite d'utilisation mensuelle atteinte.",
+  chatErrorModelConfig: "Problème de configuration IA. Vérifiez votre configuration.",
+  chatErrorContextTooLong: "La conversation est trop longue. Essayez d'en démarrer une nouvelle.",
+  chatErrorContentFiltered: "Le message n'a pas pu être traité. Essayez de le reformuler.",
+  chatRetry: "Réessayer",
+  chatRefresh: "Actualiser le chat",
 };
 
 const es: UiStrings = {
@@ -842,6 +894,16 @@ const es: UiStrings = {
   activityProposed: "Propuesto",
   activityReason: "Razón",
   activitySeverity: "Gravedad",
+  chatErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
+  chatErrorProviderDown: "El servicio de IA no está disponible temporalmente. Inténtalo en un momento.",
+  chatErrorRateLimit: "Demasiadas solicitudes — espera un momento e inténtalo de nuevo.",
+  chatErrorTimeout: "La respuesta tardó demasiado. Inténtalo de nuevo.",
+  chatErrorBudget: "Límite de uso mensual alcanzado.",
+  chatErrorModelConfig: "Problema de configuración de IA. Revisa tu configuración.",
+  chatErrorContextTooLong: "La conversación es demasiado larga. Intenta iniciar un nuevo chat.",
+  chatErrorContentFiltered: "El mensaje no pudo procesarse. Intenta reformularlo.",
+  chatRetry: "Reintentar",
+  chatRefresh: "Actualizar chat",
 };
 
 const pt: UiStrings = {
@@ -976,6 +1038,16 @@ const pt: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravidade",
+  chatErrorGeneric: "Algo correu mal. Tente novamente.",
+  chatErrorProviderDown: "O serviço de IA está temporariamente indisponível. Tente novamente em breve.",
+  chatErrorRateLimit: "Muitos pedidos — aguarde um momento e tente novamente.",
+  chatErrorTimeout: "A resposta demorou demais. Tente novamente.",
+  chatErrorBudget: "Limite de utilização mensal atingido.",
+  chatErrorModelConfig: "Problema de configuração de IA. Verifique a configuração.",
+  chatErrorContextTooLong: "A conversa é muito longa. Tente iniciar um novo chat.",
+  chatErrorContentFiltered: "A mensagem não pôde ser processada. Tente reformular.",
+  chatRetry: "Tentar novamente",
+  chatRefresh: "Atualizar chat",
 };
 
 const ja: UiStrings = {
@@ -1110,6 +1182,16 @@ const ja: UiStrings = {
   activityProposed: "提案",
   activityReason: "理由",
   activitySeverity: "重要度",
+  chatErrorGeneric: "エラーが発生しました。もう一度お試しください。",
+  chatErrorProviderDown: "AIサービスが一時的に利用できません。しばらくしてから再度お試しください。",
+  chatErrorRateLimit: "リクエストが多すぎます。少し待ってからもう一度お試しください。",
+  chatErrorTimeout: "応答に時間がかかりすぎました。もう一度お試しください。",
+  chatErrorBudget: "月間利用上限に達しました。",
+  chatErrorModelConfig: "AI設定に問題があります。設定を確認してください。",
+  chatErrorContextTooLong: "会話が長すぎます。新しいチャットを開始してください。",
+  chatErrorContentFiltered: "メッセージを処理できませんでした。言い換えてお試しください。",
+  chatRetry: "再試行",
+  chatRefresh: "チャットを更新",
 };
 
 const zh: UiStrings = {
@@ -1244,6 +1326,16 @@ const zh: UiStrings = {
   activityProposed: "建议",
   activityReason: "原因",
   activitySeverity: "严重程度",
+  chatErrorGeneric: "出现错误，请重试。",
+  chatErrorProviderDown: "AI服务暂时不可用，请稍后重试。",
+  chatErrorRateLimit: "请求过多——请稍等片刻后重试。",
+  chatErrorTimeout: "响应时间过长，请重试。",
+  chatErrorBudget: "已达到月度使用限额。",
+  chatErrorModelConfig: "AI配置问题，请检查您的设置。",
+  chatErrorContextTooLong: "对话过长，请尝试开始新的聊天。",
+  chatErrorContentFiltered: "无法处理该消息，请尝试改写。",
+  chatRetry: "重试",
+  chatRefresh: "刷新聊天",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };
