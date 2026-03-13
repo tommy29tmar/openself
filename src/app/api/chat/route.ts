@@ -32,6 +32,7 @@ import {
   createUnbackedActionClaimTransform,
   sanitizeUnbackedActionClaim,
 } from "@/lib/agent/action-claim-guard";
+import { classifyChatError, formatChatErrorResponse } from "@/lib/services/chat-errors";
 
 /**
  * Per-profile message quota for authenticated users.
@@ -63,11 +64,13 @@ function checkAndIncrementQuota(
 }
 
 export async function POST(req: Request) {
+  const requestId = randomUUID();
+
   // Rate limiting
   const rateResult = checkRateLimit(req);
   if (!rateResult.allowed) {
     return new Response(
-      JSON.stringify({ error: rateResult.reason }),
+      JSON.stringify({ error: rateResult.reason, code: "AI_RATE_LIMITED", requestId }),
       {
         status: 429,
         headers: {
@@ -82,7 +85,7 @@ export async function POST(req: Request) {
   const budgetResult = checkBudget();
   if (!budgetResult.allowed) {
     return new Response(
-      JSON.stringify({ error: budgetResult.warningMessage }),
+      JSON.stringify({ code: "BUDGET_EXCEEDED", requestId }),
       {
         status: 429,
         headers: { "Content-Type": "application/json" },
@@ -125,7 +128,6 @@ export async function POST(req: Request) {
       ? body.sessionId
       : DEFAULT_SESSION_ID;
 
-  const requestId = randomUUID();
   const sessionLanguage = language || "en";
 
   // Log auto-import trigger for telemetry (G4)
@@ -493,8 +495,7 @@ export async function POST(req: Request) {
         if (importFlag) {
           try { revertImportEvent(writeSessionId); } catch { /* best-effort */ }
         }
-        if (error instanceof Error) return error.message;
-        return String(error);
+        return formatChatErrorResponse(error, requestId);
       },
     });
   } catch (error) {
@@ -503,9 +504,10 @@ export async function POST(req: Request) {
     if (importFlag) {
       try { revertImportEvent(writeSessionId); } catch { /* best-effort */ }
     }
+    const code = classifyChatError(error);
     return new Response(
-      JSON.stringify({ error: String(error) }),
-      { status: 500, headers: { "Content-Type": "application/json", "X-Request-Id": requestId } },
+      JSON.stringify({ error: "Internal error", code, requestId }),
+      { status: code === "AI_RATE_LIMITED" ? 429 : 500, headers: { "Content-Type": "application/json", "X-Request-Id": requestId } },
     );
   }
 }
