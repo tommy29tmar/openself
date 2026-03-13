@@ -6,6 +6,7 @@ import { createAgentTools } from "@/lib/agent/tools";
 import { filterToolsByJourneyState } from "@/lib/agent/tool-filter";
 import { db, sqlite } from "@/lib/db";
 import { messages as messagesTable } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
 import { checkBudget, recordUsage } from "@/lib/services/usage-service";
@@ -323,19 +324,44 @@ export async function POST(req: Request) {
     }
   }
 
-  // Persist the latest user message
+  // Persist the latest user message (with dedup guard)
   const lastMessage = messages[messages.length - 1];
   let latestUserMessageId: string | undefined;
   if (lastMessage?.role === "user") {
-    latestUserMessageId = randomUUID();
-    db.insert(messagesTable)
-      .values({
-        id: latestUserMessageId,
-        sessionId: messageSessionId,
-        role: "user",
-        content: lastMessage.content,
-      })
-      .run();
+    // Dedup: check if identical content was persisted in same session within last 30s
+    const recent = db
+      .select({ id: messagesTable.id, createdAt: messagesTable.createdAt })
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.sessionId, messageSessionId),
+          eq(messagesTable.role, "user"),
+          eq(messagesTable.content, lastMessage.content),
+        ),
+      )
+      .orderBy(desc(messagesTable.createdAt))
+      .limit(1)
+      .get();
+
+    // CURRENT_TIMESTAMP produces "YYYY-MM-DD HH:MM:SS" format
+    const thirtySecondsAgo = new Date(Date.now() - 30_000)
+      .toISOString()
+      .replace("T", " ")
+      .replace(/\.\d+Z$/, "");
+    if (recent?.createdAt && recent.createdAt > thirtySecondsAgo) {
+      // Reuse existing message ID — this is a retry/resend
+      latestUserMessageId = recent.id;
+    } else {
+      latestUserMessageId = randomUUID();
+      db.insert(messagesTable)
+        .values({
+          id: latestUserMessageId,
+          sessionId: messageSessionId,
+          role: "user",
+          content: lastMessage.content,
+        })
+        .run();
+    }
   }
 
   // Update session activity timestamp for concierge TTL
