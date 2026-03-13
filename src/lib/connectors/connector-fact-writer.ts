@@ -28,7 +28,7 @@ export async function batchCreateFacts(
   connectorId?: string,
 ): Promise<ImportReport> {
   const createdFacts: Array<{ key: string; factId: string }> = [];
-  const report: ImportReport = { factsWritten: 0, factsSkipped: 0, errors: [], createdFacts: [] };
+  const report: ImportReport = { factsWritten: 0, factsSkipped: 0, factsClustered: 0, errors: [], createdFacts: [] };
 
   if (inputs.length === 0) return report;
 
@@ -43,6 +43,7 @@ export async function batchCreateFacts(
       );
       createdFacts.push({ key: input.key, factId: fact.id });
       report.factsWritten++;
+      if (fact._clusterResult) report.factsClustered!++;
     } catch (error) {
       report.factsSkipped++;
       // Still link existing fact to connector_items (handles re-sync duplicates)
