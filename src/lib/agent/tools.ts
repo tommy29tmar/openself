@@ -2035,9 +2035,9 @@ Do NOT call in a loop.`,
   curate_content: tool({
     description:
       "Curate the display text of page content without modifying facts. " +
-      "Use for capitalization fixes, wording improvements, tone adjustments, and professional polish. " +
-      "If factId is provided, curates a specific item (e.g., project title). " +
-      "If factId is omitted, curates the section-level description (e.g., bio text). " +
+      "Use for wording improvements, tone adjustments, and professional polish. " +
+      "Item-level: provide factId + fields (sectionType not needed). " +
+      "Section-level: provide sectionType + fields, omit factId. " +
       "The underlying facts remain unchanged — this only affects presentation.",
     parameters: z.object({
       sectionType: z
