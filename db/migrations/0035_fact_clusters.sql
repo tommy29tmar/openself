@@ -59,7 +59,8 @@ CREATE UNIQUE INDEX uniq_jobs_dedup_global
   ON jobs(job_type, json_extract(payload, '$.ownerKey'))
   WHERE status IN ('queued','running')
     AND job_type != 'session_compaction'
-    AND job_type != 'consolidate_episodes';
+    AND job_type != 'consolidate_episodes'
+    AND job_type != 'consolidate_facts';
 
 CREATE UNIQUE INDEX uniq_jobs_dedup_compaction
   ON jobs(job_type, json_extract(payload, '$.ownerKey'), json_extract(payload, '$.sessionKey'))
@@ -68,3 +69,7 @@ CREATE UNIQUE INDEX uniq_jobs_dedup_compaction
 CREATE UNIQUE INDEX uniq_jobs_dedup_consolidate
   ON jobs(job_type, json_extract(payload, '$.ownerKey'))
   WHERE status = 'queued' AND job_type = 'consolidate_episodes';
+
+CREATE UNIQUE INDEX uniq_jobs_dedup_consolidate_facts
+  ON jobs(job_type, json_extract(payload, '$.ownerKey'))
+  WHERE status = 'queued' AND job_type = 'consolidate_facts';

@@ -20,13 +20,23 @@ vi.mock("@/lib/db", () => ({
   db: {},
 }));
 
-vi.mock("@/lib/services/kb-service", () => {
-  const mockFn = vi.fn(() => []);
-  return {
-    countFacts: vi.fn(() => 0),
-    getActiveFacts: mockFn,
-  };
-});
+const mockGetActiveFactsJourney = vi.fn(() => []);
+
+vi.mock("@/lib/services/kb-service", () => ({
+  countFacts: vi.fn(() => 0),
+  getActiveFacts: (...args: any[]) => mockGetActiveFactsJourney(...args),
+}));
+
+vi.mock("@/lib/services/fact-cluster-service", () => ({
+  getProjectedFacts: (...args: any[]) =>
+    mockGetActiveFactsJourney(...args).map((f: any) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [f.id],
+    })),
+}));
 
 vi.mock("@/lib/services/page-service", () => ({
   hasAnyPublishedPage: vi.fn(() => false),
@@ -429,8 +439,7 @@ describe("assembleBootstrapPayload", () => {
   });
 
   it("includes userName when name fact exists", async () => {
-    const { getActiveFacts } = await import("@/lib/services/kb-service");
-    vi.mocked(getActiveFacts).mockReturnValue([
+    mockGetActiveFactsJourney.mockReturnValue([
       {
         id: "f1",
         category: "identity",
@@ -449,8 +458,7 @@ describe("assembleBootstrapPayload", () => {
   });
 
   it("includes userName from legacy full-name fact", async () => {
-    const { getActiveFacts } = await import("@/lib/services/kb-service");
-    vi.mocked(getActiveFacts).mockReturnValue([
+    mockGetActiveFactsJourney.mockReturnValue([
       {
         id: "f1",
         category: "identity",
@@ -490,8 +498,7 @@ describe("assembleBootstrapPayload", () => {
   it("lists stale facts", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
-    const { getActiveFacts } = await import("@/lib/services/kb-service");
-    vi.mocked(getActiveFacts).mockReturnValue([
+    mockGetActiveFactsJourney.mockReturnValue([
       {
         id: "f1",
         category: "skill",

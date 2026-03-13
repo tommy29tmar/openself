@@ -35,7 +35,7 @@ vi.mock("@/lib/db", () => ({
   db: new Proxy({} as typeof mockDb, {
     get: (_: unknown, prop: string) => (mockDb as Record<string, unknown>)[prop],
   }),
-  sqlite: { prepare: vi.fn() },
+  sqlite: { prepare: vi.fn(), transaction: vi.fn((fn: () => unknown) => fn) },
 }));
 
 vi.mock("@/lib/db/schema", () => ({

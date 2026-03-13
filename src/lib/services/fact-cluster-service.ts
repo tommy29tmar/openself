@@ -4,7 +4,7 @@
  * Fact identity matching, slug normalization, and cluster assignment logic.
  */
 
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { facts, factClusters } from "@/lib/db/schema";
 import { eq, and, isNull, ne, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -294,60 +294,64 @@ export function tryAssignCluster(
     if (!identityMatch(category, value, candidateValue)) continue;
 
     if (candidate.clusterId) {
-      // Assign new fact to existing cluster
+      // Assign new fact to existing cluster (atomic)
       const clusterId = candidate.clusterId;
 
-      db.update(facts)
-        .set({ clusterId })
-        .where(eq(facts.id, factId))
-        .run();
+      return sqlite.transaction(() => {
+        db.update(facts)
+          .set({ clusterId })
+          .where(eq(facts.id, factId))
+          .run();
 
-      updateCanonicalKey(clusterId, source, factKey, candidate);
+        updateCanonicalKey(clusterId, source, factKey, candidate);
 
-      // Read back canonical key
-      const cluster = db
-        .select()
-        .from(factClusters)
-        .where(eq(factClusters.id, clusterId))
-        .get() as { canonicalKey: string | null } | undefined;
+        // Read back canonical key
+        const cluster = db
+          .select()
+          .from(factClusters)
+          .where(eq(factClusters.id, clusterId))
+          .get() as { canonicalKey: string | null } | undefined;
 
-      return {
-        clusterId,
-        isNew: false,
-        matchedFactId: candidate.id,
-        canonicalKey: cluster?.canonicalKey ?? candidate.key,
-      };
+        return {
+          clusterId,
+          isNew: false,
+          matchedFactId: candidate.id,
+          canonicalKey: cluster?.canonicalKey ?? candidate.key,
+        };
+      })();
     } else {
-      // Neither fact has a cluster — create one
+      // Neither fact has a cluster — create one (atomic)
       const clusterId = randomUUID();
       const canonicalKey = pickCanonicalKey(source, factKey, candidate);
 
-      db.insert(factClusters)
-        .values({
-          id: clusterId,
-          ownerKey,
-          category,
+      return sqlite.transaction(() => {
+        db.insert(factClusters)
+          .values({
+            id: clusterId,
+            ownerKey,
+            category,
+            canonicalKey,
+          })
+          .run();
+
+        // Assign both facts to the new cluster
+        db.update(facts)
+          .set({ clusterId })
+          .where(eq(facts.id, candidate.id))
+          .run();
+
+        db.update(facts)
+          .set({ clusterId })
+          .where(eq(facts.id, factId))
+          .run();
+
+        return {
+          clusterId,
+          isNew: true,
+          matchedFactId: candidate.id,
           canonicalKey,
-        })
-        .run();
-
-      // Assign both facts to the new cluster
-      db.update(facts)
-        .set({ clusterId })
-        .where(eq(facts.id, candidate.id))
-        .run();
-
-      db.update(facts)
-        .set({ clusterId })
-        .where(eq(facts.id, factId))
-        .run();
-
-      return {
-        clusterId,
-        isNew: true,
-        matchedFactId: candidate.id,
-        canonicalKey,
-      };
+        };
+      })();
     }
   }
 
