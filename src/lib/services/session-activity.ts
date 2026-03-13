@@ -32,9 +32,8 @@ export function isSessionActive(
 ): boolean {
   if (!lastMessageAt) return false;
   // SQLite CURRENT_TIMESTAMP stores UTC without "Z" suffix (e.g. "2026-03-13 10:00:00").
-  // new Date("2026-03-13 10:00:00") interprets as LOCAL time → wrong on non-UTC servers.
-  // Appending "Z" forces UTC interpretation, matching SQLite's actual timezone.
-  const normalized = lastMessageAt.endsWith("Z") ? lastMessageAt : lastMessageAt + "Z";
+  // Normalize to valid ISO 8601: replace space separator with "T", ensure "Z" suffix.
+  const normalized = lastMessageAt.replace(" ", "T").replace(/Z?$/, "Z");
   const lastMs = new Date(normalized).getTime();
   if (isNaN(lastMs)) return false; // Malformed timestamp — treat as expired
   const cutoffMs = Date.now() - ttlMinutes * 60 * 1000;

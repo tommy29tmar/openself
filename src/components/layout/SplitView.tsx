@@ -127,6 +127,7 @@ export function SplitView({
   const [chatDataReady, setChatDataReady] = useState(false);
 
   useEffect(() => {
+    setChatDataReady(false);
     let cancelled = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);

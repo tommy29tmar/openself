@@ -10,7 +10,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { sqlite } from "@/lib/db";
-import { isSessionActive, getSessionTtlMinutes, updateLastMessageAt } from "@/lib/services/session-activity";
+import { isSessionActive, getSessionTtlMinutes, updateLastMessageAt, getLastMessageAt } from "@/lib/services/session-activity";
 
 describe("getSessionTtlMinutes", () => {
   const originalEnv = process.env;
@@ -83,6 +83,50 @@ describe("isSessionActive — edge cases", () => {
 
   it("returns false for partial timestamp", () => {
     expect(isSessionActive("2026-13-45 99:99:99", 120)).toBe(false);
+  });
+});
+
+describe("getLastMessageAt", () => {
+  it("returns last_message_at from sessions table when available", () => {
+    const mockGet = vi.fn()
+      .mockReturnValueOnce({ last_message_at: "2026-03-13 10:00:00" });
+    vi.mocked(sqlite.prepare).mockReturnValue({ get: mockGet, run: vi.fn() } as any);
+
+    const result = getLastMessageAt("sess-1");
+    expect(result).toBe("2026-03-13 10:00:00");
+    expect(sqlite.prepare).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT last_message_at FROM sessions"),
+    );
+  });
+
+  it("falls back to MAX(created_at) from messages when column is null", () => {
+    const mockGet = vi.fn()
+      .mockReturnValueOnce({ last_message_at: null }) // sessions query
+      .mockReturnValueOnce({ latest: "2026-03-13 09:30:00" }); // messages fallback
+    vi.mocked(sqlite.prepare).mockReturnValue({ get: mockGet, run: vi.fn() } as any);
+
+    const result = getLastMessageAt("sess-1");
+    expect(result).toBe("2026-03-13 09:30:00");
+  });
+
+  it("returns null when session has no messages at all", () => {
+    const mockGet = vi.fn()
+      .mockReturnValueOnce({ last_message_at: null }) // sessions query
+      .mockReturnValueOnce({ latest: null }); // messages fallback
+    vi.mocked(sqlite.prepare).mockReturnValue({ get: mockGet, run: vi.fn() } as any);
+
+    const result = getLastMessageAt("sess-1");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session does not exist", () => {
+    const mockGet = vi.fn()
+      .mockReturnValueOnce(undefined) // no session row
+      .mockReturnValueOnce(undefined); // no messages
+    vi.mocked(sqlite.prepare).mockReturnValue({ get: mockGet, run: vi.fn() } as any);
+
+    const result = getLastMessageAt("nonexistent");
+    expect(result).toBeNull();
   });
 });
 

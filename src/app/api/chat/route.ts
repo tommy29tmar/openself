@@ -339,7 +339,9 @@ export async function POST(req: Request) {
   }
 
   // Update session activity timestamp for concierge TTL
-  updateLastMessageAt(messageSessionId);
+  try { updateLastMessageAt(messageSessionId); } catch (e) {
+    console.warn("[chat] pre-stream updateLastMessageAt failed:", e);
+  }
 
   const provider = getProviderForTier("standard");
   const modelId = getModelIdForTier("standard");
