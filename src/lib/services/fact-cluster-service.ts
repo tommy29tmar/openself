@@ -20,6 +20,7 @@ type FactValue = Record<string, unknown>;
 
 type ClusterAssignInput = {
   factId: string;
+  factKey: string;
   category: string;
   value: Record<string, unknown>;
   source: string;
@@ -199,10 +200,10 @@ const CONNECTOR_KEY_PREFIX_RE = /^(li-|gh-|sp-|strava-|rss-)/;
  */
 export function pickCanonicalKey(
   newSource: string,
-  newFactId: string,
+  newFactKey: string,
   existingFact: FactRow
 ): string {
-  const newKey = newFactId;
+  const newKey = newFactKey;
   const existingKey = existingFact.key;
 
   const newIsConnector = CONNECTOR_KEY_PREFIX_RE.test(newKey);
@@ -222,10 +223,10 @@ export function pickCanonicalKey(
 export function updateCanonicalKey(
   clusterId: string,
   newSource: string,
-  newFactId: string,
+  newFactKey: string,
   existingFact: FactRow
 ): void {
-  const preferred = pickCanonicalKey(newSource, newFactId, existingFact);
+  const preferred = pickCanonicalKey(newSource, newFactKey, existingFact);
 
   // Get the current canonical key from the cluster
   const cluster = db
@@ -238,7 +239,7 @@ export function updateCanonicalKey(
 
   if (cluster.canonicalKey !== preferred) {
     db.update(factClusters)
-      .set({ canonicalKey: preferred })
+      .set({ canonicalKey: preferred, updatedAt: new Date().toISOString() })
       .where(eq(factClusters.id, clusterId))
       .run();
   }
@@ -259,7 +260,7 @@ export function updateCanonicalKey(
 export function tryAssignCluster(
   input: ClusterAssignInput
 ): ClusterAssignResult {
-  const { factId, category, value, source, ownerKey, sessionId } = input;
+  const { factId, factKey, category, value, source, ownerKey, sessionId } = input;
 
   // Identity facts are never clustered
   if (category === "identity") return null;
@@ -301,7 +302,7 @@ export function tryAssignCluster(
         .where(eq(facts.id, factId))
         .run();
 
-      updateCanonicalKey(clusterId, source, factId, candidate);
+      updateCanonicalKey(clusterId, source, factKey, candidate);
 
       // Read back canonical key
       const cluster = db
@@ -319,7 +320,7 @@ export function tryAssignCluster(
     } else {
       // Neither fact has a cluster — create one
       const clusterId = randomUUID();
-      const canonicalKey = pickCanonicalKey(source, factId, candidate);
+      const canonicalKey = pickCanonicalKey(source, factKey, candidate);
 
       db.insert(factClusters)
         .values({

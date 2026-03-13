@@ -8,7 +8,7 @@ import { LAYOUT_TEMPLATES, type LayoutTemplateId, resolveLayoutAlias } from "@/l
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { assignSlotsFromFacts } from "@/lib/layout/assign-slots";
 import { extractLocks } from "@/lib/layout/lock-policy";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { projectCanonicalConfig } from "@/lib/services/page-projection";
 
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     if (!draft) {
       // Auto-compose from facts (ensureDraft pattern — handles OwnerScope shift after registration)
       const readKeys = scope?.knowledgeReadKeys ?? [primaryKey];
-      const facts = getActiveFacts(primaryKey, readKeys);
+      const facts = getProjectedFacts(primaryKey, readKeys);
       if (facts.length === 0) {
         return NextResponse.json(
           { success: false, error: "No draft exists" },

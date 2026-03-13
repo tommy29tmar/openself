@@ -50,6 +50,7 @@ export async function handleConsolidateFacts(
 
       const result = tryAssignCluster({
         factId: fact.id,
+        factKey: fact.key,
         category,
         value: typeof fact.value === "object" && fact.value !== null
           ? (fact.value as Record<string, unknown>)

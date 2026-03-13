@@ -231,6 +231,7 @@ export async function createFact(
     const { tryAssignCluster } = await import("@/lib/services/fact-cluster-service");
     clusterResult = tryAssignCluster({
       factId: (row as FactRow).id,
+      factKey: input.key,
       category: normalized.canonical,
       value: input.value,
       source: input.source ?? "chat",

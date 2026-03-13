@@ -14,7 +14,7 @@ import {
   computeHash,
 } from "@/lib/services/personalization-hashing";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 
 /**
@@ -45,7 +45,7 @@ export function mergeActiveSectionCopy(
   const copyMap = new Map(copies.map((c) => [c.sectionType, c]));
 
   // 3. Compute current hashes for comparison
-  const allFacts = getActiveFacts(ownerKey, readKeys);
+  const allFacts = getProjectedFacts(ownerKey, readKeys);
   const publishableFacts = filterPublishableFacts(allFacts);
 
   const soul = getActiveSoul(ownerKey);

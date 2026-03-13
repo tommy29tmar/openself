@@ -1,7 +1,7 @@
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { getDraft, computeConfigHash } from "@/lib/services/page-service";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { projectCanonicalConfig, publishableFromCanonical } from "@/lib/services/page-projection";
 import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       const poll = () => {
         if (closed) return;
 
-        const facts = getActiveFacts(writeSessionId, readKeys);
+        const facts = getProjectedFacts(writeSessionId, readKeys);
         const draft = getDraft(writeSessionId);
 
         if (facts.length > 0) {

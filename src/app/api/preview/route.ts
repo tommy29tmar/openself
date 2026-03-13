@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getDraft, computeConfigHash } from "@/lib/services/page-service";
 import { resolveOwnerScope } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   const readKeys = scope?.knowledgeReadKeys;
 
   // Load facts
-  const facts = getActiveFacts(primaryKey, readKeys);
+  const facts = getProjectedFacts(primaryKey, readKeys);
   if (facts.length === 0) {
     return NextResponse.json({
       status: "idle",

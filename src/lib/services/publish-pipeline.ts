@@ -1,5 +1,6 @@
 import { sqlite } from "@/lib/db";
-import { getActiveFacts, setFactVisibility } from "@/lib/services/kb-service";
+import { setFactVisibility } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import {
   getDraft,
   upsertDraft,
@@ -70,7 +71,7 @@ export async function prepareAndPublish(
   const factOwnerKey = ownerKey ?? sessionId;
 
   // Step A: Validate — use shared filter
-  const facts = getActiveFacts(factOwnerKey, readKeys);
+  const facts = getProjectedFacts(factOwnerKey, readKeys);
   if (facts.length === 0) {
     throw new PublishError("No facts to publish", "NO_FACTS", 400);
   }

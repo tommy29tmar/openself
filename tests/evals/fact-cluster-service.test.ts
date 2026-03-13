@@ -298,6 +298,7 @@ describe("tryAssignCluster", () => {
 
     const result = await tryAssignCluster({
       factId: "new-fact-id",
+      factKey: "identity-alice",
       category: "identity",
       value: { name: "Alice" },
       source: "chat",
@@ -329,6 +330,7 @@ describe("tryAssignCluster", () => {
 
     const result = await tryAssignCluster({
       factId: "new-fact-id",
+      factKey: "skill-typescript",
       category: "skill",
       value: { name: "TypeScript" },
       source: "chat",
@@ -380,6 +382,7 @@ describe("tryAssignCluster", () => {
 
     const result = await tryAssignCluster({
       factId: "new-fact-id",
+      factKey: "skill-typescript",
       category: "skill",
       value: { name: "TypeScript" },
       source: "chat",
@@ -424,6 +427,7 @@ describe("tryAssignCluster", () => {
 
     const result = await tryAssignCluster({
       factId: "new-fact-id",
+      factKey: "skill-typescript",
       category: "skill",
       value: { name: "TypeScript" },
       source: "chat",
