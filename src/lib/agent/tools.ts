@@ -2035,14 +2035,19 @@ Do NOT call in a loop.`,
   curate_content: tool({
     description:
       "Curate the display text of page content without modifying facts. " +
-      "Use for capitalization fixes, wording improvements, tone adjustments, and professional polish. " +
-      "If factId is provided, curates a specific item (e.g., project title). " +
-      "If factId is omitted, curates the section-level description (e.g., bio text). " +
+      "Use for wording improvements, tone adjustments, and professional polish. " +
+      "Item-level: provide factId + fields (sectionType not needed). " +
+      "Section-level: provide sectionType + fields, omit factId. " +
       "The underlying facts remain unchanged — this only affects presentation.",
     parameters: z.object({
       sectionType: z
         .string()
-        .describe("Section type to curate (e.g., 'projects', 'bio', 'experience')"),
+        .optional()
+        .describe(
+          "Section type (e.g., 'bio', 'experience'). " +
+          "Required for section-level curation (when factId is omitted). " +
+          "Not needed for item-level curation (when factId is provided).",
+        ),
       factId: z
         .string()
         .optional()
@@ -2096,6 +2101,12 @@ Do NOT call in a loop.`,
         };
       } else {
         // --- SECTION-LEVEL: route to section_copy_state ---
+        if (!sectionType) {
+          return {
+            success: false,
+            error: "sectionType is required for section-level curation (when factId is omitted)",
+          };
+        }
         const allowed = PERSONALIZABLE_FIELDS[sectionType];
         if (!allowed) {
           return { success: false, error: `Section '${sectionType}' does not support curation` };

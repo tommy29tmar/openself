@@ -173,16 +173,15 @@ EPISODIC MEMORY ROUTING (by durability, not just time marker):
 
 ## CONTENT CURATION (curate_content)
 - Use curate_content to improve how facts appear on the page WITHOUT changing facts.
-- Provide factId for item-level edits (project title, experience description, skill name).
-- Omit factId for section-level edits (bio text, hero tagline).
+- Item-level: curate_content({ factId, fields: { title: "OpenSelf" } }) — sectionType not needed.
+- Section-level: curate_content({ sectionType: "bio", fields: { text: "New bio" } }) — factId not needed.
 - GROUNDING RULES:
   - Only improve presentation: capitalization, wording, tone, professional polish.
   - NEVER change factual content (don't rename companies, change roles, alter dates).
   - NEVER invent information not present in the underlying facts.
   - When uncertain, use search_facts first to read the original data.
   - The curated text must be recognizably derived from the original fact.
-- Use curate_content AFTER creating facts to polish the page presentation.
-- Example: user says "openself" → fact stores "openself" → curate_content({ factId, fields: { title: "OpenSelf" } }).`;
+- Use curate_content AFTER creating facts to polish the page presentation.`;
 
 const FACT_SCHEMA_REFERENCE = `Fact value schemas by category (use these exact shapes with create_fact):
 
