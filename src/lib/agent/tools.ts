@@ -480,6 +480,17 @@ export function createAgentTools(
           recomposeOk = false;
           logEvent({ eventType: "recompose_error", actor: "system", payload: { requestId, error: String(e) } });
         }
+
+        // Check if fact was clustered (typed return from createFact)
+        const clusterInfo = fact._clusterResult
+          ? {
+              clustered: true,
+              clusterSize: fact._clusterResult.isNew ? 2 : "existing",
+              matchedFactKey: fact._clusterResult.canonicalKey,
+              message: `Clustered with existing ${category} fact. Information enriched.`,
+            }
+          : {};
+
         return {
           success: true,
           factId: fact.id,
@@ -488,6 +499,7 @@ export function createAgentTools(
           visibility: fact.visibility,
           pageVisible: fact.visibility === "public" || fact.visibility === "proposed",
           recomposeOk,
+          ...clusterInfo,
         };
       } catch (error) {
         if (error instanceof FactValidationError) {
@@ -637,6 +649,7 @@ export function createAgentTools(
 
       let created = 0, deleted = 0;
       const warnings: string[] = [];
+      const clusterResults: Array<{ key: string; matchedFactKey: string; message: string }> = [];
       const reverseOps: Array<{
         action: "delete" | "recreate";
         factId?: string;
@@ -670,6 +683,13 @@ export function createAgentTools(
               );
               reverseOps.push({ action: "delete", factId: result.id });
               created++;
+              if (result._clusterResult) {
+                clusterResults.push({
+                  key: `${op.category}/${op.key}`,
+                  matchedFactKey: result._clusterResult.canonicalKey,
+                  message: `Clustered with existing ${op.category} fact. Information enriched.`,
+                });
+              }
               break;
             }
             case "delete": {
@@ -748,7 +768,13 @@ export function createAgentTools(
           mergeSessionMeta(sessionId, { pendingConfirmations: pendings.length > 0 ? pendings : null });
         }
 
-        return { success: true, created, deleted, ...(warnings.length > 0 ? { warnings } : {}) };
+        return {
+          success: true,
+          created,
+          deleted,
+          ...(warnings.length > 0 ? { warnings } : {}),
+          ...(clusterResults.length > 0 ? { clusterResults } : {}),
+        };
       } catch (err) {
         // Do NOT consume pending on error — user already confirmed but execution failed
         if (reverseOps.length > 0) {
