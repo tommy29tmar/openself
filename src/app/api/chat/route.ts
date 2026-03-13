@@ -28,7 +28,7 @@ import { analyzeImportGaps, type ImportGapReport } from "@/lib/connectors/import
 import { getActiveFacts } from "@/lib/services/kb-service";
 import { STEP_EXHAUSTION_FALLBACK } from "@/lib/agent/step-exhaustion-fallback";
 import { updateLastReferencedAt } from "@/lib/services/memory-service";
-import { stringifyToolArgsForRepair, stripMarkdownCodeFences } from "@/lib/agent/tool-call-repair";
+import { stringifyToolArgsForRepair, stripMarkdownCodeFences, repairJsonValue } from "@/lib/agent/tool-call-repair";
 import {
   createUnbackedActionClaimTransform,
   sanitizeUnbackedActionClaim,
@@ -409,14 +409,25 @@ export async function POST(req: Request) {
         stepCounter++;
       },
       experimental_repairToolCall: async ({ toolCall, parameterSchema, error }) => {
-        // Fast path: strip markdown code fences that Gemini sometimes wraps around JSON
+        // Fast path 1: strip markdown code fences that Gemini sometimes wraps around JSON
         const rawArgs = stringifyToolArgsForRepair(toolCall.args);
         const stripped = stripMarkdownCodeFences(rawArgs);
         try {
           JSON.parse(stripped);
           return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: stripped };
         } catch {
-          // Fall through to LLM repair
+          // Fall through
+        }
+
+        // Fast path 2: repair common JSON malformations (unquoted keys/values)
+        const repaired = repairJsonValue(stripped);
+        if (repaired !== stripped) {
+          try {
+            JSON.parse(repaired);
+            return { toolCallType: "function" as const, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: repaired };
+          } catch {
+            // Fall through to LLM repair
+          }
         }
 
         const schema = parameterSchema({ toolName: toolCall.toolName });
