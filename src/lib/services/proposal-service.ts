@@ -6,7 +6,7 @@ import {
   computeSectionFactsHash,
 } from "@/lib/services/personalization-hashing";
 import { filterPublishableFacts } from "@/lib/services/page-projection";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getActiveSoul } from "@/lib/services/soul-service";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import {
@@ -156,7 +156,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
           const factId = factIdMatch[1];
 
           const scope = resolveOwnerScopeForWorker(proposal.ownerKey);
-          const facts = getActiveFacts(
+          const facts = getProjectedFacts(
             scope.knowledgePrimaryKey,
             scope.knowledgeReadKeys,
           );
@@ -199,7 +199,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
 
       // Guard 1: STALE_PROPOSAL — facts or soul changed
       const scope = resolveOwnerScopeForWorker(proposal.ownerKey);
-      const facts = getActiveFacts(
+      const facts = getProjectedFacts(
         scope.knowledgePrimaryKey,
         scope.knowledgeReadKeys,
       );
@@ -341,7 +341,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
      */
     markStaleProposals(ownerKey: string): number {
       const scope = resolveOwnerScopeForWorker(ownerKey);
-      const facts = getActiveFacts(
+      const facts = getProjectedFacts(
         scope.knowledgePrimaryKey,
         scope.knowledgeReadKeys,
       );
