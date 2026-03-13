@@ -25,6 +25,7 @@ import { saveMemoryFromWorker } from "@/lib/services/memory-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { DEEP_HEARTBEAT_MIN_FACTS } from "@/lib/agent/thresholds";
 import { handlePageCuration } from "@/lib/worker/handlers/curate-page";
+import { enqueueJob } from "@/lib/worker/index";
 
 type HeartbeatPayload = {
   ownerKey: string;
@@ -300,6 +301,18 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
       payload: { ownerKey, error: String(error) },
     });
     // Non-fatal: curation failure doesn't block heartbeat recording
+  }
+
+  // --- Substep 4: Fact consolidation (enqueue, don't call directly — dedup safety) ---
+  try {
+    enqueueJob("consolidate_facts", { ownerKey });
+  } catch (error) {
+    logEvent({
+      eventType: "consolidate_facts_error",
+      actor: "worker",
+      payload: { ownerKey, error: String(error) },
+    });
+    // Non-fatal: consolidation failure doesn't block heartbeat recording
   }
 
   // Only record a successful run if both substeps completed (or were trivially skipped).
