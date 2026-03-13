@@ -721,15 +721,18 @@ function ChatPanelInner({
             <div role="alert" className="flex items-center gap-2 border-t bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
               <span className="flex-1">{chatError}</span>
               <button
+                type="button"
+                disabled={isLoading}
                 onClick={() => {
                   setChatError(null);
                   reload();
                 }}
-                className="shrink-0 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700"
+                className="shrink-0 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {t.chatRetry}
               </button>
               <button
+                type="button"
                 onClick={refreshChat}
                 className="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900"
               >

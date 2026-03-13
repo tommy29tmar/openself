@@ -467,7 +467,7 @@ const it: UiStrings = {
   chatErrorRateLimit: "Troppe richieste — attendi un momento e riprova.",
   chatErrorTimeout: "La risposta ha impiegato troppo. Riprova.",
   chatErrorBudget: "Limite di utilizzo mensile raggiunto.",
-  chatErrorModelConfig: "Problema di configurazione AI. Verifica la configurazione.",
+  chatErrorModelConfig: "Problema di configurazione AI. Verifica le impostazioni.",
   chatErrorContextTooLong: "La conversazione è troppo lunga. Prova ad avviarne una nuova.",
   chatErrorContentFiltered: "Il messaggio non è stato elaborato. Prova a riformulare.",
   chatRetry: "Riprova",
@@ -613,8 +613,8 @@ const de: UiStrings = {
   chatErrorBudget: "Monatliches Nutzungslimit erreicht.",
   chatErrorModelConfig: "KI-Konfigurationsproblem. Bitte überprüfe die Einstellungen.",
   chatErrorContextTooLong: "Die Unterhaltung ist zu lang. Versuche einen neuen Chat zu starten.",
-  chatErrorContentFiltered: "Die Nachricht konnte nicht verarbeitet werden. Versuche sie umzuformulieren.",
-  chatRetry: "Erneut versuchen",
+  chatErrorContentFiltered: "Die Nachricht konnte nicht verarbeitet werden. Versuche eine andere Formulierung.",
+  chatRetry: "Wiederholen",
   chatRefresh: "Chat aktualisieren",
 };
 
@@ -1046,7 +1046,7 @@ const pt: UiStrings = {
   chatErrorModelConfig: "Problema de configuração de IA. Verifique a configuração.",
   chatErrorContextTooLong: "A conversa é muito longa. Tente iniciar um novo chat.",
   chatErrorContentFiltered: "A mensagem não pôde ser processada. Tente reformular.",
-  chatRetry: "Tentar novamente",
+  chatRetry: "Repetir",
   chatRefresh: "Atualizar chat",
 };
 

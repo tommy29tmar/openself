@@ -2,9 +2,14 @@ import { describe, it, expect } from "vitest";
 import { chatFriendlyError, parseChatErrorJson } from "@/lib/i18n/error-messages";
 
 describe("parseChatErrorJson", () => {
-  it("parses valid JSON with code and requestId", () => {
-    const result = parseChatErrorJson('{"code":"AI_TIMEOUT","requestId":"abc-123"}');
-    expect(result).toEqual({ code: "AI_TIMEOUT", requestId: "abc-123" });
+  it("parses valid JSON with code and UUID requestId", () => {
+    const result = parseChatErrorJson('{"code":"AI_TIMEOUT","requestId":"a1b2c3d4-e5f6-7890-abcd-ef1234567890"}');
+    expect(result).toEqual({ code: "AI_TIMEOUT", requestId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890" });
+  });
+
+  it("strips non-UUID requestId for security", () => {
+    const result = parseChatErrorJson('{"code":"AI_TIMEOUT","requestId":"Call +1-800-EVIL"}');
+    expect(result).toEqual({ code: "AI_TIMEOUT", requestId: undefined });
   });
 
   it("returns null for non-JSON strings", () => {
@@ -67,13 +72,19 @@ describe("chatFriendlyError", () => {
   });
 
   it("appends requestId to generic errors", () => {
-    const msg = chatFriendlyError("CHAT_INTERNAL_ERROR", "en", "req-abc");
-    expect(msg).toContain("Ref: req-abc");
+    const msg = chatFriendlyError("CHAT_INTERNAL_ERROR", "en", "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    expect(msg).toContain("Ref: a1b2c3d4-e5f6-7890-abcd-ef1234567890");
   });
 
   it("does not append requestId to specific errors", () => {
-    const msg = chatFriendlyError("AI_TIMEOUT", "en", "req-abc");
+    const msg = chatFriendlyError("AI_TIMEOUT", "en", "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
     expect(msg).not.toContain("Ref:");
+  });
+
+  it("appends requestId for AI_NO_CONTENT (falls through to generic)", () => {
+    const msg = chatFriendlyError("AI_NO_CONTENT", "en", "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    expect(msg).toContain("went wrong");
+    expect(msg).toContain("Ref:");
   });
 
   it("falls back to en for unsupported language", () => {

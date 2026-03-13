@@ -42,7 +42,11 @@ export function parseChatErrorJson(raw: string): { code: string; requestId?: str
   try {
     const parsed = JSON.parse(raw);
     if (typeof parsed?.code === "string") {
-      return { code: parsed.code, requestId: parsed.requestId };
+      // Validate requestId format (UUID v4) to prevent text injection in error banner
+      const rid = typeof parsed.requestId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.requestId)
+        ? parsed.requestId
+        : undefined;
+      return { code: parsed.code, requestId: rid };
     }
   } catch { /* not JSON */ }
   return null;
@@ -57,7 +61,6 @@ const SPECIFIC_ERROR_CODES = new Set([
   "MODEL_NOT_CONFIGURED",
   "CONTEXT_TOO_LONG",
   "CONTENT_FILTERED",
-  "AI_NO_CONTENT",
 ]);
 
 /**
@@ -75,7 +78,7 @@ export function chatFriendlyError(code: string | null, language: string, request
     MODEL_NOT_CONFIGURED: t.chatErrorModelConfig,
     CONTEXT_TOO_LONG: t.chatErrorContextTooLong,
     CONTENT_FILTERED: t.chatErrorContentFiltered,
-    AI_NO_CONTENT: t.chatErrorGeneric,
+    // AI_NO_CONTENT intentionally omitted — falls through to generic+requestId for traceability
   };
 
   if (code && map[code]) return map[code];

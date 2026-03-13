@@ -70,7 +70,7 @@ export async function POST(req: Request) {
   const rateResult = checkRateLimit(req);
   if (!rateResult.allowed) {
     return new Response(
-      JSON.stringify({ error: rateResult.reason, code: "AI_RATE_LIMITED", requestId }),
+      JSON.stringify({ code: "AI_RATE_LIMITED", requestId }),
       {
         status: 429,
         headers: {
