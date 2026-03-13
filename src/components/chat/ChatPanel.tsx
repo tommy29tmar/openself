@@ -6,9 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import type { AuthState } from "@/app/builder/page";
-import { extractErrorMessage } from "@/lib/services/errors";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
-import { friendlyError } from "@/lib/i18n/error-messages";
+import { friendlyError, chatFriendlyError, parseChatErrorJson } from "@/lib/i18n/error-messages";
 import { useVoice } from "@/components/voice/VoiceProvider";
 
 /**
@@ -532,7 +531,9 @@ function ChatPanelInner({
           return;
         }
 
-        setChatError(extractErrorMessage(error));
+        // Try to parse structured JSON from server (bypass extractErrorMessage which strips code/requestId)
+        const parsed = parseChatErrorJson(error.message ?? "");
+        setChatError(chatFriendlyError(parsed?.code ?? null, language, parsed?.requestId));
       },
       onFinish: (message) => {
         // Step exhaustion recovery: if the final assistant message has no text,
@@ -709,7 +710,7 @@ function ChatPanelInner({
       ) : (
         <>
           {chatError && (
-            <div className="flex items-center gap-2 border-t bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            <div role="alert" className="flex items-center gap-2 border-t bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
               <span className="flex-1">{chatError}</span>
               <button
                 onClick={() => {
@@ -718,13 +719,13 @@ function ChatPanelInner({
                 }}
                 className="shrink-0 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700"
               >
-                {language === "it" ? "Riprova" : "Retry"}
+                {t.chatRetry}
               </button>
               <button
                 onClick={refreshChat}
                 className="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900"
               >
-                {language === "it" ? "Aggiorna chat" : "Refresh chat"}
+                {t.chatRefresh}
               </button>
             </div>
           )}
