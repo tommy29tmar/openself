@@ -238,10 +238,34 @@ the knowledge base as facts, and flows out through the page engine as a public p
 
 ### 3.1 Chat/Preview State and Persistence Contract
 
-The onboarding builder chat has two state layers:
+The chat follows a **Concierge Model with Session Windows**: users get a clean slate on each new visit (after a 2-hour TTL), with a server-computed dynamic greeting. No chat history UI — the agent has full context via structured memory (facts, soul, summaries, episodic events).
+
+**Session Activity Window:**
+- `last_message_at` column on `sessions` table tracks session freshness
+- `SESSION_TTL = 120 minutes` (configurable via env `CHAT_SESSION_TTL_MINUTES`, min 5)
+- Bootstrap returns `isActiveSession` flag — if active session within TTL, current session preserved on refresh
+- `isSessionActive()` (`session-activity.ts`) normalizes SQLite timestamps to ISO 8601 (space→T, Z-suffix)
+
+**Server-Computed Dynamic Greeting:**
+- `computeGreeting()` (`src/lib/agent/greeting.ts`) — template strings, NOT LLM (zero latency, zero cost, zero failure)
+- 6 journey states × 8 languages, with 3 optional situation hints (`has_sparse_profile`, `has_pending_soul_proposals`, `has_pending_episodic_patterns`)
+- `first_visit` greeting is hardcoded/deterministic ("Come ti chiami?" etc.) — no hints
+- Returned in bootstrap payload, NOT persisted until user replies
+
+**Lazy Greeting Persistence:**
+- Client renders greeting from bootstrap `greeting` field
+- On first user message, client sends `greetingMessage: { id, content }` in chat body
+- Server validates (prefix `greeting-`, id ≤30 chars, content ≤500 chars) and persists as first message
+- Prevents phantom records from bounced users
+
+**Message Loading Scoping:**
+- `GET /api/messages` applies temporal filter: `createdAt > ttlCutoff`
+- Same for both authenticated and anonymous users (no session creation needed for anonymous)
+
+**Chat State Layers:**
 
 1. **Ephemeral UI state** (`useChat` in React)
-2. **Durable history** (`messages` table, exposed via `GET /api/messages`)
+2. **Durable history** (`messages` table, exposed via `GET /api/messages`, temporally scoped)
 
 To avoid chat resets and keep behavior consistent across devices:
 
@@ -250,18 +274,19 @@ To avoid chat resets and keep behavior consistent across devices:
   panes remain mounted and inactive panes are hidden with `className="hidden"`.
 - On component mount (including full page refresh), `ChatPanel` hydrates history from
   `GET /api/messages` before initializing `useChat`.
-- The localized welcome message is a fallback for empty history, and must not be
-  duplicated if the same assistant message already exists in stored history.
+- `key={language}` on `ChatPanelInner` forces re-mount on language change (SWR cache invalidation).
+- `NEUTRAL_FALLBACK` localized dict (8 languages) used when bootstrap fails.
 - In multi-user mode, a `401` on history fetch redirects to `/invite`.
 - **Error recovery**: On stream error, the error banner offers two actions: "Retry"
   (retries last AI request via `reload()`) and "Refresh chat" (re-syncs all messages
   from `/api/messages` via `refreshChat()` to restore DB-consistent state).
+  `onGreetingChange` callback syncs parent ref when `refreshChat` fetches fresh greeting.
 - **Error extraction**: `extractErrorMessage()` (`src/lib/services/errors.ts`) robustly
   parses unknown error types: handles `Error` objects, plain strings, JSON-wrapped
   messages, and mixed content with embedded JSON. Falls back to a user-friendly message.
 - **Data prefetch dedup**: `SplitView.tsx` fetches `/api/chat/bootstrap` and
-  `/api/messages` once on mount (and re-fetches on language change), passing results
-  to `ChatPanel` via `initialBootstrap`/`initialMessages` props with
+  `/api/messages` once on mount (and re-fetches on language change, resetting `chatDataReady`),
+  passing results to `ChatPanel` via `initialBootstrap`/`initialMessages` props with
   `disableInitialFetch={true}` to prevent duplicate requests from dual ChatPanel
   instances (desktop + mobile). On 401, redirects to `/invite`.
 - **Markdown rendering**: Assistant messages are rendered as HTML via `markdown-it`
@@ -555,12 +580,12 @@ When situations are detected by the bootstrap layer, targeted directives are inj
 - `familiar` — Normal conversation depth
 - `expert` — Be concise, skip explanations, power-user mode
 
-**Dynamic Welcome Messages** (`ChatPanel.tsx`):
-**`buildWelcomeMessage(language, bootstrap | null)`** — single function replacing the legacy
-`getWelcomeMessage()`, `getSmartWelcomeMessage()`, and `WELCOME_MESSAGES` maps (all deleted).
-Handles all 6 journey states. All welcome messages share `id: 'welcome'` — dedup is
-id-based and language-agnostic. The `blocked` state uses `QUOTA_EXHAUSTED_MESSAGES` for
-coherence with `LimitReachedUI`.
+**Server-Computed Greeting** (`src/lib/agent/greeting.ts`):
+`computeGreeting(ctx)` — server-side template greeting computed in the bootstrap endpoint.
+Replaces the legacy client-side `buildWelcomeMessage()` function and its 6 hardcoded
+dictionaries (~115 lines removed from `ChatPanel.tsx`). Greeting is journey-state-aware
+with optional situation enrichment. The `blocked` state uses `QUOTA_EXHAUSTED_MESSAGES`
+in `ChatPanel` for coherence with `LimitReachedUI`.
 
 ### 4.2.5 Cross-Cutting Prompt Blocks
 
@@ -3370,6 +3395,7 @@ CREATE TABLE sessions (
     username TEXT,
     message_count INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'registered')),
+    last_message_at TEXT,  -- Session activity tracking for concierge model TTL
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -4953,7 +4979,7 @@ Runtime behavior:
 
 ### 15.7 Bootstrap Seed (SQL Reference)
 
-Migration files (33 total, `db/migrations/0001-0033`):
+Migration files (36 total, `db/migrations/0001-0036`):
 - `0001`-`0011`: Phase 0 core schema, taxonomy, components, sessions, media, translation cache, etc.
 - `0012`-`0016`: Phase 1a additions — agent memory expansion, conversation summaries,
   soul profiles, fact conflicts, trust ledger, heartbeat tables, jobs rebuild, schema_meta,
@@ -4967,6 +4993,9 @@ Migration files (33 total, `db/migrations/0001-0033`):
 - `0031`: Job heartbeat_at column for stale job recovery
 - `0032`: Connector fact category migration (interest→music/activity)
 - `0033`: Content curation layer (fact_display_overrides table + curate_page job type)
+- `0034`: Connector purge (backfill connector_items, event_id index)
+- `0035`: Fact clustering (fact_clusters table, facts.cluster_id FK)
+- `0036`: Session activity (last_message_at column on sessions, backfill from messages)
 
 Key bootstrap migrations:
 - `db/migrations/0001_core_schema.sql` (creates taxonomy tables)
