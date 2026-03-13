@@ -88,8 +88,26 @@ export const facts = sqliteTable(
     sortOrder: integer("sort_order").default(0),
     parentFactId: text("parent_fact_id"),
     archivedAt: text("archived_at"),
+    clusterId: text("cluster_id").references(() => factClusters.id),
   },
   (table) => [uniqueIndex("uniq_facts_session_category_key").on(table.sessionId, table.category, table.key)],
+);
+
+// -- Fact Clusters (groups related facts from different sources)
+export const factClusters = sqliteTable(
+  "fact_clusters",
+  {
+    id: text("id").primaryKey(),
+    ownerKey: text("owner_key").notNull(),
+    category: text("category").notNull(),
+    canonicalKey: text("canonical_key"),
+    createdAt: text("created_at").default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("idx_fact_clusters_owner").on(table.ownerKey),
+    index("idx_fact_clusters_owner_category").on(table.ownerKey, table.category),
+  ],
 );
 
 // -- Taxonomy

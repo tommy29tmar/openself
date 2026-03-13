@@ -73,6 +73,7 @@ export type FactRow = {
   sortOrder: number | null;
   parentFactId: string | null;
   archivedAt: string | null;
+  clusterId?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };

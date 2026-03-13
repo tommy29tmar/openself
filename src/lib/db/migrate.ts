@@ -6,7 +6,7 @@ import type Database from "better-sqlite3";
  * Increment this when adding new migrations.
  * Worker (follower mode) will poll schema_meta until this version appears.
  */
-export const EXPECTED_SCHEMA_VERSION = 34;
+export const EXPECTED_SCHEMA_VERSION = 35;
 
 export function runMigrations(sqlite: Database.Database): void {
   // Create migration tracking table
