@@ -351,7 +351,7 @@ export function createAgentTools(
   function ensureDraft(): PageConfig {
     const existing = getDraft(sessionId);
     if (existing) return existing.config;
-    const allFacts = getActiveFacts(sessionId, readKeys);
+    const allFacts = getProjectedFacts(effectiveOwnerKey, readKeys);
     if (allFacts.length === 0) throw new Error("No facts yet — ask the user for information first");
     const factLang = getFactLanguage(sessionId) ?? sessionLanguage;
     const composed = composeOptimisticPage(allFacts, "draft", factLang, undefined, undefined, effectiveOwnerKey);
@@ -898,7 +898,12 @@ export function createAgentTools(
     execute: async ({ query }) => {
       try {
         const results = searchFacts(query, sessionId, readKeys);
-        const mapped = results.map((f) => ({
+        // Filter to projected (cluster-primary) facts to avoid showing
+        // duplicate entries for the same clustered entity.
+        const allProjected = getProjectedFacts(effectiveOwnerKey, readKeys);
+        const projectedIds = new Set(allProjected.map((f) => f.id));
+        const deduped = results.filter((f) => projectedIds.has(f.id));
+        const mapped = deduped.map((f) => ({
           id: f.id,
           category: f.category,
           key: f.key,
@@ -1153,7 +1158,7 @@ export function createAgentTools(
     }),
     execute: async ({ username, language }) => {
       try {
-        const facts = getActiveFacts(sessionId, readKeys);
+        const facts = getProjectedFacts(effectiveOwnerKey, readKeys);
         if (facts.length === 0) {
           return { success: false, error: "No facts in knowledge base yet", hint: "Ensure facts exist before generating. Use create_fact first." };
         }

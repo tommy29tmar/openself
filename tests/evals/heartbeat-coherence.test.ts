@@ -103,6 +103,16 @@ const mockGetActiveFacts = vi.fn((..._: any[]) => Array.from({ length: 30 }, (_,
 vi.mock("@/lib/services/kb-service", () => ({
   getActiveFacts: (...args: any[]) => mockGetActiveFacts(...args),
 }));
+vi.mock("@/lib/services/fact-cluster-service", () => ({
+  getProjectedFacts: (...args: any[]) =>
+    mockGetActiveFacts(...args).map((f: any) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: null,
+      memberIds: [f.id],
+    })),
+}));
 
 const mockCheckPageCoherence = vi.fn(async (..._: any[]) => [] as any[]);
 vi.mock("@/lib/services/coherence-check", () => ({

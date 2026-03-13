@@ -18,6 +18,7 @@ import { computeHash } from "@/lib/services/personalization-hashing";
 import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { getDraft } from "@/lib/services/page-service";
 import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { checkPageCoherence } from "@/lib/services/coherence-check";
 import { mergeSessionMeta, getRecentJournalEntries } from "@/lib/services/session-metadata";
 import { detectJournalPatterns } from "@/lib/services/journal-patterns";
@@ -298,7 +299,7 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
     const draft = getDraft(scope.knowledgePrimaryKey);
     if (draft?.config) {
       const parsed = typeof draft.config === "string" ? JSON.parse(draft.config) : draft.config;
-      const coherenceFacts = getActiveFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
+      const coherenceFacts = getProjectedFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
       const soulCompiled = getActiveSoul(ownerKey)?.compiled;
       const coherenceIssues = await checkPageCoherence(parsed.sections ?? [], coherenceFacts, soulCompiled);
 
