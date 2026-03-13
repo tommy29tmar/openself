@@ -1,8 +1,66 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   slugifyForMatch,
   identityMatch,
 } from "@/lib/services/fact-cluster-service";
+
+// ---------------------------------------------------------------------------
+// Mocks for tryAssignCluster tests
+// ---------------------------------------------------------------------------
+
+const mockAll = vi.fn();
+const mockGet = vi.fn();
+const mockRun = vi.fn();
+
+// Chainable mock builder
+function makeChain(terminal: { all?: typeof mockAll; get?: typeof mockGet; run?: typeof mockRun }) {
+  const chain: Record<string, unknown> = {};
+  const methods = ["from", "where", "set", "values"];
+  for (const m of methods) {
+    chain[m] = vi.fn(() => chain);
+  }
+  if (terminal.all) chain.all = terminal.all;
+  if (terminal.get) chain.get = terminal.get;
+  if (terminal.run) chain.run = terminal.run;
+  return chain;
+}
+
+const mockDb = {
+  select: vi.fn(),
+  insert: vi.fn(),
+  update: vi.fn(),
+};
+
+vi.mock("@/lib/db", () => ({
+  db: new Proxy({} as typeof mockDb, {
+    get: (_: unknown, prop: string) => (mockDb as Record<string, unknown>)[prop],
+  }),
+  sqlite: { prepare: vi.fn() },
+}));
+
+vi.mock("@/lib/db/schema", () => ({
+  facts: {
+    id: "id",
+    sessionId: "session_id",
+    profileId: "profile_id",
+    category: "category",
+    key: "key",
+    value: "value",
+    source: "source",
+    archivedAt: "archived_at",
+    clusterId: "cluster_id",
+  },
+  factClusters: {
+    id: "id",
+    ownerKey: "owner_key",
+    category: "category",
+    canonicalKey: "canonical_key",
+  },
+}));
+
+vi.mock("@/lib/flags", () => ({
+  PROFILE_ID_CANONICAL: true,
+}));
 
 // ---------------------------------------------------------------------------
 // slugifyForMatch
@@ -223,5 +281,161 @@ describe("identityMatch", () => {
   // unknown
   it("returns false for unknown categories", () => {
     expect(identityMatch("unknown_cat", { x: 1 }, { x: 1 })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tryAssignCluster
+// ---------------------------------------------------------------------------
+
+describe("tryAssignCluster", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("skips identity category", async () => {
+    const { tryAssignCluster } = await import("@/lib/services/fact-cluster-service");
+
+    const result = await tryAssignCluster({
+      factId: "new-fact-id",
+      category: "identity",
+      value: { name: "Alice" },
+      source: "chat",
+      ownerKey: "owner-1",
+      sessionId: "session-1",
+    });
+
+    expect(result).toBeNull();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it("returns null when no identity match found", async () => {
+    const { tryAssignCluster } = await import("@/lib/services/fact-cluster-service");
+
+    // Candidate with different skill name
+    const selectChain = makeChain({ all: mockAll });
+    mockAll.mockReturnValueOnce([
+      {
+        id: "existing-fact",
+        category: "skill",
+        key: "skill-python",
+        value: JSON.stringify({ name: "Python" }),
+        source: "chat",
+        clusterId: null,
+        archivedAt: null,
+      },
+    ]);
+    mockDb.select.mockReturnValue(selectChain);
+
+    const result = await tryAssignCluster({
+      factId: "new-fact-id",
+      category: "skill",
+      value: { name: "TypeScript" },
+      source: "chat",
+      ownerKey: "owner-1",
+      sessionId: "session-1",
+    });
+
+    expect(result).toBeNull();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockDb.update).not.toHaveBeenCalled();
+  });
+
+  it("assigns to existing cluster when identity matches", async () => {
+    const { tryAssignCluster } = await import("@/lib/services/fact-cluster-service");
+
+    const existingClusterId = "cluster-abc";
+    const existingFact = {
+      id: "existing-fact",
+      category: "skill",
+      key: "skill-typescript",
+      value: JSON.stringify({ name: "TypeScript" }),
+      source: "chat",
+      clusterId: existingClusterId,
+      archivedAt: null,
+    };
+
+    // First select: candidates query → all()
+    const selectCandidates = makeChain({ all: mockAll });
+    mockAll.mockReturnValueOnce([existingFact]);
+
+    // update().set().where().run()
+    const updateChain = makeChain({ run: mockRun });
+    mockRun.mockReturnValue(undefined);
+
+    // Second select: read back cluster canonical key → get()
+    const selectCluster = makeChain({ get: mockGet });
+    mockGet.mockReturnValueOnce({ canonicalKey: "skill-typescript" });
+
+    // Third select inside updateCanonicalKey: get current canonical → get()
+    const selectCanonical = makeChain({ get: mockGet });
+    mockGet.mockReturnValueOnce({ canonicalKey: "skill-typescript" });
+
+    mockDb.select
+      .mockReturnValueOnce(selectCandidates)   // candidates query
+      .mockReturnValueOnce(selectCanonical)     // updateCanonicalKey → get cluster
+      .mockReturnValueOnce(selectCluster);      // read back after update
+
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await tryAssignCluster({
+      factId: "new-fact-id",
+      category: "skill",
+      value: { name: "TypeScript" },
+      source: "chat",
+      ownerKey: "owner-1",
+      sessionId: "session-1",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.isNew).toBe(false);
+    expect(result!.clusterId).toBe(existingClusterId);
+    expect(result!.matchedFactId).toBe("existing-fact");
+    expect(mockDb.update).toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it("creates new cluster when match found but no existing cluster", async () => {
+    const { tryAssignCluster } = await import("@/lib/services/fact-cluster-service");
+
+    const existingFact = {
+      id: "existing-fact",
+      category: "skill",
+      key: "skill-typescript",
+      value: JSON.stringify({ name: "TypeScript" }),
+      source: "chat",
+      clusterId: null,
+      archivedAt: null,
+    };
+
+    // candidates query → all()
+    const selectCandidates = makeChain({ all: mockAll });
+    mockAll.mockReturnValueOnce([existingFact]);
+    mockDb.select.mockReturnValue(selectCandidates);
+
+    // insert().values().run()
+    const insertChain = makeChain({ run: mockRun });
+    mockDb.insert.mockReturnValue(insertChain);
+
+    // update().set().where().run() — called twice (for both facts)
+    const updateChain = makeChain({ run: mockRun });
+    mockRun.mockReturnValue(undefined);
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await tryAssignCluster({
+      factId: "new-fact-id",
+      category: "skill",
+      value: { name: "TypeScript" },
+      source: "chat",
+      ownerKey: "owner-1",
+      sessionId: "session-1",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.isNew).toBe(true);
+    expect(typeof result!.clusterId).toBe("string");
+    expect(result!.matchedFactId).toBe("existing-fact");
+    expect(mockDb.insert).toHaveBeenCalledTimes(1);
+    expect(mockDb.update).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,15 +1,37 @@
 /**
  * fact-cluster-service.ts
  *
- * Pure utility functions for fact identity matching and slug normalization.
- * No DB or project imports — those are added in later tasks.
+ * Fact identity matching, slug normalization, and cluster assignment logic.
  */
+
+import { db } from "@/lib/db";
+import { facts, factClusters } from "@/lib/db/schema";
+import { eq, and, isNull, ne } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { PROFILE_ID_CANONICAL } from "@/lib/flags";
+import type { FactRow } from "@/lib/services/kb-service";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 type FactValue = Record<string, unknown>;
+
+type ClusterAssignInput = {
+  factId: string;
+  category: string;
+  value: Record<string, unknown>;
+  source: string;
+  ownerKey: string;
+  sessionId: string;
+};
+
+export type ClusterAssignResult = {
+  clusterId: string;
+  isNew: boolean;
+  matchedFactId: string;
+  canonicalKey: string;
+} | null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -162,4 +184,170 @@ export function identityMatch(
     default:
       return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Connector key prefix detection
+// ---------------------------------------------------------------------------
+
+const CONNECTOR_KEY_PREFIX_RE = /^(li-|gh-|sp-|strava-|rss-)/;
+
+/**
+ * Pick the canonical key for a cluster, preferring non-connector-prefixed keys.
+ * If both or neither are connector-prefixed, prefer the existing fact's key.
+ */
+export function pickCanonicalKey(
+  newSource: string,
+  newFactId: string,
+  existingFact: FactRow
+): string {
+  const newKey = newFactId;
+  const existingKey = existingFact.key;
+
+  const newIsConnector = CONNECTOR_KEY_PREFIX_RE.test(newKey);
+  const existingIsConnector = CONNECTOR_KEY_PREFIX_RE.test(existingKey);
+
+  // Prefer non-connector key
+  if (!newIsConnector && existingIsConnector) return newKey;
+  if (newIsConnector && !existingIsConnector) return existingKey;
+
+  // Both same type: prefer existing
+  return existingKey;
+}
+
+/**
+ * Update the canonical key of a cluster if a better key is now available.
+ */
+export function updateCanonicalKey(
+  clusterId: string,
+  newSource: string,
+  newFactId: string,
+  existingFact: FactRow
+): void {
+  const preferred = pickCanonicalKey(newSource, newFactId, existingFact);
+
+  // Get the current canonical key from the cluster
+  const cluster = db
+    .select()
+    .from(factClusters)
+    .where(eq(factClusters.id, clusterId))
+    .get() as { canonicalKey: string | null } | undefined;
+
+  if (!cluster) return;
+
+  if (cluster.canonicalKey !== preferred) {
+    db.update(factClusters)
+      .set({ canonicalKey: preferred })
+      .where(eq(factClusters.id, clusterId))
+      .run();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// tryAssignCluster
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt to assign a newly-created fact to an existing cluster.
+ * Synchronous — uses better-sqlite3 via Drizzle.
+ *
+ * Returns null if:
+ *  - category is "identity"
+ *  - no identity match found among existing active facts
+ */
+export function tryAssignCluster(
+  input: ClusterAssignInput
+): ClusterAssignResult {
+  const { factId, category, value, source, ownerKey, sessionId } = input;
+
+  // Identity facts are never clustered
+  if (category === "identity") return null;
+
+  // Build the where clause depending on flag
+  const ownerFilter = PROFILE_ID_CANONICAL
+    ? eq(facts.profileId, ownerKey)
+    : eq(facts.sessionId, sessionId);
+
+  // Query active facts in same category, excluding self
+  const candidates = db
+    .select()
+    .from(facts)
+    .where(
+      and(
+        ownerFilter,
+        eq(facts.category, category),
+        ne(facts.id, factId),
+        isNull(facts.archivedAt)
+      )
+    )
+    .all() as FactRow[];
+
+  // Find first matching fact
+  for (const candidate of candidates) {
+    const candidateValue =
+      typeof candidate.value === "string"
+        ? (JSON.parse(candidate.value) as Record<string, unknown>)
+        : (candidate.value as Record<string, unknown>);
+
+    if (!identityMatch(category, value, candidateValue)) continue;
+
+    if (candidate.clusterId) {
+      // Assign new fact to existing cluster
+      const clusterId = candidate.clusterId;
+
+      db.update(facts)
+        .set({ clusterId })
+        .where(eq(facts.id, factId))
+        .run();
+
+      updateCanonicalKey(clusterId, source, factId, candidate);
+
+      // Read back canonical key
+      const cluster = db
+        .select()
+        .from(factClusters)
+        .where(eq(factClusters.id, clusterId))
+        .get() as { canonicalKey: string | null } | undefined;
+
+      return {
+        clusterId,
+        isNew: false,
+        matchedFactId: candidate.id,
+        canonicalKey: cluster?.canonicalKey ?? candidate.key,
+      };
+    } else {
+      // Neither fact has a cluster — create one
+      const clusterId = randomUUID();
+      const canonicalKey = pickCanonicalKey(source, factId, candidate);
+
+      db.insert(factClusters)
+        .values({
+          id: clusterId,
+          ownerKey,
+          category,
+          canonicalKey,
+        })
+        .run();
+
+      // Assign both facts to the new cluster
+      db.update(facts)
+        .set({ clusterId })
+        .where(eq(facts.id, candidate.id))
+        .run();
+
+      db.update(facts)
+        .set({ clusterId })
+        .where(eq(facts.id, factId))
+        .run();
+
+      return {
+        clusterId,
+        isNew: true,
+        matchedFactId: candidate.id,
+        canonicalKey,
+      };
+    }
+  }
+
+  return null;
 }
