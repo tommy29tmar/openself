@@ -30,6 +30,7 @@ export type SpotifyTrack = {
   id: string;
   name: string;
   artists: Array<{ id: string; name: string }>;
+  album?: { name: string };
   external_urls: { spotify: string };
 };
 

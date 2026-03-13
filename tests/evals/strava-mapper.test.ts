@@ -165,6 +165,46 @@ describe("Strava mapper", () => {
     it("returns empty for no activities", () => {
       expect(mapStravaActivities([])).toHaveLength(0);
     });
+
+    it("includes elevationM when total_elevation_gain > 0", () => {
+      const facts = mapStravaActivities(activities);
+      const runFact = facts.find((f) => f.key === "strava-run")!;
+      // 50 + 20 = 70
+      expect(runFact.value.elevationM).toBe(70);
+      const rideFact = facts.find((f) => f.key === "strava-ride")!;
+      expect(rideFact.value.elevationM).toBe(200);
+    });
+
+    it("omits elevationM when all activities have 0 elevation", () => {
+      const flat: StravaActivity[] = [{
+        id: 12, name: "Flat Walk", sport_type: "Walk",
+        distance: 5000, moving_time: 3600, elapsed_time: 3700,
+        total_elevation_gain: 0, start_date: "2025-01-01T08:00:00Z",
+        pr_count: 0, achievement_count: 0,
+      }];
+      const facts = mapStravaActivities(flat);
+      expect(facts[0].value.elevationM).toBeUndefined();
+    });
+
+    it("rounds elevation to nearest integer", () => {
+      const acts: StravaActivity[] = [
+        {
+          id: 13, name: "Hill Run", sport_type: "Run",
+          distance: 10000, moving_time: 3600, elapsed_time: 3700,
+          total_elevation_gain: 150.7, start_date: "2025-01-01T08:00:00Z",
+          pr_count: 0, achievement_count: 0,
+        },
+        {
+          id: 14, name: "Hill Run 2", sport_type: "Run",
+          distance: 8000, moving_time: 3000, elapsed_time: 3100,
+          total_elevation_gain: 99.8, start_date: "2025-01-02T08:00:00Z",
+          pr_count: 0, achievement_count: 0,
+        },
+      ];
+      const facts = mapStravaActivities(acts);
+      // 150.7 + 99.8 = 250.5 → rounds to 251
+      expect(facts[0].value.elevationM).toBe(251);
+    });
   });
 
   // ── mapStravaStats ─────────────────────────────────────────────────

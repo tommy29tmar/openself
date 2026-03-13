@@ -53,6 +53,9 @@ export function mapStravaActivities(
     const totalTimeHrs = Math.round(
       acts.reduce((sum, a) => sum + a.moving_time, 0) / 3600,
     );
+    const totalElevationM = Math.round(
+      acts.reduce((sum, a) => sum + a.total_elevation_gain, 0),
+    );
     const count = acts.length;
 
     const value: Record<string, unknown> = {
@@ -62,6 +65,7 @@ export function mapStravaActivities(
     };
     if (totalDistKm > 0) value.distanceKm = totalDistKm;
     if (totalTimeHrs > 0) value.timeHrs = totalTimeHrs;
+    if (totalElevationM > 0) value.elevationM = totalElevationM;
 
     return {
       category: "activity",

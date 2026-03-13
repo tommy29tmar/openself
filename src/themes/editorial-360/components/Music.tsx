@@ -6,6 +6,7 @@ type MusicItem = {
     title: string;
     artist?: string;
     note?: string;
+    album?: string;
     url?: string;
 };
 
@@ -31,8 +32,10 @@ export function Music({ content, variant }: SectionProps<MusicContent>) {
                             <div style={{ fontSize: 15, fontWeight: 600, color: "var(--page-fg)", lineHeight: 1.3 }}>
                                 {item.title}
                             </div>
-                            {item.artist && (
-                                <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 2 }}>{item.artist}</div>
+                            {(item.artist || item.album) && (
+                                <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 2 }}>
+                                    {[item.artist, item.album].filter(Boolean).join(" — ")}
+                                </div>
                             )}
                             {item.note && (
                                 <div style={{ fontSize: 13, color: "var(--page-fg-secondary)", marginTop: 6, lineHeight: 1.5, opacity: 0.8 }}>
@@ -69,6 +72,11 @@ export function Music({ content, variant }: SectionProps<MusicContent>) {
                             <span className="text-lg font-[var(--page-font-heading)] font-medium text-[var(--page-fg)]">
                                 {item.title}
                             </span>
+                            {item.album && (
+                                <span className="text-sm text-[var(--page-fg-secondary)] italic">
+                                    — {item.album}
+                                </span>
+                            )}
                         </div>
                     ))}
                     {remaining > 0 && (
@@ -99,6 +107,11 @@ export function Music({ content, variant }: SectionProps<MusicContent>) {
                                 {item.artist && (
                                     <div className="text-lg font-medium text-[var(--page-fg)] mt-1">
                                         {item.artist}
+                                    </div>
+                                )}
+                                {item.album && (
+                                    <div className="text-base text-[var(--page-fg-secondary)] mt-1 italic">
+                                        {item.album}
                                     </div>
                                 )}
                                 {item.note && (

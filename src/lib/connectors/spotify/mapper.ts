@@ -51,15 +51,19 @@ export function mapSpotifyTopArtists(artists: SpotifyArtist[]): FactInput[] {
 // ── Top Tracks ───────────────────────────────────────────────────────
 
 export function mapSpotifyTopTracks(tracks: SpotifyTrack[]): FactInput[] {
-  return tracks.map((t) => ({
-    category: "music",
-    key: `sp-track-${t.id}`,
-    value: {
+  return tracks.map((t) => {
+    const value: Record<string, unknown> = {
       title: t.name,
       artist: t.artists.map((a) => a.name).join(", "),
       url: t.external_urls.spotify,
-    },
-  }));
+    };
+    if (t.album?.name) value.album = t.album.name;
+    return {
+      category: "music",
+      key: `sp-track-${t.id}`,
+      value,
+    };
+  });
 }
 
 // ── Taste Shift Detection ────────────────────────────────────────────

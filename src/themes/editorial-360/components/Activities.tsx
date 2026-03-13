@@ -12,19 +12,31 @@ type ActivityItem = {
 type ActivitiesContent = {
     items: ActivityItem[];
     title?: string;
+    collapseLabel?: string;
+    moreLabel?: string;
 };
 
 export function Activities({ content, variant }: SectionProps<ActivitiesContent>) {
-    const { items = [], title } = content;
+    const { items = [], title, collapseLabel, moreLabel } = content;
     const [expanded, setExpanded] = useState(false);
 
     if (!items.length) return null;
 
     if (variant === "monolith") {
-        const pillStyle: React.CSSProperties = {
-            fontSize: 12, padding: "6px 14px", borderRadius: 20,
+        const cardStyle: React.CSSProperties = {
+            padding: "10px 16px", borderRadius: 12,
             border: "1px solid var(--page-border)",
-            background: "var(--page-muted)", color: "var(--page-fg)", cursor: "default",
+            background: "var(--page-muted)", minWidth: 140, flex: "1 1 auto",
+        };
+        const nameStyle: React.CSSProperties = {
+            fontSize: 14, fontWeight: 600, color: "var(--page-fg)",
+        };
+        const descStyle: React.CSSProperties = {
+            fontSize: 12, color: "var(--page-fg-secondary)", marginTop: 4, opacity: 0.8,
+        };
+        const typeStyle: React.CSSProperties = {
+            fontSize: 10, textTransform: "uppercase" as const, letterSpacing: "0.08em",
+            color: "var(--page-fg-secondary)", opacity: 0.6, marginTop: 4,
         };
         const VISIBLE = 6;
         const visible = items.slice(0, VISIBLE);
@@ -33,17 +45,12 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
             <section className="theme-reveal">
                 <h2 className="section-label">{title || "Activities"}</h2>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {visible.map((item, i) => (
-                        <span key={i} style={pillStyle}
-                            title={[item.activityType, item.frequency, item.description].filter(Boolean).join(" · ")}>
-                            {item.name}
-                        </span>
-                    ))}
-                    {expanded && hidden.map((item, i) => (
-                        <span key={`h${i}`} style={pillStyle}
-                            title={[item.activityType, item.frequency, item.description].filter(Boolean).join(" · ")}>
-                            {item.name}
-                        </span>
+                    {(expanded ? items : visible).map((item, i) => (
+                        <div key={i} style={cardStyle}>
+                            <div style={nameStyle}>{item.name}</div>
+                            {item.description && <div style={descStyle}>{item.description}</div>}
+                            {item.activityType && <div style={typeStyle}>{item.activityType}</div>}
+                        </div>
                     ))}
                 </div>
                 {hidden.length > 0 && (
@@ -58,7 +65,7 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
                         onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
                     >
                         <span>{expanded ? "▴" : "▾"}</span>
-                        <span>{expanded ? "collapse" : `${hidden.length} more`}</span>
+                        <span>{expanded ? (collapseLabel || "collapse") : `${hidden.length} ${moreLabel || "more"}`}</span>
                     </button>
                 )}
             </section>

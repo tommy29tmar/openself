@@ -1056,6 +1056,8 @@ function buildMusicSection(musicFacts: FactRow[], language: string): Section | n
       if (artist && artist.toLowerCase() !== title?.toLowerCase()) item.artist = artist;
       const note = str(v.note) ?? str(v.description);
       if (note) item.note = note;
+      const album = str(v.album);
+      if (album) item.album = album;
       const url = str(v.url);
       if (url) item.url = url;
       return item;
@@ -1230,46 +1232,81 @@ function buildContactSection(contactFacts: FactRow[], language: string): Section
   };
 }
 
-function buildActivitiesSection(activityFacts: FactRow[], language: string): Section | null {
+/** @internal Exported for testing only */
+export function buildActivitiesSection(activityFacts: FactRow[], language: string): Section | null {
   if (activityFacts.length === 0) return null;
+
+  const t = getUiL10n(language);
+
+  const SPORT_NAME_L10N: Record<string, string> = {
+    Run: t.sportRun, Walk: t.sportWalk, Ride: t.sportRide,
+    Swim: t.sportSwim, Hike: t.sportHike, Yoga: t.sportYoga,
+    TrailRun: t.sportTrailRun, "Trail Run": t.sportTrailRun,
+    WeightTraining: t.sportWeightTraining, "Weight Training": t.sportWeightTraining,
+    Workout: t.sportWorkout,
+  };
+
+  const ACTIVITY_TYPE_L10N: Record<string, string> = {
+    volunteering: t.activityVolunteering,
+    mentoring: t.activityMentoring,
+    hobby: t.activityHobby,
+    sport: t.activitySport,
+  };
+
+  const FREQ_L10N: Record<string, string> = {
+    daily: t.freqDaily, weekly: t.freqWeekly, monthly: t.freqMonthly,
+    biweekly: t.freqBiweekly, frequent: t.freqFrequent,
+    regularly: t.freqRegularly, occasionally: t.freqOccasionally,
+  };
 
   const items: ActivityItem[] = sortFacts(activityFacts)
     .map((f) => {
       const v = val(f);
-      const name = str(v.name) ?? str(v.value);
-      if (!name) return null;
-      const item: ActivityItem = { name };
-      const activityType = str(v.activityType) ?? str(v.type);
-      if (activityType) {
-        const t = getUiL10n(language);
-        const ACTIVITY_TYPE_L10N: Record<string, string> = {
-          volunteering: t.activityVolunteering,
-          mentoring: t.activityMentoring,
-          hobby: t.activityHobby,
-          sport: t.activitySport,
-        };
-        item.activityType = (ACTIVITY_TYPE_L10N[activityType] ?? activityType) as ActivityItem["activityType"];
+      const rawName = str(v.name) ?? str(v.value);
+      if (!rawName) return null;
+
+      const item: ActivityItem = { name: SPORT_NAME_L10N[rawName] ?? rawName };
+
+      // actCount extraction (BEFORE activityType — needed for suppression)
+      const actCount = typeof v.activityCount === "number" ? v.activityCount : undefined;
+
+      // activityType badge — suppress for Strava-structured facts (redundant with localized sport name)
+      if (!actCount) {
+        const activityType = str(v.activityType) ?? str(v.type);
+        if (activityType) {
+          item.activityType = (ACTIVITY_TYPE_L10N[activityType] ?? activityType) as ActivityItem["activityType"];
+        }
       }
+
+      // Frequency
       const frequency = str(v.frequency);
       if (frequency) {
-        const t = getUiL10n(language);
-        const FREQ_L10N: Record<string, string> = {
-          daily: t.freqDaily, weekly: t.freqWeekly, monthly: t.freqMonthly,
-          biweekly: t.freqBiweekly, frequent: t.freqFrequent,
-          regularly: t.freqRegularly, occasionally: t.freqOccasionally,
-        };
         item.frequency = FREQ_L10N[frequency.toLowerCase()] ?? frequency;
       }
-      // Structured Strava data → localized description; fallback to raw description
-      const actCount = typeof v.activityCount === "number" ? v.activityCount : undefined;
+
+      // Structured Strava description (enriched); fallback to raw description
       if (actCount !== undefined) {
-        const t = getUiL10n(language);
         const parts: string[] = [];
         parts.push(`${actCount} ${actCount === 1 ? t.activityCountSingular : t.activityCountPlural}`);
         const km = typeof v.distanceKm === "number" ? v.distanceKm : undefined;
         if (km && km > 0) parts.push(`${km} km`);
         const hrs = typeof v.timeHrs === "number" ? v.timeHrs : undefined;
         if (hrs && hrs > 0) parts.push(`${hrs} ${hrs === 1 ? t.hourSingular : t.hourPlural}`);
+
+        // Elevation
+        const elevM = typeof v.elevationM === "number" ? v.elevationM : undefined;
+        if (elevM && elevM > 0) parts.push(`${elevM}m ${t.elevationLabel}`);
+
+        // Pace — running only, minimum 5km to avoid absurd values
+        const isRunning = rawName === "Run" || rawName === "TrailRun" || rawName === "Trail Run";
+        if (isRunning && km && km >= 5 && hrs && hrs > 0) {
+          const paceMinPerKm = (hrs * 60) / km;
+          let paceMin = Math.floor(paceMinPerKm);
+          let paceSec = Math.round((paceMinPerKm - paceMin) * 60);
+          if (paceSec === 60) { paceSec = 0; paceMin++; }
+          parts.push(`${paceMin}:${String(paceSec).padStart(2, "0")}/km ${t.paceLabel}`);
+        }
+
         item.description = parts.join(" · ");
       } else {
         const description = str(v.description);
@@ -1281,7 +1318,12 @@ function buildActivitiesSection(activityFacts: FactRow[], language: string): Sec
 
   if (items.length === 0) return null;
 
-  const content: ActivitiesContent = { items, title: getL10n(language).activitiesLabel };
+  const content: ActivitiesContent = {
+    items,
+    title: getL10n(language).activitiesLabel,
+    collapseLabel: t.showLess,
+    moreLabel: t.showMoreActivities,
+  };
 
   return {
     id: "activities-1",

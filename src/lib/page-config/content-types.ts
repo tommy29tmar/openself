@@ -105,6 +105,7 @@ export type MusicItem = {
   title: string;
   artist?: string;
   note?: string;
+  album?: string;
   url?: string;
 };
 export type MusicContent = { items: MusicItem[]; title?: string };
@@ -124,7 +125,7 @@ export type ActivityItem = {
   frequency?: string;
   description?: string;
 };
-export type ActivitiesContent = { items: ActivityItem[]; title?: string };
+export type ActivitiesContent = { items: ActivityItem[]; title?: string; collapseLabel?: string; moreLabel?: string };
 
 // Custom
 export type CustomContent = {

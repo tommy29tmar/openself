@@ -150,6 +150,39 @@ describe("mapSpotifyTopTracks", () => {
     });
   });
 
+  it("includes album when track has album.name", () => {
+    const tracksWithAlbum: SpotifyTrack[] = [
+      {
+        id: "t10",
+        name: "Idioteque",
+        artists: [{ id: "a1", name: "Radiohead" }],
+        album: { name: "Kid A" },
+        external_urls: { spotify: "https://open.spotify.com/track/t10" },
+      },
+    ];
+    const facts = mapSpotifyTopTracks(tracksWithAlbum);
+    expect(facts[0].value.album).toBe("Kid A");
+  });
+
+  it("omits album when track has no album field", () => {
+    const facts = mapSpotifyTopTracks(tracks);
+    expect(facts[0].value.album).toBeUndefined();
+  });
+
+  it("omits album when album.name is empty string", () => {
+    const tracksEmptyAlbum: SpotifyTrack[] = [
+      {
+        id: "t11",
+        name: "Test",
+        artists: [{ id: "a1", name: "Artist" }],
+        album: { name: "" },
+        external_urls: { spotify: "url" },
+      },
+    ];
+    const facts = mapSpotifyTopTracks(tracksEmptyAlbum);
+    expect(facts[0].value.album).toBeUndefined();
+  });
+
   it("joins multiple artists with comma", () => {
     const multiArtistTrack: SpotifyTrack[] = [
       {
