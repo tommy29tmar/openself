@@ -50,7 +50,13 @@ export function applyFactDisplayOverrides(
   if (overrides.size === 0) return facts;
 
   return facts.map((fact) => {
-    const override = overrides.get(fact.id);
+    // Check all member IDs for clusters (ProjectedFact has memberIds)
+    const memberIds: string[] = (fact as any).memberIds ?? [fact.id];
+    let override: Record<string, unknown> | undefined;
+    for (const mid of memberIds) {
+      override = overrides.get(mid);
+      if (override) break;  // first match wins (primary ID checked first)
+    }
     if (!override) return fact;
 
     const currentValue =

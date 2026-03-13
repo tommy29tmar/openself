@@ -6,9 +6,10 @@
 
 import { db } from "@/lib/db";
 import { facts, factClusters } from "@/lib/db/schema";
-import { eq, and, isNull, ne } from "drizzle-orm";
+import { eq, and, isNull, ne, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
+import { getActiveFacts } from "@/lib/services/kb-service";
 import type { FactRow } from "@/lib/services/kb-service";
 
 // ---------------------------------------------------------------------------
@@ -463,6 +464,47 @@ export function projectClusteredFacts(
   return projected.sort(
     (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
   );
+}
+
+// ---------------------------------------------------------------------------
+// getProjectedFacts
+// ---------------------------------------------------------------------------
+
+/**
+ * Load active facts for an owner and return the projected (cluster-resolved) view.
+ * Drop-in replacement for getActiveFacts() in read paths.
+ */
+export function getProjectedFacts(
+  sessionId: string,
+  sessionIds?: string[],
+): ProjectedFact[] {
+  const rawFacts = getActiveFacts(sessionId, sessionIds);
+
+  // Load clusters for all clustered facts
+  const clusterIds = [...new Set(
+    rawFacts
+      .map((f: any) => f.clusterId)
+      .filter((id: string | null): id is string => id !== null),
+  )];
+
+  if (clusterIds.length === 0) {
+    // No clusters — all facts pass through
+    return rawFacts.map((f: FactRow) => ({
+      ...f,
+      sources: [f.source ?? "chat"],
+      clusterSize: 1,
+      clusterId: (f as any).clusterId ?? null,
+      memberIds: [f.id],
+    }));
+  }
+
+  const clusters = db
+    .select()
+    .from(factClusters)
+    .where(inArray(factClusters.id, clusterIds))
+    .all() as ClusterRow[];
+
+  return projectClusteredFacts(rawFacts as any, clusters);
 }
 
 function resolveClusterVisibility(

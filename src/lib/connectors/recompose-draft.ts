@@ -4,7 +4,7 @@
  */
 
 import type { OwnerScope } from "@/lib/auth/session";
-import { getActiveFacts } from "@/lib/services/kb-service";
+import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getDraft, upsertDraft, computeConfigHash } from "@/lib/services/page-service";
 import { projectCanonicalConfig, type DraftMeta } from "@/lib/services/page-projection";
 import { getFactLanguage } from "@/lib/services/preferences-service";
@@ -27,7 +27,7 @@ export function recomposeDraft(
   const draftSessionId = scope.knowledgePrimaryKey;
   const readKeys = PROFILE_ID_CANONICAL ? undefined : scope.knowledgeReadKeys;
 
-  const allFacts = getActiveFacts(factsReadId, readKeys);
+  const allFacts = getProjectedFacts(factsReadId, readKeys);
   if (allFacts.length === 0) return false;
 
   const factLang = getFactLanguage(draftSessionId) ?? fallbackLanguage;
