@@ -99,7 +99,17 @@ export async function POST(req: Request) {
 
   // Lazy greeting persistence: if the client sends a greeting message from bootstrap,
   // persist it as the first message of this session window.
-  const greetingMessage = body.greetingMessage as { id: string; content: string } | undefined;
+  const rawGreeting = body.greetingMessage as { id: string; content: string } | undefined;
+  const greetingMessage =
+    rawGreeting &&
+    typeof rawGreeting.id === "string" &&
+    rawGreeting.id.startsWith("greeting-") &&
+    rawGreeting.id.length <= 30 &&
+    typeof rawGreeting.content === "string" &&
+    rawGreeting.content.length > 0 &&
+    rawGreeting.content.length <= 500
+      ? rawGreeting
+      : undefined;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return new Response("messages is required", { status: 400 });
