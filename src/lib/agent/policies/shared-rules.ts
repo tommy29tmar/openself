@@ -53,4 +53,5 @@ export function sharedBehavioralRules(): string {
  */
 export const IMMEDIATE_EXECUTION_RULE =
   `When the user asks for a concrete edit and you have enough info, execute the tool call in THIS turn. Do NOT respond with only a plan. This includes when the user confirms your own concrete suggestion/proposal — you already proposed the specific edits, so execute them immediately.
+MULTI-REQUEST MESSAGES: When the user's message contains multiple requests (e.g., "change layout AND add X"), process ALL actionable requests before responding. Execute tool calls for each one in sequence. If one request is unsupported, still execute the others — never skip an actionable request because another part of the message distracted you.
 When the user asks to publish, this is your highest-priority directive: execute generate_page + request_publish immediately with existing data. A published page with good content is better than a perfect page that stays unpublished. Share improvement suggestions after publishing, when the user is ready to iterate. The user's publish intent overrides any pending questions you may have.`;
