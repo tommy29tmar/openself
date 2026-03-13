@@ -15,6 +15,7 @@ import { logEvent, type Actor } from "@/lib/services/event-service";
 import { PROFILE_ID_CANONICAL } from "@/lib/flags";
 import { validateFactValue } from "@/lib/services/fact-validation";
 import { FactConstraintError, CURRENT_UNIQUE_CATEGORIES } from "@/lib/services/fact-constraints";
+import type { ClusterAssignResult } from "@/lib/services/fact-cluster-service";
 
 // -- Taxonomy store backed by DB
 
@@ -97,7 +98,7 @@ export async function createFact(
   sessionId: string = "__default__",
   profileId?: string,
   options?: { actor?: Actor; visibility?: Visibility },
-): Promise<FactRow> {
+): Promise<FactRow & { _clusterResult?: ClusterAssignResult }> {
   // Validate fact value before persisting
   validateFactValue(input.category, input.key, input.value);
 
@@ -222,6 +223,28 @@ export async function createFact(
     )
     .get();
 
+  // Post-insert: try to assign to a cluster (semantic dedup).
+  // IMPORTANT: use row.id (the actual persisted ID), not `id` (which is the
+  // pre-generated UUID that may not match on upsert).
+  let clusterResult: ClusterAssignResult = null;
+  try {
+    const { tryAssignCluster } = await import("@/lib/services/fact-cluster-service");
+    clusterResult = tryAssignCluster({
+      factId: (row as FactRow).id,
+      category: normalized.canonical,
+      value: input.value,
+      source: input.source ?? "chat",
+      ownerKey: profileId ?? sessionId,
+      sessionId,
+    });
+  } catch (err) {
+    // Non-fatal — fact is created, clustering is best-effort
+    console.warn("[createFact] cluster assignment failed:", err);
+  }
+
+  if (clusterResult) {
+    return { ...(row as FactRow), _clusterResult: clusterResult };
+  }
   return row as FactRow;
 }
 
