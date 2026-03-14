@@ -926,7 +926,7 @@ export function createAgentTools(
   }),
 
   update_page_style: tool({
-    description: "Update the page visual presence (surface, voice, light) or layout template.",
+    description: "Update the page visual presence (surface, voice, light) or layout template. Does NOT reorder or rearrange sections — use reorder_sections for that.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       surface: z.string().optional().describe(

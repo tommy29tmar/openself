@@ -110,8 +110,8 @@ const TOOL_POLICY = `Tool usage rules:
 - When removing a section completely, search_facts for ALL facts in that category, delete each one, then verify with search_facts that none remain before calling generate_page
 - Use search_facts to check what you already know before asking again
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
-- Use update_page_style when the user requests visual changes (surface, voice, light, layout)
-- Use reorder_sections when the user wants to rearrange their page
+- Use update_page_style when the user requests visual changes (surface, voice, light, layout). update_page_style does NOT support section reordering — it only changes presence and layout template
+- For ANY request to change section order, position, or arrangement → use reorder_sections. Call inspect_page_state first to get current section IDs, then pass them in the desired order
 - NEVER directly edit section content — always use generate_page to rebuild from facts
 - Before publishing, call publish_preflight to check readiness (draft exists, username valid, sections complete). Share any issues with the user before proceeding
 - Use inspect_page_state to understand the current page layout, section slots, and quality before making changes
