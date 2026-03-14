@@ -171,9 +171,9 @@ export function ActivityDrawer({
           )}
 
           {!loading && items.length === 0 && (
-            <div style={emptyStyle}>
-              <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>○</div>
-              <div style={{ opacity: 0.5, fontSize: 14 }}>{t.activityEmpty}</div>
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-lg font-medium" style={{ color: "var(--page-fg, #ccc)" }}>{t.allClear}</p>
+              <p className="mt-2 text-sm" style={{ color: "var(--page-fg, #888)" }}>{t.noNotifications}</p>
             </div>
           )}
 

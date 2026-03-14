@@ -173,6 +173,10 @@ export interface UiStrings {
   activityReason: string;
   activitySeverity: string;
 
+  // Empty state
+  allClear: string;
+  noNotifications: string;
+
   // Chat errors
   chatErrorGeneric: string;
   chatErrorProviderDown: string;
@@ -318,6 +322,8 @@ const en: UiStrings = {
   activityProposed: "Proposed",
   activityReason: "Reason",
   activitySeverity: "Severity",
+  allClear: "All clear",
+  noNotifications: "No new notifications",
   chatErrorGeneric: "Something went wrong. Please try again.",
   chatErrorProviderDown: "The AI service is temporarily unavailable. Please try again shortly.",
   chatErrorRateLimit: "Too many requests — please wait a moment and try again.",
@@ -462,6 +468,8 @@ const it: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravità",
+  allClear: "Tutto a posto",
+  noNotifications: "Nessuna nuova notifica",
   chatErrorGeneric: "Qualcosa è andato storto. Riprova.",
   chatErrorProviderDown: "Il servizio AI non è al momento disponibile. Riprova tra poco.",
   chatErrorRateLimit: "Troppe richieste — attendi un momento e riprova.",
@@ -606,6 +614,8 @@ const de: UiStrings = {
   activityProposed: "Vorgeschlagen",
   activityReason: "Grund",
   activitySeverity: "Schweregrad",
+  allClear: "Alles erledigt",
+  noNotifications: "Keine neuen Benachrichtigungen",
   chatErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   chatErrorProviderDown: "Der KI-Dienst ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
   chatErrorRateLimit: "Zu viele Anfragen — bitte warte einen Moment und versuche es erneut.",
@@ -750,6 +760,8 @@ const fr: UiStrings = {
   activityProposed: "Proposé",
   activityReason: "Raison",
   activitySeverity: "Gravité",
+  allClear: "Rien a signaler",
+  noNotifications: "Aucune nouvelle notification",
   chatErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
   chatErrorProviderDown: "Le service IA est temporairement indisponible. Réessayez dans un instant.",
   chatErrorRateLimit: "Trop de requêtes — veuillez patienter un moment et réessayer.",
@@ -894,6 +906,8 @@ const es: UiStrings = {
   activityProposed: "Propuesto",
   activityReason: "Razón",
   activitySeverity: "Gravedad",
+  allClear: "Todo en orden",
+  noNotifications: "Sin notificaciones nuevas",
   chatErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
   chatErrorProviderDown: "El servicio de IA no está disponible temporalmente. Inténtalo en un momento.",
   chatErrorRateLimit: "Demasiadas solicitudes — espera un momento e inténtalo de nuevo.",
@@ -1038,6 +1052,8 @@ const pt: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravidade",
+  allClear: "Tudo em ordem",
+  noNotifications: "Nenhuma notificacao nova",
   chatErrorGeneric: "Algo correu mal. Tente novamente.",
   chatErrorProviderDown: "O serviço de IA está temporariamente indisponível. Tente novamente em breve.",
   chatErrorRateLimit: "Muitos pedidos — aguarde um momento e tente novamente.",
@@ -1182,6 +1198,8 @@ const ja: UiStrings = {
   activityProposed: "提案",
   activityReason: "理由",
   activitySeverity: "重要度",
+  allClear: "すべて完了",
+  noNotifications: "新しい通知はありません",
   chatErrorGeneric: "エラーが発生しました。もう一度お試しください。",
   chatErrorProviderDown: "AIサービスが一時的に利用できません。しばらくしてから再度お試しください。",
   chatErrorRateLimit: "リクエストが多すぎます。少し待ってからもう一度お試しください。",
@@ -1326,6 +1344,8 @@ const zh: UiStrings = {
   activityProposed: "建议",
   activityReason: "原因",
   activitySeverity: "严重程度",
+  allClear: "一切就绪",
+  noNotifications: "没有新通知",
   chatErrorGeneric: "出现错误，请重试。",
   chatErrorProviderDown: "AI服务暂时不可用，请稍后重试。",
   chatErrorRateLimit: "请求过多——请稍等片刻后重试。",
