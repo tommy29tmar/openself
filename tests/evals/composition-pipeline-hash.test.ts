@@ -143,6 +143,7 @@ vi.mock("@/lib/services/personalization-hashing", () => ({
 import { createAgentTools } from "@/lib/agent/tools";
 import { projectCanonicalConfig } from "@/lib/services/page-projection";
 import { computeConfigHash } from "@/lib/services/page-service";
+import { personalizeSection } from "@/lib/services/section-personalizer";
 
 // ---------------------------------------------------------------------------
 // BUG-1: Bio revert — recomposeAfterMutation triggers re-personalization
@@ -260,5 +261,89 @@ describe("BUG-1: fact mutation triggers re-personalization in steady_state", () 
 
     await new Promise(r => setTimeout(r, 50));
     expect(mockPersonalizeSection).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG-4: Experience title mismatch — experience section re-personalized
+// when unrelated fact (e.g. bio) changes
+// ---------------------------------------------------------------------------
+describe("BUG-4: experience section personalization survives unrelated fact mutation", () => {
+  const draftConfig = {
+    version: 1 as const,
+    username: "draft",
+    surface: "canvas",
+    voice: "signal",
+    light: "day",
+    style: { primaryColor: "#000", layout: "centered" as const },
+    sections: [
+      { id: "hero-1", type: "hero" as const, variant: "large" as const, content: { name: "Elena" } },
+      { id: "bio-1", type: "bio" as const, variant: "full" as const, content: { text: "Bio text" } },
+      { id: "experience-1", type: "experience" as const, variant: "timeline" as const, content: { title: "My Journey", items: [{ title: "Designer", company: "Acme" }] } },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetFactLanguage.mockReturnValue("en");
+    mockGetActiveFacts.mockReturnValue([
+      { id: "f1", category: "identity", key: "name", value: { name: "Elena" }, visibility: "public", source: "chat" },
+      { id: "f2", category: "identity", key: "bio", value: { value: "Bio text" }, visibility: "public", source: "chat" },
+      { id: "f3", category: "experience", key: "job1", value: { role: "Designer", company: "Acme" }, visibility: "public", source: "chat" },
+    ]);
+    mockGetDraft.mockReturnValue({ config: draftConfig, configHash: "old-hash", username: "draft" });
+    vi.mocked(projectCanonicalConfig).mockReturnValue({
+      ...draftConfig,
+      sections: [
+        { id: "hero-1", type: "hero", variant: "large", content: { name: "Elena" } },
+        { id: "bio-1", type: "bio", variant: "full", content: { text: "Updated bio." } },
+        { id: "experience-1", type: "experience", variant: "timeline", content: { title: "Experience", items: [{ title: "Designer", company: "Acme" }] } },
+      ],
+    });
+    vi.mocked(computeConfigHash).mockReturnValue("new-hash");
+    mockGetActiveSoul.mockReturnValue({ compiled: "soul-text" });
+    mockComputeHash.mockReturnValue("soul-hash-abc");
+    // Both bio AND experience are impacted (hash mismatch after identity fact change)
+    mockDetectImpactedSections.mockReturnValue(["bio", "experience"]);
+    mockPersonalizeSection.mockResolvedValue({ text: "Personalized" });
+  });
+
+  it("re-personalizes the experience section when an unrelated identity fact mutates", async () => {
+    mockCreateFact.mockReturnValue({ id: "f4", category: "identity", key: "tagline", visibility: "proposed" });
+
+    const { tools } = createAgentTools("en", "sess1", "owner1", "req1", undefined, "steady_state");
+    await tools.create_fact.execute(
+      { category: "identity", key: "tagline", value: { value: "Creative Director" } },
+      { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
+    );
+
+    await new Promise(r => setTimeout(r, 50));
+
+    // personalizeSection should be called for BOTH impacted sections (bio and experience)
+    expect(mockPersonalizeSection).toHaveBeenCalled();
+    const calls = vi.mocked(personalizeSection).mock.calls;
+    const personalizedTypes = calls.map((c) => (c[0] as any).section.type);
+    expect(personalizedTypes).toContain("experience");
+    expect(personalizedTypes).toContain("bio");
+  });
+
+  it("includes experience section in personalizeSection call with correct owner context", async () => {
+    mockCreateFact.mockReturnValue({ id: "f4", category: "identity", key: "tagline", visibility: "proposed" });
+
+    const { tools } = createAgentTools("en", "sess1", "owner1", "req1", undefined, "steady_state");
+    await tools.create_fact.execute(
+      { category: "identity", key: "tagline", value: { value: "Creative Director" } },
+      { toolCallId: "tc1", messages: [], abortSignal: new AbortController().signal },
+    );
+
+    await new Promise(r => setTimeout(r, 50));
+
+    // Find the call for the experience section
+    const calls = vi.mocked(personalizeSection).mock.calls;
+    const experienceCall = calls.find((c) => (c[0] as any).section.type === "experience");
+    expect(experienceCall).toBeDefined();
+    expect((experienceCall![0] as any).ownerKey).toBe("owner1");
+    expect((experienceCall![0] as any).language).toBe("en");
+    expect((experienceCall![0] as any).soulCompiled).toBe("soul-text");
   });
 });
