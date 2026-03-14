@@ -17,13 +17,6 @@ export function FeedItemDetail({ item, onAction, language, t }: FeedItemDetailPr
 
   return (
     <div style={detailContainerStyle}>
-      {d.type === "connector_sync" && (
-        <div>
-          <DetailRow label="Facts" value={`${d.factsCreated} created, ${d.factsUpdated} updated`} />
-          <DetailRow label="Events" value={`${d.eventsCreated} created`} />
-        </div>
-      )}
-
       {d.type === "connector_error" && (
         <div>
           <DetailRow label="Error" value={d.error} />

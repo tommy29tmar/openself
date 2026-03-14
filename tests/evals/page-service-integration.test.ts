@@ -48,6 +48,7 @@ testSqlite.exec(`
     generated_at DATETIME,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     source_language TEXT,
+    hidden_sections TEXT DEFAULT '[]',
     CHECK (status != 'published' OR username != 'draft')
   );
   CREATE UNIQUE INDEX uniq_page_published ON page(username) WHERE status = 'published';

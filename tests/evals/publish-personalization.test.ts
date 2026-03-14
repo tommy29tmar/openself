@@ -148,6 +148,10 @@ vi.mock("@/lib/agent/journey", () => ({
   updateJourneyStatePin: vi.fn(),
 }));
 
+vi.mock("@/lib/services/section-visibility-service", () => ({
+  getHiddenSections: vi.fn(() => []),
+}));
+
 import { prepareAndPublish } from "@/lib/services/publish-pipeline";
 
 describe("publish pipeline personalization integration", () => {

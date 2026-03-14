@@ -519,6 +519,21 @@
   opacity: var(--os-dna-signature-opacity, 0.4);
 }
 
+/* ─── Bottom Sheet Slide-Up ─── */
+
+@keyframes bottom-sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.bottom-sheet-slide-up {
+  animation: bottom-sheet-slide-up 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* ─── Reduced Motion ─── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -539,4 +554,21 @@
   .hover-underline-grow::after {
     transition: none;
   }
+
+  .bottom-sheet-slide-up {
+    animation: none;
+  }
+}
+
+/* ─── Details/Summary marker reset (Safari/older Chrome) ─── */
+details > summary::-webkit-details-marker { display: none; }
+
+/* ─── Scrollbar Hide Utility ─── */
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

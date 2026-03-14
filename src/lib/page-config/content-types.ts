@@ -3,6 +3,7 @@ export type HeroContent = {
   tagline: string;
   avatarUrl?: string;
   socialLinks?: SocialLink[];
+  cta?: { label: string; url: string };
   contactEmail?: string;
   languages?: { language: string; proficiency?: string; canonicalProficiency?: string }[];
   location?: string;
@@ -124,6 +125,16 @@ export type ActivityItem = {
   activityType?: "sport" | "volunteering" | "event" | "club" | "other";
   frequency?: string;
   description?: string;
+  /** Structured numeric data preserved from connector facts (Strava etc.).
+   *  Survives translation pipeline untouched — rendered directly by component. */
+  stats?: {
+    activityCount?: number;
+    distanceKm?: number;
+    timeHrs?: number;
+    elevationM?: number;
+    /** Pre-formatted pace string (e.g. "5:30/km") — locale-independent. */
+    pace?: string;
+  };
 };
 export type ActivitiesContent = { items: ActivityItem[]; title?: string; collapseLabel?: string; moreLabel?: string };
 

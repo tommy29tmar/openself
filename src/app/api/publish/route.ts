@@ -3,6 +3,7 @@ import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline
 import { logEvent } from "@/lib/services/event-service";
 import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
+import { getUserById } from "@/lib/services/auth-service";
 
 /**
  * POST /api/publish
@@ -38,6 +39,17 @@ export async function POST(req: Request) {
       { success: false, error: "Sign up required to publish", code: "AUTH_REQUIRED" },
       { status: 403 },
     );
+  }
+
+  // Email verification gate: block publish for unverified users
+  if (authCtx?.userId) {
+    const user = getUserById(authCtx.userId);
+    if (user && user.emailVerified !== 1) {
+      return NextResponse.json(
+        { success: false, error: "Verify your email to publish", code: "EMAIL_NOT_VERIFIED" },
+        { status: 403 },
+      );
+    }
   }
 
   // Effective username: if user already has one, enforce it (ignore body)

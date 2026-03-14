@@ -24,6 +24,7 @@ import { type PageConfig } from "@/lib/page-config/schema";
 import { listSurfaces, listVoices } from "@/lib/presence";
 import { logEvent } from "@/lib/services/event-service";
 import { repairJsonValue } from "@/lib/agent/tool-call-repair";
+import { stableDeepEqual } from "@/lib/utils/stable-deep-equal";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
@@ -267,18 +268,6 @@ export function createAgentTools(
     return { requiresConfirmation: true, message: `Deleting identity/${key} requires confirmation. Explain to the user what will be removed and ask them to confirm.` };
   }
 
-  // --- Stable deep equality for duplicate detection ---
-  function stableDeepEqual(a: unknown, b: unknown): boolean {
-    return JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
-  }
-  function sortKeys(obj: unknown): unknown {
-    if (obj === null || typeof obj !== "object") return obj;
-    if (Array.isArray(obj)) return obj.map(sortKeys);
-    return Object.fromEntries(
-      Object.entries(obj as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortKeys(v)])
-    );
-  }
-
   type DeleteGateResult =
     | { requiresConfirmation: true; message: string }
     | { allowed: true; commit: () => void; consumeOnly?: () => void };
@@ -370,6 +359,10 @@ export function createAgentTools(
    * Anti-loop: _recomposing flag prevents re-entry.
    * Idempotency: computeConfigHash(composed) compared to draft.configHash
    * (both are SHA-256 of full config JSON). Skip upsertDraft on match.
+   *
+   * In steady_state mode, triggers fire-and-forget re-personalization for
+   * impacted sections so that personalized copy is refreshed when facts change
+   * (prevents bio revert when e.g. title changes).
    */
   let _recomposing = false;
   function recomposeAfterMutation(): void {
@@ -412,6 +405,41 @@ export function createAgentTools(
       }
 
       upsertDraft(currentDraft?.username ?? "draft", composed, sessionId);
+
+      // Fire-and-forget re-personalization in steady_state mode.
+      // When facts change, section_copy_state hashes become stale and
+      // mergeActiveSectionCopy falls back to deterministic content.
+      // Re-personalizing here refreshes the hashes so preview/publish
+      // continue to show LLM-personalized copy.
+      if (mode === "steady_state" && effectiveOwnerKey) {
+        const soul = getActiveSoul(effectiveOwnerKey);
+        if (soul?.compiled) {
+          const publishable = filterPublishableFacts(allFacts);
+          const soulHash = computeHash(soul.compiled);
+          const impacted = detectImpactedSections(publishable, effectiveOwnerKey, factLang, soulHash);
+          if (impacted.length > 0) {
+            (async () => {
+              try {
+                const meta = getSessionMeta(sessionId);
+                const archetype = typeof meta.archetype === "string" ? meta.archetype : undefined;
+                const impactedSections = impacted
+                  .map(type => composed.sections.find((s: any) => s.type === type))
+                  .filter((s): s is typeof composed.sections[number] => !!s);
+                const orderedSections = prioritizeSections(impactedSections, archetype);
+                for (const section of orderedSections) {
+                  await personalizeSection({
+                    section, ownerKey: effectiveOwnerKey, language: factLang,
+                    publishableFacts: publishable,
+                    soulCompiled: soul.compiled, username: currentDraft?.username ?? "draft",
+                  });
+                }
+              } catch (err) {
+                console.error("[recompose] personalization error:", err);
+              }
+            })();
+          }
+        }
+      }
     } finally {
       _recomposing = false;
     }
@@ -2129,6 +2157,30 @@ Do NOT call in a loop.`,
       }
     },
   }),
+  toggle_section_visibility: tool({
+    description:
+      "Show or hide a section on the page. Hidden sections are not visible to visitors " +
+      "on the published page, but appear as ghost cards in the builder preview. " +
+      "Use this when the user wants to temporarily hide a section without deleting its data.",
+    parameters: z.object({
+      sectionType: z.string().describe("The section type to show/hide (e.g. 'skills', 'education', 'social')."),
+      visible: z.boolean().describe("true = show the section, false = hide it."),
+    }),
+    execute: async ({ sectionType, visible }) => {
+      try {
+        const { toggleSectionVisibility } = await import("@/lib/services/section-visibility-service");
+        const hidden = toggleSectionVisibility(sessionId, sectionType, visible);
+        recomposeAfterMutation();
+        logTrustAction(effectiveOwnerKey, "toggle_section_visibility",
+          `${visible ? "Showed" : "Hid"} section "${sectionType}"`,
+          { details: { sectionType, visible } },
+        );
+        return { success: true, hiddenSections: hidden };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
   curate_content: tool({
     description:
       "Curate the display text of page content without modifying facts. " +
@@ -2282,6 +2334,7 @@ Do NOT call in a loop.`,
       case "recall_episodes": return `recall ${args.timeframe}${args.keywords ? ` "${args.keywords}"` : ""}`;
       case "confirm_episodic_pattern": return `${args.accept ? "accepted" : "rejected"} pattern ${args.proposalId}`;
       case "curate_content": return `curate ${args.sectionType}${args.factId ? ` item ${args.factId}` : ""}`;
+      case "toggle_section_visibility": return `${args.visible ? "show" : "hide"} ${args.sectionType}`;
       default: return toolName;
     }
   }

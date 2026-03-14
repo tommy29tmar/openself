@@ -193,9 +193,16 @@ export async function prepareAndPublish(
   );
 
   // Step C: Translate (async, OUTSIDE transaction — LLM call can't be in SQLite txn)
-  const renderedConfig = normalizeConfigForWrite(
+  const translatedConfig = normalizeConfigForWrite(
     await translatePageContent(personalizedConfig, targetLang, factLang),
   );
+
+  // Step C2: Filter hidden sections from published output
+  const { getHiddenSections } = await import("@/lib/services/section-visibility-service");
+  const hiddenSections = getHiddenSections(sessionId);
+  const renderedConfig = hiddenSections.length > 0
+    ? { ...translatedConfig, sections: translatedConfig.sections.filter(s => !hiddenSections.includes(s.type)) }
+    : translatedConfig;
 
   // Step D: Atomic transaction — promote proposed→public, persist, publish
   const txn = sqlite.transaction(() => {

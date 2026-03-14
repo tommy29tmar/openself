@@ -1,11 +1,22 @@
 import React from "react";
 import type { SectionProps } from "../../types";
+import {
+    Linkedin, Mail, Twitter, Globe, Calendar, AtSign, Cloud,
+    Hash, Github, Music, Activity, Rss,
+} from "lucide-react";
+import { SOCIAL_PLATFORMS } from "@/lib/social-links";
+
+function safeHref(url: string): string {
+  if (/^(https?:|mailto:)/i.test(url)) return url;
+  return "#";
+}
 
 type HeroContent = {
     name: string;
     tagline: string;
     avatarUrl?: string;
     socialLinks?: { platform: string; url: string; label?: string }[];
+    cta?: { label: string; url: string };
     contactEmail?: string;
     languages?: { language: string; proficiency?: string; canonicalProficiency?: string }[];
     location?: string;
@@ -55,6 +66,29 @@ function isHighProficiency(l: { proficiency?: string; canonicalProficiency?: str
     return HIGH_PROFICIENCY_CANONICAL.has(normalized);
 }
 
+// Map platform icon names (from SOCIAL_PLATFORMS) to lucide-react components
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    Linkedin,
+    Mail,
+    Twitter,
+    Globe,
+    Calendar,
+    AtSign,
+    Cloud,
+    Hash,
+    Github,
+    Music,
+    Activity,
+    Rss,
+};
+
+function SocialIcon({ platform, size = 20 }: { platform: string; size?: number }) {
+    const def = SOCIAL_PLATFORMS[platform.toLowerCase()];
+    const iconName = def?.icon ?? "Globe";
+    const IconComponent = ICON_MAP[iconName] ?? Globe;
+    return <IconComponent size={size} />;
+}
+
 function HeroChips({ content }: { content: HeroContent }) {
     const chips: string[] = [];
 
@@ -84,44 +118,57 @@ function HeroChips({ content }: { content: HeroContent }) {
     );
 }
 
-function HeroContact({ content }: { content: HeroContent }) {
-    const hasEmail = !!content.contactEmail;
+function HeroSocialLinks({ content }: { content: HeroContent }) {
     const socialLinks = (content.socialLinks ?? []).filter(l => l.url);
-    if (!hasEmail && socialLinks.length === 0) return null;
+    const hasEmail = !!content.contactEmail;
+    const cta = content.cta;
 
-    const linkStyle: React.CSSProperties = {
-        fontSize: 13, color: "var(--page-fg-secondary)",
-        textDecoration: "none", fontWeight: 500, letterSpacing: "0.02em",
-        transition: "color 0.15s",
-    };
+    if (!hasEmail && socialLinks.length === 0 && !cta) return null;
 
-    const LABELS: Record<string, string> = {
-        github: "GitHub", linkedin: "LinkedIn", twitter: "𝕏", x: "𝕏",
-        website: "↗", instagram: "Instagram",
-    };
+    // Combine email + social links into one array for icon rendering
+    const allLinks: { platform: string; url: string; label: string }[] = [];
+    if (hasEmail) {
+        allLinks.push({ platform: "email", url: `mailto:${content.contactEmail}`, label: "Email" });
+    }
+    for (const link of socialLinks) {
+        const def = SOCIAL_PLATFORMS[link.platform?.toLowerCase()];
+        allLinks.push({
+            platform: link.platform,
+            url: link.url,
+            label: link.label ?? def?.label ?? link.platform ?? "Link",
+        });
+    }
 
     return (
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-            {hasEmail && (
-                <a href={`mailto:${content.contactEmail}`} style={linkStyle}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--page-fg)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--page-fg-secondary)")}
+        <div style={{ marginTop: 16 }}>
+            {/* Social icon row — horizontal scroll on mobile, 44px touch targets */}
+            {allLinks.length > 0 && (
+                <div className="flex gap-3 overflow-x-auto py-2 -mx-2 px-2 scrollbar-hide">
+                    {allLinks.map((link, i) => (
+                        <a
+                            key={i}
+                            href={safeHref(link.url)}
+                            target={link.platform === "email" ? undefined : "_blank"}
+                            rel={link.platform === "email" ? undefined : "noopener noreferrer"}
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--page-fg,#333)]/20 text-[var(--page-fg-secondary)] transition-colors hover:bg-[var(--page-fg,#333)]/10 hover:text-[var(--page-fg)]"
+                            aria-label={link.label}
+                        >
+                            <SocialIcon platform={link.platform} size={20} />
+                        </a>
+                    ))}
+                </div>
+            )}
+            {/* Optional CTA button */}
+            {cta && cta.url && cta.label && (
+                <a
+                    href={safeHref(cta.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex h-11 items-center rounded-full border border-[var(--page-accent)] bg-[var(--page-accent)] px-6 text-sm font-medium text-[var(--page-accent-fg,var(--page-bg))] transition-opacity hover:opacity-90"
                 >
-                    {content.contactEmail}
+                    {cta.label}
                 </a>
             )}
-            {socialLinks.map((link, i) => {
-                const label = LABELS[link.platform?.toLowerCase()] ?? link.label ?? link.platform ?? "↗";
-                return (
-                    <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                        aria-label={link.label ?? link.platform} style={linkStyle}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--page-fg)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--page-fg-secondary)")}
-                    >
-                        {label}
-                    </a>
-                );
-            })}
         </div>
     );
 }
@@ -183,6 +230,9 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                 <p className="text-xl md:text-3xl font-[var(--h-font)] text-[var(--page-fg-secondary)] max-w-2xl mx-auto italic leading-relaxed relative z-10">
                     {tagline}
                 </p>
+                <div className="relative z-10">
+                    <HeroSocialLinks content={content} />
+                </div>
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-[radial-gradient(ellipse_at_center,var(--page-accent)_0%,transparent_50%)] opacity-5 pointer-events-none blur-3xl rounded-full"></div>
             </header>
         );
@@ -203,6 +253,7 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                             <p className="text-xl md:text-2xl text-[var(--page-fg-secondary)] max-w-xl leading-relaxed font-light">
                                 {tagline}
                             </p>
+                            <HeroSocialLinks content={content} />
                         </div>
                         <div className="md:col-span-4 flex justify-start md:justify-end">
                             <div className="rounded-2xl shadow-lg rotate-3 hover:rotate-0 transition-transform duration-500">
@@ -241,7 +292,7 @@ export function Hero({ content, variant = "hero-split", onAvatarClick }: HeroPro
                     </div>
                 </div>
                 <HeroChips content={content} />
-                <HeroContact content={content} />
+                <HeroSocialLinks content={content} />
             </div>
         </header>
     );

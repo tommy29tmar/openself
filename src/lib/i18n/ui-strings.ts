@@ -173,6 +173,27 @@ export interface UiStrings {
   activityReason: string;
   activitySeverity: string;
 
+  // Presence panel
+  presenceBackground: string;
+  presenceTypography: string;
+  presenceMode: string;
+  presencePresets: string;
+  presencePhoto: string;
+  presenceSources: string;
+
+  // Social section
+  socialSectionTitle: string;
+
+  // Drawer
+  closeDrawer: string;
+
+  // Publish banner
+  readyToPublish: string;
+
+  // Empty state
+  allClear: string;
+  noNotifications: string;
+
   // Chat errors
   chatErrorGeneric: string;
   chatErrorProviderDown: string;
@@ -184,6 +205,19 @@ export interface UiStrings {
   chatErrorContentFiltered: string;
   chatRetry: string;
   chatRefresh: string;
+
+  // Section visibility
+  sectionHidden: string;
+  sectionShow: string;
+
+  // Section interaction (canvas preview)
+  editWithChat: string;
+  hideSection: string;
+  showSection: string;
+  moveUp: string;
+  moveDown: string;
+  longPressHint: string;
+  dismiss: string;
 }
 
 const en: UiStrings = {
@@ -318,6 +352,17 @@ const en: UiStrings = {
   activityProposed: "Proposed",
   activityReason: "Reason",
   activitySeverity: "Severity",
+  presenceBackground: "Background",
+  presenceTypography: "Typography",
+  presenceMode: "Mode",
+  presencePresets: "Preset styles",
+  presencePhoto: "Photo",
+  presenceSources: "Sources",
+  socialSectionTitle: "Get in touch",
+  closeDrawer: "Close",
+  readyToPublish: "Ready to publish",
+  allClear: "All clear",
+  noNotifications: "No new notifications",
   chatErrorGeneric: "Something went wrong. Please try again.",
   chatErrorProviderDown: "The AI service is temporarily unavailable. Please try again shortly.",
   chatErrorRateLimit: "Too many requests — please wait a moment and try again.",
@@ -328,6 +373,15 @@ const en: UiStrings = {
   chatErrorContentFiltered: "The message could not be processed. Try rephrasing.",
   chatRetry: "Retry",
   chatRefresh: "Refresh chat",
+  sectionHidden: "hidden",
+  sectionShow: "Show",
+  editWithChat: "Edit with chat",
+  hideSection: "Hide section",
+  showSection: "Show section",
+  moveUp: "Move up",
+  moveDown: "Move down",
+  longPressHint: "Long-press any section to edit, hide, or reorder it.",
+  dismiss: "Got it",
 };
 
 const it: UiStrings = {
@@ -462,6 +516,17 @@ const it: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravità",
+  presenceBackground: "Sfondo",
+  presenceTypography: "Tipografia",
+  presenceMode: "Modalità",
+  presencePresets: "Stili predefiniti",
+  presencePhoto: "Foto",
+  presenceSources: "Fonti",
+  socialSectionTitle: "Contatti",
+  closeDrawer: "Chiudi",
+  readyToPublish: "Pronto per la pubblicazione",
+  allClear: "Tutto a posto",
+  noNotifications: "Nessuna nuova notifica",
   chatErrorGeneric: "Qualcosa è andato storto. Riprova.",
   chatErrorProviderDown: "Il servizio AI non è al momento disponibile. Riprova tra poco.",
   chatErrorRateLimit: "Troppe richieste — attendi un momento e riprova.",
@@ -472,6 +537,15 @@ const it: UiStrings = {
   chatErrorContentFiltered: "Il messaggio non è stato elaborato. Prova a riformulare.",
   chatRetry: "Riprova",
   chatRefresh: "Aggiorna chat",
+  sectionHidden: "nascosta",
+  sectionShow: "Mostra",
+  editWithChat: "Modifica con chat",
+  hideSection: "Nascondi sezione",
+  showSection: "Mostra sezione",
+  moveUp: "Sposta su",
+  moveDown: "Sposta gi\u00f9",
+  longPressHint: "Tieni premuta una sezione per modificarla, nasconderla o riordinarla.",
+  dismiss: "Capito",
 };
 
 const de: UiStrings = {
@@ -606,6 +680,17 @@ const de: UiStrings = {
   activityProposed: "Vorgeschlagen",
   activityReason: "Grund",
   activitySeverity: "Schweregrad",
+  presenceBackground: "Hintergrund",
+  presenceTypography: "Typografie",
+  presenceMode: "Modus",
+  presencePresets: "Vordefinierte Stile",
+  presencePhoto: "Foto",
+  presenceSources: "Quellen",
+  socialSectionTitle: "Kontakt",
+  closeDrawer: "Schließen",
+  readyToPublish: "Bereit zur Veröffentlichung",
+  allClear: "Alles erledigt",
+  noNotifications: "Keine neuen Benachrichtigungen",
   chatErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   chatErrorProviderDown: "Der KI-Dienst ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
   chatErrorRateLimit: "Zu viele Anfragen — bitte warte einen Moment und versuche es erneut.",
@@ -616,6 +701,15 @@ const de: UiStrings = {
   chatErrorContentFiltered: "Die Nachricht konnte nicht verarbeitet werden. Versuche eine andere Formulierung.",
   chatRetry: "Wiederholen",
   chatRefresh: "Chat aktualisieren",
+  sectionHidden: "ausgeblendet",
+  sectionShow: "Anzeigen",
+  editWithChat: "Im Chat bearbeiten",
+  hideSection: "Abschnitt ausblenden",
+  showSection: "Abschnitt anzeigen",
+  moveUp: "Nach oben",
+  moveDown: "Nach unten",
+  longPressHint: "Halte einen Abschnitt gedr\u00fcckt, um ihn zu bearbeiten, auszublenden oder umzuordnen.",
+  dismiss: "Verstanden",
 };
 
 const fr: UiStrings = {
@@ -750,6 +844,17 @@ const fr: UiStrings = {
   activityProposed: "Proposé",
   activityReason: "Raison",
   activitySeverity: "Gravité",
+  presenceBackground: "Fond",
+  presenceTypography: "Typographie",
+  presenceMode: "Mode",
+  presencePresets: "Styles prédéfinis",
+  presencePhoto: "Photo",
+  presenceSources: "Sources",
+  socialSectionTitle: "Contact",
+  closeDrawer: "Fermer",
+  readyToPublish: "Prêt à publier",
+  allClear: "Rien à signaler",
+  noNotifications: "Aucune nouvelle notification",
   chatErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
   chatErrorProviderDown: "Le service IA est temporairement indisponible. Réessayez dans un instant.",
   chatErrorRateLimit: "Trop de requêtes — veuillez patienter un moment et réessayer.",
@@ -760,6 +865,15 @@ const fr: UiStrings = {
   chatErrorContentFiltered: "Le message n'a pas pu être traité. Essayez de le reformuler.",
   chatRetry: "Réessayer",
   chatRefresh: "Actualiser le chat",
+  sectionHidden: "masqu\u00e9e",
+  sectionShow: "Afficher",
+  editWithChat: "Modifier avec le chat",
+  hideSection: "Masquer la section",
+  showSection: "Afficher la section",
+  moveUp: "D\u00e9placer vers le haut",
+  moveDown: "D\u00e9placer vers le bas",
+  longPressHint: "Appuyez longuement sur une section pour la modifier, la masquer ou la r\u00e9organiser.",
+  dismiss: "Compris",
 };
 
 const es: UiStrings = {
@@ -894,6 +1008,17 @@ const es: UiStrings = {
   activityProposed: "Propuesto",
   activityReason: "Razón",
   activitySeverity: "Gravedad",
+  presenceBackground: "Fondo",
+  presenceTypography: "Tipografía",
+  presenceMode: "Modo",
+  presencePresets: "Estilos predefinidos",
+  presencePhoto: "Foto",
+  presenceSources: "Fuentes",
+  socialSectionTitle: "Contacto",
+  closeDrawer: "Cerrar",
+  readyToPublish: "Listo para publicar",
+  allClear: "Todo en orden",
+  noNotifications: "Sin notificaciones nuevas",
   chatErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
   chatErrorProviderDown: "El servicio de IA no está disponible temporalmente. Inténtalo en un momento.",
   chatErrorRateLimit: "Demasiadas solicitudes — espera un momento e inténtalo de nuevo.",
@@ -904,6 +1029,15 @@ const es: UiStrings = {
   chatErrorContentFiltered: "El mensaje no pudo procesarse. Intenta reformularlo.",
   chatRetry: "Reintentar",
   chatRefresh: "Actualizar chat",
+  sectionHidden: "oculta",
+  sectionShow: "Mostrar",
+  editWithChat: "Editar con chat",
+  hideSection: "Ocultar secci\u00f3n",
+  showSection: "Mostrar secci\u00f3n",
+  moveUp: "Mover arriba",
+  moveDown: "Mover abajo",
+  longPressHint: "Mant\u00e9n pulsada una secci\u00f3n para editarla, ocultarla o reordenarla.",
+  dismiss: "Entendido",
 };
 
 const pt: UiStrings = {
@@ -1038,6 +1172,17 @@ const pt: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravidade",
+  presenceBackground: "Fundo",
+  presenceTypography: "Tipografia",
+  presenceMode: "Modo",
+  presencePresets: "Estilos predefinidos",
+  presencePhoto: "Foto",
+  presenceSources: "Fontes",
+  socialSectionTitle: "Contato",
+  closeDrawer: "Fechar",
+  readyToPublish: "Pronto para publicar",
+  allClear: "Tudo em ordem",
+  noNotifications: "Nenhuma notificação nova",
   chatErrorGeneric: "Algo correu mal. Tente novamente.",
   chatErrorProviderDown: "O serviço de IA está temporariamente indisponível. Tente novamente em breve.",
   chatErrorRateLimit: "Muitos pedidos — aguarde um momento e tente novamente.",
@@ -1048,6 +1193,15 @@ const pt: UiStrings = {
   chatErrorContentFiltered: "A mensagem não pôde ser processada. Tente reformular.",
   chatRetry: "Tentar novamente",
   chatRefresh: "Atualizar chat",
+  sectionHidden: "oculta",
+  sectionShow: "Mostrar",
+  editWithChat: "Editar pelo chat",
+  hideSection: "Ocultar se\u00e7\u00e3o",
+  showSection: "Mostrar se\u00e7\u00e3o",
+  moveUp: "Mover para cima",
+  moveDown: "Mover para baixo",
+  longPressHint: "Mantenha uma se\u00e7\u00e3o premida para editar, ocultar ou reordenar.",
+  dismiss: "Entendido",
 };
 
 const ja: UiStrings = {
@@ -1182,6 +1336,17 @@ const ja: UiStrings = {
   activityProposed: "提案",
   activityReason: "理由",
   activitySeverity: "重要度",
+  presenceBackground: "背景",
+  presenceTypography: "タイポグラフィ",
+  presenceMode: "モード",
+  presencePresets: "プリセットスタイル",
+  presencePhoto: "写真",
+  presenceSources: "ソース",
+  socialSectionTitle: "連絡先",
+  closeDrawer: "閉じる",
+  readyToPublish: "公開準備完了",
+  allClear: "すべて完了",
+  noNotifications: "新しい通知はありません",
   chatErrorGeneric: "エラーが発生しました。もう一度お試しください。",
   chatErrorProviderDown: "AIサービスが一時的に利用できません。しばらくしてから再度お試しください。",
   chatErrorRateLimit: "リクエストが多すぎます。少し待ってからもう一度お試しください。",
@@ -1191,7 +1356,16 @@ const ja: UiStrings = {
   chatErrorContextTooLong: "会話が長すぎます。新しいチャットを開始してください。",
   chatErrorContentFiltered: "メッセージを処理できませんでした。言い換えてお試しください。",
   chatRetry: "再試行",
-  chatRefresh: "チャットを更新",
+  chatRefresh: "\u30c1\u30e3\u30c3\u30c8\u3092\u66f4\u65b0",
+  sectionHidden: "\u975e\u8868\u793a",
+  sectionShow: "\u8868\u793a",
+  editWithChat: "\u30c1\u30e3\u30c3\u30c8\u3067\u7de8\u96c6",
+  hideSection: "\u30bb\u30af\u30b7\u30e7\u30f3\u3092\u975e\u8868\u793a",
+  showSection: "\u30bb\u30af\u30b7\u30e7\u30f3\u3092\u8868\u793a",
+  moveUp: "\u4e0a\u3078\u79fb\u52d5",
+  moveDown: "\u4e0b\u3078\u79fb\u52d5",
+  longPressHint: "\u30bb\u30af\u30b7\u30e7\u30f3\u3092\u9577\u62bc\u3057\u3057\u3066\u7de8\u96c6\u3001\u975e\u8868\u793a\u3001\u4e26\u3079\u66ff\u3048\u304c\u3067\u304d\u307e\u3059\u3002",
+  dismiss: "\u4e86\u89e3",
 };
 
 const zh: UiStrings = {
@@ -1326,6 +1500,17 @@ const zh: UiStrings = {
   activityProposed: "建议",
   activityReason: "原因",
   activitySeverity: "严重程度",
+  presenceBackground: "背景",
+  presenceTypography: "字体",
+  presenceMode: "模式",
+  presencePresets: "预设样式",
+  presencePhoto: "照片",
+  presenceSources: "来源",
+  socialSectionTitle: "联系方式",
+  closeDrawer: "关闭",
+  readyToPublish: "准备发布",
+  allClear: "一切就绪",
+  noNotifications: "没有新通知",
   chatErrorGeneric: "出现错误，请重试。",
   chatErrorProviderDown: "AI服务暂时不可用，请稍后重试。",
   chatErrorRateLimit: "请求过多——请稍等片刻后重试。",
@@ -1335,7 +1520,16 @@ const zh: UiStrings = {
   chatErrorContextTooLong: "对话过长，请尝试开始新的聊天。",
   chatErrorContentFiltered: "无法处理该消息，请尝试改写。",
   chatRetry: "重试",
-  chatRefresh: "刷新聊天",
+  chatRefresh: "\u5237\u65b0\u804a\u5929",
+  sectionHidden: "\u5df2\u9690\u85cf",
+  sectionShow: "\u663e\u793a",
+  editWithChat: "\u901a\u8fc7\u804a\u5929\u7f16\u8f91",
+  hideSection: "\u9690\u85cf\u6a21\u5757",
+  showSection: "\u663e\u793a\u6a21\u5757",
+  moveUp: "\u4e0a\u79fb",
+  moveDown: "\u4e0b\u79fb",
+  longPressHint: "\u957f\u6309\u4efb\u4f55\u6a21\u5757\u53ef\u7f16\u8f91\u3001\u9690\u85cf\u6216\u91cd\u65b0\u6392\u5e8f\u3002",
+  dismiss: "\u77e5\u9053\u4e86",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };

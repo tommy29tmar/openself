@@ -16,6 +16,8 @@ export function LoginForm({ providers, oauthError }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,6 +45,33 @@ export function LoginForm({ providers, oauthError }: LoginFormProps) {
     }
   };
 
+  const handleMagicLink = async () => {
+    if (!email) {
+      setError("Enter your email first");
+      return;
+    }
+    setError(null);
+    setMagicLinkLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (res.status === 429) {
+        setError("Too many attempts. Try again later.");
+      } else {
+        setMagicLinkSent(true);
+      }
+    } catch {
+      setError("Network error");
+    } finally {
+      setMagicLinkLoading(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
       <h1 className="text-3xl font-bold tracking-tight">Sign in</h1>
@@ -51,6 +80,14 @@ export function LoginForm({ providers, oauthError }: LoginFormProps) {
         <p className="text-sm text-red-600 dark:text-red-400">
           OAuth sign-in failed. Please try again.
         </p>
+      )}
+
+      {magicLinkSent && (
+        <div className="w-full max-w-sm rounded-lg border bg-green-50 p-4 text-center dark:bg-green-950">
+          <p className="text-sm text-green-800 dark:text-green-200">
+            Check your email for a sign-in link.
+          </p>
+        </div>
       )}
 
       {/* OAuth buttons — only configured providers */}
@@ -76,7 +113,7 @@ export function LoginForm({ providers, oauthError }: LoginFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
           required
-          className="rounded border bg-background px-3 py-2 text-sm"
+          className="min-h-[48px] rounded border bg-background px-3 py-2 text-sm"
           autoComplete="email"
         />
         <input
@@ -86,15 +123,23 @@ export function LoginForm({ providers, oauthError }: LoginFormProps) {
           placeholder="Password"
           required
           minLength={8}
-          className="rounded border bg-background px-3 py-2 text-sm"
+          className="min-h-[48px] rounded border bg-background px-3 py-2 text-sm"
           autoComplete="current-password"
         />
         {error && (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" disabled={loading} className="min-h-[48px]">
           {loading ? "Signing in..." : "Sign in"}
         </Button>
+        <button
+          type="button"
+          onClick={handleMagicLink}
+          disabled={magicLinkLoading}
+          className="text-sm text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+        >
+          {magicLinkLoading ? "Sending..." : "Sign in with email link"}
+        </button>
       </form>
 
       <div className="flex w-full max-w-sm flex-col items-center gap-2">
@@ -105,13 +150,12 @@ export function LoginForm({ providers, oauthError }: LoginFormProps) {
           </Link>
         </p>
         <p className="text-xs text-muted-foreground">
-          Forgot password?{" "}
-          <a
-            href="mailto:tom@openself.dev?subject=Password%20reset%20request"
+          <Link
+            href="/forgot-password"
             className="font-medium text-foreground underline underline-offset-2 hover:text-foreground/80"
           >
-            tom@openself.dev
-          </a>
+            Forgot password?
+          </Link>
         </p>
       </div>
     </main>

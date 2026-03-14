@@ -470,9 +470,17 @@ function buildHeroSection(
 
   // ContactBar data (injected from social, contact, language facts)
   const socialLinks: { platform: string; url: string; label?: string }[] = [];
+  let ctaData: { label: string; url: string } | undefined;
   const t = getUiL10n(language);
   for (const f of socialFacts ?? []) {
     const v = val(f);
+    // CTA button: social fact with key "cta" and value {label, url}
+    if (f.key === "cta") {
+      const ctaLabel = str(v.label) ?? str(v.text);
+      const ctaUrl = str(v.url) ?? str(v.link);
+      if (ctaLabel && ctaUrl) ctaData = { label: ctaLabel, url: ctaUrl };
+      continue;
+    }
     const platform = str(v.platform) ?? str(v.name) ?? f.key;
     const url = str(v.url) ?? str(v.link);
     // Localize "website" display label; keep platform canonical for icon lookup
@@ -528,6 +536,7 @@ function buildHeroSection(
     tagline: finalTagline,
   };
   if (socialLinks.length > 0) content.socialLinks = socialLinks;
+  if (ctaData) content.cta = ctaData;
   if (contactEmail) content.contactEmail = contactEmail;
   if (languageItems.length > 0) content.languages = languageItems;
 
@@ -677,7 +686,7 @@ function buildBioSection(grouped: FactsByCategory, language: string, hasInterest
   };
 }
 
-function buildSkillsSection(skillFacts: FactRow[], language: string): Section | null {
+export function buildSkillsSection(skillFacts: FactRow[], language: string): Section | null {
   if (skillFacts.length === 0) return null;
 
   const skills = sortFacts(skillFacts)
@@ -687,10 +696,21 @@ function buildSkillsSection(skillFacts: FactRow[], language: string): Section | 
     })
     .filter((s): s is string => s !== undefined);
 
-  if (skills.length === 0) return null;
+  // Defense-in-depth deduplication by normalized name.
+  // Fact clustering handles this at write-time, but pre-clustering legacy data
+  // or race conditions can leave duplicates that would appear on the page.
+  const seen = new Set<string>();
+  const uniqueSkills = skills.filter((s) => {
+    const key = s.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (uniqueSkills.length === 0) return null;
 
   const content: SkillsContent = {
-    groups: [{ label: getL10n(language).skillsLabel, skills }],
+    groups: [{ label: getL10n(language).skillsLabel, skills: uniqueSkills }],
   };
 
   return {
@@ -1284,18 +1304,18 @@ export function buildActivitiesSection(activityFacts: FactRow[], language: strin
         item.frequency = FREQ_L10N[frequency.toLowerCase()] ?? frequency;
       }
 
-      // Structured Strava description (enriched); fallback to raw description
+      // Structured Strava data: preserve numeric stats for component rendering,
+      // and also build a localized description string as fallback.
       if (actCount !== undefined) {
-        const parts: string[] = [];
-        parts.push(`${actCount} ${actCount === 1 ? t.activityCountSingular : t.activityCountPlural}`);
         const km = typeof v.distanceKm === "number" ? v.distanceKm : undefined;
-        if (km && km > 0) parts.push(`${km} km`);
         const hrs = typeof v.timeHrs === "number" ? v.timeHrs : undefined;
-        if (hrs && hrs > 0) parts.push(`${hrs} ${hrs === 1 ? t.hourSingular : t.hourPlural}`);
-
-        // Elevation
         const elevM = typeof v.elevationM === "number" ? v.elevationM : undefined;
-        if (elevM && elevM > 0) parts.push(`${elevM}m ${t.elevationLabel}`);
+
+        // Preserve structured numeric data — survives translation pipeline untouched
+        const stats: NonNullable<ActivityItem["stats"]> = { activityCount: actCount };
+        if (km && km > 0) stats.distanceKm = km;
+        if (hrs && hrs > 0) stats.timeHrs = hrs;
+        if (elevM && elevM > 0) stats.elevationM = elevM;
 
         // Pace — running only, minimum 5km to avoid absurd values
         const isRunning = rawName === "Run" || rawName === "TrailRun" || rawName === "Trail Run";
@@ -1304,8 +1324,17 @@ export function buildActivitiesSection(activityFacts: FactRow[], language: strin
           let paceMin = Math.floor(paceMinPerKm);
           let paceSec = Math.round((paceMinPerKm - paceMin) * 60);
           if (paceSec === 60) { paceSec = 0; paceMin++; }
-          parts.push(`${paceMin}:${String(paceSec).padStart(2, "0")}/km ${t.paceLabel}`);
+          stats.pace = `${paceMin}:${String(paceSec).padStart(2, "0")}/km`;
         }
+        item.stats = stats;
+
+        // Also build localized description as fallback for legacy renderers
+        const parts: string[] = [];
+        parts.push(`${actCount} ${actCount === 1 ? t.activityCountSingular : t.activityCountPlural}`);
+        if (km && km > 0) parts.push(`${km} km`);
+        if (hrs && hrs > 0) parts.push(`${hrs} ${hrs === 1 ? t.hourSingular : t.hourPlural}`);
+        if (elevM && elevM > 0) parts.push(`${elevM}m ${t.elevationLabel}`);
+        if (stats.pace) parts.push(`${stats.pace} ${t.paceLabel}`);
 
         item.description = parts.join(" · ");
       } else {

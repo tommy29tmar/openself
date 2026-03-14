@@ -36,10 +36,6 @@ const CONNECTOR_LABELS: Record<string, string> = {
 function getItemTitle(item: FeedItemType, t: UiStrings): string {
   const d = item.detail;
   switch (d.type) {
-    case "connector_sync": {
-      const label = CONNECTOR_LABELS[d.connectorType] ?? d.connectorType;
-      return `${label} ${t.activitySynced}: ${d.factsCreated} ${t.activityFacts}, ${d.eventsCreated} ${t.activityEvents}`;
-    }
     case "connector_error": {
       const label = CONNECTOR_LABELS[d.connectorType] ?? d.connectorType;
       return `${label} ${t.activitySyncFailed}`;
@@ -56,7 +52,6 @@ function getItemTitle(item: FeedItemType, t: UiStrings): string {
 }
 
 const TYPE_ICONS: Record<string, string> = {
-  connector_sync: "↻",
   connector_error: "⚠",
   conformity_proposal: "✦",
   soul_proposal: "◈",

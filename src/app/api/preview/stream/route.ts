@@ -5,6 +5,7 @@ import { getProjectedFacts } from "@/lib/services/fact-cluster-service";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { projectCanonicalConfig, publishableFromCanonical } from "@/lib/services/page-projection";
 import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";
+import { getHiddenSections } from "@/lib/services/section-visibility-service";
 
 export const runtime = "nodejs";
 
@@ -103,11 +104,13 @@ export async function GET(req: Request) {
 
           if (changed) {
             unchangedCount = 0;
+            const hiddenSections = getHiddenSections(writeSessionId);
             sendEvent({
               status: "optimistic_ready",
               publishStatus: draft?.status ?? "draft",
               config: personalizedConfig,
               configHash: publishableHash,
+              hiddenSections,
             });
           } else {
             unchangedCount++;

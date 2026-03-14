@@ -49,6 +49,7 @@ export type AuthState = {
   multiUser: boolean;
   publishedUsername: string | null;
   authV2?: boolean;
+  emailVerified?: boolean;
 };
 
 export default function BuilderPage() {
@@ -90,6 +91,7 @@ export default function BuilderPage() {
         multiUser: !!data.multiUser,
         publishedUsername: data.publishedUsername ?? null,
         authV2: !!data.authV2,
+        emailVerified: !!data.emailVerified,
       });
       setPublishedConfigHash(data.publishedConfigHash ?? null);
     } catch { /* silent — includes abort */ }

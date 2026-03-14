@@ -82,10 +82,15 @@ export async function GET(req: Request) {
   const publishableConfig = publishableFromCanonical(previewConfig);
   const configHash = computeConfigHash(publishableConfig);
 
+  // Hidden sections: pass separately so preview can show ghost cards
+  const { getHiddenSections } = await import("@/lib/services/section-visibility-service");
+  const hiddenSections = getHiddenSections(primaryKey);
+
   return NextResponse.json({
     status: "optimistic_ready",
     publishStatus: draft?.status ?? "draft",
     config: personalizedConfig,
     configHash,
+    hiddenSections,
   });
 }

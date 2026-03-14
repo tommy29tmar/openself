@@ -210,6 +210,12 @@ function LimitReachedUI({
   );
 }
 
+type SectionContextPayload = {
+  sectionType: string;
+  contentSummary: string;
+  prompt: string;
+} | null;
+
 type ChatPanelProps = {
   language?: string;
   /** When true, show email + password fields in the signup form */
@@ -220,6 +226,12 @@ type ChatPanelProps = {
   initialMessages?: Array<{id: string; role: string; content: string}>;
   disableInitialFetch?: boolean;
   isPrimaryVoiceConsumer?: boolean;
+  /** Fired when an agent tool completes with success:true. */
+  onToolComplete?: (toolName: string) => void;
+  /** Section context injected from preview interaction (edit with chat). */
+  sectionContext?: SectionContextPayload;
+  /** Called after section context has been consumed (pre-filled into input). */
+  onSectionContextConsumed?: () => void;
 };
 
 type StoredMessage = {
@@ -246,6 +258,9 @@ type ChatPanelInnerProps = {
   isPrimaryVoiceConsumer?: boolean;
   pendingGreeting?: { id: string; content: string } | null;
   onGreetingChange?: (greeting: { id: string; content: string } | null) => void;
+  onToolComplete?: (toolName: string) => void;
+  sectionContext?: SectionContextPayload;
+  onSectionContextConsumed?: () => void;
 };
 
 function ChatPanelLoading() {
@@ -258,7 +273,7 @@ function ChatPanelLoading() {
   );
 }
 
-export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer, onToolComplete, sectionContext, onSectionContextConsumed }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>([]);
   const greetingRef = useRef<{ id: string; content: string } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -356,6 +371,9 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
       isPrimaryVoiceConsumer={isPrimaryVoiceConsumer}
       pendingGreeting={greetingRef.current}
       onGreetingChange={(g) => { greetingRef.current = g; }}
+      onToolComplete={onToolComplete}
+      sectionContext={sectionContext}
+      onSectionContextConsumed={onSectionContextConsumed}
     />
   );
 }
@@ -369,6 +387,9 @@ function ChatPanelInner({
   isPrimaryVoiceConsumer,
   pendingGreeting,
   onGreetingChange,
+  onToolComplete,
+  sectionContext,
+  onSectionContextConsumed,
 }: ChatPanelInnerProps) {
   const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -387,10 +408,12 @@ function ChatPanelInner({
   const voiceRef = useRef(false);
   const isPrimaryRef = useRef(false);
   const voiceSpeakRef = useRef<(text: string) => void>(() => {});
+  const onToolCompleteRef = useRef(onToolComplete);
+  onToolCompleteRef.current = onToolComplete;
 
   const pendingGreetingRef = useRef(pendingGreeting);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append, error: streamError } =
+  const { messages, input, setInput, handleInputChange, handleSubmit, isLoading, reload, setMessages, append, error: streamError } =
     useChat({
       api: "/api/chat",
       body: {
@@ -449,6 +472,22 @@ function ChatPanelInner({
         // TTS in voice mode (guarded via refs to avoid stale closures)
         if (isPrimaryRef.current && voiceRef.current && message.content?.trim()) {
           voiceSpeakRef.current(message.content);
+        }
+        // Toast notifications for successful tool completions
+        if (onToolCompleteRef.current && message.toolInvocations) {
+          const seen = new Set<string>();
+          for (const inv of message.toolInvocations) {
+            if (
+              inv.state === "result" &&
+              typeof inv.result === "object" &&
+              inv.result !== null &&
+              (inv.result as Record<string, unknown>).success === true &&
+              !seen.has(inv.toolName)
+            ) {
+              seen.add(inv.toolName);
+              onToolCompleteRef.current(inv.toolName);
+            }
+          }
         }
       },
     });
@@ -542,6 +581,18 @@ function ChatPanelInner({
     },
     [handleSubmit],
   );
+
+  // Section context injection from preview interaction ("edit with chat")
+  useEffect(() => {
+    if (!sectionContext) return;
+    setInput(sectionContext.prompt);
+    onSectionContextConsumed?.();
+    // iOS focus timing: defer focus after tab switch
+    const inputEl = document.querySelector<HTMLInputElement>('input[name="prompt"]');
+    if (inputEl) {
+      setTimeout(() => inputEl.focus(), 50);
+    }
+  }, [sectionContext, setInput, onSectionContextConsumed]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

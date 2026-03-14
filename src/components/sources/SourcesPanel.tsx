@@ -46,7 +46,7 @@ export function deriveCardState(
   return { connectionState: "not_connected", lastSync: null, lastError: null };
 }
 
-export function SourcesPanel() {
+export function SourcesPanel({ language }: { language?: string }) {
   const [statuses, setStatuses] = useState<ConnectorStatusRow[]>([]);
   const definitions = listConnectorUIs();
 
@@ -71,6 +71,7 @@ export function SourcesPanel() {
             definition={def}
             status={status}
             onRefresh={refresh}
+            language={language}
           />
         );
       })}

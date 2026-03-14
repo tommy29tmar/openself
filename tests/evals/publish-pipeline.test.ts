@@ -116,6 +116,10 @@ vi.mock("@/lib/agent/journey", () => ({
   updateJourneyStatePin: vi.fn(),
 }));
 
+vi.mock("@/lib/services/section-visibility-service", () => ({
+  getHiddenSections: vi.fn(() => []),
+}));
+
 import { prepareAndPublish, PublishError } from "@/lib/services/publish-pipeline";
 import { updateJourneyStatePin } from "@/lib/agent/journey";
 import { mergeActiveSectionCopy } from "@/lib/services/personalization-projection";

@@ -69,6 +69,21 @@ export function getPublishedPage(username: string): PageConfig | null {
 }
 
 /**
+ * Return all published pages' usernames and their last-updated timestamps.
+ * Used by sitemap generation.
+ */
+export function getAllPublishedUsernames(): { username: string; updatedAt: string }[] {
+  const rows = sqlite
+    .prepare("SELECT username, updated_at FROM page WHERE status = 'published' ORDER BY username ASC")
+    .all() as { username: string; updated_at: string | null }[];
+
+  return rows.map((r) => ({
+    username: r.username,
+    updatedAt: r.updated_at ?? new Date().toISOString(),
+  }));
+}
+
+/**
  * Get the source language of a published page.
  * Returns null if page not found or no source_language recorded.
  */
