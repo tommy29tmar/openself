@@ -81,7 +81,8 @@ testSqlite.exec(`
     config_hash TEXT,
     status TEXT NOT NULL DEFAULT 'draft',
     generated_at TEXT,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    hidden_sections TEXT DEFAULT '[]'
   );
   CREATE TABLE profile_message_usage (
     profile_key TEXT PRIMARY KEY,

@@ -172,6 +172,7 @@ export const page = sqliteTable("page", {
   generatedAt: text("generated_at"),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
   sourceLanguage: text("source_language"),
+  hiddenSections: text("hidden_sections").default("[]"),
 });
 
 // -- Agent Config

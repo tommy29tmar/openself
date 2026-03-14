@@ -66,7 +66,8 @@ testSqlite.exec(`
     status TEXT NOT NULL DEFAULT 'draft',
     generated_at TEXT,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    source_language TEXT
+    source_language TEXT,
+    hidden_sections TEXT DEFAULT '[]'
   );
   CREATE TABLE facts (
     id TEXT PRIMARY KEY,

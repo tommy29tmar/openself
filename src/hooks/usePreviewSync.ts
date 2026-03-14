@@ -17,6 +17,7 @@ export interface PreviewSyncData {
   light?: string;
   layoutTemplate?: string;
   username?: string;
+  hiddenSections?: string[];
 }
 
 /**
@@ -45,6 +46,7 @@ export async function pollPreview(opts: {
       light: data.config.light,
       layoutTemplate: data.config.layoutTemplate,
       username: data.config.username,
+      hiddenSections: data.hiddenSections,
     });
   } catch {
     // Silently ignore polling errors
@@ -92,6 +94,7 @@ export function usePreviewSync(opts: {
         light: data.config.light,
         layoutTemplate: data.config.layoutTemplate,
         username: data.config.username,
+        hiddenSections: data.hiddenSections,
       });
     };
 

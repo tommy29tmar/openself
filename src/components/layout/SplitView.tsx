@@ -98,6 +98,7 @@ export function SplitView({
   const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
   const [publishUsername, setPublishUsername] = useState<string>("");
+  const [hiddenSections, setHiddenSections] = useState<string[]>([]);
   const [surface, setSurface] = useState(config?.surface ?? "canvas");
   const [voice, setVoice] = useState(config?.voice ?? "signal");
   const [light, setLight] = useState<"day" | "night">((config?.light as "day" | "night") ?? "day");
@@ -163,6 +164,7 @@ export function SplitView({
         if (data.configHash) setConfigHash(data.configHash);
         if (data.publishStatus) setPublishStatus(data.publishStatus);
         if (data.username) setPublishUsername(data.username);
+        if (data.hiddenSections) setHiddenSections(data.hiddenSections);
         return;
       }
       if (data.config) setConfig(data.config);
@@ -173,6 +175,7 @@ export function SplitView({
       if (data.voice) setVoice(data.voice);
       if (data.light) setLight(data.light as "day" | "night");
       if (data.layoutTemplate) setLayoutTemplate(data.layoutTemplate as LayoutTemplateId);
+      if (data.hiddenSections) setHiddenSections(data.hiddenSections);
     },
   });
 
@@ -284,7 +287,7 @@ export function SplitView({
         unpublishedChangesLabel={t.unpublishedChanges}
         publishLabel={t.publish}
       />
-      <PageRenderer config={displayConfig} previewMode={true} />
+      <PageRenderer config={displayConfig} previewMode={true} hiddenSections={hiddenSections} />
     </>
   ) : (
     <EmptyPreview language={language} />

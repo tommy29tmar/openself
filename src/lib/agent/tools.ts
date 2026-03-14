@@ -2168,6 +2168,26 @@ Do NOT call in a loop.`,
       }
     },
   }),
+  toggle_section_visibility: tool({
+    description:
+      "Show or hide a section on the page. Hidden sections are not visible to visitors " +
+      "on the published page, but appear as ghost cards in the builder preview. " +
+      "Use this when the user wants to temporarily hide a section without deleting its data.",
+    parameters: z.object({
+      sectionType: z.string().describe("The section type to show/hide (e.g. 'skills', 'education', 'social')."),
+      visible: z.boolean().describe("true = show the section, false = hide it."),
+    }),
+    execute: async ({ sectionType, visible }) => {
+      try {
+        const { toggleSectionVisibility } = await import("@/lib/services/section-visibility-service");
+        const hidden = toggleSectionVisibility(sessionId, sectionType, visible);
+        recomposeAfterMutation();
+        return { success: true, hiddenSections: hidden };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  }),
   curate_content: tool({
     description:
       "Curate the display text of page content without modifying facts. " +
@@ -2321,6 +2341,7 @@ Do NOT call in a loop.`,
       case "recall_episodes": return `recall ${args.timeframe}${args.keywords ? ` "${args.keywords}"` : ""}`;
       case "confirm_episodic_pattern": return `${args.accept ? "accepted" : "rejected"} pattern ${args.proposalId}`;
       case "curate_content": return `curate ${args.sectionType}${args.factId ? ` item ${args.factId}` : ""}`;
+      case "toggle_section_visibility": return `${args.visible ? "show" : "hide"} ${args.sectionType}`;
       default: return toolName;
     }
   }
