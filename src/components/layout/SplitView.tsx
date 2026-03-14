@@ -400,6 +400,25 @@ export function SplitView({
     <>
       {usernameInput}
       <ProposalBanner />
+      {authenticated && authState?.emailVerified === false && (
+        <div className="flex items-center gap-3 border-b bg-blue-50 px-4 py-2 text-sm dark:bg-blue-950">
+          <span className="text-blue-800 dark:text-blue-200">
+            Verify your email to publish your page.
+          </span>
+          <a
+            href="/api/auth/resend-verification"
+            onClick={async (e) => {
+              e.preventDefault();
+              try {
+                await fetch("/api/auth/resend-verification", { method: "POST" });
+              } catch { /* silent */ }
+            }}
+            className="shrink-0 text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+          >
+            Resend email
+          </a>
+        </div>
+      )}
       <UnpublishedBanner
         hasUnpublishedChanges={hasUnpublishedChanges}
         publishing={publishing}

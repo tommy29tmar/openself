@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { db, sqlite } from "@/lib/db";
 import { heartbeatRuns, factDisplayOverrides } from "@/lib/db/schema";
+import { cleanupAuthRateLimits } from "@/lib/auth/rate-limit";
 import { getFactDisplayOverrideService } from "@/lib/services/fact-display-override-service";
 import {
   getHeartbeatConfig,
@@ -118,6 +119,20 @@ export function runGlobalHousekeeping(): void {
     }
   } catch {
     // Non-fatal — empty clusters will be cleaned next cycle
+  }
+
+  // Clean up expired auth rate limit records (>24h old)
+  try {
+    const cleaned = cleanupAuthRateLimits();
+    if (cleaned > 0) {
+      logEvent({
+        eventType: "housekeeping",
+        actor: "worker",
+        payload: { action: "auth_rate_limit_cleanup", cleaned },
+      });
+    }
+  } catch {
+    // Non-fatal — old records will be cleaned next cycle
   }
 }
 

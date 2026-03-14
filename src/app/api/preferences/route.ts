@@ -14,6 +14,7 @@ import { translatePageContent } from "@/lib/ai/translate";
 import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { AUTH_V2 } from "@/lib/flags";
+import { getUserById } from "@/lib/services/auth-service";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,13 @@ export async function GET(req: Request) {
   const readKeys = scope?.knowledgeReadKeys ?? [];
   const publishedUsername = getPublishedUsername(readKeys);
 
+  // Resolve email verification status
+  let emailVerified = false;
+  if (authCtx?.userId) {
+    const user = getUserById(authCtx.userId);
+    emailVerified = user?.emailVerified === 1;
+  }
+
   return NextResponse.json({
     language: prefs.language,
     hasPage: hasAnyPage(primaryKey),
@@ -38,6 +46,7 @@ export async function GET(req: Request) {
     publishedUsername,
     publishedConfigHash: getPublishedConfigHash(readKeys),
     authV2: AUTH_V2,
+    emailVerified,
   });
 }
 

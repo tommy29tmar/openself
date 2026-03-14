@@ -624,3 +624,41 @@ export const episodicPatternProposals = sqliteTable(
       .where(sql`${table.status} IN ('pending', 'accepted')`),
   ],
 );
+
+// -- Auth Tokens (password reset, email verification, magic link)
+export const authTokens = sqliteTable(
+  "auth_tokens",
+  {
+    id: text("id").primaryKey(),
+    profileId: text("profile_id")
+      .notNull()
+      .references(() => profiles.id),
+    tokenHash: text("token_hash").notNull(),
+    type: text("type").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("idx_auth_tokens_hash").on(table.tokenHash),
+    index("idx_auth_tokens_profile_type").on(table.profileId, table.type),
+  ],
+);
+
+// -- Auth Rate Limits (persistent, SQLite-based)
+export const authRateLimits = sqliteTable(
+  "auth_rate_limits",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ip: text("ip").notNull(),
+    action: text("action").notNull(),
+    attemptedAt: text("attempted_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("idx_auth_rate_ip_action").on(table.ip, table.action, table.attemptedAt),
+  ],
+);

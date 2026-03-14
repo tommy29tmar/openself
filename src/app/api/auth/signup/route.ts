@@ -10,6 +10,7 @@ import {
   createAuthSession,
 } from "@/lib/services/auth-service";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
+import { sendVerificationEmail } from "@/lib/auth/verification";
 
 const USERNAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/;
 const RESERVED = new Set(["draft", "api", "builder", "admin", "invite", "_next", "login", "signup"]);
@@ -100,6 +101,11 @@ export async function POST(req: Request) {
       eventType: "user_registered",
       actor: "user",
       payload: { username, email: email.toLowerCase() },
+    });
+
+    // Send verification email (non-blocking)
+    sendVerificationEmail(profile.id, email).catch((err) => {
+      console.error("[signup] Verification email failed (non-fatal):", err);
     });
 
     const response = NextResponse.json({ success: true, username });

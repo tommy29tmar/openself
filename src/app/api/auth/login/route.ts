@@ -7,6 +7,7 @@ import {
 } from "@/lib/services/auth-service";
 import { createSessionCookie, getSessionIdFromRequest } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/middleware/rate-limit";
+import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 import { sqlite } from "@/lib/db";
 
 /**
@@ -16,12 +17,24 @@ import { sqlite } from "@/lib/db";
  * Creates a new session (anti session-fixation).
  */
 export async function POST(req: Request) {
-  // Rate limit: 5 attempts / 60s per IP
+  // Rate limit: in-memory burst protection (5/60s)
   const rateResult = checkRateLimit(req, { maxRequests: 5, windowMs: 60_000 });
   if (!rateResult.allowed) {
     return NextResponse.json(
       { success: false, error: "Too many attempts. Try again later.", code: "RATE_LIMITED" },
       { status: 429, headers: { "Retry-After": String(rateResult.retryAfter ?? 60) } },
+    );
+  }
+
+  // Persistent rate limit: 5/15min per IP (survives restarts)
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim()
+    ?? req.headers.get("x-real-ip")
+    ?? "unknown";
+  const authRate = checkAuthRateLimit(ip, "login");
+  if (!authRate.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many attempts. Try again later.", code: "RATE_LIMITED" },
+      { status: 429, headers: { "Retry-After": String(authRate.retryAfterSeconds ?? 60) } },
     );
   }
 
