@@ -194,6 +194,10 @@ export interface UiStrings {
   chatErrorContentFiltered: string;
   chatRetry: string;
   chatRefresh: string;
+
+  // Section visibility
+  sectionHidden: string;
+  sectionShow: string;
 }
 
 const en: UiStrings = {
@@ -344,6 +348,8 @@ const en: UiStrings = {
   chatErrorContentFiltered: "The message could not be processed. Try rephrasing.",
   chatRetry: "Retry",
   chatRefresh: "Refresh chat",
+  sectionHidden: "hidden",
+  sectionShow: "Show",
 };
 
 const it: UiStrings = {
@@ -494,6 +500,8 @@ const it: UiStrings = {
   chatErrorContentFiltered: "Il messaggio non è stato elaborato. Prova a riformulare.",
   chatRetry: "Riprova",
   chatRefresh: "Aggiorna chat",
+  sectionHidden: "nascosta",
+  sectionShow: "Mostra",
 };
 
 const de: UiStrings = {
@@ -644,6 +652,8 @@ const de: UiStrings = {
   chatErrorContentFiltered: "Die Nachricht konnte nicht verarbeitet werden. Versuche eine andere Formulierung.",
   chatRetry: "Wiederholen",
   chatRefresh: "Chat aktualisieren",
+  sectionHidden: "ausgeblendet",
+  sectionShow: "Anzeigen",
 };
 
 const fr: UiStrings = {
@@ -794,6 +804,8 @@ const fr: UiStrings = {
   chatErrorContentFiltered: "Le message n'a pas pu être traité. Essayez de le reformuler.",
   chatRetry: "Réessayer",
   chatRefresh: "Actualiser le chat",
+  sectionHidden: "masquée",
+  sectionShow: "Afficher",
 };
 
 const es: UiStrings = {
@@ -944,6 +956,8 @@ const es: UiStrings = {
   chatErrorContentFiltered: "El mensaje no pudo procesarse. Intenta reformularlo.",
   chatRetry: "Reintentar",
   chatRefresh: "Actualizar chat",
+  sectionHidden: "oculta",
+  sectionShow: "Mostrar",
 };
 
 const pt: UiStrings = {
@@ -1094,6 +1108,8 @@ const pt: UiStrings = {
   chatErrorContentFiltered: "A mensagem não pôde ser processada. Tente reformular.",
   chatRetry: "Tentar novamente",
   chatRefresh: "Atualizar chat",
+  sectionHidden: "oculta",
+  sectionShow: "Mostrar",
 };
 
 const ja: UiStrings = {
@@ -1244,6 +1260,8 @@ const ja: UiStrings = {
   chatErrorContentFiltered: "メッセージを処理できませんでした。言い換えてお試しください。",
   chatRetry: "再試行",
   chatRefresh: "チャットを更新",
+  sectionHidden: "非表示",
+  sectionShow: "表示",
 };
 
 const zh: UiStrings = {
@@ -1394,6 +1412,8 @@ const zh: UiStrings = {
   chatErrorContentFiltered: "无法处理该消息，请尝试改写。",
   chatRetry: "重试",
   chatRefresh: "刷新聊天",
+  sectionHidden: "已隐藏",
+  sectionShow: "显示",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };

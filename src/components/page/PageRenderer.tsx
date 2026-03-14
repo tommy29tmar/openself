@@ -12,24 +12,57 @@ import { PageTopBar } from "@/components/page/PageTopBar";
 import { filterCompleteSections } from "@/lib/page-config/section-completeness";
 import { OsPageWrapper } from "@/components/page/OsPageWrapper";
 import { SECTION_COMPONENTS } from "@/components/sections";
+import { HiddenSectionCard } from "@/components/page/HiddenSectionCard";
 
 export type PageRendererProps = {
   config: PageConfig;
   previewMode?: boolean;
   isOwner?: boolean;
+  /** Section types that are hidden from visitors. In preview mode, shown as ghost cards. */
+  hiddenSections?: string[];
+  /** Callback when user clicks "Show" on a hidden section ghost card (preview only). */
+  onShowSection?: (sectionType: string) => void;
 };
 
-export function PageRenderer({ config, previewMode = false, isOwner = false }: PageRendererProps) {
+export function PageRenderer({
+  config,
+  previewMode = false,
+  isOwner = false,
+  hiddenSections = [],
+  onShowSection,
+}: PageRendererProps) {
   const template = resolveLayoutTemplate(config);
   const LayoutComponent = getLayoutComponent(template.id);
   const rawSections = previewMode ? config.sections : filterCompleteSections(config.sections);
   const MONOLITH_HIDDEN = new Set(["social", "contact", "at-a-glance"]);
-  const sections = template.id === "monolith"
-    ? rawSections.filter(s => !MONOLITH_HIDDEN.has(s.type))
-    : rawSections;
-  const slots = groupSectionsBySlot(sections, template);
+
+  const hiddenSet = new Set(hiddenSections);
+
+  // In non-preview (public) mode, filter out hidden sections completely.
+  // In preview mode, keep them for ghost card rendering.
+  const visibleSections = previewMode
+    ? (template.id === "monolith"
+        ? rawSections.filter(s => !MONOLITH_HIDDEN.has(s.type))
+        : rawSections)
+    : (template.id === "monolith"
+        ? rawSections.filter(s => !MONOLITH_HIDDEN.has(s.type) && !hiddenSet.has(s.type))
+        : rawSections.filter(s => !hiddenSet.has(s.type)));
+
+  const slots = groupSectionsBySlot(visibleSections, template);
 
   const renderSection = (section: Section) => {
+    // In preview mode, render hidden sections as ghost cards
+    if (previewMode && hiddenSet.has(section.type)) {
+      return (
+        <div key={section.id} id={`section-${section.id}`} data-section={section.type}>
+          <HiddenSectionCard
+            sectionType={section.type}
+            onShow={onShowSection ? () => onShowSection(section.type) : undefined}
+          />
+        </div>
+      );
+    }
+
     const SectionComponent = SECTION_COMPONENTS[section.type];
 
     if (!SectionComponent) {
@@ -58,11 +91,12 @@ export function PageRenderer({ config, previewMode = false, isOwner = false }: P
 
   // Owner view: keep OwnerBanner (sticky top) + StickyNav (fixed top-9) inside themed wrapper
   // Visitor view: unified PageTopBar (fixed top-0) — logo/login split on scroll, nav fades in center
+  const navSections = visibleSections.filter(s => !hiddenSet.has(s.type));
   const topBar = previewMode ? null : isOwner
-    ? (shouldShowStickyNav(sections)
-        ? <StickyNav sections={sections} name={heroName} avatarUrl={heroAvatarUrl} />
+    ? (shouldShowStickyNav(navSections)
+        ? <StickyNav sections={navSections} name={heroName} avatarUrl={heroAvatarUrl} />
         : null)
-    : <PageTopBar sections={sections} name={heroName} avatarUrl={heroAvatarUrl} showStickyNav={shouldShowStickyNav(sections)} />;
+    : <PageTopBar sections={navSections} name={heroName} avatarUrl={heroAvatarUrl} showStickyNav={shouldShowStickyNav(navSections)} />;
 
   return (
     <>
