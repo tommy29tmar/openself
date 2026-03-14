@@ -531,7 +531,13 @@ export function createAgentTools(
           action: z.literal("create"),
           category: z.string(),
           key: z.string(),
-          value: z.record(z.unknown()),
+          value: z.preprocess((v) => {
+            if (typeof v === "object" && v !== null) return v;
+            if (typeof v === "string") {
+              try { return JSON.parse(repairJsonValue(v)); } catch { /* fall through */ }
+            }
+            return v;
+          }, z.record(z.unknown())),
           source: z.string().optional(),
           confidence: z.number().optional(),
           parentFactId: z.string().optional(),

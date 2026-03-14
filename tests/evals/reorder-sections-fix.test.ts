@@ -59,10 +59,9 @@ describe("reorder_sections — slot validation", () => {
     const tools = getTools();
     const draft = getDraft(sessionId);
     const typesBefore = draft!.config.sections.map(s => s.type);
-    // Move skills after bio (if both exist)
-    const hasSkills = typesBefore.includes("skills");
-    const hasBio = typesBefore.includes("bio");
-    if (!hasSkills || !hasBio) return; // skip if sections don't exist
+    // Precondition: both sections must exist (created by beforeAll + first test's generate_page)
+    expect(typesBefore).toContain("skills");
+    expect(typesBefore).toContain("bio");
 
     const result = await tools.reorder_sections.execute(
       { username: "draft", moveSection: "skills", afterSection: "bio" },
@@ -113,6 +112,22 @@ describe("reorder_sections — slot validation", () => {
     );
     expect(result.success).toBe(false);
     expect((result as any).error).toContain("fixed structural section");
+  });
+
+  it("afterSection: 'hero' places section at position 1 (right after hero)", async () => {
+    const tools = getTools();
+    const result = await tools.reorder_sections.execute(
+      { username: "draft", moveSection: "skills", afterSection: "hero" },
+      { toolCallId: "t-after-hero", messages: [] },
+    );
+    expect(result.success).toBe(true);
+
+    const updated = getDraft(sessionId);
+    const types = updated!.config.sections.map(s => s.type);
+    const heroIdx = types.indexOf("hero");
+    const skillsIdx = types.indexOf("skills");
+    expect(heroIdx).toBeGreaterThanOrEqual(0);
+    expect(skillsIdx).toBe(heroIdx + 1);
   });
 
   it("warnings field is present when validation finds issues (advisory only)", async () => {
