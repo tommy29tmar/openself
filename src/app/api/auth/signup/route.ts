@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     // Validate email
     if (!email || typeof email !== "string" || !EMAIL_RE.test(email)) {
       return NextResponse.json(
-        { success: false, error: "Valid email is required", code: "USERNAME_INVALID" },
+        { success: false, error: "Valid email is required", code: "EMAIL_INVALID" },
         { status: 400 },
       );
     }
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     // Validate password
     if (!password || typeof password !== "string" || password.length < 8) {
       return NextResponse.json(
-        { success: false, error: "Password must be at least 8 characters", code: "USERNAME_INVALID" },
+        { success: false, error: "Password must be at least 8 characters", code: "PASSWORD_TOO_SHORT" },
         { status: 400 },
       );
     }
