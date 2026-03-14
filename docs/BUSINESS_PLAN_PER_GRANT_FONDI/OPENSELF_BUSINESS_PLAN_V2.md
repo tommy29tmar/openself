@@ -42,6 +42,8 @@ Ma il problema va oltre la presentazione. I professionisti indipendenti — free
 
 ### La soluzione
 
+OpenSelf incarna il principio dello **"Slow Internet"**: come Slow Food ha ridefinito il cibo privilegiando qualità e autenticità sull'industrializzazione, OpenSelf ridefinisce la presenza online. Non posting compulsivo, non profili curati manualmente per apparire — ma esperienze vissute che si raccontano da sole, attraverso una pagina che respira e cresce con la persona. L'antidoto alla professionalità performativa di LinkedIn e all'ansia da aggiornamento dei social media.
+
 **OpenSelf** è una piattaforma di identità professionale digitale che trasforma una conversazione in una pagina professionale vivente e un profilo progressivamente verificato. L'utente non compila moduli: parla — a voce o via chat — e un agente AI con memoria episodica a quattro livelli estrae fatti, competenze, esperienze e tratti identitari, componendo una pagina personalizzata con 19 tipologie di sezione, quattro template di layout e un sistema di identità visiva proprietario (Presence System). Cinque connettori (GitHub, LinkedIn, RSS/Atom, Spotify, Strava) alimentano la pagina in modo continuo; un processo autonomo a tre livelli mantiene il profilo coerente e aggiornato senza intervento dell'utente.
 
 L'arricchimento del profilo è progressivo e trasparente: il livello L1 (auto-dichiarato) cattura le informazioni dalla conversazione; il livello L2 (verificato da connettori) conferma e arricchisce le dichiarazioni con dati provenienti da fonti esterne. Il Fact Clustering con 14 identity matcher categoriali unifica automaticamente le informazioni da fonti diverse — "Python" menzionato in conversazione e presente nei repository GitHub diventa un singolo fatto verificato da due fonti indipendenti. Il livello Portfolio+ introduce badge verificati e la generazione di un dossier professionale PDF con indicazione delle fonti di verifica per ciascun dato.
@@ -255,6 +257,8 @@ OpenSelf è una piattaforma SaaS che genera, mantiene e aggiorna autonomamente l
 
 L'architettura si fonda su un principio radicale: **conversation-first, not form-first** (prima la conversazione, non il modulo). L'utente non seleziona template, non compila campi, non carica documenti. Parla — a voce tramite Speech-to-Text o via chat testuale — e un agente AI dotato di memoria persistente a quattro livelli, 25 strumenti operativi e un sistema di Journey Intelligence a 6 stati costruisce progressivamente una rappresentazione professionale ricca, coerente, personalizzata e progressivamente verificata.
 
+La filosofia alla base del prodotto è lo **"Slow Internet"** — l'antidoto alla presenza online performativa e all'ansia da aggiornamento costante. Dove LinkedIn richiede posting compulsivo e auto-promozione, dove i social media premiano l'engagement a scapito dell'autenticità, OpenSelf propone un paradigma radicalmente diverso: le esperienze professionali vissute — progetti completati, articoli pubblicati, competenze dimostrate — alimentano automaticamente la pagina attraverso i connettori e il worker autonomo. Il professionista vive la propria carriera; OpenSelf la racconta.
+
 ### 3.2 Architettura funzionale
 
 #### 3.2.1 Memoria a quattro livelli
@@ -360,7 +364,7 @@ Il layer di astrazione (Drizzle ORM) garantisce portabilità futura verso Postgr
 
 OpenSelf non è un website builder con un chatbot aggiunto. È un cambio di paradigma nell'interazione tra persona e presenza digitale: dalla compilazione manuale alla **conversazione come interfaccia primaria**, dalla pagina statica alla **pagina vivente** che si aggiorna autonomamente, dal formato unico per tutti alla **rappresentazione personale unica** generata dall'intelligenza artificiale, dalla pagina come presentazione alla **pagina come credenziale professionale progressivamente verificata**.
 
-L'innovazione non risiede in una singola funzionalità ma nell'integrazione di undici innovazioni tecniche in un sistema coerente che nessun competitor ha mai tentato di assemblare.
+L'innovazione non risiede in una singola funzionalità ma nell'integrazione di undici innovazioni tecniche in un sistema coerente che nessun competitor ha mai tentato di assemblare. È l'incarnazione tecnologica dello "Slow Internet": un'architettura progettata affinché la presenza online si alimenti dalle esperienze reali del professionista, non dalla sua capacità di produrre contenuti per un algoritmo.
 
 ### 4.2 Le undici innovazioni chiave
 
@@ -700,6 +704,8 @@ Il pricing di OpenSelf è posizionato tra i page builder personali e i SaaS prof
 | Pro | EUR 4,99/mese o EUR 49,99/anno | Worker autonomo, tutti i connettori, memoria completa, dominio custom, content curation | Professionisti che vogliono una pagina vivente |
 | Portfolio+ | EUR 9,99/mese o EUR 99,99/anno | Badge verificati (L2), dossier professionale PDF, curation prioritaria | Professionisti che necessitano di credibilità verificata |
 
+**Nota IVA.** I prezzi indicati sono IVA esclusa. Il prezzo al consumatore finale include IVA al 22%: EUR 6,09/mese (Pro) e EUR 12,19/mese (Portfolio+). Le proiezioni finanziarie di questo piano utilizzano i ricavi netti IVA esclusa.
+
 ### 7.2 Economia unitaria
 
 I costi variabili per utente Pro sono stati calcolati sui token reali generati in un mese di utilizzo tipico: 4 sessioni da 15 turni + worker 4 volte a settimana + 4 connettori attivi. Prezzi Haiku 4.5 con cache dei prompt (cache read = 10%) e API Batch (-50%) per i job del worker. Cambio EUR/USD = 0,92.
@@ -751,37 +757,50 @@ Le proiezioni seguono ipotesi deliberatamente conservative: nessun effetto viral
 | LLM — utenti gratuiti (MAU ~100/400/1.000) | EUR 252 | EUR 1.008 | EUR 2.520 |
 | LLM — utenti Pro (MAU) | EUR 193 | EUR 773 | EUR 1.932 |
 | LLM — utenti Portfolio+ (MAU) | EUR 36 | EUR 144 | EUR 360 |
-| Infrastruttura Hetzner | EUR 120 | EUR 300 | EUR 600 |
+| Infrastruttura Hetzner (web + worker) | EUR 150 | EUR 300 | EUR 480 |
 | Strumenti SaaS (monitoraggio, CDN, email) | EUR 180 | EUR 300 | EUR 480 |
-| **TOTALE COSTI VARIABILI** | **EUR 781** | **EUR 2.525** | **EUR 5.892** |
-| **MARGINE LORDO** | **EUR 155 (17%)** | **EUR 4.214 (63%)** | **EUR 12.975 (69%)** |
+| **TOTALE COSTI VARIABILI** | **EUR 811** | **EUR 2.525** | **EUR 5.772** |
+| **MARGINE LORDO** | **EUR 125 (13%)** | **EUR 4.214 (63%)** | **EUR 13.095 (69%)** |
 | **COSTI FISSI** | | | |
 | Compenso amministratore CEO | EUR 18.000 | EUR 21.600 | EUR 24.000 |
 | Contributi INPS Gestione Separata (24%) | EUR 4.320 | EUR 5.184 | EUR 5.760 |
-| Collaboratore tecnico | EUR 0 | EUR 12.000 | EUR 24.000 |
+| Collaboratore tecnico (contratto P.IVA) | EUR 0 | EUR 12.000 | EUR 24.000 |
 | Legale / Commercialista | EUR 3.000 | EUR 4.000 | EUR 5.000 |
 | Strumenti AI per sviluppo | EUR 1.560 | EUR 1.560 | EUR 1.560 |
 | Dominio openself.dev | EUR 30 | EUR 30 | EUR 30 |
 | Diritto camerale CCIAA + tassa gov. | EUR 510 | EUR 510 | EUR 510 |
-| Registrazione marchio EUIPO | EUR 900 | EUR 0 | EUR 0 |
-| Costituzione SRLS | EUR 800 | EUR 0 | EUR 0 |
-| Consulenza privacy/conformità | EUR 1.500 | EUR 0 | EUR 0 |
-| Attrezzatura di sviluppo (PC) | EUR 2.500 | EUR 0 | EUR 0 |
+| Conto corrente business | EUR 108 | EUR 108 | EUR 108 |
+| PEC + firma digitale (rinnovo annuale) | — | EUR 30 | EUR 30 |
+| Deposito bilancio CCIAA | — | EUR 130 | EUR 130 |
+| Registrazione marchio EUIPO | EUR 900 | — | — |
+| Costituzione SRLS | EUR 800 | — | — |
+| Consulenza privacy/conformità | EUR 1.500 | EUR 500 | EUR 500 |
+| Attrezzatura di sviluppo (PC) | EUR 2.500 | — | — |
 | Marketing e contenuti | EUR 600 | EUR 2.400 | EUR 4.800 |
 | Commissioni di pagamento (Stripe) | EUR 70 | EUR 300 | EUR 700 |
-| **TOTALE COSTI FISSI** | **EUR 33.790** | **EUR 47.584** | **EUR 66.360** |
-| **EBIT** | **-EUR 33.635** | **-EUR 43.370** | **-EUR 53.385** |
+| **TOTALE COSTI FISSI** | **EUR 33.898** | **EUR 48.352** | **EUR 67.128** |
+| **EBIT** | **-EUR 33.773** | **-EUR 44.138** | **-EUR 54.033** |
 
-La crescita del margine lordo dal 17% (Anno 1) al 69% (Anno 3) è strutturale: ogni utente pagante aggiunto diluisce il costo degli utenti gratuiti. Il deficit annuale è coperto dal contributo Pre-Seed 3.0 nei primi 18 mesi e da capitale del fondatore + ricavi crescenti nel periodo successivo.
+La crescita del margine lordo dal 13% (Anno 1) al 69% (Anno 3) è strutturale: ogni utente pagante aggiunto diluisce il costo degli utenti gratuiti. Il deficit annuale è coperto dal contributo Pre-Seed 3.0 nei primi 18 mesi e da capitale del fondatore + ricavi crescenti nel periodo successivo.
+
+**Investimento pre-revenue.** Prima della costituzione della SRLS, il fondatore ha sostenuto a titolo personale investimenti preparatori per circa EUR 2.000-2.500: strumenti AI per lo sviluppo (~EUR 130/mese × 18 mesi di sviluppo), dominio openself.dev, infrastruttura Hetzner per la fase di sviluppo e test. Questi costi non rientrano nel piano finanziario della SRLS ma documentano l'impegno e la validazione tecnica precedenti alla richiesta di contributo.
 
 **Dettaglio delle voci di costo:**
 - **Compenso amministratore SRLS** (non stipendio): il fondatore percepisce un compenso come amministratore unico della SRLS, deliberato dall'assemblea. L'importo è mantenuto contenuto nei primi 3 anni per massimizzare l'efficienza del capitale.
-- **Contributi INPS Gestione Separata** (24% del compenso lordo): aliquota ridotta in quanto il fondatore mantiene la copertura contributiva principale come lavoratore dipendente presso CDP.
+- **Contributi INPS Gestione Separata** (24% del compenso lordo): aliquota ridotta in quanto il fondatore mantiene la copertura contributiva principale come lavoratore dipendente presso CDP. L'aliquota standard per i non iscritti ad altra gestione sarebbe 26,07%.
+- **Collaboratore tecnico** (contratto P.IVA): collaboratore esterno ingaggiato con contratto di prestazione professionale a partita IVA. Non è un dipendente: non genera obblighi di TFR, ferie, contributi a carico dell'azienda. Il compenso indicato è il lordo fatturato dal collaboratore.
 - **Strumenti AI per sviluppo** (EUR 1.560/anno): Claude Max (~EUR 90/mese), ChatGPT Plus (~EUR 20/mese), Gemini Pro (~EUR 20/mese). Costituiscono il "team di sviluppo aumentato".
 - **Attrezzatura di sviluppo** (EUR 2.500 una tantum): workstation PC per lo sviluppo locale, test LLM e debug.
 - **Registrazione marchio EUIPO** (EUR 900 una tantum): protezione del marchio "OpenSelf" nelle classi 9 e 42 (software e SaaS) sul territorio dell'Unione Europea.
-- **Costituzione SRLS** (EUR 800 una tantum): atto costitutivo, PEC, firma digitale, iscrizione CCIAA, apertura posizioni INPS/INAIL.
-- **Consulenza privacy/conformità** (EUR 1.500 Anno 1): DPIA, redazione Informativa Privacy e Condizioni d'uso conformi al GDPR e all'AI Act, revisione legale dei flussi dati dei connettori.
+- **Costituzione SRLS** (EUR 800 una tantum): atto costitutivo, PEC, firma digitale, iscrizione CCIAA, apertura posizioni INPS/INAIL. Il costo include la prima annualità di PEC e firma digitale; i rinnovi successivi sono indicati separatamente.
+- **Conto corrente business** (EUR 108/anno): conto corrente dedicato alla SRLS (es. Qonto, Finom — EUR 9/mese per piano base con POS virtuale e fatturazione elettronica integrata).
+- **PEC + firma digitale rinnovo** (EUR 30/anno da Anno 2): rinnovo annuale della casella PEC e del certificato di firma digitale. La prima annualità è inclusa nella voce di costituzione.
+- **Deposito bilancio CCIAA** (EUR 130/anno da Anno 2): diritti di segreteria e bolli per il deposito annuale del bilancio d'esercizio presso la Camera di Commercio.
+- **Consulenza privacy/conformità**: Anno 1 EUR 1.500 una tantum (DPIA, Informativa Privacy, Condizioni d'uso GDPR/AI Act, revisione flussi dati connettori). Anni successivi EUR 500/anno per aggiornamento periodico della documentazione e revisione di nuove funzionalità.
+
+**Note fiscali.**
+- **IRAP**: la SRLS iscritta come startup innovativa beneficia dell'esenzione IRAP per i primi 5 anni di attività (art. 26 DL 179/2012, come modificato). Le proiezioni non includono IRAP nel periodo considerato.
+- **IRES**: le perdite fiscali generate nei primi anni sono riportabili a nuovo senza limite di tempo e compensabili con i redditi futuri nella misura dell'80% (art. 84 TUIR). Questo significa che quando OpenSelf raggiungerà la profittabilità, il carico fiscale effettivo sarà significativamente ridotto per diversi anni.
 
 ### 7.5 Piano di utilizzo del contributo Pre-Seed 3.0
 
@@ -791,34 +810,36 @@ Pre-Seed 3.0 (Lazio Innova) è un **contributo a fondo perduto** — non un mutu
 |---|---|---|---|
 | Personale — Compenso amministratore CEO | EUR 13.500 | EUR 13.500 | EUR 27.000 |
 | Contributi INPS (24%) | EUR 3.240 | EUR 3.240 | EUR 6.480 |
-| Personale — Collaboratore tecnico (da M10) | EUR 0 | EUR 9.000 | EUR 9.000 |
+| Personale — Collaboratore tecnico P.IVA (da M10) | EUR 0 | EUR 9.000 | EUR 9.000 |
 | Consulenza legale / commercialista | EUR 2.250 | EUR 2.250 | EUR 4.500 |
-| Consulenza privacy/conformità | EUR 1.500 | EUR 0 | EUR 1.500 |
+| Consulenza privacy/conformità | EUR 1.500 | EUR 250 | EUR 1.750 |
 | Tecnologie e licenze (LLM API + SaaS + AI dev tools) | EUR 1.305 | EUR 1.305 | EUR 2.610 |
 | Infrastruttura cloud (Hetzner) | EUR 90 | EUR 180 | EUR 270 |
 | Attrezzatura sviluppo (PC) | EUR 2.500 | EUR 0 | EUR 2.500 |
 | Costituzione SRLS + PEC + firma digitale | EUR 800 | EUR 0 | EUR 800 |
 | Registrazione marchio EUIPO | EUR 900 | EUR 0 | EUR 900 |
 | Diritto camerale + tassa gov. (18 mesi) | EUR 383 | EUR 383 | EUR 765 |
+| Conto corrente business | EUR 81 | EUR 81 | EUR 162 |
+| Rinnovi e adempimenti (PEC, firma, bilancio) | EUR 0 | EUR 160 | EUR 160 |
 | Marketing e contenuti | EUR 450 | EUR 1.350 | EUR 1.800 |
 | Commissioni di pagamento (Stripe) | EUR 35 | EUR 105 | EUR 140 |
 | Dominio | EUR 23 | EUR 23 | EUR 45 |
-| **TOTALE** | **EUR 26.975** | **EUR 31.335** | **EUR 58.310** |
+| **TOTALE** | **EUR 27.057** | **EUR 31.827** | **EUR 58.882** |
 
 **Due viste del modello finanziario:**
-- **Vista progetto 18 mesi** (scope Pre-Seed 3.0): spese EUR 58.310 coperte dal contributo. Questo è ciò che Lazio Innova valuta.
+- **Vista progetto 18 mesi** (scope Pre-Seed 3.0): spese EUR 58.882 coperte dal contributo. Questo è ciò che Lazio Innova valuta.
 - **Vista sostenibilità 3 anni** (mostra il percorso verso il pareggio): le proiezioni Anno 2-3 mostrano che il business può raggiungere la sostenibilità. Le spese oltre i 18 mesi del grant sono coperte da ricavi + capitale del fondatore.
 
-**Allocazione del contributo:** EUR 58.310 di spese contro un tetto di EUR 145.000 (con EUR 10.000 angel per moltiplicatore 2x). Il margine residuo di EUR 86.690 è buffer per: costi di compliance imprevisti, espansione del team se la trazione supera le attese, spesa marketing aggiuntiva. Senza angel: tetto EUR 100.000, comunque sufficiente a coprire il piano base di EUR 58.310.
+**Allocazione del contributo:** EUR 58.882 di spese contro un tetto di EUR 145.000 (con EUR 10.000 angel per moltiplicatore 2x). Il margine residuo di EUR 86.118 è buffer per: costi di compliance imprevisti, espansione del team se la trazione supera le attese, spesa marketing aggiuntiva. Senza angel: tetto EUR 100.000, comunque sufficiente a coprire il piano base di EUR 58.882.
 
 **Flusso di cassa con contributo:**
 
 | Periodo | Ricavi | Costi | Deficit | Contributo Pre-Seed 3.0 | Saldo |
 |---|---|---|---|---|---|
-| M1-M9 (beta+lancio) | ~EUR 0 | EUR 26.975 | -EUR 26.975 | +EUR 26.975 | EUR 0 |
-| M10-M18 (crescita) | ~EUR 700 | EUR 31.335 | -EUR 30.635 | +EUR 30.635 | EUR 0 |
-| **Totale 18 mesi** | **~EUR 700** | **EUR 58.310** | **-EUR 57.610** | **+EUR 57.610** | **EUR 0** |
-| M19-M36 (post-grant) | ~EUR 20.000 | ~EUR 55.000 | -EUR 35.000 | — | Fondatore + ricavi |
+| M1-M9 (beta+lancio) | ~EUR 0 | EUR 27.057 | -EUR 27.057 | +EUR 27.057 | EUR 0 |
+| M10-M18 (crescita) | ~EUR 700 | EUR 31.827 | -EUR 31.127 | +EUR 31.127 | EUR 0 |
+| **Totale 18 mesi** | **~EUR 700** | **EUR 58.882** | **-EUR 58.182** | **+EUR 58.182** | **EUR 0** |
+| M19-M36 (post-grant) | ~EUR 20.000 | ~EUR 57.000 | -EUR 37.000 | — | Fondatore + ricavi |
 
 ### 7.6 Infrastruttura — Piano di crescita
 
@@ -826,7 +847,7 @@ L'architettura SQLite one-file-per-identity è adeguata fino a migliaia di utent
 
 | Utenti registrati | MAU stimati | Configurazione | Costo/mese |
 |-------------------|-------------|---------------|------------|
-| 0-300 | 0-75 | Hetzner CX22 — EUR 3,99/mese | EUR 4-10 |
+| 0-300 | 0-75 | Hetzner CX23 (web) + CX22 (worker) | EUR 10-15 |
 | 300-1.500 | 75-375 | Hetzner CX32 — EUR 6,80/mese | EUR 15-25 |
 | 1.500-5.000 | 375-1.250 | CX42 (EUR 16,40) + CX22 worker (EUR 3,99) | EUR 25-40 |
 
@@ -838,16 +859,16 @@ L'analisi utilizza il **margine di contribuzione** (ricavo per utente meno costo
 
 | Parametro | Valore |
 |-----------|--------|
-| Costi fissi mensili a regime (Anno 3) | CEO EUR 2.000 + INPS EUR 480 + collaboratore EUR 2.000 + legale EUR 417 + AI tools EUR 130 + marketing EUR 400 + Stripe EUR 58 + CCIAA EUR 43 + infra/SaaS EUR 2 = **~EUR 5.530/mese** |
+| Costi fissi mensili a regime (Anno 3) | CEO EUR 2.000 + INPS EUR 480 + collaboratore EUR 2.000 + legale EUR 417 + AI tools EUR 130 + marketing EUR 400 + Stripe EUR 58 + CCIAA EUR 43 + conto corrente EUR 9 + rinnovi EUR 13 + privacy EUR 42 + dominio EUR 3 = **~EUR 5.594/mese** |
 | Margine di contribuzione medio per utente pagante (mix 350 Pro + 50 Portfolio+) | Ricavo medio ponderato EUR 5,62/mese - costo variabile medio EUR 0,48/mese = **EUR 5,14/utente/mese** |
-| **Utenti paganti per pareggio** | EUR 5.530 / EUR 5,14 ≈ **~1.076 utenti paganti** |
+| **Utenti paganti per pareggio** | EUR 5.594 / EUR 5,14 ≈ **~1.088 utenti paganti** |
 
-Il pareggio operativo a ~1.076 utenti paganti è un obiettivo post-Anno 3, raggiungibile con l'espansione europea (8 lingue pronte) e l'introduzione di tier a maggiore valore aggiunto (Pro+ Coach a EUR 14,99/mese). Lo scenario base proietta 400 utenti paganti a M+36; il pareggio richiede una crescita continuata oltre il piano triennale.
+Il pareggio operativo a ~1.088 utenti paganti è un obiettivo post-Anno 3, raggiungibile con l'espansione europea (8 lingue pronte) e l'introduzione di tier a maggiore valore aggiunto (Pro+ Coach a EUR 14,99/mese). Lo scenario base proietta 400 utenti paganti a M+36; il pareggio richiede una crescita continuata oltre il piano triennale.
 
 **Percorso verso la sostenibilità:**
 - **M1-M18 (periodo grant):** deficit coperto dal contributo Pre-Seed 3.0.
 - **M19-M36 (post-grant):** deficit coperto da capitale del fondatore + ricavi crescenti.
-- **M36+ (percorso pareggio):** espansione EU, introduzione Pro+ Coach, crescita organica verso 1.076 utenti paganti.
+- **M36+ (percorso pareggio):** espansione EU, introduzione Pro+ Coach, crescita organica verso 1.088 utenti paganti.
 
 ### 7.8 Analisi di sensibilità
 
@@ -900,7 +921,7 @@ Il piano di crescita del team è dettagliato nella Sezione 5.3. In sintesi: fond
 
 L'architettura attuale è progettata per crescere verticalmente fino a migliaia di utenti attivi senza modifiche strutturali. Lo stack — Next.js App Router, SQLite (one-file-per-identity), worker asincrono, Coolify su Hetzner — è ottimizzato per semplicità operativa e costo contenuto nella fase di validazione.
 
-- **Attuale — Fase 0-1 (0-500 utenti):** Hetzner CX23 (2 vCPU, 4GB RAM), SQLite, costo infrastruttura ~EUR 30-50/mese
+- **Attuale — Fase 0-1 (0-500 utenti):** Hetzner CX23 (web) + CX22 (worker), SQLite, costo infrastruttura ~EUR 10-15/mese
 - **Crescita verticale — Fase 2 (500-2.000 utenti):** Upgrade a Hetzner CX32/CX42, CDN per risorse statiche, costo stimato ~EUR 100-200/mese
 - **Architettura distribuita — Fase 3 (2.000-5.000 utenti):** Separazione worker da server applicativo, costo stimato ~EUR 300-500/mese
 
@@ -941,7 +962,7 @@ OpenSelf è un progetto a fondatore singolo in fase pre-revenue. I rischi princi
 | Mercato | **Mancata validazione del riscontro prodotto-mercato.** I 50 utenti beta non confermano la proposta di valore o la fidelizzazione è troppo bassa. | ALTO | Criterio di avanzamento esplicito: se NPS < 30 a M+3 o fidelizzazione M+1 < 30%, nessun investimento aggiuntivo prima di un ciclo di ripensamento. Interviste qualitative strutturate con ogni utente beta. Costo marginale della fase beta quasi zero. |
 | Competitivo | **Entrata di un attore grande** (LinkedIn, Wix, Notion). | MEDIO | I grandi attori hanno cicli di sviluppo lunghi e non possono convergere su questo posizionamento senza cannibalizzare il loro business principale. Il vantaggio di OpenSelf è nell'integrazione sistemica (4 livelli memoria + 5 connettori + worker a 3 livelli + Soul Profile + Journey Intelligence + Fact Clustering), non in una singola funzionalità. |
 | Competitivo | **Pressione competitiva sul pricing.** Alternative gratuite (Carrd, Linktree free tier) rendono EUR 4,99/mese una barriera psicologica per i freelancer italiani. | MEDIO | Livello gratuito genuinamente utile come hook. Il valore del coach AI si dimostra con l'uso — la conversione avviene dopo che l'utente ha sperimentato il prodotto. Il Portfolio+ offre un valore tangibile e quantificabile (dossier verificato) che i competitor gratuiti non possono replicare. |
-| Tecnologico | **Aumento dei costi LLM o discontinuità di un provider.** | MEDIO | Instradamento multi-provider già operativo (Anthropic, OpenAI, Google, Ollama). Il costo LLM stimato a regime (Haiku 4.5) è <EUR 0,05/utente/mese nel livello gratuito. La tendenza strutturale dei costi LLM è in calo di oltre il 90% annuo. |
+| Tecnologico | **Aumento dei costi LLM o discontinuità di un provider.** | MEDIO | Instradamento multi-provider già operativo (Anthropic, OpenAI, Google, Ollama). Il costo LLM stimato a regime (Haiku 4.5) è ~EUR 0,21/utente/mese nel livello gratuito. La tendenza strutturale dei costi LLM è in calo di oltre il 90% annuo. |
 | Tecnologico | **Dipendenza da strumenti AI per lo sviluppo.** | MEDIO | Approccio multi-strumento deliberato: 3 provider AI distinti eliminano il punto unico di vulnerabilità. Le competenze sono trasferibili tra strumenti. |
 | Legale/HR | **Mancata autorizzazione del datore di lavoro per attività parallela.** | MEDIO | Il processo di autorizzazione è avviato in parallelo alla beta gratuita, prima di qualsiasi monetizzazione. In caso di diniego, il progetto rimane nella fase beta gratuita fino alla risoluzione. |
 | Tecnologico | **Comportamento inaffidabile dell'agente LLM.** | BASSO | Action Claim Guard anti-allucinazione, oltre 3.077 test, Journey Intelligence con policy per stato, conferma esplicita per operazioni distruttive, Extended Thinking. |
@@ -1024,7 +1045,7 @@ OpenSelf affronta un problema strutturale del mercato del lavoro contemporaneo: 
 
 **Sovranità digitale italiana ed europea.** OpenSelf è un prodotto AI concepito, sviluppato e ospitato in Europa. I dati degli utenti risiedono su infrastruttura europea (Hetzner, Helsinki). L'architettura è conforme fin dalla progettazione al GDPR e all'AI Act. Nessun dato viene ceduto a terzi, utilizzato per la pubblicità, o impiegato per l'addestramento di modelli AI senza consenso esplicito. In un mercato dominato da piattaforme americane che monetizzano i dati personali degli utenti europei, OpenSelf rappresenta un'alternativa strutturalmente allineata ai valori e alla normativa dell'Unione Europea.
 
-**Creazione di occupazione.** Il piano prevede la creazione di 2+ posti di lavoro equivalenti a tempo pieno entro M+18, con crescita progressiva a 3 persone entro M+24. Le assunzioni privilegiano talento italiano ed europeo, con un focus sulle competenze AI/LLM — un settore ad alta domanda e alta qualificazione.
+**Creazione di occupazione.** Il piano prevede 2 posizioni lavorative entro M+18 (fondatore a tempo pieno + primo collaboratore tecnico P.IVA), con crescita progressiva a 3 equivalenti a tempo pieno entro M+24. Le collaborazioni privilegiano talento italiano ed europeo, con un focus sulle competenze AI/LLM — un settore ad alta domanda e alta qualificazione.
 
 ### 10.2 Impatto sull'ecosistema startup italiano
 
@@ -1044,9 +1065,9 @@ La sostenibilità economica di OpenSelf si fonda su quattro pilastri verificabil
 
 2. **Costi LLM in calo strutturale.** Oltre il 90% di riduzione tra il 2023 e il 2026. Tendenza guidata dalla concorrenza tra provider, dall'ottimizzazione hardware e dalla compressione dei modelli. Ogni riduzione migliora direttamente il margine senza richiedere aumenti di prezzo.
 
-3. **Costi operativi contenuti.** EUR 20.000-40.000/anno nella fase iniziale, grazie all'architettura ottimizzata (SQLite, Hetzner, instradamento LLM per livello di costo) e al modello fondatore singolo potenziato dall'AI. Il contributo Pre-Seed 3.0 copre interamente questi costi per i primi 18 mesi.
+3. **Costi operativi contenuti.** EUR 25.000-45.000/anno nella fase iniziale, grazie all'architettura ottimizzata (SQLite, Hetzner, instradamento LLM per livello di costo) e al modello fondatore singolo potenziato dall'AI. Il contributo Pre-Seed 3.0 copre interamente questi costi per i primi 18 mesi.
 
-4. **Pareggio raggiungibile.** Il punto di pareggio operativo è raggiungibile con ~1.076 utenti paganti (mix Pro + Portfolio+). Con l'espansione europea e l'introduzione del Pro+ Coach da Anno 4, il pareggio è un obiettivo realistico nella traiettoria Anno 4-5.
+4. **Pareggio raggiungibile.** Il punto di pareggio operativo è raggiungibile con ~1.088 utenti paganti (mix Pro + Portfolio+). Con l'espansione europea e l'introduzione del Pro+ Coach da Anno 4, il pareggio è un obiettivo realistico nella traiettoria Anno 4-5.
 
 ### 10.4 Perché finanziare OpenSelf
 
@@ -1060,7 +1081,7 @@ OpenSelf presenta caratteristiche distintive rispetto alla maggioranza delle pro
 
 4. **Vantaggio competitivo europeo.** In un mercato post-AI Act, la conformità fin dalla progettazione non è un optional: è un requisito e un differenziatore competitivo. OpenSelf è nativamente conforme al GDPR e all'AI Act, con dati in Europa e nessuna cessione a terzi.
 
-5. **Percorso chiaro verso la sostenibilità.** Margini lordi del 91%+ sul livello Pro, costi variabili in calo strutturale, pareggio raggiungibile a ~1.076 utenti paganti. Il contributo Pre-Seed 3.0 copre i primi 18 mesi; i ricavi crescenti e il capitale del fondatore coprono il periodo successivo.
+5. **Percorso chiaro verso la sostenibilità.** Margini lordi del 91%+ sul livello Pro, costi variabili in calo strutturale, pareggio raggiungibile a ~1.088 utenti paganti. Il contributo Pre-Seed 3.0 copre i primi 18 mesi; i ricavi crescenti e il capitale del fondatore coprono il periodo successivo.
 
 6. **Direzione strategica con fondamenta solide.** OpenSelf non si limita al personal branding: ha una direzione strategica chiara verso l'identità professionale digitale certificata. I livelli L1+L2 sono già operativi, l'architettura è predisposta per l'evoluzione verso L3, e il dialogo con operatori del settore bancario ha validato la domanda di mercato. Il finanziamento Pre-Seed serve a costruire la base utenti e la trazione necessarie per rendere questa evoluzione possibile nel round successivo.
 
