@@ -173,6 +173,12 @@ export interface UiStrings {
   activityReason: string;
   activitySeverity: string;
 
+  // Presence panel
+  presenceBackground: string;
+  presenceTypography: string;
+  presenceMode: string;
+  presencePresets: string;
+
   // Empty state
   allClear: string;
   noNotifications: string;
@@ -322,6 +328,10 @@ const en: UiStrings = {
   activityProposed: "Proposed",
   activityReason: "Reason",
   activitySeverity: "Severity",
+  presenceBackground: "Background",
+  presenceTypography: "Typography",
+  presenceMode: "Mode",
+  presencePresets: "Preset styles",
   allClear: "All clear",
   noNotifications: "No new notifications",
   chatErrorGeneric: "Something went wrong. Please try again.",
@@ -468,6 +478,10 @@ const it: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravità",
+  presenceBackground: "Sfondo",
+  presenceTypography: "Tipografia",
+  presenceMode: "Modalità",
+  presencePresets: "Stili predefiniti",
   allClear: "Tutto a posto",
   noNotifications: "Nessuna nuova notifica",
   chatErrorGeneric: "Qualcosa è andato storto. Riprova.",
@@ -614,6 +628,10 @@ const de: UiStrings = {
   activityProposed: "Vorgeschlagen",
   activityReason: "Grund",
   activitySeverity: "Schweregrad",
+  presenceBackground: "Hintergrund",
+  presenceTypography: "Typografie",
+  presenceMode: "Modus",
+  presencePresets: "Vordefinierte Stile",
   allClear: "Alles erledigt",
   noNotifications: "Keine neuen Benachrichtigungen",
   chatErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
@@ -760,6 +778,10 @@ const fr: UiStrings = {
   activityProposed: "Proposé",
   activityReason: "Raison",
   activitySeverity: "Gravité",
+  presenceBackground: "Fond",
+  presenceTypography: "Typographie",
+  presenceMode: "Mode",
+  presencePresets: "Styles prédéfinis",
   allClear: "Rien a signaler",
   noNotifications: "Aucune nouvelle notification",
   chatErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
@@ -906,6 +928,10 @@ const es: UiStrings = {
   activityProposed: "Propuesto",
   activityReason: "Razón",
   activitySeverity: "Gravedad",
+  presenceBackground: "Fondo",
+  presenceTypography: "Tipografía",
+  presenceMode: "Modo",
+  presencePresets: "Estilos predefinidos",
   allClear: "Todo en orden",
   noNotifications: "Sin notificaciones nuevas",
   chatErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
@@ -1052,6 +1078,10 @@ const pt: UiStrings = {
   activityProposed: "Proposto",
   activityReason: "Motivo",
   activitySeverity: "Gravidade",
+  presenceBackground: "Fundo",
+  presenceTypography: "Tipografia",
+  presenceMode: "Modo",
+  presencePresets: "Estilos predefinidos",
   allClear: "Tudo em ordem",
   noNotifications: "Nenhuma notificacao nova",
   chatErrorGeneric: "Algo correu mal. Tente novamente.",
@@ -1198,6 +1228,10 @@ const ja: UiStrings = {
   activityProposed: "提案",
   activityReason: "理由",
   activitySeverity: "重要度",
+  presenceBackground: "背景",
+  presenceTypography: "タイポグラフィ",
+  presenceMode: "モード",
+  presencePresets: "プリセットスタイル",
   allClear: "すべて完了",
   noNotifications: "新しい通知はありません",
   chatErrorGeneric: "エラーが発生しました。もう一度お試しください。",
@@ -1344,6 +1378,10 @@ const zh: UiStrings = {
   activityProposed: "建议",
   activityReason: "原因",
   activitySeverity: "严重程度",
+  presenceBackground: "背景",
+  presenceTypography: "字体",
+  presenceMode: "模式",
+  presencePresets: "预设样式",
   allClear: "一切就绪",
   noNotifications: "没有新通知",
   chatErrorGeneric: "出现错误，请重试。",

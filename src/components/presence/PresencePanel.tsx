@@ -8,6 +8,14 @@ import type { PageConfig } from "@/lib/page-config/schema";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "@/lib/layout/contracts";
 import { getLayoutTemplate } from "@/lib/layout/registry";
 import { AvatarSection } from "@/components/settings/AvatarSection";
+import { getUiL10n } from "@/lib/i18n/ui-strings";
+
+/** Map surface id → representative background color for the swatch dot. */
+const SURFACE_SWATCH: Record<string, string> = {
+  canvas: "#fafaf9",
+  clay: "#f5ede0",
+  archive: "#ffffff",
+};
 
 type PresencePanelProps = {
   open: boolean;
@@ -85,6 +93,7 @@ export function PresencePanel({
           onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
           onClose={onClose}
           showHeader={!showMiniPreview}
+          language={language}
         />
       </div>
     );
@@ -114,6 +123,7 @@ export function PresencePanel({
           onLayoutChange={onLayoutChange} onAvatarChange={onAvatarChange}
           onClose={onClose}
           showHeader
+          language={language}
         />
       </div>
     </>
@@ -135,13 +145,17 @@ type PresencePanelControlsProps = {
   onAvatarChange: () => void;
   onClose: () => void;
   showHeader?: boolean;
+  language: string;
 };
 
 function PresencePanelControls({
   surfaces, voices, surface, voice, light, layoutTemplate,
   onSurfaceChange, onVoiceChange, onLightChange, onComboSelect, onLayoutChange, onAvatarChange, onClose,
   showHeader = true,
+  language,
 }: PresencePanelControlsProps) {
+  const l10n = getUiL10n(language);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       {showHeader && (
@@ -155,14 +169,14 @@ function PresencePanelControls({
 
       {/* Signature Combinations — first */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Signature Combinations</div>
+        <div style={sectionLabelStyle}>{l10n.presencePresets}</div>
         <SignatureCombos activeSurface={surface} activeVoice={voice} activeLight={light}
           onSelect={onComboSelect} />
       </div>
 
-      {/* Surface */}
+      {/* Surface → Background */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Surface</div>
+        <div style={sectionLabelStyle}>{l10n.presenceBackground}</div>
         {surfaces.map(s => (
           <button key={s.id} type="button" aria-pressed={surface === s.id} onClick={() => onSurfaceChange(s.id)}
             style={{
@@ -172,15 +186,28 @@ function PresencePanelControls({
               cursor: "pointer",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 500, color: surface === s.id ? "#c9a96e" : "#e8e4de" }}>{s.displayName}</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{s.description.split(".")[0]}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  background: SURFACE_SWATCH[s.id] ?? "#ccc",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontSize: 12, fontWeight: 500, color: surface === s.id ? "#c9a96e" : "#e8e4de" }}>{s.displayName}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2, marginLeft: 20 }}>{s.description.split(".")[0]}</div>
           </button>
         ))}
       </div>
 
-      {/* Voice */}
+      {/* Voice → Typography */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Voice</div>
+        <div style={sectionLabelStyle}>{l10n.presenceTypography}</div>
         {voices.map(v => (
           <button key={v.id} type="button" aria-pressed={voice === v.id} onClick={() => onVoiceChange(v.id)}
             style={{
@@ -190,15 +217,18 @@ function PresencePanelControls({
               cursor: "pointer",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 500, color: voice === v.id ? "#c9a96e" : "#e8e4de" }}>{v.displayName}</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{v.headingFont} + {v.bodyFont}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontFamily: `"${v.headingFont}", sans-serif`, fontSize: 13, color: "rgba(255,255,255,0.5)", width: 22, flexShrink: 0, textAlign: "center" }}>Aa</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: voice === v.id ? "#c9a96e" : "#e8e4de" }}>{v.displayName}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2, marginLeft: 30 }}>{v.headingFont} + {v.bodyFont}</div>
           </button>
         ))}
       </div>
 
-      {/* Light */}
+      {/* Light → Mode */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Light</div>
+        <div style={sectionLabelStyle}>{l10n.presenceMode}</div>
         <div style={{ display: "flex", gap: 8 }}>
           {(["day", "night"] as const).map(l => (
             <button key={l} type="button" aria-pressed={light === l} onClick={() => onLightChange(l)}
@@ -218,7 +248,7 @@ function PresencePanelControls({
 
       {/* Layout */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Layout</div>
+        <div style={sectionLabelStyle}>{l10n.layout}</div>
         {LAYOUT_TEMPLATES.map(t => {
           const tmpl = getLayoutTemplate(t);
           return (
@@ -238,15 +268,23 @@ function PresencePanelControls({
 
       {/* Avatar/Photo */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Photo</div>
+        <div style={sectionLabelStyle}>Photo</div>
         <AvatarSection onAvatarChange={onAvatarChange} />
       </div>
 
       {/* Sources */}
       <div>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Sources</div>
+        <div style={sectionLabelStyle}>Sources</div>
         <ConnectorSection />
       </div>
     </div>
   );
 }
+
+const sectionLabelStyle = {
+  fontSize: 10,
+  letterSpacing: "0.15em",
+  textTransform: "uppercase" as const,
+  color: "rgba(255,255,255,0.4)",
+  marginBottom: 10,
+};
