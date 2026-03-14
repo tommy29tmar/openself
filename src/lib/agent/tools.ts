@@ -23,6 +23,7 @@ import { composeOptimisticPage } from "@/lib/services/page-composer";
 import { type PageConfig } from "@/lib/page-config/schema";
 import { listSurfaces, listVoices } from "@/lib/presence";
 import { logEvent } from "@/lib/services/event-service";
+import { repairJsonValue } from "@/lib/agent/tool-call-repair";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
@@ -435,11 +436,8 @@ export function createAgentTools(
         .preprocess((v) => {
           if (typeof v === "object" && v !== null) return v;
           if (typeof v === "string") {
-            try { return JSON.parse(v); } catch { /* fall through */ }
-            // Handle JS object literal syntax: {key: "val"} → {"key": "val"}
-            try { return JSON.parse(v.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3')); } catch { /* fall through */ }
-            // Handle partially-quoted keys: company": "val" → "company": "val"
-            try { return JSON.parse(v.replace(/([{,]\s*)([a-zA-Z_]\w*)"(\s*:)/g, '$1"$2"$3')); } catch { /* fall through */ }
+            // Delegate all JSON repair to the shared repairJsonValue helper
+            try { return JSON.parse(repairJsonValue(v)); } catch { /* fall through */ }
           }
           return v;
         }, z.record(z.unknown()))
@@ -1001,7 +999,20 @@ export function createAgentTools(
 
         let finalSections: PageConfig["sections"];
 
+        if (moveSection && afterSection && sectionOrder && sectionOrder.length > 0) {
+          // Both provided — warn but prefer moveSection (simpler intent)
+          logEvent({ eventType: "tool_call_warning", actor: "system", payload: { tool: "reorder_sections", warning: "Both moveSection and sectionOrder provided — using moveSection" } });
+        }
+
         if (moveSection && afterSection) {
+          // Guard: cannot move hero or footer (fixed structural sections)
+          if (moveSection === "hero" || moveSection === "footer") {
+            return { success: false, error: `Cannot move '${moveSection}' — it is a fixed structural section` };
+          }
+          // Guard: self-move is a no-op
+          if (moveSection === afterSection) {
+            return { success: true, newOrder: existing.sections.map((s) => s.type), hint: "Section is already in position" };
+          }
           // Type-based move: find sections by type and reorder
           const sections = [...existing.sections];
           const moveIdx = sections.findIndex((s) => s.type === moveSection);

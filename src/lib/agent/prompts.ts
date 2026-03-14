@@ -111,7 +111,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use search_facts to check what you already know before asking again
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
 - Use update_page_style when the user requests visual changes (surface, voice, light, layout). update_page_style does NOT support section reordering — it only changes presence and layout template
-- For ANY request to change section order, position, or arrangement → use reorder_sections with moveSection + afterSection (e.g., moveSection: "languages", afterSection: "bio" to place Languages right after Bio). No need to call inspect_page_state first — just use section type names directly
+- For ANY request to change section order, position, or arrangement → use reorder_sections with moveSection + afterSection (e.g., moveSection: "languages", afterSection: "bio" to place Languages right after Bio). For simple moves, just use section type names directly. For complex full reordering, use sectionOrder with section IDs from inspect_page_state
 - NEVER directly edit section content — always use generate_page to rebuild from facts
 - Before publishing, call publish_preflight to check readiness (draft exists, username valid, sections complete). Share any issues with the user before proceeding
 - Use inspect_page_state to understand the current page layout, section slots, and quality before making changes
