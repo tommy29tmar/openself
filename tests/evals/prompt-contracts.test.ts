@@ -93,4 +93,10 @@ describe("prompt contracts", () => {
     const toolsSrc = readFileSync("src/lib/agent/tools.ts", "utf-8");
     expect(toolsSrc).toMatch(/Update the page visual presence.*Does NOT reorder/s);
   });
+
+  it("TOOL_POLICY contains scoped DELETE RESULT TRUST instruction", () => {
+    expect(src).toContain("DELETE RESULT TRUST");
+    // Must be scoped — not blanket "never verify"
+    expect(src).toContain("section removal");
+  });
 });

@@ -255,7 +255,7 @@ describe("personalizer pipeline (integration)", () => {
     expect(bioResult.id).toBe(originalBioSection.id);
 
     // Verify the mocked services were called correctly
-    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "en");
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "en", undefined);
     expect(mockGetActiveFacts).toHaveBeenCalledWith("owner1", undefined);
     expect(mockFilterPublishableFacts).toHaveBeenCalledWith(
       expect.arrayContaining(allFacts.map((f: any) => expect.objectContaining({ id: f.id }))),
