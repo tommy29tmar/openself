@@ -239,7 +239,7 @@ export function createAgentTools(
       createdAt: new Date().toISOString(),
     });
     mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-    return { requiresConfirmation: true, message: `Changing identity/${key} requires confirmation. Explain to the user what will change (old → new value) and ask them to confirm. The pending confirmation is stored — when they confirm in their next message, retry the same tool call with the same target and value.` };
+    return { requiresConfirmation: true, message: `Changing this identity entry requires confirmation. Explain what will change (old → new value) and ask the user to confirm. When they confirm, retry the same operation.` };
   }
 
   /**
@@ -265,7 +265,7 @@ export function createAgentTools(
     });
     _identityBlockedThisTurn = true;
     mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-    return { requiresConfirmation: true, message: `Deleting identity/${key} requires confirmation. Explain to the user what will be removed and ask them to confirm.` };
+    return { requiresConfirmation: true, message: `Deleting this identity entry requires confirmation. Explain what will be removed and ask the user to confirm.` };
   }
 
   type DeleteGateResult =
@@ -493,7 +493,7 @@ export function createAgentTools(
           return {
             success: false,
             error: `A fact for ${category}/${key} already exists with a different value.`,
-            hint: "To update this fact: (1) delete_fact the existing one, (2) create_fact with the new value.",
+            hint: "To update: remove the existing entry first, then add the corrected version.",
             existingFactId: existingFacts[0].id,
           };
         }
@@ -591,13 +591,13 @@ export function createAgentTools(
         if (factId.includes("/") && !factId.match(/^[0-9a-f]{8}-/)) {
           const [cat] = factId.split("/");
           if (cat === "identity") {
-            return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot delete identity fact ${factId} via batch_facts. ALWAYS use delete_fact for identity deletions — it supports the required cross-turn confirmation. Call delete_fact("${factId}") instead.`, created: 0, deleted: 0 };
+            return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot remove identity information in bulk — use the individual removal tool instead, which supports the required confirmation step.`, created: 0, deleted: 0 };
           }
         } else {
           // UUID format: check via DB
           const fact = getFactById(factId, sessionId, readKeys);
           if (fact && fact.category === "identity") {
-            return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot delete identity fact ${factId} via batch_facts. ALWAYS use delete_fact for identity deletions — it supports the required cross-turn confirmation. Call delete_fact("${factId}") instead.`, created: 0, deleted: 0 };
+            return { success: false, code: "IDENTITY_DELETE_BLOCKED", message: `Cannot remove identity information in bulk — use the individual removal tool instead, which supports the required confirmation step.`, created: 0, deleted: 0 };
           }
         }
       }
@@ -606,7 +606,7 @@ export function createAgentTools(
       const deleteFactIds = deleteOps.map(op => (op as { factId: string }).factId);
       const uniqueDeleteFactIds = new Set(deleteFactIds);
       if (uniqueDeleteFactIds.size !== deleteFactIds.length) {
-        return { success: false, error: "DUPLICATE_FACT_IDS", message: "Duplicate factIds in delete operations", created: 0, deleted: 0 };
+        return { success: false, error: "DUPLICATE_FACT_IDS", message: "Duplicate items detected in removal list. Each item should appear only once.", created: 0, deleted: 0 };
       }
 
       // Pre-flight: batch with ≥2 deletes → confirmation required
@@ -644,7 +644,7 @@ export function createAgentTools(
                 createdAt: new Date().toISOString(),
               });
               mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
-              return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, confirmationId: newConfirmationId, message: "Batch deletions factIds do not match the confirmed set. Re-confirm with the correct list.", created: 0, deleted: 0 };
+              return { success: false, code: "REQUIRES_CONFIRMATION", requiresConfirmation: true, confirmationId: newConfirmationId, message: "The items to remove don't match what was confirmed. Please confirm the updated list.", created: 0, deleted: 0 };
             }
           } else {
             // No matching pending — issue new confirmationId
@@ -854,7 +854,7 @@ export function createAgentTools(
 
           const matching = findFactsByOwnerCategoryKey(effectiveOwnerKey, cat, key, readKeys);
           if (matching.length === 0) {
-            return { success: false, error: "No facts found for category/key: " + factId, hint: "Use search_facts to find available facts." };
+            return { success: false, error: "No facts found for category/key: " + factId, hint: "Search for available entries to find the correct one." };
           }
           if (matching.length === 1) {
             let identityAlreadyConfirmed = false;
@@ -884,7 +884,7 @@ export function createAgentTools(
           return {
             success: false,
             code: "REQUIRES_CONFIRMATION",
-            message: `Found ${matching.length} facts matching "${factId}". Present these to the user and ask which to delete. Then call delete_fact with the specific UUID.`,
+            message: `Found ${matching.length} matching items. Ask the user which one to remove, then try again with the specific item.`,
             matchingFacts: matching.map(f => ({ id: f.id, value: typeof f.value === "string" ? f.value.slice(0, 100) : JSON.stringify(f.value).slice(0, 100) })),
           };
         }
@@ -902,7 +902,7 @@ export function createAgentTools(
         const ok = await deleteFact(factId, sessionId, readKeys);
         if (!ok) {
           if (dResult && "consumeOnly" in dResult && dResult.consumeOnly) dResult.consumeOnly();
-          return { success: false, error: "Fact not found", hint: "Use search_facts to find the correct factId, or use category/key format like 'education/dams-torino'." };
+          return { success: false, error: "Fact not found", hint: "Search for available entries to find the correct one." };
         }
         if (dResult && "commit" in dResult) dResult.commit();
         try { recomposeAfterMutation(); } catch (e) {
@@ -1248,7 +1248,7 @@ export function createAgentTools(
       try {
         const facts = getProjectedFacts(effectiveOwnerKey, readKeys);
         if (facts.length === 0) {
-          return { success: false, error: "No facts in knowledge base yet", hint: "Ensure facts exist before generating. Use create_fact first." };
+          return { success: false, error: "No facts in knowledge base yet", hint: "Ensure the relevant information has been saved before generating the page." };
         }
         // Preserve user's style customizations (theme, colors, font) from
         // the existing draft, AND preserve section order/locks from any
@@ -1361,7 +1361,7 @@ export function createAgentTools(
           actor: "assistant",
           payload: { requestId, tool: "generate_page", error: String(error) },
         });
-        return { success: false, error: String(error), hint: "Ensure facts exist before generating. Use create_fact first." };
+        return { success: false, error: String(error), hint: "Ensure the relevant information has been saved before generating the page." };
       }
     },
   }),

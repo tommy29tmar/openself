@@ -137,16 +137,14 @@ export async function createFact(
 
       if (!existingVal || !newVal) {
         throw new Error(
-          `Fact experience/${input.key} already exists but value could not be compared. ` +
-          `Delete the existing fact first, then create a new one, or use a different key.`
+          `This experience entry already exists but could not be compared. Remove the existing one first, then add the new one.`
         );
       }
       const existingCompany = String(existingVal.company ?? "").toLowerCase();
       const newCompany = String(newVal.company ?? "").toLowerCase();
       if (existingCompany && newCompany && existingCompany !== newCompany) {
         throw new Error(
-          `Fact experience/${input.key} already exists for company '${existingVal.company}'. ` +
-          `Use a different key, or delete the existing fact first then create a new one.`
+          `An experience entry with this key already exists. Remove the existing one first, then add the corrected version.`
         );
       }
     }

@@ -220,7 +220,7 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(false);
-      expect((result as any).hint).toContain("search_facts");
+      expect((result as any).hint).toContain("Search for available entries");
     });
   });
 });

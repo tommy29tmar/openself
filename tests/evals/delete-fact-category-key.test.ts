@@ -86,7 +86,7 @@ describe("create_fact duplicate detection", () => {
       toolCtx,
     );
     expect(result2.success).toBe(false);
-    expect((result2 as any).hint).toContain("delete_fact");
+    expect((result2 as any).hint).toContain("remove the existing entry");
     expect((result2 as any).existingFactId).toBe(result1.factId);
   });
 });
@@ -124,6 +124,6 @@ describe("delete_fact with category/key format", () => {
       toolCtx,
     );
     expect(result.success).toBe(false);
-    expect((result as any).hint).toContain("search_facts");
+    expect((result as any).hint).toContain("Search for available entries");
   });
 });
