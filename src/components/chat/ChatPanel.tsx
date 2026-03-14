@@ -210,6 +210,12 @@ function LimitReachedUI({
   );
 }
 
+type SectionContextPayload = {
+  sectionType: string;
+  contentSummary: string;
+  prompt: string;
+} | null;
+
 type ChatPanelProps = {
   language?: string;
   /** When true, show email + password fields in the signup form */
@@ -222,6 +228,10 @@ type ChatPanelProps = {
   isPrimaryVoiceConsumer?: boolean;
   /** Fired when an agent tool completes with success:true. */
   onToolComplete?: (toolName: string) => void;
+  /** Section context injected from preview interaction (edit with chat). */
+  sectionContext?: SectionContextPayload;
+  /** Called after section context has been consumed (pre-filled into input). */
+  onSectionContextConsumed?: () => void;
 };
 
 type StoredMessage = {
@@ -249,6 +259,8 @@ type ChatPanelInnerProps = {
   pendingGreeting?: { id: string; content: string } | null;
   onGreetingChange?: (greeting: { id: string; content: string } | null) => void;
   onToolComplete?: (toolName: string) => void;
+  sectionContext?: SectionContextPayload;
+  onSectionContextConsumed?: () => void;
 };
 
 function ChatPanelLoading() {
@@ -261,7 +273,7 @@ function ChatPanelLoading() {
   );
 }
 
-export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer, onToolComplete }: ChatPanelProps) {
+export function ChatPanel({ language = "en", authV2 = true, authState, onSignupRequest, initialBootstrap, initialMessages: propMessages, disableInitialFetch, isPrimaryVoiceConsumer, onToolComplete, sectionContext, onSectionContextConsumed }: ChatPanelProps) {
   const [initialMessages, setInitialMessages] = useState<StoredMessage[]>([]);
   const greetingRef = useRef<{ id: string; content: string } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -360,6 +372,8 @@ export function ChatPanel({ language = "en", authV2 = true, authState, onSignupR
       pendingGreeting={greetingRef.current}
       onGreetingChange={(g) => { greetingRef.current = g; }}
       onToolComplete={onToolComplete}
+      sectionContext={sectionContext}
+      onSectionContextConsumed={onSectionContextConsumed}
     />
   );
 }
@@ -374,6 +388,8 @@ function ChatPanelInner({
   pendingGreeting,
   onGreetingChange,
   onToolComplete,
+  sectionContext,
+  onSectionContextConsumed,
 }: ChatPanelInnerProps) {
   const t = getUiL10n(language);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -397,7 +413,7 @@ function ChatPanelInner({
 
   const pendingGreetingRef = useRef(pendingGreeting);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages, append, error: streamError } =
+  const { messages, input, setInput, handleInputChange, handleSubmit, isLoading, reload, setMessages, append, error: streamError } =
     useChat({
       api: "/api/chat",
       body: {
@@ -565,6 +581,18 @@ function ChatPanelInner({
     },
     [handleSubmit],
   );
+
+  // Section context injection from preview interaction ("edit with chat")
+  useEffect(() => {
+    if (!sectionContext) return;
+    setInput(sectionContext.prompt);
+    onSectionContextConsumed?.();
+    // iOS focus timing: defer focus after tab switch
+    const inputEl = document.querySelector<HTMLInputElement>('input[name="prompt"]');
+    if (inputEl) {
+      setTimeout(() => inputEl.focus(), 50);
+    }
+  }, [sectionContext, setInput, onSectionContextConsumed]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

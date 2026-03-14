@@ -13,6 +13,10 @@ import { filterCompleteSections } from "@/lib/page-config/section-completeness";
 import { OsPageWrapper } from "@/components/page/OsPageWrapper";
 import { SECTION_COMPONENTS } from "@/components/sections";
 import { HiddenSectionCard } from "@/components/page/HiddenSectionCard";
+import { SectionInteractionWrapper } from "@/components/page/SectionInteractionWrapper";
+import type { SectionAction } from "@/components/page/SectionInteractionWrapper";
+
+export type { SectionAction };
 
 export type PageRendererProps = {
   config: PageConfig;
@@ -22,6 +26,10 @@ export type PageRendererProps = {
   hiddenSections?: string[];
   /** Callback when user clicks "Show" on a hidden section ghost card (preview only). */
   onShowSection?: (sectionType: string) => void;
+  /** Callback for canvas-style section interactions (edit, hide, move). Only active in preview mode. */
+  onSectionAction?: (action: SectionAction) => void;
+  /** Desktop action bar factory — receives section metadata, returns a React node positioned by SectionInteractionWrapper. */
+  renderActionBar?: (props: { sectionType: string; sectionIndex: number; totalSections: number }) => React.ReactNode;
 };
 
 export function PageRenderer({
@@ -30,6 +38,8 @@ export function PageRenderer({
   isOwner = false,
   hiddenSections = [],
   onShowSection,
+  onSectionAction,
+  renderActionBar,
 }: PageRendererProps) {
   const template = resolveLayoutTemplate(config);
   const LayoutComponent = getLayoutComponent(template.id);
@@ -49,6 +59,10 @@ export function PageRenderer({
         : rawSections.filter(s => !hiddenSet.has(s.type)));
 
   const slots = groupSectionsBySlot(visibleSections, template);
+
+  // Count of interactable (non-hidden) sections for move bounds
+  const interactableSections = visibleSections.filter(s => !hiddenSet.has(s.type));
+  const totalInteractable = interactableSections.length;
 
   const renderSection = (section: Section) => {
     // In preview mode, render hidden sections as ghost cards
@@ -77,10 +91,34 @@ export function PageRenderer({
     }
 
     const variant = resolveVariant(section);
+    const sectionIndex = interactableSections.indexOf(section);
+
+    const sectionContent = (
+      <div id={`section-${section.id}`} data-section={section.type}>
+        <SectionComponent content={section.content} variant={variant} />
+      </div>
+    );
+
+    // Wrap with interaction handler only when onSectionAction is provided and in preview mode
+    if (previewMode && onSectionAction) {
+      return (
+        <div key={section.id}>
+          <SectionInteractionWrapper
+            sectionType={section.type}
+            sectionIndex={sectionIndex}
+            totalSections={totalInteractable}
+            onAction={onSectionAction}
+            actionBar={renderActionBar?.({ sectionType: section.type, sectionIndex, totalSections: totalInteractable })}
+          >
+            {sectionContent}
+          </SectionInteractionWrapper>
+        </div>
+      );
+    }
 
     return (
-      <div key={section.id} id={`section-${section.id}`} data-section={section.type}>
-        <SectionComponent content={section.content} variant={variant} />
+      <div key={section.id}>
+        {sectionContent}
       </div>
     );
   };

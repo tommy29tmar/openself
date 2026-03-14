@@ -198,6 +198,15 @@ export interface UiStrings {
   // Section visibility
   sectionHidden: string;
   sectionShow: string;
+
+  // Section interaction (canvas preview)
+  editWithChat: string;
+  hideSection: string;
+  showSection: string;
+  moveUp: string;
+  moveDown: string;
+  longPressHint: string;
+  dismiss: string;
 }
 
 const en: UiStrings = {
@@ -350,6 +359,13 @@ const en: UiStrings = {
   chatRefresh: "Refresh chat",
   sectionHidden: "hidden",
   sectionShow: "Show",
+  editWithChat: "Edit with chat",
+  hideSection: "Hide section",
+  showSection: "Show section",
+  moveUp: "Move up",
+  moveDown: "Move down",
+  longPressHint: "Long-press any section to edit, hide, or reorder it.",
+  dismiss: "Got it",
 };
 
 const it: UiStrings = {
@@ -502,6 +518,13 @@ const it: UiStrings = {
   chatRefresh: "Aggiorna chat",
   sectionHidden: "nascosta",
   sectionShow: "Mostra",
+  editWithChat: "Modifica con chat",
+  hideSection: "Nascondi sezione",
+  showSection: "Mostra sezione",
+  moveUp: "Sposta su",
+  moveDown: "Sposta gi\u00f9",
+  longPressHint: "Tieni premuta una sezione per modificarla, nasconderla o riordinarla.",
+  dismiss: "Capito",
 };
 
 const de: UiStrings = {
@@ -654,6 +677,13 @@ const de: UiStrings = {
   chatRefresh: "Chat aktualisieren",
   sectionHidden: "ausgeblendet",
   sectionShow: "Anzeigen",
+  editWithChat: "Im Chat bearbeiten",
+  hideSection: "Abschnitt ausblenden",
+  showSection: "Abschnitt anzeigen",
+  moveUp: "Nach oben",
+  moveDown: "Nach unten",
+  longPressHint: "Halte einen Abschnitt gedr\u00fcckt, um ihn zu bearbeiten, auszublenden oder umzuordnen.",
+  dismiss: "Verstanden",
 };
 
 const fr: UiStrings = {
@@ -804,8 +834,15 @@ const fr: UiStrings = {
   chatErrorContentFiltered: "Le message n'a pas pu être traité. Essayez de le reformuler.",
   chatRetry: "Réessayer",
   chatRefresh: "Actualiser le chat",
-  sectionHidden: "masquée",
+  sectionHidden: "masqu\u00e9e",
   sectionShow: "Afficher",
+  editWithChat: "Modifier avec le chat",
+  hideSection: "Masquer la section",
+  showSection: "Afficher la section",
+  moveUp: "D\u00e9placer vers le haut",
+  moveDown: "D\u00e9placer vers le bas",
+  longPressHint: "Appuyez longuement sur une section pour la modifier, la masquer ou la r\u00e9organiser.",
+  dismiss: "Compris",
 };
 
 const es: UiStrings = {
@@ -958,6 +995,13 @@ const es: UiStrings = {
   chatRefresh: "Actualizar chat",
   sectionHidden: "oculta",
   sectionShow: "Mostrar",
+  editWithChat: "Editar con chat",
+  hideSection: "Ocultar secci\u00f3n",
+  showSection: "Mostrar secci\u00f3n",
+  moveUp: "Mover arriba",
+  moveDown: "Mover abajo",
+  longPressHint: "Mant\u00e9n pulsada una secci\u00f3n para editarla, ocultarla o reordenarla.",
+  dismiss: "Entendido",
 };
 
 const pt: UiStrings = {
@@ -1110,6 +1154,13 @@ const pt: UiStrings = {
   chatRefresh: "Atualizar chat",
   sectionHidden: "oculta",
   sectionShow: "Mostrar",
+  editWithChat: "Editar pelo chat",
+  hideSection: "Ocultar se\u00e7\u00e3o",
+  showSection: "Mostrar se\u00e7\u00e3o",
+  moveUp: "Mover para cima",
+  moveDown: "Mover para baixo",
+  longPressHint: "Mantenha uma se\u00e7\u00e3o premida para editar, ocultar ou reordenar.",
+  dismiss: "Entendido",
 };
 
 const ja: UiStrings = {
@@ -1259,9 +1310,16 @@ const ja: UiStrings = {
   chatErrorContextTooLong: "会話が長すぎます。新しいチャットを開始してください。",
   chatErrorContentFiltered: "メッセージを処理できませんでした。言い換えてお試しください。",
   chatRetry: "再試行",
-  chatRefresh: "チャットを更新",
-  sectionHidden: "非表示",
-  sectionShow: "表示",
+  chatRefresh: "\u30c1\u30e3\u30c3\u30c8\u3092\u66f4\u65b0",
+  sectionHidden: "\u975e\u8868\u793a",
+  sectionShow: "\u8868\u793a",
+  editWithChat: "\u30c1\u30e3\u30c3\u30c8\u3067\u7de8\u96c6",
+  hideSection: "\u30bb\u30af\u30b7\u30e7\u30f3\u3092\u975e\u8868\u793a",
+  showSection: "\u30bb\u30af\u30b7\u30e7\u30f3\u3092\u8868\u793a",
+  moveUp: "\u4e0a\u3078\u79fb\u52d5",
+  moveDown: "\u4e0b\u3078\u79fb\u52d5",
+  longPressHint: "\u30bb\u30af\u30b7\u30e7\u30f3\u3092\u9577\u62bc\u3057\u3057\u3066\u7de8\u96c6\u3001\u975e\u8868\u793a\u3001\u4e26\u3079\u66ff\u3048\u304c\u3067\u304d\u307e\u3059\u3002",
+  dismiss: "\u4e86\u89e3",
 };
 
 const zh: UiStrings = {
@@ -1411,9 +1469,16 @@ const zh: UiStrings = {
   chatErrorContextTooLong: "对话过长，请尝试开始新的聊天。",
   chatErrorContentFiltered: "无法处理该消息，请尝试改写。",
   chatRetry: "重试",
-  chatRefresh: "刷新聊天",
-  sectionHidden: "已隐藏",
-  sectionShow: "显示",
+  chatRefresh: "\u5237\u65b0\u804a\u5929",
+  sectionHidden: "\u5df2\u9690\u85cf",
+  sectionShow: "\u663e\u793a",
+  editWithChat: "\u901a\u8fc7\u804a\u5929\u7f16\u8f91",
+  hideSection: "\u9690\u85cf\u6a21\u5757",
+  showSection: "\u663e\u793a\u6a21\u5757",
+  moveUp: "\u4e0a\u79fb",
+  moveDown: "\u4e0b\u79fb",
+  longPressHint: "\u957f\u6309\u4efb\u4f55\u6a21\u5757\u53ef\u7f16\u8f91\u3001\u9690\u85cf\u6216\u91cd\u65b0\u6392\u5e8f\u3002",
+  dismiss: "\u77e5\u9053\u4e86",
 };
 
 const STRINGS: Record<string, UiStrings> = { en, it, de, fr, es, pt, ja, zh };

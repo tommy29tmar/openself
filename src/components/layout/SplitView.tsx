@@ -13,6 +13,10 @@ import { UnpublishedBanner } from "@/components/layout/UnpublishedBanner";
 import { MobilePreviewHeader } from "@/components/layout/MobilePreviewHeader";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
 import { PageRenderer } from "@/components/page";
+import type { SectionAction } from "@/components/page/SectionInteractionWrapper";
+import { SectionActionSheet } from "@/components/page/SectionActionSheet";
+import { SectionActionBar } from "@/components/page/SectionActionBar";
+import { usePreviewInteraction } from "@/hooks/usePreviewInteraction";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
 import { HERO_NAME_FALLBACKS } from "@/lib/i18n/hero-fallbacks";
 import { friendlyError } from "@/lib/i18n/error-messages";
@@ -124,6 +128,22 @@ export function SplitView({
   const [pendingUsername, setPendingUsername] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const lastUserEdit = useRef(0);
+
+  // Section interaction (canvas-style preview)
+  const previewInteraction = usePreviewInteraction();
+  const [pendingAction, setPendingAction] = useState<SectionAction | null>(null);
+  const [hasSeenHint, setHasSeenHint] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("openself:longpress-hint-seen") === "1";
+  });
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  const dismissHint = useCallback(() => {
+    setHasSeenHint(true);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("openself:longpress-hint-seen", "1");
+    }
+  }, []);
 
   // Detect keyboard open via visualViewport
   useEffect(() => {
@@ -271,6 +291,63 @@ export function SplitView({
     });
   }, []);
 
+  // Execute a section action directly (from bottom sheet or desktop inline).
+  // Uses refs for values that change frequently to keep the callback stable.
+  const displayConfigRef = useRef(displayConfig);
+  displayConfigRef.current = displayConfig;
+
+  const handleSectionActionDirect = useCallback((action: SectionAction) => {
+    if (action.type === "edit") {
+      previewInteraction.injectSectionContext(action, displayConfigRef.current);
+      if (isMobile) {
+        // Switch to chat tab, then focus input after tab switch
+        setActiveMobileTab("chat");
+        setTimeout(() => chatInputRef.current?.focus(), 50);
+      }
+    } else if (action.type === "hide") {
+      void fetch("/api/draft/toggle-section", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionType: action.sectionType, hidden: true }),
+      });
+    } else if (action.type === "show") {
+      void fetch("/api/draft/toggle-section", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionType: action.sectionType, hidden: false }),
+      });
+    } else if (action.type === "moveUp" || action.type === "moveDown") {
+      void fetch("/api/draft/reorder-section", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionType: action.sectionType, direction: action.type === "moveUp" ? "up" : "down" }),
+      });
+    }
+  }, [previewInteraction, isMobile]);
+
+  // Section action handler — mobile opens bottom sheet, desktop handles inline
+  const handleSectionAction = useCallback((action: SectionAction) => {
+    if (isMobile) {
+      // On mobile, long-press always opens the action sheet
+      setPendingAction(action);
+      setPresenceOpen(false);
+      setActivityOpen(false);
+    } else {
+      // Desktop: handle directly (action bar buttons fire specific types)
+      handleSectionActionDirect(action);
+    }
+  }, [isMobile, handleSectionActionDirect]);
+
+  // Desktop action bar factory
+  const renderActionBar = useCallback((props: { sectionType: string; sectionIndex: number; totalSections: number }) => (
+    <SectionActionBar
+      sectionType={props.sectionType}
+      sectionIndex={props.sectionIndex}
+      totalSections={props.totalSections}
+      onAction={handleSectionAction}
+    />
+  ), [handleSectionAction]);
+
   const heroName = config?.sections?.find((s) => s.type === "hero")?.content?.name as string | undefined;
 
   // Shared presence panel props
@@ -296,6 +373,8 @@ export function SplitView({
     disableInitialFetch: chatDataReady,
     isPrimaryVoiceConsumer: isPrimary,
     onToolComplete: handleToolComplete,
+    sectionContext: previewInteraction.pendingContext,
+    onSectionContextConsumed: previewInteraction.consumeContext,
   });
 
   const usernameInput = usernameInputOpen && (
@@ -333,7 +412,13 @@ export function SplitView({
         language={language}
         onDiscard={publishedConfigHash ? handleDiscardDraft : undefined}
       />
-      <PageRenderer config={displayConfig} previewMode={true} hiddenSections={hiddenSections} />
+      <PageRenderer
+        config={displayConfig}
+        previewMode={true}
+        hiddenSections={hiddenSections}
+        onSectionAction={handleSectionAction}
+        renderActionBar={renderActionBar}
+      />
     </>
   ) : (
     <EmptyPreview language={language} />
@@ -412,6 +497,15 @@ export function SplitView({
                 onLogout={handleLogout}
               />
               {previewContent}
+              {/* Long-press hint for first-time mobile users */}
+              {!hasSeenHint && displayConfig && (
+                <div className="mx-4 mb-4 rounded-xl bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
+                  {t.longPressHint}
+                  <button type="button" onClick={dismissHint} className="ml-2 underline">
+                    {t.dismiss}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -448,6 +542,23 @@ export function SplitView({
           )}
           <ActivityDrawer open={activityOpen} onClose={() => setActivityOpen(false)} language={language} t={t} isMobile={true} onUnreadRefresh={refreshUnread} bellRef={bellRef} />
         </div>
+
+        {/* Mobile section action sheet */}
+        {pendingAction && (
+          <SectionActionSheet
+            open={true}
+            onClose={() => setPendingAction(null)}
+            sectionType={pendingAction.sectionType}
+            sectionIndex={pendingAction.sectionIndex}
+            totalSections={displayConfig?.sections?.length ?? 0}
+            isHidden={hiddenSections.includes(pendingAction.sectionType)}
+            onAction={(a) => {
+              setPendingAction(null);
+              handleSectionActionDirect(a);
+            }}
+            t={t}
+          />
+        )}
 
         <ToastContainer
           toasts={toastManager.toasts}
