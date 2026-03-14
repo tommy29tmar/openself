@@ -24,12 +24,12 @@ const mockGetActiveFactsJourney = vi.fn(() => []);
 
 vi.mock("@/lib/services/kb-service", () => ({
   countFacts: vi.fn(() => 0),
-  getActiveFacts: (...args: any[]) => mockGetActiveFactsJourney(...args),
+  getActiveFacts: (...args: unknown[]) => mockGetActiveFactsJourney(),
 }));
 
 vi.mock("@/lib/services/fact-cluster-service", () => ({
-  getProjectedFacts: (...args: any[]) =>
-    mockGetActiveFactsJourney(...args).map((f: any) => ({
+  getProjectedFacts: (..._args: unknown[]) =>
+    mockGetActiveFactsJourney().map((f: any) => ({
       ...f,
       sources: [f.source ?? "chat"],
       clusterSize: 1,

@@ -150,9 +150,9 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(true);
-      expect(result.visibility).toBe("proposed");
-      expect(result.pageVisible).toBe(true);
-      expect(result.recomposeOk).toBe(true);
+      expect((result as any).visibility).toBe("proposed");
+      expect((result as any).pageVisible).toBe(true);
+      expect((result as any).recomposeOk).toBe(true);
     });
 
     it("returns pageVisible: false for private visibility", async () => {
@@ -165,8 +165,8 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(true);
-      expect(result.visibility).toBe("private");
-      expect(result.pageVisible).toBe(false);
+      expect((result as any).visibility).toBe("private");
+      expect((result as any).pageVisible).toBe(false);
     });
 
     it("returns pageVisible: true for public visibility", async () => {
@@ -179,8 +179,8 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(true);
-      expect(result.visibility).toBe("public");
-      expect(result.pageVisible).toBe(true);
+      expect((result as any).visibility).toBe("public");
+      expect((result as any).pageVisible).toBe(true);
     });
 
     it("returns recomposeOk: false when recomposition fails", async () => {
@@ -195,7 +195,7 @@ describe("tool visibility response enrichment", () => {
         toolCallOpts,
       );
       expect(result.success).toBe(true);
-      expect(result.recomposeOk).toBe(false);
+      expect((result as any).recomposeOk).toBe(false);
       expect(result.factId).toBe("f5");
     });
   });
