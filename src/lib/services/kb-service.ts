@@ -161,6 +161,18 @@ export async function createFact(
   const effectiveProfileId = profileId ?? sessionId;
   const sortOrder = getNextSortOrder(sessionId, normalized.canonical);
 
+  // Ensure profile row exists to prevent orphaned profileId references.
+  // Uses INSERT OR IGNORE to handle concurrent writes safely (no TOCTOU race).
+  // Note: userId is NULL here for anonymous sessions — it will be linked
+  // when the user registers via /api/register (which calls linkProfileToUser).
+  // Reuses the `now` variable (already computed as new Date().toISOString())
+  // to maintain ISO 8601 format consistency with the rest of the codebase.
+  sqlite
+    .prepare(
+      "INSERT OR IGNORE INTO profiles (id, created_at, updated_at) VALUES (?, ?, ?)"
+    )
+    .run(effectiveProfileId, now, now);
+
   db.insert(facts)
     .values({
       id,
