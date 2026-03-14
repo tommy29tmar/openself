@@ -470,9 +470,17 @@ function buildHeroSection(
 
   // ContactBar data (injected from social, contact, language facts)
   const socialLinks: { platform: string; url: string; label?: string }[] = [];
+  let ctaData: { label: string; url: string } | undefined;
   const t = getUiL10n(language);
   for (const f of socialFacts ?? []) {
     const v = val(f);
+    // CTA button: social fact with key "cta" and value {label, url}
+    if (f.key === "cta") {
+      const ctaLabel = str(v.label) ?? str(v.text);
+      const ctaUrl = str(v.url) ?? str(v.link);
+      if (ctaLabel && ctaUrl) ctaData = { label: ctaLabel, url: ctaUrl };
+      continue;
+    }
     const platform = str(v.platform) ?? str(v.name) ?? f.key;
     const url = str(v.url) ?? str(v.link);
     // Localize "website" display label; keep platform canonical for icon lookup
@@ -528,6 +536,7 @@ function buildHeroSection(
     tagline: finalTagline,
   };
   if (socialLinks.length > 0) content.socialLinks = socialLinks;
+  if (ctaData) content.cta = ctaData;
   if (contactEmail) content.contactEmail = contactEmail;
   if (languageItems.length > 0) content.languages = languageItems;
 
