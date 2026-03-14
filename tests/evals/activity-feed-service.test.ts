@@ -241,7 +241,7 @@ const db = testDb as unknown as typeof import("@/lib/db").db;
 // ---------------------------------------------------------------------------
 
 describe("getSyncFeedItems", () => {
-  it("returns a connector_sync item for a successful sync within the window", () => {
+  it("excludes successful syncs from the feed", () => {
     insertConnector("c1", "owner1");
     insertSyncLog("sl1", "c1", "success", isoAgo(1), {
       factsCreated: 3,
@@ -251,15 +251,8 @@ describe("getSyncFeedItems", () => {
 
     const items = getSyncFeedItems("owner1", isoAgo(FEED_WINDOW_DAYS), db);
 
-    expect(items).toHaveLength(1);
-    expect(items[0].type).toBe("connector_sync");
-    expect(items[0].category).toBe("informational");
-    expect(items[0].connectorType).toBe("github");
-    expect(items[0].title).toBe("");
-    const detail = items[0].detail as import("@/lib/services/activity-feed-types").SyncDetail;
-    expect(detail.factsCreated).toBe(3);
-    expect(detail.factsUpdated).toBe(1);
-    expect(detail.eventsCreated).toBe(2);
+    // Successful syncs should not appear — only errors
+    expect(items).toHaveLength(0);
   });
 
   it("returns a connector_error item for a failed sync", () => {
@@ -277,9 +270,9 @@ describe("getSyncFeedItems", () => {
     expect(detail.lastSuccessfulSync).toBeNull();
   });
 
-  it("excludes items older than the since window", () => {
+  it("excludes error items older than the since window", () => {
     insertConnector("c1", "owner1");
-    insertSyncLog("sl1", "c1", "success", isoAgo(FEED_WINDOW_DAYS + 2));
+    insertSyncLog("sl1", "c1", "error", isoAgo(FEED_WINDOW_DAYS + 2), { error: "old" });
 
     const items = getSyncFeedItems("owner1", isoAgo(FEED_WINDOW_DAYS), db);
     expect(items).toHaveLength(0);
@@ -287,7 +280,7 @@ describe("getSyncFeedItems", () => {
 
   it("excludes items from other owners", () => {
     insertConnector("c1", "owner-other");
-    insertSyncLog("sl1", "c1", "success", isoAgo(1));
+    insertSyncLog("sl1", "c1", "error", isoAgo(1), { error: "test" });
 
     const items = getSyncFeedItems("owner1", isoAgo(FEED_WINDOW_DAYS), db);
     expect(items).toHaveLength(0);
@@ -296,7 +289,7 @@ describe("getSyncFeedItems", () => {
   it("returns up to 20 items (limit)", () => {
     insertConnector("c1", "owner1");
     for (let i = 0; i < 25; i++) {
-      insertSyncLog(`sl${i}`, "c1", "success", isoAgo(0, i * 60000));
+      insertSyncLog(`sl${i}`, "c1", "error", isoAgo(0, i * 60000), { error: `err${i}` });
     }
 
     const items = getSyncFeedItems("owner1", isoAgo(FEED_WINDOW_DAYS), db);
@@ -430,9 +423,9 @@ describe("getEpisodicFeedItems", () => {
 
 describe("getActivityFeed", () => {
   it("merges and sorts all sources by createdAt DESC", () => {
-    // Connector sync
+    // Connector error sync (successful syncs excluded)
     insertConnector("c1", "owner1");
-    insertSyncLog("sl1", "c1", "success", isoAgo(1));
+    insertSyncLog("sl1", "c1", "error", isoAgo(1), { error: "test" });
 
     // Conformity proposal
     insertConformityProposal("owner1", "pending");
@@ -455,7 +448,7 @@ describe("getActivityFeed", () => {
   it("respects the limit option", () => {
     insertConnector("c1", "owner1");
     for (let i = 0; i < 10; i++) {
-      insertSyncLog(`sl${i}`, "c1", "success", isoAgo(0, i * 60000));
+      insertSyncLog(`sl${i}`, "c1", "error", isoAgo(0, i * 60000), { error: `err${i}` });
     }
     for (let i = 0; i < 10; i++) {
       insertConformityProposal("owner1", "pending");
@@ -467,13 +460,13 @@ describe("getActivityFeed", () => {
 
   it("excludes sync items older than since window", () => {
     insertConnector("c1", "owner1");
-    // Old sync (beyond 7 days)
-    insertSyncLog("sl-old", "c1", "success", isoAgo(FEED_WINDOW_DAYS + 2));
-    // Recent sync
-    insertSyncLog("sl-new", "c1", "success", isoAgo(1));
+    // Old error sync (beyond 7 days)
+    insertSyncLog("sl-old", "c1", "error", isoAgo(FEED_WINDOW_DAYS + 2), { error: "old" });
+    // Recent error sync
+    insertSyncLog("sl-new", "c1", "error", isoAgo(1), { error: "new" });
 
     const items = getActivityFeed("owner1", undefined, db);
-    const syncItems = items.filter((i) => i.type === "connector_sync");
+    const syncItems = items.filter((i) => i.type === "connector_error");
     expect(syncItems).toHaveLength(1);
     expect(syncItems[0].id).toBe("sync_sl-new");
   });
@@ -494,12 +487,13 @@ describe("getUnreadCount", () => {
     expect(count).toBe(0);
   });
 
-  it("counts sync log items since window floor when no lastFeedViewedAt", () => {
+  it("counts only error/failed sync log items since window floor", () => {
     insertConnector("c1", "owner1");
-    insertSyncLog("sl1", "c1", "success", isoAgo(1));
-    insertSyncLog("sl2", "c1", "error", isoAgo(2));
+    insertSyncLog("sl1", "c1", "success", isoAgo(1)); // excluded (successful)
+    insertSyncLog("sl2", "c1", "error", isoAgo(2));   // counted
+    insertSyncLog("sl3", "c1", "failed", isoAgo(3));  // counted
     // Old one outside window
-    insertSyncLog("sl-old", "c1", "success", isoAgo(FEED_WINDOW_DAYS + 2));
+    insertSyncLog("sl-old", "c1", "error", isoAgo(FEED_WINDOW_DAYS + 2));
 
     const count = getUnreadCount("owner1", db);
     expect(count).toBe(2);
@@ -530,11 +524,10 @@ describe("getUnreadCount", () => {
 
   it("uses lastFeedViewedAt when it is more recent than windowFloor", () => {
     insertConnector("c1", "owner1");
-    // 3 syncs: one old (6 days), two recent (1 day, 2 days)
-    const sixDaysAgo = isoAgo(6);
-    insertSyncLog("sl-old", "c1", "success", isoAgo(6, 1000));
-    insertSyncLog("sl-new1", "c1", "success", isoAgo(1));
-    insertSyncLog("sl-new2", "c1", "success", isoAgo(2));
+    // 3 error syncs: one old (6 days), two recent (1 day, 2 days)
+    insertSyncLog("sl-old", "c1", "error", isoAgo(6, 1000), { error: "old" });
+    insertSyncLog("sl-new1", "c1", "error", isoAgo(1), { error: "new1" });
+    insertSyncLog("sl-new2", "c1", "error", isoAgo(2), { error: "new2" });
 
     // Owner viewed feed 4 days ago — so syncs before 4 days ago are "read"
     const fourDaysAgo = isoAgo(4);
@@ -547,7 +540,7 @@ describe("getUnreadCount", () => {
 
   it("sums all source counts correctly", () => {
     insertConnector("c1", "owner1");
-    insertSyncLog("sl1", "c1", "success", isoAgo(1));
+    insertSyncLog("sl1", "c1", "error", isoAgo(1), { error: "test" });
     insertConformityProposal("owner1", "pending");
     insertSoulProposal("sp1", "owner1", "pending");
     insertEpisodicProposal("ep1", "owner1", "pending", isoAhead(10));
@@ -598,28 +591,76 @@ describe("markFeedViewed", () => {
     expect(count).toBe(1);
   });
 
-  it("after markFeedViewed, connector syncs created before view are not counted", () => {
+  it("after markFeedViewed, error syncs created before view are not counted", () => {
     insertConnector("c1", "owner1");
     const oldSync = isoAgo(1);
-    insertSyncLog("sl1", "c1", "success", oldSync);
+    insertSyncLog("sl1", "c1", "error", oldSync, { error: "test" });
     insertProfile("owner1", null);
 
     // Simulate marking viewed now (after the sync)
     markFeedViewed("owner1", db);
 
-    // No new syncs since lastFeedViewedAt — so sync count should be 0
+    // No new error syncs since lastFeedViewedAt — so sync count should be 0
     const count = getUnreadCount("owner1", db);
-    // lastFeedViewedAt is now ≥ the sync createdAt, so sync is "read"
-    const syncCountRow = testSqlite
-      .prepare(
-        `SELECT COUNT(*) AS cnt FROM sync_log sl
-         JOIN connectors c ON sl.connector_id = c.id
-         WHERE c.owner_key = ? AND sl.created_at >= ?`,
-      )
-      .get(
-        "owner1",
-        (testSqlite.prepare("SELECT last_feed_viewed_at FROM profiles WHERE id = ?").get("owner1") as { last_feed_viewed_at: string }).last_feed_viewed_at,
-      ) as { cnt: number };
-    expect(syncCountRow.cnt).toBe(0);
+    expect(count).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Successful syncs excluded from feed (Task 3.1)
+// ---------------------------------------------------------------------------
+
+describe("successful syncs excluded from feed", () => {
+  it("getSyncFeedItems returns only error/failed syncs, not successful ones", () => {
+    insertConnector("c1", "owner1");
+    // 3 successful syncs
+    insertSyncLog("sl-ok1", "c1", "success", isoAgo(1));
+    insertSyncLog("sl-ok2", "c1", "success", isoAgo(2));
+    insertSyncLog("sl-ok3", "c1", "partial", isoAgo(3));
+    // 1 error sync
+    insertSyncLog("sl-err", "c1", "error", isoAgo(1), { error: "timeout" });
+
+    const items = getSyncFeedItems("owner1", isoAgo(FEED_WINDOW_DAYS), db);
+
+    // Only the error sync should appear
+    expect(items).toHaveLength(1);
+    expect(items[0].type).toBe("connector_error");
+    expect(items[0].id).toBe("sync_sl-err");
+  });
+
+  it("getActivityFeed returns error syncs + proposals, no successful syncs", () => {
+    insertConnector("c1", "owner1");
+    // 3 successful syncs
+    insertSyncLog("sl-ok1", "c1", "success", isoAgo(1));
+    insertSyncLog("sl-ok2", "c1", "success", isoAgo(2));
+    insertSyncLog("sl-ok3", "c1", "success", isoAgo(3));
+    // 1 error sync
+    insertSyncLog("sl-err", "c1", "error", isoAgo(1), { error: "timeout" });
+    // 1 soul proposal
+    insertSoulProposal("sp1", "owner1", "pending");
+
+    const items = getActivityFeed("owner1", undefined, db);
+
+    // Should have error sync + soul proposal only (no successful syncs)
+    expect(items).toHaveLength(2);
+    const types = items.map((i) => i.type);
+    expect(types).toContain("connector_error");
+    expect(types).toContain("soul_proposal");
+    expect(types).not.toContain("connector_sync");
+  });
+
+  it("getUnreadCount excludes successful syncs", () => {
+    insertConnector("c1", "owner1");
+    // 2 successful syncs
+    insertSyncLog("sl-ok1", "c1", "success", isoAgo(1));
+    insertSyncLog("sl-ok2", "c1", "success", isoAgo(2));
+    // 1 error sync
+    insertSyncLog("sl-err", "c1", "error", isoAgo(1), { error: "timeout" });
+    // 1 soul proposal
+    insertSoulProposal("sp1", "owner1", "pending");
+
+    const count = getUnreadCount("owner1", db);
+    // Should be 2: 1 error sync + 1 soul proposal (no successful syncs)
+    expect(count).toBe(2);
   });
 });

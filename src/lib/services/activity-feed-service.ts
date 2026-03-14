@@ -10,7 +10,6 @@ import {
 } from "@/lib/db/schema";
 import type {
   FeedItem,
-  SyncDetail,
   SyncErrorDetail,
   ConformityDetail,
   SoulDetail,
@@ -38,13 +37,11 @@ export function getSyncFeedItems(
 ): FeedItem[] {
   // Drizzle doesn't have a clean join helper used elsewhere in the codebase,
   // so we use the select().from().innerJoin() form.
+  // Only show error/failed syncs — successful syncs are noise.
   const rows = db
     .select({
       id: syncLog.id,
       status: syncLog.status,
-      factsCreated: syncLog.factsCreated,
-      factsUpdated: syncLog.factsUpdated,
-      eventsCreated: syncLog.eventsCreated,
       error: syncLog.error,
       createdAt: syncLog.createdAt,
       connectorType: connectors.connectorType,
@@ -52,49 +49,34 @@ export function getSyncFeedItems(
     })
     .from(syncLog)
     .innerJoin(connectors, eq(syncLog.connectorId, connectors.id))
-    .where(and(eq(connectors.ownerKey, ownerKey), gte(syncLog.createdAt, since)))
+    .where(
+      and(
+        eq(connectors.ownerKey, ownerKey),
+        gte(syncLog.createdAt, since),
+        or(eq(syncLog.status, "error"), eq(syncLog.status, "failed")),
+      ),
+    )
     .orderBy(desc(syncLog.createdAt))
     .limit(20)
     .all();
 
   return rows.map((row) => {
-    const isError = row.status === "error" || row.status === "failed";
-    if (isError) {
-      const detail: SyncErrorDetail = {
-        type: "connector_error",
-        connectorType: row.connectorType,
-        error: row.error ?? "Unknown error",
-        lastSuccessfulSync: null,
-      };
-      return {
-        id: `sync_${row.id}`,
-        type: "connector_error" as const,
-        category: "informational" as const,
-        connectorType: row.connectorType,
-        title: "",
-        createdAt: row.createdAt ?? new Date().toISOString(),
-        status: row.status,
-        detail,
-      } satisfies FeedItem;
-    } else {
-      const detail: SyncDetail = {
-        type: "connector_sync",
-        connectorType: row.connectorType,
-        factsCreated: row.factsCreated ?? 0,
-        factsUpdated: row.factsUpdated ?? 0,
-        eventsCreated: row.eventsCreated ?? 0,
-      };
-      return {
-        id: `sync_${row.id}`,
-        type: "connector_sync" as const,
-        category: "informational" as const,
-        connectorType: row.connectorType,
-        title: "",
-        createdAt: row.createdAt ?? new Date().toISOString(),
-        status: row.status,
-        detail,
-      } satisfies FeedItem;
-    }
+    const detail: SyncErrorDetail = {
+      type: "connector_error",
+      connectorType: row.connectorType,
+      error: row.error ?? "Unknown error",
+      lastSuccessfulSync: null,
+    };
+    return {
+      id: `sync_${row.id}`,
+      type: "connector_error" as const,
+      category: "informational" as const,
+      connectorType: row.connectorType,
+      title: "",
+      createdAt: row.createdAt ?? new Date().toISOString(),
+      status: row.status,
+      detail,
+    } satisfies FeedItem;
   });
 }
 
@@ -308,12 +290,18 @@ export function getUnreadCount(
   const since =
     lastViewed && lastViewed > windowFloorTs ? lastViewed : windowFloorTs;
 
-  // 1) Sync log count (joined with connectors)
+  // 1) Sync log count — only error/failed syncs (successful syncs are noise)
   const syncCountRow = db
     .select({ count: sql<number>`COUNT(*)` })
     .from(syncLog)
     .innerJoin(connectors, eq(syncLog.connectorId, connectors.id))
-    .where(and(eq(connectors.ownerKey, ownerKey), gte(syncLog.createdAt, since)))
+    .where(
+      and(
+        eq(connectors.ownerKey, ownerKey),
+        gte(syncLog.createdAt, since),
+        or(eq(syncLog.status, "error"), eq(syncLog.status, "failed")),
+      ),
+    )
     .get();
   const syncCount = syncCountRow?.count ?? 0;
 
