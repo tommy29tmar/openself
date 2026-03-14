@@ -122,6 +122,7 @@ export async function prepareAndPublish(
     factLang,
     draftMeta,
     profileId,
+    readKeys,
   );
 
   if (expectedHash) {

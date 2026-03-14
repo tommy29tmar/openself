@@ -52,7 +52,7 @@ export async function POST(req: Request) {
         layoutTemplate: published.layoutTemplate,
         sections: published.sections,
       } : undefined;
-      const composed = projectCanonicalConfig(facts, draftUsername, factLang, draftMeta, authProfileId);
+      const composed = projectCanonicalConfig(facts, draftUsername, factLang, draftMeta, authProfileId, scope?.knowledgeReadKeys);
       upsertDraft(draftUsername, composed, primaryKey);
       draft = getDraft(primaryKey);
       if (!draft) {

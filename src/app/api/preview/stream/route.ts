@@ -81,6 +81,7 @@ export async function GET(req: Request) {
             factLang,
             draftMeta,
             profileId,
+            scope?.knowledgeReadKeys,
           );
 
           // Merge personalized copy (hash-guarded, stale → deterministic fallback)

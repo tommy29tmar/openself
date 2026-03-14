@@ -400,6 +400,7 @@ export function createAgentTools(
         factLang,
         draftMeta,
         effectiveOwnerKey,
+        readKeys,
       );
 
       // Idempotency: skip write if hash matches
@@ -1191,6 +1192,7 @@ export function createAgentTools(
           factLang,
           draftMeta,
           effectiveOwnerKey,
+          readKeys,
         );
 
         const config = await translatePageContent(styled, targetLang, factLang);
