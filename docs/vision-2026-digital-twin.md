@@ -4,7 +4,7 @@ Alla luce delle tendenze architetturali previste per il 2026, OpenSelf ha l'oppo
 
 Invece di competere sul piano puramente estetico con i classici website builder, la visione è posizionare OpenSelf come **"La prima infrastruttura Open Source per il tuo Gemello Digitale Autonomo"**. La pagina web diventerà solo l'interfaccia visiva di un'entità IA molto più potente.
 
-Ecco le 4 direttrici strategiche (Pillars) per questa evoluzione:
+Ecco le 5 direttrici strategiche (Pillars) per questa evoluzione:
 
 ## 1. Da "Pagina Pubblica" a "Gemello Digitale Interattivo"
 Attualmente i visitatori si limitano a leggere la tua pagina tradotta. Nel futuro, OpenSelf sarà il tuo Agente di rappresentanza.
@@ -28,11 +28,93 @@ Il web futuro sarà popolato da interazioni Agente-verso-Agente.
 
 ---
 
+## 5. Da Gemello Digitale a Identità Verificata — OpenSelf Verified
+
+Il Gemello Digitale descritto nei pilastri 1-4 ha un limite intrinseco: i dati sono **self-declared** o al massimo **connector-verified**. Per sbloccare il valore economico reale (sostituzione KYC, onboarding bancario, sottoscrizione servizi), serve un layer di **verifica certificata**.
+
+### Visione
+
+OpenSelf resta B2C. L'utente continua a chattare, collegare connettori, costruire il proprio profilo. Ma sotto, i dati acquisiscono livelli di trust crescenti:
+
+| Trust Tier | Fonte | Esempio |
+|---|---|---|
+| **Self-declared** | Chat con l'agente | "Sono un freelancer" |
+| **Connector-verified** | GitHub, LinkedIn, Spotify, Strava | 50 repo pubblici, 8 anni di esperienza |
+| **Institutionally-verified** | SPID/CIE, Open Banking (PSD2), certificati universitari | Identità anagrafica, reddito reale, laurea |
+| **Cross-referenced** | AI incrocia le fonti e rileva incongruenze | Trust score complessivo |
+
+### Come funziona per l'utente
+
+1. **Onboarding identico a oggi** — chatti, colleghi, il profilo si costruisce
+2. **Verifica opzionale** — colleghi SPID/CIE (è un OAuth) e/o il conto corrente (via Tink/Plaid)
+3. **Condivisione selettiva** — quando devi aprire un conto, iscriverti a un servizio, ecc., usi "Accedi con OpenSelf"
+4. **Consent screen** — vedi esattamente cosa viene condiviso e approvi
+5. **Dashboard "chi ha i miei dati"** — controllo totale su chi ha ricevuto cosa
+
+### Valore
+
+- **Per l'utente**: zero questionari, zero form, zero attesa. Il tuo profilo verificato viaggia con te
+- **Per le aziende**: onboarding istantaneo, dati già verificati, riduzione frodi, costo KYC vicino a zero
+- **Per OpenSelf**: le aziende pagano per profilo verificato ricevuto (B2B2C)
+
+### Business Model: B2C gratuito, B2B a pagamento
+
+```
+Utente (gratis)                      Azienda (paga)
+─────────────────                    ──────────────
+Chatta → profilo → pagina            Integra "Accedi con OpenSelf"
+Collega SPID + banca (opzionale)     Riceve profilo verificato
+Controlla cosa condividere           Paga €5-20 per profilo ricevuto
+Dashboard "chi ha i miei dati"       Risparmia €50-100 di KYC tradizionale
+```
+
+### Moat difendibile
+
+1. **UX conversazionale** — Nessun wallet governativo o identity provider offre onboarding via conversazione
+2. **Profilo ricco** — SPID/CIE dice chi sei. OpenSelf dice chi sei + cosa fai + quanto vali
+3. **Network effect** — Più utenti verificati → più aziende integrano → più utenti vogliono OpenSelf
+4. **Trust composto** — Il profilo si arricchisce nel tempo, non è un'istantanea
+
+### Competitor e posizionamento
+
+| Player | Cosa fa | OpenSelf Verified è diverso perché... |
+|---|---|---|
+| SPID / CIE / EUDI Wallet | Autenticazione governativa | Solo chi sei, non cosa fai o quanto vali |
+| Plaid / Tink | Open Banking | Solo dati bancari, nessun contesto professionale/personale |
+| Onfido / Jumio / Veriff | Verifica documenti | UX da form, nessun profilo ricco, B2B puro |
+| Yoti | Identity wallet | Form + scan, non conversazione. Meno contesto |
+| LinkedIn | Identità professionale | Non verificato, non condivisibile strutturato, platform-owned |
+
+### Vertical di lancio: freelancer + banche italiane
+
+Il primo use case è l'apertura conto per freelancer e partite IVA:
+- Le banche non sanno valutare chi non ha busta paga tradizionale
+- OpenSelf aggrega: fatturato da tool, reputazione GitHub, storia professionale, movimenti bancari
+- Il contatto con Intesa Sanpaolo (tramite il creatore di Mooney) è il canale di validazione
+
+### Roadmap tecnica (incrementale su OpenSelf esistente)
+
+| Fase | Cosa | Dipende da |
+|---|---|---|
+| **Fase 1** (oggi) | Chat + connettori + digital twin come pagina | ✅ Completato |
+| **Fase 2** | SPID/CIE come login (OAuth), Open Banking via Tink/Plaid | Fase 1 |
+| **Fase 3** | OpenSelf come OAuth/OIDC provider, selective disclosure API, consent management | Fase 2 |
+| **Fase 4** | Primo pilot B2B (banca), dashboard "chi ha i miei dati" | Fase 3 |
+
+### Compliance necessaria
+
+- **GDPR**: DPO, DPIA per dati finanziari, art. 9 per dati sensibili
+- **eIDAS 2.0**: potenziale certificazione come trust service provider (via partner: InfoCert, Namirial)
+- **PSD2**: per Open Banking, via partner certificato (Tink, Plaid, Fabrick)
+- **ISO 27001 / SOC2**: per credibilità B2B (può essere via partner inizialmente)
+
+---
+
 ## Analisi del Database: Gap da superare per il Gemello Digitale
 
 L'attuale schema del database (`src/lib/db/schema.ts`) possiede già delle fondamenta eccellenti. Tabelle come `facts`, `agent_memory`, `conversation_summaries`, `soul_profiles`, unitamente all'infrastruttura asincrona (`jobs`, `heartbeat_runs`), forniscono già il "cervello" cognitivo dell'agente.
 
-Tuttavia, per scalare verso i 4 pilastri del Gemello Digitale, lo schema dovrà evolvere integrando i "muscoli verso l'esterno" e i protocolli crittografici. Ecco le evoluzioni necessarie:
+Tuttavia, per scalare verso i 5 pilastri del Gemello Digitale (inclusa l'Identità Verificata), lo schema dovrà evolvere integrando i "muscoli verso l'esterno", i protocolli crittografici e il layer di condivisione verificata. Ecco le evoluzioni necessarie:
 
 ### 1. Per il Gemello Interattivo (Chat Pubblica)
 * **Stato Attuale:** Le tabelle `sessions` e `messages` sono strutturate per il dialogo esclusivo tra il Proprietario e l'Agente Costruttore.
@@ -54,9 +136,20 @@ Tuttavia, per scalare verso i 4 pilastri del Gemello Digitale, lo schema dovrà 
   1. Aggiungere tabelle per la gestione di **`mcp_clients`** o **`api_tokens`**, permettendo ad agenti IA esterni di autenticarsi in sicurezza.
   2. Evolvere la colonna `visibility` della tabella `facts` per supportare stati **`conditional`**, permettendo al Gemello di negoziare dinamicamente l'accesso a dati sensibili basandosi su logiche di autorizzazione (es. "Rivela il recapito telefonico solo se l'agente del recruiter offre un salario superiore a X").
 
+### 5. Per l'Identità Verificata (OpenSelf Verified)
+* **Stato Attuale:** I `facts` hanno `source` (user/connector/agent) e `visibility` (public/private/proposed), ma nessun livello di *trust* o *verifica istituzionale*.
+* **Evoluzione:**
+  1. Aggiungere **`trust_tier`** ai facts (self_declared | connector_verified | institutionally_verified | cross_referenced) — indica il livello di attendibilità del dato.
+  2. Creare **`identity_verifications`** — tabella che registra le verifiche istituzionali collegate (SPID, CIE, Open Banking) con timestamp, provider, e hash crittografico della risposta.
+  3. Creare **`disclosure_consents`** — registro di ogni condivisione effettuata: chi ha ricevuto cosa, quando, con quale consenso, e stato di revoca.
+  4. Creare **`disclosure_requests`** — richieste in ingresso da servizi B2B: quali campi richiedono, per quale scopo (scoping), stato (pending/approved/denied/expired).
+  5. Creare **`b2b_clients`** — registry di servizi/aziende autorizzati con API key, scopes permessi, e billing metadata.
+  6. Estendere **`facts.visibility`** con stato `verified` — un fatto verificato istituzionalmente che può essere condiviso via selective disclosure.
+  7. **`trust_score_cache`** — punteggio di affidabilità complessivo per profilo, calcolato dall'AI incrociando le fonti, con TTL e invalidation su fact mutation.
+
 ---
 
-## 5. Il Collo di Bottiglia Architetturale: L'Economia del Motore di Calcolo (FinOps)
+## 6. Il Collo di Bottiglia Architetturale: L'Economia del Motore di Calcolo (FinOps)
 
 Se OpenSelf diventa un Digital Twin che riceve centinaia di input giornalieri tra diari (Life-Logging), chiamate asincrone e visitatori esterni, l'attuale modello centralizzato basato su quote (es. `llmUsageDaily` e `profileMessageUsage`) comporterà un'esplosione dei costi per i server OpenSelf. 
 

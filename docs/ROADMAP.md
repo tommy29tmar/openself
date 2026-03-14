@@ -1,6 +1,6 @@
 # OpenSelf - Execution Roadmap
 
-Last updated: 2026-03-12
+Last updated: 2026-03-13
 Planning horizon: rolling (update every sprint/iteration)
 
 ## 1) Goal
@@ -540,6 +540,7 @@ Full builder UI state persistence across browser reloads (beyond chat history).
 3. Additional connectors (Goodreads, ORCID, etc.) — Strava, Spotify, RSS already implemented
 4. Advanced theming and design packs
 5. Multi-profile / multi-tenant model if product direction requires it
+6. **OpenSelf Verified (Phase 3)** — Verified identity layer (SPID/CIE + Open Banking + selective disclosure + B2B2C). See Milestone D below and `docs/BUSINESS.md` §10. Start condition: B2B demand validated with at least one bank.
 
 ## 7) Milestones
 
@@ -569,9 +570,47 @@ Outcome:
 - Five data connectors (GitHub, LinkedIn, RSS, Spotify, Strava) feed the knowledge base
 - Public pages auto-translate for international visitors
 
-### Milestone C — Phase 2 (Not Started)
+### Milestone C — Phase 2: Identity Coach (Not Started)
 
-TBD: community components, additional connectors, advanced theming, multi-tenant.
+Community components, additional connectors, advanced theming, Identity Coach capabilities,
+Discovery Scout, bi-directional connectors. See `docs/ARCHITECTURE.md` §4.6.
+
+### Milestone D — Phase 3: OpenSelf Verified (Not Started)
+
+OpenSelf evolves from digital twin to **verified identity layer**. Same product, same UX —
+the user still chats, connects services, and builds their profile. But the profile becomes
+*spendable*: a portable verified identity that services can consume.
+
+**Phase 3a — Identity Anchoring:**
+1. SPID/CIE integration as verified login (OAuth/OIDC — libraries exist)
+2. Open Banking integration via Tink/Plaid/Fabrick (PSD2-compliant partner)
+3. Trust tier model: self-declared → connector-verified → institutionally-verified → cross-referenced
+4. Trust score computation per fact and per profile
+
+**Phase 3b — Selective Disclosure & Consent:**
+1. OpenSelf as OAuth/OIDC provider ("Login with OpenSelf")
+2. Selective disclosure API: services request specific data fields, user approves
+3. Consent management: user sees exactly what will be shared, approves/denies
+4. Audit dashboard: "who has my data" with revocation capability
+
+**Phase 3c — B2B2C Pilot:**
+1. First B2B integration (target: Italian bank, freelancer onboarding use case)
+2. Business API: verified profile endpoint with per-request billing
+3. Compliance: GDPR DPO/DPIA, eIDAS 2.0 via certified partner (InfoCert/Namirial)
+4. Pricing: €5-20 per verified profile received (vs €50-100 traditional KYC)
+
+**Vertical beachhead:** Freelancers and partite IVA opening bank accounts. These users
+are most penalized by traditional KYC (no payslip, variable income). OpenSelf aggregates
+invoices, GitHub activity, professional history, bank statements → rich creditworthiness
+profile that traditional KYC cannot produce.
+
+**Key dependencies:**
+- Phase 1 complete ✅
+- Compliance partner (InfoCert, Namirial, or equivalent)
+- B2B validation: at least one bank confirms willingness to pilot
+- Co-founder or advisor with banking/compliance background
+
+**Reference:** `docs/vision-2026-digital-twin.md` §5 (Verified Identity)
 
 ## 8) Tracking Process
 

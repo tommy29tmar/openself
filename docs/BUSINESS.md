@@ -14,6 +14,7 @@ communication speaks to people with acute pain and measurable value.
 | **1** | Freelancers & consultants | Need a professional web presence, hate building/maintaining sites | High willingness-to-pay, measurable ROI (clients find them), vocal community |
 | **2** | Researchers & academics | Scattered publications, no unified identity, manual CV updates | Connectors (Scholar, ORCID) as killer feature, organic word-of-mouth in departments |
 | **3** | Career transitioners | Need to reposition online fast, existing profiles are stale | Intense but temporary need — high conversion urgency, lower retention |
+| **4** | Freelancers needing verified identity (Phase 3) | Can't open bank accounts / access services easily — no payslip, scattered data | Highest willingness-to-pay, clear ROI, B2B2C unlocks revenue |
 
 ### Why not "everyone" at launch
 
@@ -45,6 +46,8 @@ communication speaks to people with acute pain and measurable value.
 - **Premium themes**: one-time purchase (€5-15 per theme)
 - **White-label**: organizations license OpenSelf for internal use (custom pricing)
 - **Marketplace fee**: percentage on community-published connectors/themes (Phase 3+)
+- **Verified identity (B2B2C, Phase 3)**: businesses pay €5-20 per verified profile
+  received via "Login with OpenSelf". Users are free. See section 10.
 
 ### Pricing philosophy
 
@@ -96,6 +99,11 @@ No single moat. Defense comes from stacking multiple advantages:
 
 5. **Community contributions**: themes, connectors, and page templates contributed by the
    community create a catalog that compounds over time.
+
+6. **Identity network effect (Phase 3)**: users come for the free personal page, stay
+   for the living profile, and become *verified* when they need to share credentials.
+   More verified users → more businesses integrate → more users verify. This is the
+   same flywheel as "Login with Google" but with rich, verified data — not just an email.
 
 ---
 
@@ -246,3 +254,92 @@ GitHub, RSS, Chess.com, Duolingo, ORCID — all easy (1-2h each, public APIs).
 3. No engagement optimization (time-on-site, notifications, streaks)
 4. No feature gating that makes free users feel like second-class citizens
 5. No investor pressure to grow at all costs — sustainable unit economics first
+
+---
+
+## 10) OpenSelf Verified — B2B2C Evolution (Phase 3)
+
+### The insight
+
+The same digital twin that powers a personal page can become a **portable verified
+identity**. The user experience doesn't change — chat, connect, build. But the profile
+becomes economically valuable when anchored to institutional sources.
+
+### The problem it solves
+
+- **For users**: every new service = new form, new KYC, new questionnaire. Tedious, slow, repetitive
+- **For businesses**: KYC costs €50-100/customer, takes days, has 40-60% onboarding dropout
+- **For banks specifically**: freelancers/P.IVA are hard to evaluate (no payslip, variable income, scattered data)
+
+### How it works
+
+```
+User (free)                             Business (pays)
+───────────                             ───────────────
+1. Chats → builds profile               1. Integrates "Login with OpenSelf"
+2. Connects SPID/CIE (verified ID)      2. Requests specific data fields
+3. Connects bank (via Tink/Plaid)        3. User approves on consent screen
+4. Profile enriches over time            4. Receives verified profile instantly
+5. Controls who sees what                5. Pays €5-20 per profile
+```
+
+### Trust tier model
+
+| Tier | Source | Trust level | Example |
+|---|---|---|---|
+| 1 | Self-declared (chat) | Low | "I'm a freelancer" |
+| 2 | Connector-verified | Medium | 50 GitHub repos, 8y LinkedIn experience |
+| 3 | Institutionally-verified | High | SPID identity, bank statements (PSD2) |
+| 4 | Cross-referenced (AI) | Computed | No contradictions across sources → high score |
+
+### Market opportunity
+
+- Global Identity Verification market: ~$12B (2024), projected $30B+ by 2030
+- EU bank fraud losses: ~€1.8B/year (ECB 2023)
+- Average KYC cost per bank customer: €50-100
+- KYC onboarding dropout: 40-60%
+
+### Competitive positioning
+
+OpenSelf Verified occupies a unique space that no current player covers:
+
+| What they do | What OpenSelf adds |
+|---|---|
+| SPID/CIE: *who you are* | + *what you do, what you're worth* |
+| Plaid/Tink: *bank data* | + *professional history, skills, reputation* |
+| Onfido/Veriff: *document scan* | + *conversational UX, rich profile, living data* |
+| LinkedIn: *professional network* | + *verified, not self-reported; portable, not platform-locked* |
+
+The moat is **UX × richness × trust compounding**: no one else builds a verified
+identity through a 5-minute conversation that improves every day.
+
+### Unit economics (Phase 3)
+
+| Metric | Value | Notes |
+|---|---|---|
+| Revenue per verification | €5-20 | Depends on data depth requested |
+| Cost per verification | ~€0.50 | API calls to verification partners |
+| Margin | ~90%+ | After infrastructure costs |
+| Break-even (B2B) | 1 bank pilot, ~500 verifications/month | Covers compliance + partner costs |
+
+### Beachhead: freelancers × Italian banks
+
+1. **Why freelancers**: most underserved by traditional KYC (no payslip = hard to evaluate)
+2. **Why Italian banks**: contact with Intesa Sanpaolo via Mooney founder; Italian market less competitive than UK/US for identity verification
+3. **Why banks first**: highest willingness-to-pay, clear ROI, regulatory pressure to innovate
+
+### Dependencies and risks
+
+| Dependency | Mitigation |
+|---|---|
+| Compliance (GDPR, eIDAS, PSD2) | Partner with certified provider (InfoCert, Namirial) |
+| Bank integration | Validate with 1 bank before building |
+| Chicken-and-egg (users ↔ businesses) | Users come for the free personal page; B2B is the second act |
+| Co-founder with banking expertise | Required for Phase 3 execution |
+
+### What NOT to do
+
+- Do NOT build Phase 3 tech before validating B2B demand with real bank conversations
+- Do NOT delay Phase 1-2 for Verified features — the personal page IS the user acquisition engine
+- Do NOT attempt compliance in-house — always via certified partner
+- Do NOT store raw banking data — only processed/aggregated signals

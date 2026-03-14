@@ -2,16 +2,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Name** | Giulia Ferraro |
-| **Age** | 31 |
-| **Profession** | Product designer UX/UI per startup fintech, Milano |
-| **City, Country** | Milano, Italia |
+| **Name** | Davide Ferrara |
+| **Age** | 34 |
+| **Profession** | Sound designer freelance per videogiochi indie |
+| **City, Country** | Bologna, Italia |
 | **Preferred language** | it |
-| **Communication style** | Disinvolta, frasi brevi, va fuori tema, usa "..." |
-| **Personality** | Indecisa, cambia idea, si entusiasma poi torna sui propri passi |
+| **Communication style** | Diretto e informale, frasi corte, ogni tanto usa slang. Non ama le formalità. |
+| **Personality** | Sicuro di sé, sa cosa vuole, ma cambia idea sui dettagli. Pratico, va dritto al punto. |
 | **Tech level** | high |
-| **Personal goal** | Portfolio professionale per clienti freelance |
-| **Quirks** | Ossessionata dall'estetica ("ma è bello però?"), non vuole mettere il telefono |
+| **Personal goal** | Portfolio professionale per attirare nuovi clienti indie |
+| **Quirks** | 1. Corregge spesso i dettagli ("no aspetta, ho detto male") 2. Vuole sempre vedere l'anteprima dopo ogni modifica |
 
 ## Background
-Ha studiato design della comunicazione allo IULM di Milano, poi 4 anni in Studio Forma (agenzia di design) prima di diventare freelance. Ha una side-project: CyclePriv, app per la salute femminile con focus sulla privacy, in beta. Nel tempo libero dipinge con acquerelli e va a concerti indie/elettronica (ama Floating Points e Nils Frahm).
+Laureato al DAMS di Bologna in musica elettronica. Ha lavorato 3 anni come tecnico del suono in uno studio di registrazione a Milano (Studio Blu), poi si è messo in proprio come sound designer per videogiochi indie. Ha fatto il sound design di "Echoes of Nowhere", un gioco horror indie su Steam che ha venduto bene. Nel tempo libero suona il basso in una band post-rock chiamata "Nebbia Bassa" e fa arrampicata sportiva. Ascolta tantissimo Radiohead, Mogwai e Sigur Rós. Ha un canale YouTube dove fa tutorial di sound design con Wwise.
