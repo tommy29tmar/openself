@@ -10,7 +10,7 @@
  */
 
 import { eq, and, inArray } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { page } from "@/lib/db/schema";
 
 /**
@@ -49,30 +49,36 @@ export function toggleSectionVisibility(
   sectionType: string,
   visible: boolean,
 ): string[] {
-  const current = getHiddenSections(pageId);
-  const isHidden = current.includes(sectionType);
+  return sqlite.transaction(() => {
+    const current = getHiddenSections(pageId);
+    const isHidden = current.includes(sectionType);
 
-  let updated: string[];
-  if (visible && isHidden) {
-    // Show: remove from hidden list
-    updated = current.filter(s => s !== sectionType);
-  } else if (!visible && !isHidden) {
-    // Hide: add to hidden list
-    updated = [...current, sectionType];
-  } else {
-    // Already in desired state
-    updated = current;
-  }
+    let updated: string[];
+    if (visible && isHidden) {
+      // Show: remove from hidden list
+      updated = current.filter(s => s !== sectionType);
+    } else if (!visible && !isHidden) {
+      // Hide: add to hidden list
+      updated = [...current, sectionType];
+    } else {
+      // Already in desired state
+      updated = current;
+    }
 
-  db.update(page)
-    .set({ hiddenSections: JSON.stringify(updated) })
-    .where(
-      and(
-        eq(page.id, pageId),
-        inArray(page.status, ["draft", "approval_pending"]),
-      ),
-    )
-    .run();
+    const result = db.update(page)
+      .set({ hiddenSections: JSON.stringify(updated) })
+      .where(
+        and(
+          eq(page.id, pageId),
+          inArray(page.status, ["draft", "approval_pending"]),
+        ),
+      )
+      .run();
 
-  return updated;
+    if (result.changes === 0) {
+      console.warn(`[section-visibility] toggleSectionVisibility: no draft found for pageId=${pageId}`);
+    }
+
+    return updated;
+  })();
 }

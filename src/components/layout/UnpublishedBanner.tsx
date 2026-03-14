@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PageChange } from "@/lib/services/page-diff-service";
+import { getUiL10n } from "@/lib/i18n/ui-strings";
 
 /**
  * Pure visibility predicates — exported for unit testing.
@@ -51,6 +52,17 @@ const DISCARD_LABELS: Record<string, string> = {
 const DISCARDING_LABELS: Record<string, string> = {
   en: "Discarding...", it: "Scartando...", de: "Verwerfe...", fr: "Annulation...",
   es: "Descartando...", pt: "Descartando...", ja: "破棄中...", zh: "丢弃中...",
+};
+
+const CONFIRM_DISCARD_LABELS: Record<string, string> = {
+  en: "Discard all unpublished changes?",
+  it: "Scartare tutte le modifiche non pubblicate?",
+  de: "Alle unveröffentlichten Änderungen verwerfen?",
+  fr: "Supprimer toutes les modifications non publiées ?",
+  es: "¿Descartar todos los cambios no publicados?",
+  pt: "Descartar todas as alterações não publicadas?",
+  ja: "未公開の変更をすべて破棄しますか？",
+  zh: "丢弃所有未发布的更改？",
 };
 
 const CHANGES_LABEL: Record<string, string> = {
@@ -124,11 +136,13 @@ export function UnpublishedBanner({
     authenticated,
   });
 
+  const l10n = getUiL10n(language);
+
   if (showApproval) {
     return (
       <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
         <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-          Ready to publish
+          {l10n.readyToPublish}
         </span>
         <button
           type="button"
@@ -136,7 +150,7 @@ export function UnpublishedBanner({
           disabled={publishing}
           className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
         >
-          {publishing ? "Publishing..." : "Publish"}
+          {publishing ? l10n.publishing : l10n.publish}
         </button>
       </div>
     );
@@ -153,6 +167,8 @@ export function UnpublishedBanner({
 
     const handleDiscard = async () => {
       if (!onDiscard || discarding) return;
+      const confirmMsg = CONFIRM_DISCARD_LABELS[language] ?? CONFIRM_DISCARD_LABELS.en;
+      if (!window.confirm(confirmMsg)) return;
       setDiscarding(true);
       try {
         await onDiscard();

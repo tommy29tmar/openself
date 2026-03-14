@@ -36,6 +36,7 @@ export function SectionInteractionWrapper({
   actionBar,
 }: SectionInteractionWrapperProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startXRef = useRef(0);
   const startYRef = useRef(0);
   const cancelledRef = useRef(false);
   const [pressed, setPressed] = useState(false);
@@ -60,6 +61,7 @@ export function SectionInteractionWrapper({
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
       cancelledRef.current = false;
+      startXRef.current = e.touches[0].clientX;
       startYRef.current = e.touches[0].clientY;
       setPressed(true);
 
@@ -84,8 +86,9 @@ export function SectionInteractionWrapper({
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
+      const deltaX = Math.abs(e.touches[0].clientX - startXRef.current);
       const deltaY = Math.abs(e.touches[0].clientY - startYRef.current);
-      if (deltaY > SCROLL_CANCEL_PX) {
+      if (deltaX > SCROLL_CANCEL_PX || deltaY > SCROLL_CANCEL_PX) {
         cancelledRef.current = true;
         clearTimer();
       }

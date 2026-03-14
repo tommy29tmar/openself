@@ -6,7 +6,7 @@ import {
   createAuthSession,
 } from "@/lib/services/auth-service";
 import { createSessionCookie, getSessionIdFromRequest } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/middleware/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/middleware/rate-limit";
 import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 import { sqlite } from "@/lib/db";
 
@@ -27,9 +27,7 @@ export async function POST(req: Request) {
   }
 
   // Persistent rate limit: 5/15min per IP (survives restarts)
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim()
-    ?? req.headers.get("x-real-ip")
-    ?? "unknown";
+  const ip = getClientIp(req);
   const authRate = checkAuthRateLimit(ip, "login");
   if (!authRate.allowed) {
     return NextResponse.json(

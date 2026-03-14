@@ -22,6 +22,7 @@ export function mapStravaProfile(profile: StravaProfile): FactInput[] {
       value: {
         platform: "strava",
         label: `${profile.firstname} ${profile.lastname}`.trim(),
+        url: `https://www.strava.com/athletes/${profile.id}`,
         location:
           [profile.city, profile.state, profile.country]
             .filter(Boolean)

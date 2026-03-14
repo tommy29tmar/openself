@@ -42,9 +42,9 @@ export async function GET(req: Request) {
     const changes = computePageDiff(draft.config, publishedConfig);
     return NextResponse.json({ success: true, changes });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    console.error("[draft/diff] Error:", error);
     return NextResponse.json(
-      { success: false, code: "INTERNAL", error: message },
+      { success: false, error: "Internal server error" },
       { status: 500 },
     );
   }

@@ -17,6 +17,15 @@ export function computePageDiff(
   if (!draft || !published) return [];
 
   const changes: PageChange[] = [];
+
+  // Top-level style/presence field changes
+  const TOP_LEVEL_KEYS = ["surface", "voice", "light", "layoutTemplate"] as const;
+  for (const key of TOP_LEVEL_KEYS) {
+    if ((draft as any)[key] !== (published as any)[key]) {
+      changes.push({ sectionType: key, changeType: "modified" as const });
+    }
+  }
+
   const draftSections = new Map(draft.sections.map((s) => [s.type, s]));
   const pubSections = new Map(published.sections.map((s) => [s.type, s]));
 

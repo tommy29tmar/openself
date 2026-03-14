@@ -2,9 +2,14 @@ import React from "react";
 import type { SectionProps } from "../../types";
 import {
     Linkedin, Mail, Twitter, Globe, Calendar, AtSign, Cloud,
-    Hash, Github, Music, Activity,
+    Hash, Github, Music, Activity, Rss,
 } from "lucide-react";
 import { SOCIAL_PLATFORMS } from "@/lib/social-links";
+
+function safeHref(url: string): string {
+  if (/^(https?:|mailto:)/i.test(url)) return url;
+  return "#";
+}
 
 type HeroContent = {
     name: string;
@@ -74,6 +79,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: 
     Github,
     Music,
     Activity,
+    Rss,
 };
 
 function SocialIcon({ platform, size = 20 }: { platform: string; size?: number }) {
@@ -141,7 +147,7 @@ function HeroSocialLinks({ content }: { content: HeroContent }) {
                     {allLinks.map((link, i) => (
                         <a
                             key={i}
-                            href={link.url}
+                            href={safeHref(link.url)}
                             target={link.platform === "email" ? undefined : "_blank"}
                             rel={link.platform === "email" ? undefined : "noopener noreferrer"}
                             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--page-fg,#333)]/20 text-[var(--page-fg-secondary)] transition-colors hover:bg-[var(--page-fg,#333)]/10 hover:text-[var(--page-fg)]"
@@ -155,7 +161,7 @@ function HeroSocialLinks({ content }: { content: HeroContent }) {
             {/* Optional CTA button */}
             {cta && cta.url && cta.label && (
                 <a
-                    href={cta.url}
+                    href={safeHref(cta.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-3 inline-flex h-11 items-center rounded-full border border-[var(--page-accent)] bg-[var(--page-accent)] px-6 text-sm font-medium text-[var(--page-accent-fg,var(--page-bg))] transition-opacity hover:opacity-90"

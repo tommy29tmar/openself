@@ -268,14 +268,14 @@ function PresencePanelControls({
 
       {/* Avatar/Photo */}
       <div>
-        <div style={sectionLabelStyle}>Photo</div>
+        <div style={sectionLabelStyle}>{l10n.presencePhoto}</div>
         <AvatarSection onAvatarChange={onAvatarChange} />
       </div>
 
       {/* Sources */}
       <div>
-        <div style={sectionLabelStyle}>Sources</div>
-        <ConnectorSection />
+        <div style={sectionLabelStyle}>{l10n.presenceSources}</div>
+        <ConnectorSection language={language} />
       </div>
     </div>
   );

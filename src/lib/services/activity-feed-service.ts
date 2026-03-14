@@ -37,7 +37,9 @@ export function getSyncFeedItems(
 ): FeedItem[] {
   // Drizzle doesn't have a clean join helper used elsewhere in the codebase,
   // so we use the select().from().innerJoin() form.
-  // Only show error/failed syncs — successful syncs are noise.
+  // Only show error/failed syncs in the feed.
+  // "partial" (no sync implementation) and "success" are intentionally excluded —
+  // the feed surfaces problems only, not routine operations.
   const rows = db
     .select({
       id: syncLog.id,

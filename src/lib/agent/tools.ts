@@ -2171,6 +2171,10 @@ Do NOT call in a loop.`,
         const { toggleSectionVisibility } = await import("@/lib/services/section-visibility-service");
         const hidden = toggleSectionVisibility(sessionId, sectionType, visible);
         recomposeAfterMutation();
+        logTrustAction(effectiveOwnerKey, "toggle_section_visibility",
+          `${visible ? "Showed" : "Hid"} section "${sectionType}"`,
+          { details: { sectionType, visible } },
+        );
         return { success: true, hiddenSections: hidden };
       } catch (error) {
         return { success: false, error: String(error) };

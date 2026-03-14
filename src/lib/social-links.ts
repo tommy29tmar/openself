@@ -25,6 +25,7 @@ export const SOCIAL_PLATFORMS: Record<string, SocialPlatformDef> = {
   github: { icon: "Github", label: "GitHub", urlPattern: /github\.com/ },
   spotify: { icon: "Music", label: "Spotify", urlPattern: /spotify\.com/ },
   strava: { icon: "Activity", label: "Strava", urlPattern: /strava\.com/ },
+  blog: { icon: "Rss", label: "Blog", urlPattern: null },
 } as const;
 
 /**

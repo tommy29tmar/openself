@@ -3,6 +3,7 @@ import { getUserByEmail, getProfileForUser } from "@/lib/services/auth-service";
 import { createAuthToken } from "@/lib/auth/tokens";
 import { getEmailAdapter } from "@/lib/email";
 import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
+import { getClientIp } from "@/lib/middleware/rate-limit";
 
 /**
  * POST /api/auth/magic-link
@@ -70,10 +71,3 @@ function buildMagicLinkEmail(loginUrl: string): string {
   `;
 }
 
-function getClientIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  const real = req.headers.get("x-real-ip");
-  if (real) return real;
-  return "unknown";
-}

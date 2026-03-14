@@ -20,16 +20,15 @@ interface ToastManagerOpts {
 const DEFAULT_MAX_VISIBLE = 5;
 const DEFAULT_DISMISS_MS = 3000;
 
-let _counter = 0;
-function nextId(): string {
-  return `toast-${++_counter}-${Date.now()}`;
-}
-
 /**
  * Imperative toast manager — no React dependency.
  * Exported for unit testing; the React hook wraps this.
  */
 export function createToastManager(opts?: ToastManagerOpts) {
+  let _counter = 0;
+  function nextId(): string {
+    return `toast-${++_counter}-${Date.now()}`;
+  }
   const maxVisible = opts?.maxVisible ?? DEFAULT_MAX_VISIBLE;
   const dismissAfterMs = opts?.dismissAfterMs ?? DEFAULT_DISMISS_MS;
   const onChange = opts?.onChange;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback, useState } from "react";
+import React, { useRef, useEffect, useCallback, useState, useMemo } from "react";
 
 type BottomSheetProps = {
   open: boolean;
@@ -24,10 +24,15 @@ const SWIPE_DISMISS_PX = 60;
  */
 export function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
+  const translateYRef = useRef(0);
   const [translateY, setTranslateY] = useState(0);
   const [closing, setClosing] = useState(false);
-  const titleId = `bottom-sheet-title-${title.replace(/\s+/g, "-").toLowerCase()}`;
+  const titleId = useMemo(
+    () => `bottom-sheet-title-${title.replace(/\s+/g, "-").toLowerCase()}`,
+    [title],
+  );
 
   // Body scroll lock
   useEffect(() => {
@@ -39,14 +44,19 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
     };
   }, [open]);
 
-  // Focus trap via inert on <main>
+  // Focus trap via inert on all body children except the sheet elements
   useEffect(() => {
     if (!open) return;
-    const main = document.querySelector("main");
-    if (main) {
-      main.setAttribute("inert", "");
-      return () => main.removeAttribute("inert");
-    }
+    const exclude = new Set<Element>();
+    if (backdropRef.current) exclude.add(backdropRef.current);
+    if (sheetRef.current) exclude.add(sheetRef.current);
+    const siblings = Array.from(document.body.children).filter(
+      (el) => !exclude.has(el) && el instanceof HTMLElement,
+    ) as HTMLElement[];
+    siblings.forEach((el) => el.setAttribute("inert", ""));
+    return () => {
+      siblings.forEach((el) => el.removeAttribute("inert"));
+    };
   }, [open]);
 
   // Escape key
@@ -68,6 +78,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
+    translateYRef.current = 0;
     setTranslateY(0);
   }, []);
 
@@ -75,22 +86,25 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
     const delta = e.touches[0].clientY - touchStartY.current;
     // Only allow downward swipe
     if (delta > 0) {
+      translateYRef.current = delta;
       setTranslateY(delta);
     }
   }, []);
 
   const handleTouchEnd = useCallback(() => {
-    if (translateY > SWIPE_DISMISS_PX) {
+    if (translateYRef.current > SWIPE_DISMISS_PX) {
       setClosing(true);
       setTimeout(() => {
         setClosing(false);
+        translateYRef.current = 0;
         setTranslateY(0);
         onClose();
       }, 200);
     } else {
+      translateYRef.current = 0;
       setTranslateY(0);
     }
-  }, [translateY, onClose]);
+  }, [onClose]);
 
   if (!open && !closing) return null;
 
@@ -98,6 +112,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
     <>
       {/* Backdrop */}
       <div
+        ref={backdropRef}
         style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)" }}
         onClick={onClose}
         aria-hidden="true"

@@ -28,7 +28,7 @@ function connectorLabel(type: string): string {
 export function formatFeedForContext(items: FeedItem[]): string {
   if (items.length === 0) return "";
 
-  const syncs = items.filter((i) => i.type === "connector_sync" || i.type === "connector_error");
+  const syncs = items.filter((i) => i.type === "connector_error");
   const pending = items.filter((i) => i.category === "actionable" && i.status === "pending");
 
   const lines: string[] = [];
@@ -38,9 +38,7 @@ export function formatFeedForContext(items: FeedItem[]): string {
     lines.push("RECENT ACTIVITY:");
     for (const s of syncs.slice(0, 5)) {
       const d = s.detail;
-      if (d.type === "connector_sync") {
-        lines.push(`- ${connectorLabel(d.connectorType)} synced ${relativeTime(s.createdAt)}: ${d.factsCreated} facts, ${d.eventsCreated} events`);
-      } else if (d.type === "connector_error") {
+      if (d.type === "connector_error") {
         lines.push(`- ${connectorLabel(d.connectorType)} sync failed ${relativeTime(s.createdAt)}: ${d.error}`);
       }
     }

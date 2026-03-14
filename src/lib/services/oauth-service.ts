@@ -93,35 +93,50 @@ export async function handleOAuthCallback(
     // Link OAuth identity to existing user
     userId = existingUser.id;
     isNew = false;
+
+    // 3a. Create the OAuth identity link for existing user
+    db.insert(authIdentities)
+      .values({
+        id: randomUUID(),
+        userId,
+        provider: info.provider,
+        providerUserId: info.providerUserId,
+        providerEmail: info.email,
+      })
+      .run();
   } else {
     // Create new user (with random password — login via OAuth only)
+    // Compute async hash BEFORE transaction (SQLite transactions are synchronous)
     userId = randomUUID();
     const randomPassword = randomUUID();
     const passwordHash = await hashPassword(randomPassword);
     const now = new Date().toISOString();
 
-    db.insert(users)
-      .values({
-        id: userId,
-        email: info.email.toLowerCase().trim(),
-        passwordHash,
-        displayName: info.displayName ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run();
-  }
+    // All new-user DB writes in one atomic transaction
+    sqlite.transaction(() => {
+      db.insert(users)
+        .values({
+          id: userId,
+          email: info.email.toLowerCase().trim(),
+          passwordHash,
+          displayName: info.displayName ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
 
-  // 3. Create the OAuth identity link
-  db.insert(authIdentities)
-    .values({
-      id: randomUUID(),
-      userId,
-      provider: info.provider,
-      providerUserId: info.providerUserId,
-      providerEmail: info.email,
-    })
-    .run();
+      // 3b. Create the OAuth identity link
+      db.insert(authIdentities)
+        .values({
+          id: randomUUID(),
+          userId,
+          provider: info.provider,
+          providerUserId: info.providerUserId,
+          providerEmail: info.email,
+        })
+        .run();
+    })();
+  }
 
   // 4. Get or create profile
   let profile = db

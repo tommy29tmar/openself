@@ -25,7 +25,7 @@ describe("social-links registry", () => {
         expect(def.icon, `${key} should have icon`).toBeTruthy();
         expect(def.label, `${key} should have label`).toBeTruthy();
         // urlPattern can be null (website fallback)
-        if (key !== "website") {
+        if (key !== "website" && key !== "blog") {
           expect(def.urlPattern, `${key} should have urlPattern`).toBeInstanceOf(RegExp);
         }
       }

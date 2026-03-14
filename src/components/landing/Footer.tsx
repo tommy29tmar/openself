@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Github } from "lucide-react";
 
 export function Footer() {
@@ -17,14 +16,10 @@ export function Footer() {
 
         {/* Links */}
         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[#999]">
-          <Link href="/privacy" className="transition-colors hover:text-white">
-            Privacy
-          </Link>
-          <Link href="/terms" className="transition-colors hover:text-white">
-            Terms
-          </Link>
+          <span className="text-zinc-500 cursor-default" title="Coming soon">Privacy Policy</span>
+          <span className="text-zinc-500 cursor-default" title="Coming soon">Terms of Service</span>
           <a
-            href="https://github.com/open-self"
+            href="https://github.com/openself"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 transition-colors hover:text-white"

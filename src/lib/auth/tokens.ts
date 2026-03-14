@@ -1,8 +1,6 @@
-import { randomBytes, createHash, timingSafeEqual } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { randomUUID } from "crypto";
-import { db } from "@/lib/db";
-import { authTokens } from "@/lib/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { sqlite } from "@/lib/db";
 
 export type TokenType = "password_reset" | "email_verification" | "magic_link";
 
@@ -18,126 +16,73 @@ export function createAuthToken(
   type: TokenType,
   ttlMs: number = DEFAULT_TTL_MS,
 ): string {
-  // Invalidate any existing unused tokens of same type for this profile
-  const now = new Date().toISOString();
-  db.update(authTokens)
-    .set({ usedAt: now })
-    .where(
-      and(
-        eq(authTokens.profileId, profileId),
-        eq(authTokens.type, type),
-        isNull(authTokens.usedAt),
-      ),
-    )
-    .run();
-
   const rawToken = randomBytes(32).toString("hex");
   const tokenHash = hashToken(rawToken);
+  const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const id = randomUUID();
 
-  db.insert(authTokens)
-    .values({
-      id: randomUUID(),
-      profileId,
-      tokenHash,
-      type,
-      expiresAt,
-      createdAt: now,
-    })
-    .run();
+  sqlite.transaction(() => {
+    // Invalidate any existing unused tokens of same type for this profile
+    sqlite.prepare(
+      `UPDATE auth_tokens SET used_at = ? WHERE profile_id = ? AND type = ? AND used_at IS NULL`,
+    ).run(now, profileId, type);
+    // Insert new token
+    sqlite.prepare(
+      `INSERT INTO auth_tokens (id, profile_id, token_hash, type, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(id, profileId, tokenHash, type, expiresAt, now);
+  })();
 
   return rawToken;
 }
 
 /**
- * Validate and consume a token. Returns the profileId if valid, null otherwise.
- * Uses constant-time comparison to prevent timing attacks.
+ * Validate and consume a token atomically. Returns the profileId if valid, null otherwise.
+ * Uses a single UPDATE...RETURNING to eliminate TOCTOU race conditions and O(n) scans.
  */
 export function consumeAuthToken(
   rawToken: string,
   type: TokenType,
 ): string | null {
   const tokenHash = hashToken(rawToken);
+  const now = new Date().toISOString();
 
-  // Find matching token row
-  const rows = db
-    .select()
-    .from(authTokens)
-    .where(
-      and(
-        eq(authTokens.type, type),
-        isNull(authTokens.usedAt),
-      ),
-    )
-    .all();
+  const result = sqlite.prepare(`
+    UPDATE auth_tokens
+    SET used_at = ?
+    WHERE token_hash = ? AND type = ? AND used_at IS NULL AND expires_at > ?
+    RETURNING profile_id
+  `).get(now, tokenHash, type, now) as { profile_id: string } | undefined;
 
-  // Constant-time comparison against all unused tokens of this type
-  const now = new Date();
-  for (const row of rows) {
-    const storedHash = Buffer.from(row.tokenHash, "hex");
-    const candidateHash = Buffer.from(tokenHash, "hex");
-
-    if (storedHash.length !== candidateHash.length) continue;
-
-    if (timingSafeEqual(storedHash, candidateHash)) {
-      // Check expiry
-      if (new Date(row.expiresAt) < now) {
-        // Expired — mark as used
-        db.update(authTokens)
-          .set({ usedAt: now.toISOString() })
-          .where(eq(authTokens.id, row.id))
-          .run();
-        return null;
-      }
-
-      // Valid — consume
-      db.update(authTokens)
-        .set({ usedAt: now.toISOString() })
-        .where(eq(authTokens.id, row.id))
-        .run();
-
-      return row.profileId;
-    }
-  }
-
-  return null;
+  return result?.profile_id ?? null;
 }
 
 /**
  * Validate a token without consuming it. Returns the profileId if valid, null otherwise.
  * Used for checking token validity before showing a form.
+ * Uses hash-in-WHERE (O(1) via idx_auth_tokens_hash) — same pattern as consumeAuthToken.
  */
 export function validateAuthToken(
   rawToken: string,
   type: TokenType,
 ): string | null {
   const tokenHash = hashToken(rawToken);
-  const now = new Date();
+  const now = new Date().toISOString();
+  const result = sqlite.prepare(
+    `SELECT profile_id FROM auth_tokens WHERE token_hash = ? AND type = ? AND used_at IS NULL AND expires_at > ?`,
+  ).get(tokenHash, type, now) as { profile_id: string } | undefined;
+  return result?.profile_id ?? null;
+}
 
-  const rows = db
-    .select()
-    .from(authTokens)
-    .where(
-      and(
-        eq(authTokens.type, type),
-        isNull(authTokens.usedAt),
-      ),
-    )
-    .all();
-
-  for (const row of rows) {
-    const storedHash = Buffer.from(row.tokenHash, "hex");
-    const candidateHash = Buffer.from(tokenHash, "hex");
-
-    if (storedHash.length !== candidateHash.length) continue;
-
-    if (timingSafeEqual(storedHash, candidateHash)) {
-      if (new Date(row.expiresAt) < now) return null;
-      return row.profileId;
-    }
-  }
-
-  return null;
+/**
+ * Delete expired and consumed auth tokens. Returns the number of rows removed.
+ * Called from global housekeeping (worker).
+ */
+export function cleanupExpiredAuthTokens(): number {
+  const result = sqlite.prepare(
+    `DELETE FROM auth_tokens WHERE expires_at < datetime('now')`,
+  ).run();
+  return result.changes;
 }
 
 function hashToken(token: string): string {

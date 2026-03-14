@@ -1,44 +1,4 @@
-"use client";
-
-import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-
-type FAQItemProps = {
-  question: string;
-  answer: string;
-  open: boolean;
-  onToggle: () => void;
-};
-
-function FAQItem({ question, answer, open, onToggle }: FAQItemProps) {
-  return (
-    <div className="border-b border-white/8">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between py-5 text-left"
-      >
-        <span className="pr-4 text-base font-medium text-white">
-          {question}
-        </span>
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-[#999] transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-      <div
-        className={`grid transition-all duration-200 ${
-          open ? "grid-rows-[1fr] pb-5" : "grid-rows-[0fr]"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <p className="text-sm leading-relaxed text-[#999]">{answer}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const faqs = [
   {
@@ -68,8 +28,6 @@ const faqs = [
 ];
 
 export function FAQ() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-
   return (
     <section className="px-6 py-20 sm:py-28">
       <div className="mx-auto max-w-2xl">
@@ -81,14 +39,18 @@ export function FAQ() {
         </p>
 
         <div className="border-t border-white/8">
-          {faqs.map((faq, i) => (
-            <FAQItem
-              key={faq.q}
-              question={faq.q}
-              answer={faq.a}
-              open={openIndex === i}
-              onToggle={() => setOpenIndex(openIndex === i ? null : i)}
-            />
+          {faqs.map((faq) => (
+            <details key={faq.q} className="group border-b border-white/8">
+              <summary className="flex w-full cursor-pointer list-none items-center justify-between py-5 text-left">
+                <span className="pr-4 text-base font-medium text-white">
+                  {faq.q}
+                </span>
+                <ChevronDown className="h-5 w-5 shrink-0 text-[#999] transition-transform duration-200 group-open:rotate-180" />
+              </summary>
+              <p className="pb-5 text-sm leading-relaxed text-[#999]">
+                {faq.a}
+              </p>
+            </details>
           ))}
         </div>
       </div>

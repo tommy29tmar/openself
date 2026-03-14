@@ -634,7 +634,7 @@ export const authTokens = sqliteTable(
       .notNull()
       .references(() => profiles.id),
     tokenHash: text("token_hash").notNull(),
-    type: text("type").notNull(),
+    type: text("type", { enum: ["password_reset", "email_verification", "magic_link"] }).notNull(),
     expiresAt: text("expires_at").notNull(),
     usedAt: text("used_at"),
     createdAt: text("created_at")

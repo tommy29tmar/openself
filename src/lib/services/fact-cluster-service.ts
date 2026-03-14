@@ -112,7 +112,15 @@ export function identityMatch(
     case "social": {
       const platA = slugifyForMatch(str(a.platform));
       const platB = slugifyForMatch(str(b.platform));
-      return platA !== "" && platA === platB;
+      if (platA === "" || platA !== platB) return false;
+      // Also require same URL or same username to avoid cross-connector false positives
+      const urlA = str(a.url); const urlB = str(b.url);
+      if (urlA && urlB) return urlA === urlB;
+      const uA = slugifyForMatch(str(a.username));
+      const uB = slugifyForMatch(str(b.username));
+      if (uA !== "" && uB !== "") return uA === uB;
+      // If neither has matching url or username, don't cluster
+      return false;
     }
 
     case "music": {

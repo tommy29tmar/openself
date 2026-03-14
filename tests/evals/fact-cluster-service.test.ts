@@ -133,12 +133,32 @@ describe("identityMatch", () => {
   });
 
   // social
-  it("matches social by platform", () => {
+  it("matches social by platform + same url", () => {
+    expect(
+      identityMatch(
+        "social",
+        { platform: "github", url: "https://github.com/user1" },
+        { platform: "GitHub", url: "https://github.com/user1" }
+      )
+    ).toBe(true);
+  });
+
+  it("does not match social with same platform but different url", () => {
     expect(
       identityMatch(
         "social",
         { platform: "github", url: "https://github.com/user1" },
         { platform: "GitHub", url: "https://github.com/user2" }
+      )
+    ).toBe(false);
+  });
+
+  it("matches social by platform + same username", () => {
+    expect(
+      identityMatch(
+        "social",
+        { platform: "twitter", username: "johndoe" },
+        { platform: "Twitter", username: "JohnDoe" }
       )
     ).toBe(true);
   });

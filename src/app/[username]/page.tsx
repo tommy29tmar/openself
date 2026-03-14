@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getPublishedPage, getPublishedPageSourceLanguage } from "@/lib/services/page-service";
+import { getPublishedPage, getPublishedPageSourceLanguage, computeConfigHash } from "@/lib/services/page-service";
 import { PageRenderer } from "@/components/page";
 import { checkPageOwnership } from "@/lib/services/ownership";
 import { translatePageContent } from "@/lib/ai/translate";
@@ -75,7 +75,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     (typeof bio?.content?.text === "string" ? bio.content.text.slice(0, 160) : null) ??
     `${name} on OpenSelf`;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://openself.dev";
-  const ogImageUrl = `${baseUrl}/api/og/${encodeURIComponent(username)}`;
+  const ogImageUrl = `${baseUrl}/api/og/${encodeURIComponent(username)}?v=${computeConfigHash(config)}`;
   const profileUrl = `${baseUrl}/${encodeURIComponent(username)}`;
   const ogTitle = headline ? `${name} — ${headline}` : name;
 
@@ -111,7 +111,9 @@ export default async function UsernamePage({ params, searchParams }: Props) {
   const jsonLdScript = (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+      }}
     />
   );
 

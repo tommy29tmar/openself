@@ -31,6 +31,7 @@ export function useChatPrefetch(language: string) {
         ]);
         if (cancelled) return;
         if (bRes.status === 401 || mRes.status === 401) {
+          cancelled = true;
           window.location.href = "/invite";
           return;
         }

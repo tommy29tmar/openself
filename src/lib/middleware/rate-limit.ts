@@ -22,9 +22,16 @@ export type RateLimitResult = {
   reason?: string;
 };
 
-function getClientIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+/**
+ * Extract client IP from request headers.
+ * Only trusts X-Forwarded-For when TRUSTED_PROXY_IP is set (prevents spoofing).
+ */
+export function getClientIp(req: Request): string {
+  const trustedProxy = process.env.TRUSTED_PROXY_IP;
+  if (trustedProxy) {
+    const forwarded = req.headers.get("x-forwarded-for");
+    if (forwarded) return forwarded.split(",")[0].trim();
+  }
   const real = req.headers.get("x-real-ip");
   if (real) return real;
   return "unknown";

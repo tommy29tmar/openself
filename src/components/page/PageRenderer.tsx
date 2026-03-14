@@ -30,6 +30,8 @@ export type PageRendererProps = {
   onSectionAction?: (action: SectionAction) => void;
   /** Desktop action bar factory — receives section metadata, returns a React node positioned by SectionInteractionWrapper. */
   renderActionBar?: (props: { sectionType: string; sectionIndex: number; totalSections: number }) => React.ReactNode;
+  /** Localized label for the "Show" button on hidden-section ghost cards. */
+  showLabel?: string;
 };
 
 export function PageRenderer({
@@ -40,6 +42,7 @@ export function PageRenderer({
   onShowSection,
   onSectionAction,
   renderActionBar,
+  showLabel,
 }: PageRendererProps) {
   const template = resolveLayoutTemplate(config);
   const LayoutComponent = getLayoutComponent(template.id);
@@ -72,6 +75,7 @@ export function PageRenderer({
           <HiddenSectionCard
             sectionType={section.type}
             onShow={onShowSection ? () => onShowSection(section.type) : undefined}
+            showLabel={showLabel}
           />
         </div>
       );
@@ -129,7 +133,7 @@ export function PageRenderer({
 
   // Owner view: keep OwnerBanner (sticky top) + StickyNav (fixed top-9) inside themed wrapper
   // Visitor view: unified PageTopBar (fixed top-0) — logo/login split on scroll, nav fades in center
-  const navSections = visibleSections.filter(s => !hiddenSet.has(s.type));
+  const navSections = visibleSections;
   const topBar = previewMode ? null : isOwner
     ? (shouldShowStickyNav(navSections)
         ? <StickyNav sections={navSections} name={heroName} avatarUrl={heroAvatarUrl} />

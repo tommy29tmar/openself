@@ -178,6 +178,17 @@ export interface UiStrings {
   presenceTypography: string;
   presenceMode: string;
   presencePresets: string;
+  presencePhoto: string;
+  presenceSources: string;
+
+  // Social section
+  socialSectionTitle: string;
+
+  // Drawer
+  closeDrawer: string;
+
+  // Publish banner
+  readyToPublish: string;
 
   // Empty state
   allClear: string;
@@ -345,6 +356,11 @@ const en: UiStrings = {
   presenceTypography: "Typography",
   presenceMode: "Mode",
   presencePresets: "Preset styles",
+  presencePhoto: "Photo",
+  presenceSources: "Sources",
+  socialSectionTitle: "Get in touch",
+  closeDrawer: "Close",
+  readyToPublish: "Ready to publish",
   allClear: "All clear",
   noNotifications: "No new notifications",
   chatErrorGeneric: "Something went wrong. Please try again.",
@@ -504,6 +520,11 @@ const it: UiStrings = {
   presenceTypography: "Tipografia",
   presenceMode: "Modalità",
   presencePresets: "Stili predefiniti",
+  presencePhoto: "Foto",
+  presenceSources: "Fonti",
+  socialSectionTitle: "Contatti",
+  closeDrawer: "Chiudi",
+  readyToPublish: "Pronto per la pubblicazione",
   allClear: "Tutto a posto",
   noNotifications: "Nessuna nuova notifica",
   chatErrorGeneric: "Qualcosa è andato storto. Riprova.",
@@ -663,6 +684,11 @@ const de: UiStrings = {
   presenceTypography: "Typografie",
   presenceMode: "Modus",
   presencePresets: "Vordefinierte Stile",
+  presencePhoto: "Foto",
+  presenceSources: "Quellen",
+  socialSectionTitle: "Kontakt",
+  closeDrawer: "Schließen",
+  readyToPublish: "Bereit zur Veröffentlichung",
   allClear: "Alles erledigt",
   noNotifications: "Keine neuen Benachrichtigungen",
   chatErrorGeneric: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
@@ -822,7 +848,12 @@ const fr: UiStrings = {
   presenceTypography: "Typographie",
   presenceMode: "Mode",
   presencePresets: "Styles prédéfinis",
-  allClear: "Rien a signaler",
+  presencePhoto: "Photo",
+  presenceSources: "Sources",
+  socialSectionTitle: "Contact",
+  closeDrawer: "Fermer",
+  readyToPublish: "Prêt à publier",
+  allClear: "Rien à signaler",
   noNotifications: "Aucune nouvelle notification",
   chatErrorGeneric: "Quelque chose s'est mal passé. Veuillez réessayer.",
   chatErrorProviderDown: "Le service IA est temporairement indisponible. Réessayez dans un instant.",
@@ -981,6 +1012,11 @@ const es: UiStrings = {
   presenceTypography: "Tipografía",
   presenceMode: "Modo",
   presencePresets: "Estilos predefinidos",
+  presencePhoto: "Foto",
+  presenceSources: "Fuentes",
+  socialSectionTitle: "Contacto",
+  closeDrawer: "Cerrar",
+  readyToPublish: "Listo para publicar",
   allClear: "Todo en orden",
   noNotifications: "Sin notificaciones nuevas",
   chatErrorGeneric: "Algo salió mal. Inténtalo de nuevo.",
@@ -1140,8 +1176,13 @@ const pt: UiStrings = {
   presenceTypography: "Tipografia",
   presenceMode: "Modo",
   presencePresets: "Estilos predefinidos",
+  presencePhoto: "Foto",
+  presenceSources: "Fontes",
+  socialSectionTitle: "Contato",
+  closeDrawer: "Fechar",
+  readyToPublish: "Pronto para publicar",
   allClear: "Tudo em ordem",
-  noNotifications: "Nenhuma notificacao nova",
+  noNotifications: "Nenhuma notificação nova",
   chatErrorGeneric: "Algo correu mal. Tente novamente.",
   chatErrorProviderDown: "O serviço de IA está temporariamente indisponível. Tente novamente em breve.",
   chatErrorRateLimit: "Muitos pedidos — aguarde um momento e tente novamente.",
@@ -1299,6 +1340,11 @@ const ja: UiStrings = {
   presenceTypography: "タイポグラフィ",
   presenceMode: "モード",
   presencePresets: "プリセットスタイル",
+  presencePhoto: "写真",
+  presenceSources: "ソース",
+  socialSectionTitle: "連絡先",
+  closeDrawer: "閉じる",
+  readyToPublish: "公開準備完了",
   allClear: "すべて完了",
   noNotifications: "新しい通知はありません",
   chatErrorGeneric: "エラーが発生しました。もう一度お試しください。",
@@ -1458,6 +1504,11 @@ const zh: UiStrings = {
   presenceTypography: "字体",
   presenceMode: "模式",
   presencePresets: "预设样式",
+  presencePhoto: "照片",
+  presenceSources: "来源",
+  socialSectionTitle: "联系方式",
+  closeDrawer: "关闭",
+  readyToPublish: "准备发布",
   allClear: "一切就绪",
   noNotifications: "没有新通知",
   chatErrorGeneric: "出现错误，请重试。",

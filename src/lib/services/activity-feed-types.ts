@@ -1,5 +1,4 @@
 export type FeedItemType =
-  | "connector_sync"
   | "connector_error"
   | "conformity_proposal"
   | "soul_proposal"
@@ -19,19 +18,10 @@ export interface FeedItem {
 }
 
 export type FeedItemDetail =
-  | SyncDetail
   | SyncErrorDetail
   | ConformityDetail
   | SoulDetail
   | EpisodicDetail;
-
-export interface SyncDetail {
-  type: "connector_sync";
-  connectorType: string;
-  factsCreated: number;
-  factsUpdated: number;
-  eventsCreated: number;
-}
 
 export interface SyncErrorDetail {
   type: "connector_error";

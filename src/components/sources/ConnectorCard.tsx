@@ -8,9 +8,10 @@ type ConnectorCardProps = {
   definition: ConnectorUIDefinition;
   status: ConnectorStatusRow | null;
   onRefresh: () => void;
+  language?: string;
 };
 
-export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardProps) {
+export function ConnectorCard({ definition, status, onRefresh, language = "en" }: ConnectorCardProps) {
   const [loading, setLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -236,7 +237,7 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
       </p>
       {status?.lastSync && (
         <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginBottom: 10 }}>
-          Last sync: {relativeTime(status.lastSync)}
+          Last sync: {relativeTime(status.lastSync, language)}
         </p>
       )}
 
@@ -513,16 +514,17 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
   );
 }
 
-function relativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 0) return "just now";
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+function relativeTime(dateStr: string, locale = "en"): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const seconds = Math.floor(diff / 1000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (seconds < 60) return rtf.format(-seconds, "second");
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return rtf.format(-minutes, "minute");
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return rtf.format(-hours, "hour");
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return rtf.format(-days, "day");
 }
 
 function btnStyle(bg: string, color: string): CSSProperties {

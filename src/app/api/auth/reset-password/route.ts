@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { consumeAuthToken, validateAuthToken } from "@/lib/auth/tokens";
-import { hashPassword, getUserById } from "@/lib/services/auth-service";
+import { hashPassword } from "@/lib/services/auth-service";
 import { db } from "@/lib/db";
-import { users, profiles } from "@/lib/db/schema";
+import { users, profiles, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 /**
@@ -29,8 +29,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Consume the token (one-time use)
-    const profileId = consumeAuthToken(token, "password_reset");
+    // Validate the token (read-only) before consuming
+    const profileId = validateAuthToken(token, "password_reset");
     if (!profileId) {
       return NextResponse.json(
         { success: false, error: "Invalid or expired link" },
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Find the user for this profile
+    // Find the user for this profile (before consuming token)
     const profile = db
       .select()
       .from(profiles)
@@ -52,11 +52,25 @@ export async function POST(req: Request) {
       );
     }
 
+    // Now consume the token (one-time use)
+    const consumed = consumeAuthToken(token, "password_reset");
+    if (!consumed) {
+      return NextResponse.json(
+        { success: false, error: "Invalid or expired link" },
+        { status: 400 },
+      );
+    }
+
     // Hash the new password and update
     const passwordHash = await hashPassword(password);
     db.update(users)
       .set({ passwordHash, updatedAt: new Date().toISOString() })
       .where(eq(users.id, profile.userId))
+      .run();
+
+    // Invalidate all sessions for this profile (force re-auth on all devices)
+    db.delete(sessions)
+      .where(eq(sessions.profileId, profileId))
       .run();
 
     return NextResponse.json({ success: true });

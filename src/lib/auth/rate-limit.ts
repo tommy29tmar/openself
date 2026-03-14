@@ -67,6 +67,11 @@ export function checkAuthRateLimit(
       )
       .run(ip, action);
 
+    // Cleanup stale entries for this IP+action (lightweight, indexed)
+    sqlite.prepare(
+      "DELETE FROM auth_rate_limits WHERE ip = ? AND action = ? AND attempted_at < datetime('now', '-24 hours')",
+    ).run(ip, action);
+
     return { allowed: true };
   } catch (err) {
     // If table doesn't exist yet (pre-migration), allow through

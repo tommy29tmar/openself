@@ -3,20 +3,19 @@ import { formatFeedForContext } from "@/lib/services/activity-feed-formatters";
 import type { FeedItem } from "@/lib/services/activity-feed-types";
 
 describe("formatFeedForContext", () => {
-  it("formats sync items with relative time and counts", () => {
+  it("formats error items with relative time", () => {
     const items: FeedItem[] = [{
       id: "sync_1",
-      type: "connector_sync",
+      type: "connector_error",
       category: "informational",
       connectorType: "strava",
       title: "",
       createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      detail: { type: "connector_sync", connectorType: "strava", factsCreated: 3, factsUpdated: 0, eventsCreated: 2 },
+      detail: { type: "connector_error", connectorType: "strava", error: "timeout", lastSuccessfulSync: null },
     }];
     const result = formatFeedForContext(items);
     expect(result).toContain("Strava");
-    expect(result).toContain("3 facts");
-    expect(result).toContain("2 events");
+    expect(result).toContain("sync failed");
     expect(result).toContain("RECENT ACTIVITY");
   });
 
@@ -69,26 +68,26 @@ describe("formatFeedForContext", () => {
   it("stays within ~200 tokens (1000 chars)", () => {
     const items: FeedItem[] = Array.from({ length: 20 }, (_, i) => ({
       id: `sync_${i}`,
-      type: "connector_sync" as const,
+      type: "connector_error" as const,
       category: "informational" as const,
       connectorType: "rss",
       title: "",
       createdAt: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
-      detail: { type: "connector_sync" as const, connectorType: "rss", factsCreated: 1, factsUpdated: 0, eventsCreated: 0 },
+      detail: { type: "connector_error" as const, connectorType: "rss", error: "timeout", lastSuccessfulSync: null },
     }));
     const result = formatFeedForContext(items);
     expect(result.length).toBeLessThan(1000);
   });
 
-  it("caps sync items at 5", () => {
+  it("caps error items at 5", () => {
     const items: FeedItem[] = Array.from({ length: 10 }, (_, i) => ({
       id: `sync_${i}`,
-      type: "connector_sync" as const,
+      type: "connector_error" as const,
       category: "informational" as const,
       connectorType: "rss",
       title: "",
       createdAt: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
-      detail: { type: "connector_sync" as const, connectorType: "rss", factsCreated: 1, factsUpdated: 0, eventsCreated: 0 },
+      detail: { type: "connector_error" as const, connectorType: "rss", error: "timeout", lastSuccessfulSync: null },
     }));
     const result = formatFeedForContext(items);
     const syncLines = result.split("\n").filter(l => l.startsWith("- "));
@@ -111,19 +110,19 @@ describe("formatFeedForContext", () => {
 });
 
 describe("pageStateBlock with activity feed", () => {
-  it("includes RECENT ACTIVITY when sync items exist in steady_state", () => {
+  it("includes RECENT ACTIVITY when error items exist in steady_state", () => {
     // This is a structural test that verifies the imports exist and the
     // formatFeedForContext function produces the expected format
     // (already tested in the formatter tests above)
     // Here we just verify the integration point works
     const items = [{
       id: "sync_1",
-      type: "connector_sync" as const,
+      type: "connector_error" as const,
       category: "informational" as const,
       connectorType: "strava",
       title: "",
       createdAt: new Date().toISOString(),
-      detail: { type: "connector_sync" as const, connectorType: "strava", factsCreated: 3, factsUpdated: 0, eventsCreated: 2 },
+      detail: { type: "connector_error" as const, connectorType: "strava", error: "rate_limited", lastSuccessfulSync: null },
     }];
     const result = formatFeedForContext(items);
     expect(result).toContain("RECENT ACTIVITY");

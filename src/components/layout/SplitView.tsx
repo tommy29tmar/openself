@@ -136,8 +136,6 @@ export function SplitView({
     if (typeof window === "undefined") return true;
     return localStorage.getItem("openself:longpress-hint-seen") === "1";
   });
-  const chatInputRef = useRef<HTMLInputElement>(null);
-
   const dismissHint = useCallback(() => {
     setHasSeenHint(true);
     if (typeof window !== "undefined") {
@@ -160,7 +158,7 @@ export function SplitView({
   }, [openSettings]);
 
   // Toast manager
-  const toastManager = useToastManager();
+  const toastManager = useToastManager({ maxVisible: isMobile ? 2 : 3 });
   const handleToolComplete = useCallback((toolName: string) => {
     const msg = getToolToastMessage(toolName, language);
     if (msg) toastManager.add(msg, "success");
@@ -196,13 +194,21 @@ export function SplitView({
 
   // Discard draft changes
   const handleDiscardDraft = useCallback(async () => {
-    const res = await fetch("/api/draft/discard", { method: "POST" });
-    const data = await res.json();
-    if (data.success) {
-      onPublishedConfigHashChange?.(configHash);
-      setPageChanges([]);
+    try {
+      const res = await fetch("/api/draft/discard", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setConfigHash(publishedConfigHash ?? null);
+        onPublishedConfigHashChange?.(publishedConfigHash ?? null);
+        setPageChanges([]);
+        setHiddenSections([]);
+      } else {
+        toastManager.add("Failed to discard changes", "error");
+      }
+    } catch {
+      toastManager.add("Failed to discard changes", "error");
     }
-  }, [configHash, onPublishedConfigHashChange]);
+  }, [publishedConfigHash, onPublishedConfigHashChange, toastManager]);
 
   const t = getUiL10n(language);
   const authenticated = authState?.authenticated ?? false;
@@ -221,23 +227,19 @@ export function SplitView({
     enabled: true,
     language,
     onUpdate: (data) => {
-      if (Date.now() - lastUserEdit.current < POLL_INTERVAL) {
-        if (data.config) setConfig(data.config);
-        if (data.configHash) setConfigHash(data.configHash);
-        if (data.publishStatus) setPublishStatus(data.publishStatus);
-        if (data.username) setPublishUsername(data.username);
-        if (data.hiddenSections) setHiddenSections(data.hiddenSections);
-        return;
-      }
+      // Common fields — always applied
       if (data.config) setConfig(data.config);
       if (data.configHash) setConfigHash(data.configHash);
       if (data.publishStatus) setPublishStatus(data.publishStatus);
       if (data.username) setPublishUsername(data.username);
-      if (data.surface) setSurface(data.surface);
-      if (data.voice) setVoice(data.voice);
-      if (data.light) setLight(data.light as "day" | "night");
-      if (data.layoutTemplate) setLayoutTemplate(data.layoutTemplate as LayoutTemplateId);
       if (data.hiddenSections) setHiddenSections(data.hiddenSections);
+      // Style fields — only when user hasn't edited recently
+      if (Date.now() - lastUserEdit.current >= POLL_INTERVAL) {
+        if (data.surface) setSurface(data.surface);
+        if (data.voice) setVoice(data.voice);
+        if (data.light) setLight(data.light as "day" | "night");
+        if (data.layoutTemplate) setLayoutTemplate(data.layoutTemplate as LayoutTemplateId);
+      }
     },
   });
 
@@ -300,27 +302,38 @@ export function SplitView({
     if (action.type === "edit") {
       previewInteraction.injectSectionContext(action, displayConfigRef.current);
       if (isMobile) {
-        // Switch to chat tab, then focus input after tab switch
+        // Switch to chat tab — ChatPanel handles focus independently
         setActiveMobileTab("chat");
-        setTimeout(() => chatInputRef.current?.focus(), 50);
       }
     } else if (action.type === "hide") {
-      void fetch("/api/draft/toggle-section", {
+      setHiddenSections(prev => prev.includes(action.sectionType) ? prev : [...prev, action.sectionType]);
+      fetch("/api/draft/toggle-section", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sectionType: action.sectionType, hidden: true }),
+      }).catch(() => {
+        // Revert on failure
+        setHiddenSections(prev => prev.filter(s => s !== action.sectionType));
+        toastManager.add("Failed to hide section", "error");
       });
     } else if (action.type === "show") {
-      void fetch("/api/draft/toggle-section", {
+      setHiddenSections(prev => prev.filter(s => s !== action.sectionType));
+      fetch("/api/draft/toggle-section", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sectionType: action.sectionType, hidden: false }),
+      }).catch(() => {
+        // Revert on failure
+        setHiddenSections(prev => [...prev, action.sectionType]);
+        toastManager.add("Failed to show section", "error");
       });
     } else if (action.type === "moveUp" || action.type === "moveDown") {
-      void fetch("/api/draft/reorder-section", {
+      fetch("/api/draft/reorder-section", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sectionType: action.sectionType, direction: action.type === "moveUp" ? "up" : "down" }),
+      }).catch(() => {
+        toastManager.add("Failed to reorder section", "error");
       });
     }
   }, [previewInteraction, isMobile]);
@@ -363,11 +376,16 @@ export function SplitView({
     onClose: handlePresenceClose,
   };
 
+  const handleSignupRequest = useCallback(() => {
+    setPresenceOpen(false);
+    setSignupOpen(true);
+  }, []);
+
   const chatPanelProps = (isPrimary: boolean) => ({
     language,
     authV2: authState?.authV2,
     authState,
-    onSignupRequest: () => { setPresenceOpen(false); setSignupOpen(true); },
+    onSignupRequest: handleSignupRequest,
     initialBootstrap: bootstrapData,
     initialMessages: chatInitialMessages,
     disableInitialFetch: chatDataReady,
@@ -436,7 +454,11 @@ export function SplitView({
         previewMode={true}
         hiddenSections={hiddenSections}
         onSectionAction={handleSectionAction}
+        onShowSection={(sectionType) =>
+          handleSectionActionDirect({ type: "show", sectionType, sectionIndex: 0 })
+        }
         renderActionBar={renderActionBar}
+        showLabel={t.sectionShow}
       />
     </>
   ) : (
@@ -569,7 +591,7 @@ export function SplitView({
             onClose={() => setPendingAction(null)}
             sectionType={pendingAction.sectionType}
             sectionIndex={pendingAction.sectionIndex}
-            totalSections={displayConfig?.sections?.length ?? 0}
+            totalSections={(displayConfig?.sections?.filter(s => !hiddenSections.includes(s.type)).length) ?? 0}
             isHidden={hiddenSections.includes(pendingAction.sectionType)}
             onAction={(a) => {
               setPendingAction(null);

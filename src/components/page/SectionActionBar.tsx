@@ -40,7 +40,7 @@ export function SectionActionBar({
     <div
       style={{
         position: "absolute",
-        top: -6,
+        top: 4,
         right: 16,
         zIndex: 10,
         display: "flex",

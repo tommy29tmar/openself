@@ -98,11 +98,18 @@ export function usePreviewSync(opts: {
       });
     };
 
+    let polling = false;
     const doPoll = async () => {
-      await pollPreview({
-        language: languageRef.current,
-        onUpdate: (d) => onUpdateRef.current(d),
-      });
+      if (polling) return;
+      polling = true;
+      try {
+        await pollPreview({
+          language: languageRef.current,
+          onUpdate: (d) => onUpdateRef.current(d),
+        });
+      } finally {
+        polling = false;
+      }
     };
 
     const startPolling = () => {
@@ -143,5 +150,5 @@ export function usePreviewSync(opts: {
       es?.close();
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [opts.enabled, opts.language]);
+  }, [opts.enabled]);
 }

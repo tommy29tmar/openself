@@ -132,7 +132,7 @@ export function ActivityDrawer({
       <div ref={drawerRef} style={drawerStyle}>
         <div style={headerStyle(isMobile)}>
           {isMobile && (
-            <button type="button" onClick={onClose} style={closeButtonStyle}>
+            <button type="button" onClick={onClose} style={closeButtonStyle} aria-label={t.closeDrawer}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M12.7 5.3a1 1 0 00-1.4 0L7 9.6a.5.5 0 000 .7l4.3 4.4a1 1 0 001.4-1.4L9.4 10l3.3-3.3a1 1 0 000-1.4z" />
               </svg>
@@ -157,7 +157,7 @@ export function ActivityDrawer({
           )}
 
           {!isMobile && (
-            <button type="button" onClick={onClose} style={closeButtonStyle}>
+            <button type="button" onClick={onClose} style={closeButtonStyle} aria-label={t.closeDrawer}>
               ✕
             </button>
           )}

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { resolveOwnerScope, getAuthContext } from "@/lib/auth/session";
 import { isMultiUserEnabled } from "@/lib/services/session-service";
 import { getDraft, getPublishedPage, getPublishedUsername, upsertDraft } from "@/lib/services/page-service";
+import { db } from "@/lib/db";
+import { page } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * POST /api/draft/discard
@@ -62,6 +65,12 @@ export async function POST(req: Request) {
     // Overwrite draft with published config
     const profileId = authCtx?.profileId ?? primaryKey;
     upsertDraft(publishedUsername, publishedConfig, primaryKey, profileId);
+
+    // Reset hidden sections back to empty
+    db.update(page)
+      .set({ hiddenSections: "[]" })
+      .where(eq(page.id, primaryKey))
+      .run();
 
     return NextResponse.json({ success: true });
   } catch (error) {

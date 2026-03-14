@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -10,6 +10,7 @@ export default function VerifyEmailPage() {
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("");
+  const calledRef = useRef(false);
 
   useEffect(() => {
     if (!token) {
@@ -17,6 +18,8 @@ export default function VerifyEmailPage() {
       setMessage("Invalid verification link.");
       return;
     }
+    if (calledRef.current) return;
+    calledRef.current = true;
 
     fetch("/api/auth/verify-email", {
       method: "POST",
