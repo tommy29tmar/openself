@@ -41,7 +41,10 @@ export function repairJsonValue(raw: string): string {
     // Fix 1: Add quotes around unquoted keys  ({role: "x"} → {"role": "x"})
     let fixed = raw.replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g, '$1"$2":');
 
-    // Fix 2: Add quotes around unquoted string values
+    // Fix 2: Handle partially-quoted keys: company": "val" → "company": "val"
+    fixed = fixed.replace(/([{,]\s*)([a-zA-Z_]\w*)"(\s*:)/g, '$1"$2"$3');
+
+    // Fix 3: Add quotes around unquoted string values
     // Strategy: match values that start with a letter (not digit, quote, brace, bracket, or minus)
     // and exclude JSON keywords (true, false, null) via negative lookahead.
     // Using [a-zA-Z] as first char avoids the \s* backtracking bug where

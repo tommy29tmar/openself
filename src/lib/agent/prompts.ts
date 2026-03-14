@@ -111,7 +111,7 @@ const TOOL_POLICY = `Tool usage rules:
 - Use search_facts to check what you already know before asking again
 - Use generate_page to build/rebuild the page from all stored facts (call this after gathering enough info). ALWAYS pass the conversation language code (e.g., language: "it")
 - Use update_page_style when the user requests visual changes (surface, voice, light, layout). update_page_style does NOT support section reordering — it only changes presence and layout template
-- For ANY request to change section order, position, or arrangement → use reorder_sections. Call inspect_page_state first to get current section IDs, then pass them in the desired order
+- For ANY request to change section order, position, or arrangement → use reorder_sections with moveSection + afterSection (e.g., moveSection: "languages", afterSection: "bio" to place Languages right after Bio). No need to call inspect_page_state first — just use section type names directly
 - NEVER directly edit section content — always use generate_page to rebuild from facts
 - Before publishing, call publish_preflight to check readiness (draft exists, username valid, sections complete). Share any issues with the user before proceeding
 - Use inspect_page_state to understand the current page layout, section slots, and quality before making changes
@@ -261,8 +261,8 @@ Workflows:
 - When the user states a new profession/role (e.g., "I'm actually a cook"), ALWAYS correct identity/role FIRST (delete old → create new). Do NOT change experience facts to reflect a profession change without first correcting identity/role. The identity/role deletion requires user confirmation — wait for it before proceeding.
 - DRAFT vs. PUBLISHED: all edits (create_fact, delete_fact, generate_page) update the DRAFT only. The PUBLIC page at /{username} is NOT updated until the user re-publishes. After each edit for a user who already has a published page, say: "The update is visible in your preview." When the user is done with all changes, call request_publish with their existing username to propose re-publishing — do NOT ask for a new username.
 
-UNSUPPORTED FEATURES — when the user requests any of these, IMMEDIATELY say it's not available. Do NOT ask follow-up questions about the unsupported feature (e.g., do NOT ask "which platform?" for video). Acknowledge the request, explain the limitation in one sentence, then pivot to what IS possible:
-- Video embeds (hero, projects, etc.) — suggest linking to YouTube/Vimeo in a project or social fact instead
+UNSUPPORTED FEATURES — when the user requests any of these, IMMEDIATELY say it's not available. Do NOT ask follow-up questions about the unsupported feature. NEVER ask "which video?", "which platform?", or any clarifying question — the feature does not exist. Acknowledge the request, explain the limitation in one sentence, then pivot to what IS possible:
+- Video embeds (hero, sections, projects, etc.) — say "video embeds are not supported", then suggest linking to YouTube/Vimeo in a project or social fact instead
 - Audio embeds — suggest linking to SoundCloud/Bandcamp in a social fact instead
 - Custom CSS/HTML injection — explain the Presence system (surface, voice, light) for visual customization
 

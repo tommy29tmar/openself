@@ -438,6 +438,8 @@ export function createAgentTools(
             try { return JSON.parse(v); } catch { /* fall through */ }
             // Handle JS object literal syntax: {key: "val"} → {"key": "val"}
             try { return JSON.parse(v.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3')); } catch { /* fall through */ }
+            // Handle partially-quoted keys: company": "val" → "company": "val"
+            try { return JSON.parse(v.replace(/([{,]\s*)([a-zA-Z_]\w*)"(\s*:)/g, '$1"$2"$3')); } catch { /* fall through */ }
           }
           return v;
         }, z.record(z.unknown()))
@@ -977,31 +979,67 @@ export function createAgentTools(
 
   reorder_sections: tool({
     description:
-      "Reorder the sections on the page. Provide the section IDs in the desired order.",
+      "Reorder sections on the page. Use EITHER sectionOrder (full reorder with section IDs) OR moveSection+afterSection (move one section after another by type name, e.g. 'languages' after 'bio'). The type-based move is simpler and preferred for single moves.",
     parameters: z.object({
       username: z.string().describe("The username for the page"),
       sectionOrder: z
         .array(z.string())
-        .describe("Array of section IDs in the desired display order"),
+        .optional()
+        .describe("Array of section IDs in the desired display order (for full reorder)"),
+      moveSection: z
+        .string()
+        .optional()
+        .describe("Section type to move (e.g. 'languages', 'skills', 'projects'). Use this for simple 'move X after Y' requests."),
+      afterSection: z
+        .string()
+        .optional()
+        .describe("Place moveSection after this section type (e.g. 'bio', 'experience'). Use 'hero' to place first."),
     }),
-    execute: async ({ username, sectionOrder }) => {
+    execute: async ({ username, sectionOrder, moveSection, afterSection }) => {
       try {
         const existing = ensureDraft();
-        const sectionMap = new Map(
-          existing.sections.map((s) => [s.id, s]),
-        );
-        const reordered = sectionOrder
-          .map((id) => sectionMap.get(id))
-          .filter(Boolean);
-        // Append any sections not in the new order at the end
-        for (const s of existing.sections) {
-          if (!sectionOrder.includes(s.id)) {
-            reordered.push(s);
+
+        let finalSections: PageConfig["sections"];
+
+        if (moveSection && afterSection) {
+          // Type-based move: find sections by type and reorder
+          const sections = [...existing.sections];
+          const moveIdx = sections.findIndex((s) => s.type === moveSection);
+          if (moveIdx === -1) {
+            return { success: false, error: `Section type '${moveSection}' not found on page. Available: ${sections.map(s => s.type).join(", ")}` };
           }
+          const afterIdx = sections.findIndex((s) => s.type === afterSection);
+          if (afterIdx === -1) {
+            return { success: false, error: `Section type '${afterSection}' not found on page. Available: ${sections.map(s => s.type).join(", ")}` };
+          }
+          // Remove the section to move
+          const [moved] = sections.splice(moveIdx, 1);
+          // Find the new position of afterSection (may have shifted after splice)
+          const newAfterIdx = sections.findIndex((s) => s.type === afterSection);
+          // Insert after it
+          sections.splice(newAfterIdx + 1, 0, moved);
+          finalSections = sections as PageConfig["sections"];
+        } else if (sectionOrder && sectionOrder.length > 0) {
+          // ID-based full reorder (original behavior)
+          const sectionMap = new Map(
+            existing.sections.map((s) => [s.id, s]),
+          );
+          const reordered = sectionOrder
+            .map((id) => sectionMap.get(id))
+            .filter(Boolean);
+          for (const s of existing.sections) {
+            if (!sectionOrder.includes(s.id)) {
+              reordered.push(s);
+            }
+          }
+          finalSections = reordered as PageConfig["sections"];
+        } else {
+          return { success: false, error: "Provide either sectionOrder (array of IDs) or moveSection+afterSection (type names)" };
         }
+
         const updated: PageConfig = {
           ...existing,
-          sections: reordered as PageConfig["sections"],
+          sections: finalSections,
         };
         // Run slot validation on reordered config
         const warnings: string[] = [];
@@ -1014,7 +1052,11 @@ export function createAgentTools(
           }
         } catch { /* validation is advisory, don't block reorder */ }
         upsertDraft(username, updated, sessionId);
-        return { success: true, ...(warnings.length > 0 ? { warnings } : {}) };
+        return {
+          success: true,
+          newOrder: finalSections.map((s) => s.type),
+          ...(warnings.length > 0 ? { warnings } : {}),
+        };
       } catch (error) {
         return { success: false, error: String(error) };
       }

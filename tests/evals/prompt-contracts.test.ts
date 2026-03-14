@@ -94,6 +94,18 @@ describe("prompt contracts", () => {
     expect(toolsSrc).toMatch(/Update the page visual presence.*Does NOT reorder/s);
   });
 
+  it("reorder_sections tool supports moveSection+afterSection by type name", () => {
+    const toolsSrc = readFileSync("src/lib/agent/tools.ts", "utf-8");
+    expect(toolsSrc).toContain("moveSection");
+    expect(toolsSrc).toContain("afterSection");
+    expect(toolsSrc).toContain("Section type to move");
+  });
+
+  it("UNSUPPORTED FEATURES explicitly forbids follow-up questions", () => {
+    expect(src).toContain("NEVER ask \"which video?\"");
+    expect(src).toContain("video embeds are not supported");
+  });
+
   it("TOOL_POLICY contains scoped DELETE RESULT TRUST instruction", () => {
     expect(src).toContain("DELETE RESULT TRUST");
     // Must be scoped — not blanket "never verify"
