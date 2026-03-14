@@ -78,7 +78,7 @@ export function runGlobalHousekeeping(): void {
       const scope = resolveOwnerScopeForWorker(ownerKey);
       const activeFacts = getActiveFacts(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
       const activeFactIds = activeFacts.map((f: { id: string }) => f.id);
-      overrideService.cleanupOrphans(ownerKey, activeFactIds);
+      overrideService.cleanupOrphans(ownerKey, activeFactIds, scope.knowledgeReadKeys);
     }
   } catch {
     // Non-fatal — orphans will be cleaned next cycle
@@ -249,7 +249,7 @@ export async function handleHeartbeatDeep(payload: Record<string, unknown>): Pro
   try {
     const preferences = getPreferences(scope.knowledgePrimaryKey);
     const personalizationLanguage = preferences.language ?? preferences.factLanguage ?? "en";
-    const activeCopies = getAllActiveCopies(ownerKey, personalizationLanguage);
+    const activeCopies = getAllActiveCopies(ownerKey, personalizationLanguage, scope.knowledgeReadKeys);
     const soul = getActiveSoul(ownerKey);
     if (activeCopies.length > 0 && soul?.compiled) {
       const issues = await analyzeConformity(activeCopies, soul.compiled, ownerKey);

@@ -126,8 +126,8 @@ export function createFactDisplayOverrideService(db: typeof defaultDb = defaultD
       .run();
   }
 
-  function cleanupOrphans(ownerKey: string, activeFactIds: string[]): number {
-    const overrides = getOverridesForOwner(ownerKey);
+  function cleanupOrphans(ownerKey: string, activeFactIds: string[], readKeys?: string[]): number {
+    const overrides = getOverridesForOwner(ownerKey, readKeys);
     const activeSet = new Set(activeFactIds);
     let cleaned = 0;
     for (const row of overrides) {

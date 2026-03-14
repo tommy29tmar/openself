@@ -97,6 +97,6 @@ describe("prompt contracts", () => {
   it("TOOL_POLICY contains scoped DELETE RESULT TRUST instruction", () => {
     expect(src).toContain("DELETE RESULT TRUST");
     // Must be scoped — not blanket "never verify"
-    expect(src).toContain("section removal");
+    expect(src).toContain("removing a section completely");
   });
 });
