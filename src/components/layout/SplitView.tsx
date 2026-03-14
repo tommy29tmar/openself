@@ -9,6 +9,7 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { PresencePanel } from "@/components/presence/PresencePanel";
 import { SignupModal } from "@/components/auth/SignupModal";
 import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
+import { UnpublishedBanner } from "@/components/layout/UnpublishedBanner";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
 import { PageRenderer } from "@/components/page";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
@@ -440,36 +441,15 @@ export function SplitView({
     <>
       {usernameInput}
       <ProposalBanner />
-      {publishStatus === "approval_pending" && !hasUnpublishedChanges && (
-        <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
-          <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-            Ready to publish
-          </span>
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={publishing}
-            className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            {publishing ? "Publishing..." : "Publish"}
-          </button>
-        </div>
-      )}
-      {hasUnpublishedChanges && !publishing && publishStatus !== "approval_pending" && authenticated && (
-        <div className="flex items-center justify-between gap-3 border-b bg-amber-50 px-4 py-2 text-sm dark:bg-amber-950">
-          <span className="text-amber-800 dark:text-amber-200">
-            {t.unpublishedChanges}
-          </span>
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={publishing}
-            className="shrink-0 rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            {t.publish}
-          </button>
-        </div>
-      )}
+      <UnpublishedBanner
+        hasUnpublishedChanges={hasUnpublishedChanges}
+        publishing={publishing}
+        publishStatus={publishStatus}
+        authenticated={authenticated}
+        onPublish={handlePublish}
+        unpublishedChangesLabel={t.unpublishedChanges}
+        publishLabel={t.publish}
+      />
       <PageRenderer config={displayConfig} previewMode={true} />
     </>
   ) : (
