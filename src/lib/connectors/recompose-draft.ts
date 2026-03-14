@@ -50,6 +50,7 @@ export function recomposeDraft(
     factLang,
     draftMeta,
     scope.cognitiveOwnerKey,
+    readKeys,
   );
 
   const composedHash = computeConfigHash(composed);

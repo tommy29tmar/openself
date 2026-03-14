@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db as defaultDb } from "@/lib/db";
 import { factDisplayOverrides } from "@/lib/db/schema";
 import { computeHash } from "@/lib/services/personalization-hashing";
@@ -82,19 +82,28 @@ export function createFactDisplayOverrideService(db: typeof defaultDb = defaultD
     return { id, factId: input.factId };
   }
 
-  function getOverridesForOwner(ownerKey: string) {
+  function getOverridesForOwner(ownerKey: string, readKeys?: string[]) {
+    const allKeys = readKeys?.length
+      ? [...new Set([...readKeys.filter((k) => k !== ownerKey), ownerKey])]
+      : [ownerKey];
+
     return db
       .select()
       .from(factDisplayOverrides)
-      .where(eq(factDisplayOverrides.ownerKey, ownerKey))
+      .where(
+        allKeys.length === 1
+          ? eq(factDisplayOverrides.ownerKey, ownerKey)
+          : inArray(factDisplayOverrides.ownerKey, allKeys),
+      )
       .all();
   }
 
   function getValidOverrides(
     ownerKey: string,
     factHashes: FactHashEntry[],
+    readKeys?: string[],
   ): Map<string, Record<string, unknown>> {
-    const overrides = getOverridesForOwner(ownerKey);
+    const overrides = getOverridesForOwner(ownerKey, readKeys);
     const hashMap = new Map(factHashes.map((f) => [f.id, f.valueHash]));
     const valid = new Map<string, Record<string, unknown>>();
 
@@ -117,8 +126,8 @@ export function createFactDisplayOverrideService(db: typeof defaultDb = defaultD
       .run();
   }
 
-  function cleanupOrphans(ownerKey: string, activeFactIds: string[]): number {
-    const overrides = getOverridesForOwner(ownerKey);
+  function cleanupOrphans(ownerKey: string, activeFactIds: string[], readKeys?: string[]): number {
+    const overrides = getOverridesForOwner(ownerKey, readKeys);
     const activeSet = new Set(activeFactIds);
     let cleaned = 0;
     for (const row of overrides) {

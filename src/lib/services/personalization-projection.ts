@@ -36,7 +36,7 @@ export function mergeActiveSectionCopy(
   readKeys?: string[],
 ): PageConfig {
   // 1. Fetch all active copies for this owner + language
-  const copies = getAllActiveCopies(ownerKey, language);
+  const copies = getAllActiveCopies(ownerKey, language, readKeys);
   if (copies.length === 0) {
     return canonical;
   }

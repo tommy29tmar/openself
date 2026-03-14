@@ -30,7 +30,7 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
     existingOverrides.filter((o) => o.source === "agent").map((o) => o.factId),
   );
 
-  const page = projectCanonicalConfig(allFacts, "draft", language, undefined, scope.cognitiveOwnerKey);
+  const page = projectCanonicalConfig(allFacts, "draft", language, undefined, scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
 
   let totalProposals = 0;
   const MAX_PROPOSALS_PER_RUN = 10;

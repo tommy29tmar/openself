@@ -122,6 +122,82 @@ describe("getAllActiveCopies", () => {
   });
 });
 
+describe("getAllActiveCopies with readKeys", () => {
+  it("returns copies from readKeys sessions", () => {
+    const oldSessionId = "old-session-123";
+    const newProfileId = "profile-456";
+
+    svc.upsertState(makeInput({
+      ownerKey: oldSessionId,
+      sectionType: "bio",
+      language: "it",
+      personalizedContent: JSON.stringify({ headline: "Custom bio" }),
+      factsHash: "hash-a",
+      soulHash: "hash-b",
+      source: "agent",
+    }));
+
+    // Without readKeys: only finds under primary ownerKey
+    const withoutReadKeys = svc.getAllActiveCopies(newProfileId, "it");
+    expect(withoutReadKeys).toHaveLength(0);
+
+    // With readKeys including old session: finds the curation
+    const withReadKeys = svc.getAllActiveCopies(newProfileId, "it", [oldSessionId]);
+    expect(withReadKeys).toHaveLength(1);
+    expect(withReadKeys[0].ownerKey).toBe(oldSessionId);
+    expect(withReadKeys[0].sectionType).toBe("bio");
+  });
+
+  it("empty readKeys array behaves like omitting readKeys", () => {
+    svc.upsertState(makeInput({
+      ownerKey: "other-session",
+      language: "en",
+      personalizedContent: "{}",
+      source: "agent",
+    }));
+    const result = svc.getAllActiveCopies("primary", "en", []);
+    expect(result).toHaveLength(0);
+  });
+
+  it("deduplicates ownerKey appearing in readKeys", () => {
+    svc.upsertState(makeInput({
+      ownerKey: "primary",
+      language: "en",
+      personalizedContent: "{}",
+      source: "agent",
+    }));
+    // readKeys includes ownerKey itself — should not duplicate results
+    const result = svc.getAllActiveCopies("primary", "en", ["primary", "other"]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("primary ownerKey copy wins over readKeys copy for same sectionType", () => {
+    // Old session has bio curation
+    svc.upsertState(makeInput({
+      ownerKey: "old-session",
+      language: "en",
+      personalizedContent: JSON.stringify({ headline: "Old" }),
+      factsHash: "h1",
+      soulHash: "s1",
+      source: "agent",
+    }));
+    // New profile also has bio curation
+    svc.upsertState(makeInput({
+      ownerKey: "new-profile",
+      language: "en",
+      personalizedContent: JSON.stringify({ headline: "New" }),
+      factsHash: "h2",
+      soulHash: "s2",
+      source: "agent",
+    }));
+    const result = svc.getAllActiveCopies("new-profile", "en", ["old-session"]);
+    // Both returned, but primary should come last so Map() in mergeActiveSectionCopy keeps it
+    const bioRows = result.filter(r => r.sectionType === "bio");
+    expect(bioRows).toHaveLength(2);
+    expect(bioRows[bioRows.length - 1].ownerKey).toBe("new-profile");
+  });
+});
+
 describe("getActiveCopyWithHashGuard", () => {
   it("returns copy when hashes match", () => {
     svc.upsertState(makeInput());

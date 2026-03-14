@@ -254,7 +254,16 @@ describe("mergeActiveSectionCopy", () => {
 
     mergeActiveSectionCopy(config, "owner-abc", "it");
 
-    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner-abc", "it");
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner-abc", "it", undefined);
+  });
+
+  it("passes readKeys to getAllActiveCopies", () => {
+    mockGetAllActiveCopies.mockReturnValue([]);
+    const config = makeConfig([makeSection("bio", { text: "Test." })]);
+
+    mergeActiveSectionCopy(config, "owner-abc", "it", ["legacy-session-1"]);
+
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner-abc", "it", ["legacy-session-1"]);
   });
 
   it("uses readKeys for fact hash checks while keeping ownerKey for state lookups", () => {
@@ -277,7 +286,7 @@ describe("mergeActiveSectionCopy", () => {
 
     mergeActiveSectionCopy(config, "profile-1", "en", readKeys);
 
-    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("profile-1", "en");
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("profile-1", "en", readKeys);
     expect(mockGetActiveFacts).toHaveBeenCalledWith("profile-1", readKeys);
     expect(mockGetActiveSoul).toHaveBeenCalledWith("profile-1");
   });

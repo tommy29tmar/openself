@@ -83,4 +83,20 @@ describe("prompt contracts", () => {
     const policy = activeStalePolicy("en");
     expect(policy).toMatch(/visible in.*preview/i);
   });
+
+  it("TOOL_POLICY contains explicit reorder_sections routing", () => {
+    expect(src).toContain("update_page_style does NOT support section reordering");
+    expect(src).toContain("For ANY request to change section order");
+  });
+
+  it("update_page_style tool description excludes section reordering", () => {
+    const toolsSrc = readFileSync("src/lib/agent/tools.ts", "utf-8");
+    expect(toolsSrc).toMatch(/Update the page visual presence.*Does NOT reorder/s);
+  });
+
+  it("TOOL_POLICY contains scoped DELETE RESULT TRUST instruction", () => {
+    expect(src).toContain("DELETE RESULT TRUST");
+    // Must be scoped — not blanket "never verify"
+    expect(src).toContain("removing a section completely");
+  });
 });

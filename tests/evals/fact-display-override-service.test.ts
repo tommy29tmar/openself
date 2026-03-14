@@ -147,6 +147,32 @@ describe("fact-display-override-service", () => {
     });
   });
 
+  describe("getValidOverrides with readKeys", () => {
+    it("finds overrides from readKeys sessions", () => {
+      const oldSession = "old-session-123";
+      const newProfile = "profile-456";
+      const factId = "fact-abc";
+      const valueHash = "hash-xyz";
+
+      service.upsertOverride({
+        ownerKey: oldSession,
+        factId,
+        displayFields: { title: "Custom Title" },
+        factValueHash: valueHash,
+        source: "agent",
+      });
+
+      // Without readKeys: not found
+      const without = service.getValidOverrides(newProfile, [{ id: factId, valueHash }]);
+      expect(without.size).toBe(0);
+
+      // With readKeys: found
+      const withKeys = service.getValidOverrides(newProfile, [{ id: factId, valueHash }], [oldSession]);
+      expect(withKeys.size).toBe(1);
+      expect(withKeys.get(factId)).toEqual({ title: "Custom Title" });
+    });
+  });
+
   describe("deleteOverride", () => {
     it("deletes an override by factId", () => {
       service.upsertOverride({

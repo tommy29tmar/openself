@@ -81,6 +81,7 @@ export function projectCanonicalConfig(
   factLanguage: string,
   draftMeta?: DraftMeta,
   profileId?: string,
+  readKeys?: string[],
 ): PageConfig {
   // 1. Filter to publishable facts only
   const publishable = filterPublishableFacts(facts);
@@ -102,6 +103,7 @@ export function projectCanonicalConfig(
     const validOverrides = overrideService.getValidOverrides(
       profileId,
       factHashes,
+      readKeys,
     );
     displayFacts = applyFactDisplayOverrides(publishable, validOverrides);
   }
@@ -188,8 +190,9 @@ export function projectPublishableConfig(
   factLanguage: string,
   draftMeta?: DraftMeta,
   profileId?: string,
+  readKeys?: string[],
 ): PageConfig {
   return publishableFromCanonical(
-    projectCanonicalConfig(facts, username, factLanguage, draftMeta, profileId),
+    projectCanonicalConfig(facts, username, factLanguage, draftMeta, profileId, readKeys),
   );
 }
