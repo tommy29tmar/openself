@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { PageConfig, StyleConfig } from "@/lib/page-config/schema";
+import type { PageConfig } from "@/lib/page-config/schema";
 import type { LanguageCode } from "@/lib/i18n/languages";
 import type { LayoutTemplateId } from "@/lib/layout/contracts";
 import type { AuthState } from "@/app/builder/page";
@@ -10,6 +10,7 @@ import { PresencePanel } from "@/components/presence/PresencePanel";
 import { SignupModal } from "@/components/auth/SignupModal";
 import { BuilderNavBar } from "@/components/layout/BuilderNavBar";
 import { UnpublishedBanner } from "@/components/layout/UnpublishedBanner";
+import { MobilePreviewHeader } from "@/components/layout/MobilePreviewHeader";
 import { ProposalBanner } from "@/components/builder/ProposalBanner";
 import { PageRenderer } from "@/components/page";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
@@ -22,6 +23,8 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { ActivityDrawer } from "@/components/notifications/ActivityDrawer";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
 import { usePreviewSync, POLL_INTERVAL } from "@/hooks/usePreviewSync";
+import { useChatPrefetch } from "@/hooks/useChatPrefetch";
+import { usePresenceHandlers } from "@/hooks/usePresenceHandlers";
 
 type SplitViewProps = {
   language: string;
@@ -54,12 +57,8 @@ function EmptyPreview({ language }: { language: string }) {
   return (
     <div className="flex h-full items-center justify-center text-center">
       <div className="max-w-xs space-y-2">
-        <p className="text-lg font-medium text-muted-foreground">
-          {t.pageWillAppear}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {t.startChatting}
-        </p>
+        <p className="text-lg font-medium text-muted-foreground">{t.pageWillAppear}</p>
+        <p className="text-sm text-muted-foreground">{t.startChatting}</p>
       </div>
     </div>
   );
@@ -79,36 +78,6 @@ function deriveUsernameFromConfig(config: PageConfig | null): string {
   return slug.length >= 3 ? slug : "";
 }
 
-async function persistStyle(patch: {
-  surface?: string;
-  voice?: string;
-  light?: string;
-  style?: Partial<StyleConfig>;
-  layoutTemplate?: string;
-}): Promise<boolean> {
-  try {
-    const res = await fetch("/api/draft/style", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    if (res.status === 401) {
-      window.location.href = "/invite";
-      return false;
-    }
-    if (!res.ok) {
-      console.warn("[settings] Failed to persist style:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn("[settings] Failed to persist style:", err);
-    return false;
-  }
-}
-
-
-
 export function SplitView({
   language,
   onLanguageChange,
@@ -121,52 +90,10 @@ export function SplitView({
   const isMobile = useIsMobile();
   const voiceEnabled = isVoiceEnabled();
 
-  // Lifted chat data fetching — bootstrap + messages fetched once, shared by both ChatPanel instances
-  const [bootstrapData, setBootstrapData] = useState<Record<string, unknown> | null>(null);
-  const [chatInitialMessages, setChatInitialMessages] = useState<Array<{id: string; role: string; content: string}>>([]);
-  const [chatDataReady, setChatDataReady] = useState(false);
+  // Chat data prefetch
+  const { bootstrapData, initialMessages: chatInitialMessages, ready: chatDataReady } = useChatPrefetch(language);
 
-  useEffect(() => {
-    setChatDataReady(false);
-    let cancelled = false;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    (async () => {
-      try {
-        const [bRes, mRes] = await Promise.all([
-          fetch(`/api/chat/bootstrap?language=${language}`, { cache: "no-store", signal: controller.signal }),
-          fetch("/api/messages", { cache: "no-store", signal: controller.signal }),
-        ]);
-        if (cancelled) return;
-        // Redirect to invite page on 401 (unauthenticated)
-        if (bRes.status === 401 || mRes.status === 401) {
-          window.location.href = "/invite";
-          return;
-        }
-        const bootstrap = bRes.ok ? await bRes.json() : null;
-        let msgs: Array<{id: string; role: string; content: string}> = [];
-        if (mRes.ok) {
-          const data = await mRes.json();
-          if (data.success && Array.isArray(data.messages)) {
-            msgs = data.messages.filter(
-              (m: any) => typeof m.id === "string" && typeof m.role === "string" && typeof m.content === "string" && (m.role === "user" || m.role === "assistant")
-            );
-          }
-        }
-        if (!cancelled) {
-          setBootstrapData(bootstrap);
-          setChatInitialMessages(msgs);
-        }
-      } catch (err) {
-        console.warn("[SplitView] chat data prefetch failed:", err);
-      } finally {
-        clearTimeout(timeout);
-        if (!cancelled) setChatDataReady(true);
-      }
-    })();
-    return () => { cancelled = true; controller.abort(); };
-  }, [language]);
-
+  // Page state
   const [config, setConfig] = useState<PageConfig | null>(initialConfig ?? null);
   const [configHash, setConfigHash] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string>("draft");
@@ -177,14 +104,23 @@ export function SplitView({
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplateId>(
     (config?.layoutTemplate as LayoutTemplateId) ?? "monolith",
   );
+
+  // UI state
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
   const { count: unreadCount, refresh: refreshUnread } = useUnreadCount();
   const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "preview">("chat");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [usernameInputOpen, setUsernameInputOpen] = useState(false);
+  const [pendingUsername, setPendingUsername] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+  const lastUserEdit = useRef(0);
 
-  // Detect keyboard open via visualViewport — hide tab bar to maximise chat space
+  // Detect keyboard open via visualViewport
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
     const vv = window.visualViewport;
@@ -195,141 +131,34 @@ export function SplitView({
 
   // Auto-open presence when returning from OAuth connector flow
   useEffect(() => {
-    if (openSettings) {
-      setPresenceOpen(true);
-    }
+    if (openSettings) setPresenceOpen(true);
   }, [openSettings]);
 
-  // Lifted publish / signup state
-  const [signupOpen, setSignupOpen] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
-
-  // Username input for authenticated-but-no-username (OAuth edge case)
-  const [usernameInputOpen, setUsernameInputOpen] = useState(false);
-  const [pendingUsername, setPendingUsername] = useState("");
-
-  // Mobile logout state
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  // Tracks the last user-initiated style edit
-  const lastUserEdit = useRef(0);
-
-  // Change detection: draft differs from published
   const hasUnpublishedChanges = Boolean(
     configHash && (
       (publishedConfigHash && configHash !== publishedConfigHash) ||
-      (!publishedConfigHash && config) // first publish: draft exists, never published
+      (!publishedConfigHash && config)
     )
   );
 
   const t = getUiL10n(language);
-
   const authenticated = authState?.authenticated ?? false;
 
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/";
-    } catch {
-      setLoggingOut(false);
-    }
-  };
+  // Presence style handlers
+  const {
+    handleSurfaceChange, handleVoiceChange, handleLightChange,
+    handleComboSelect, handleLayoutTemplateChange, fetchPreview,
+  } = usePresenceHandlers({
+    setSurface, setVoice, setLight, setLayoutTemplate, setConfig,
+    lastUserEdit, language,
+  });
 
-  const doPublish = async (username: string) => {
-    setPublishing(true);
-    setPublishError(null);
-    try {
-      const res = await fetch("/api/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, expectedHash: configHash }),
-      });
-      if (res.status === 401) {
-        window.location.href = "/invite";
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
-        // Sync hashes so button disappears
-        onPublishedConfigHashChange?.(configHash);
-        window.location.href = data.url;
-      } else {
-        setPublishError(friendlyError(data.code, t));
-      }
-    } catch {
-      setPublishError(t.networkError);
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  const handlePublish = () => {
-    const username = authState?.username ?? pendingUsername;
-    if (authState?.authenticated && !username) {
-      setUsernameInputOpen(true);
-      return;
-    }
-    if (!username) {
-      setSignupOpen(true);
-      return;
-    }
-    void doPublish(username);
-  };
-
-  const handleSurfaceChange = useCallback((s: string) => {
-    setSurface(s);
-    lastUserEdit.current = Date.now();
-    persistStyle({ surface: s });
-  }, []);
-
-  const handleVoiceChange = useCallback((v: string) => {
-    setVoice(v);
-    lastUserEdit.current = Date.now();
-    persistStyle({ voice: v });
-  }, []);
-
-  const handleLightChange = useCallback((l: "day" | "night") => {
-    setLight(l);
-    lastUserEdit.current = Date.now();
-    persistStyle({ light: l });
-  }, []);
-
-  const handleComboSelect = useCallback(async (s: string, v: string, l: string) => {
-    setSurface(s);
-    setVoice(v);
-    setLight(l as "day" | "night");
-    lastUserEdit.current = Date.now();
-    await persistStyle({ surface: s, voice: v, light: l });
-  }, []);
-
-  const handleLayoutTemplateChange = useCallback(async (t: LayoutTemplateId) => {
-    setLayoutTemplate(t);
-    lastUserEdit.current = Date.now();
-    const ok = await persistStyle({ layoutTemplate: t });
-    if (ok) {
-      lastUserEdit.current = 0;
-      try {
-        const res = await fetch(`/api/preview?username=draft&language=${language}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.config) {
-            setConfig(data.config);
-            if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
-          }
-        }
-      } catch { /* ignore */ }
-    }
-  }, [language]);
-
-  // SSE preview with polling fallback — transport-only hook
+  // SSE preview with polling fallback
   usePreviewSync({
     enabled: true,
     language,
     onUpdate: (data) => {
       if (Date.now() - lastUserEdit.current < POLL_INTERVAL) {
-        // Still apply config + metadata, just skip style overrides
         if (data.config) setConfig(data.config);
         if (data.configHash) setConfigHash(data.configHash);
         if (data.publishStatus) setPublishStatus(data.publishStatus);
@@ -347,73 +176,85 @@ export function SplitView({
     },
   });
 
-  // Manual fetch for layout change refresh
-  const fetchPreview = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/preview?username=draft&language=${language}`);
-      if (res.status === 401) {
-        window.location.href = "/invite";
-        return;
-      }
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.config) {
-        setConfig(data.config);
-        if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
-      }
-    } catch {
-      // Silently ignore
-    }
-  }, [language]);
-
   const displayConfig: PageConfig | null = config
-    ? {
-        ...config,
-        surface,
-        voice,
-        light,
-        layoutTemplate,
-      }
+    ? { ...config, surface, voice, light, layoutTemplate }
     : null;
+
+  // Callbacks
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/";
+    } catch { setLoggingOut(false); }
+  };
+
+  const doPublish = async (username: string) => {
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, expectedHash: configHash }),
+      });
+      if (res.status === 401) { window.location.href = "/invite"; return; }
+      const data = await res.json();
+      if (data.success) {
+        onPublishedConfigHashChange?.(configHash);
+        window.location.href = data.url;
+      } else {
+        setPublishError(friendlyError(data.code, t));
+      }
+    } catch { setPublishError(t.networkError); }
+    finally { setPublishing(false); }
+  };
+
+  const handlePublish = () => {
+    const username = authState?.username ?? pendingUsername;
+    if (authState?.authenticated && !username) { setUsernameInputOpen(true); return; }
+    if (!username) { setSignupOpen(true); return; }
+    void doPublish(username);
+  };
 
   const handlePresenceClose = useCallback(() => setPresenceOpen(false), []);
   const handleAvatarChange = useCallback(() => { void fetchPreview(); }, [fetchPreview]);
-
   const handleActivityToggle = useCallback(() => {
     setActivityOpen(prev => {
-      if (!prev) setPresenceOpen(false); // close presence when opening activity
+      if (!prev) setPresenceOpen(false);
       return !prev;
     });
   }, []);
 
-  // Derive hero name for pill and mobile header
   const heroName = config?.sections?.find((s) => s.type === "hero")?.content?.name as string | undefined;
 
-  const navBar = (
-    <BuilderNavBar
-      authState={authState}
-      hasUnpublishedChanges={hasUnpublishedChanges}
-      publishing={publishing}
-      publishError={publishError}
-      onPublish={handlePublish}
-      onSignup={() => setSignupOpen(true)}
-      onPresenceOpen={() => {
-        setActivityOpen(false); // mutual exclusion
-        setPresenceOpen(true);
-      }}
-      pageName={heroName}
-      publishedUsername={authState?.publishedUsername ?? null}
-      unreadCount={unreadCount}
-      onActivityOpen={handleActivityToggle}
-      bellRef={bellRef}
-    />
-  );
+  // Shared presence panel props
+  const presenceProps = {
+    config, surface, voice, light, layoutTemplate,
+    onSurfaceChange: handleSurfaceChange,
+    onVoiceChange: handleVoiceChange,
+    onLightChange: handleLightChange,
+    onComboSelect: handleComboSelect,
+    onLayoutChange: handleLayoutTemplateChange,
+    onAvatarChange: handleAvatarChange,
+    language,
+    onClose: handlePresenceClose,
+  };
+
+  const chatPanelProps = (isPrimary: boolean) => ({
+    language,
+    authV2: authState?.authV2,
+    authState,
+    onSignupRequest: () => { setPresenceOpen(false); setSignupOpen(true); },
+    initialBootstrap: bootstrapData,
+    initialMessages: chatInitialMessages,
+    disableInitialFetch: chatDataReady,
+    isPrimaryVoiceConsumer: isPrimary,
+  });
 
   const usernameInput = usernameInputOpen && (
     <div className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 text-sm dark:bg-amber-950">
-      <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">
-        Choose your username
-      </span>
+      <span className="shrink-0 font-medium text-amber-800 dark:text-amber-200">Choose your username</span>
       <input
         type="text"
         value={pendingUsername}
@@ -423,21 +264,14 @@ export function SplitView({
       />
       <button
         type="button"
-        onClick={() => {
-          if (!pendingUsername) return;
-          setUsernameInputOpen(false);
-          void doPublish(pendingUsername);
-        }}
+        onClick={() => { if (!pendingUsername) return; setUsernameInputOpen(false); void doPublish(pendingUsername); }}
         disabled={!pendingUsername || publishing}
         className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-      >
-        Publish
-      </button>
+      >Publish</button>
     </div>
   );
 
-  // Desktop/mobile shared page content (no overflow, no navbar)
-  const desktopPreviewContent = displayConfig ? (
+  const previewContent = displayConfig ? (
     <>
       {usernameInput}
       <ProposalBanner />
@@ -456,129 +290,9 @@ export function SplitView({
     <EmptyPreview language={language} />
   );
 
-  // Mobile preview: sticky header + page content
-  const mobilePreviewContent = (
-    <>
-      <div style={{
-        position: "sticky", top: 0, zIndex: 10,
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "0 16px", height: 44,
-        background: "rgba(7,7,9,0.92)",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        flexShrink: 0,
-      }}>
-        <span style={{ fontFamily: "monospace", fontSize: 11, color: "#c9a96e" }}>openself</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => { setActivityOpen(false); setPresenceOpen(true); }}
-            style={{
-              background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)",
-              border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer",
-            }}
-          >
-            Presence
-          </button>
-          {hasUnpublishedChanges && !publishing && authenticated && (
-            <button
-              type="button"
-              onClick={handlePublish}
-              style={{
-                background: "#c9a96e", color: "#111", border: "none",
-                borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
-              }}
-            >
-              Publish →
-            </button>
-          )}
-          {hasUnpublishedChanges && !publishing && !authenticated && (
-            <button
-              type="button"
-              onClick={() => setSignupOpen(true)}
-              style={{
-                background: "#c9a96e", color: "#111", border: "none",
-                borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
-              }}
-            >
-              Sign up →
-            </button>
-          )}
-          {publishing && (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Publishing…</span>
-          )}
-          {publishError && !publishing && (
-            <span style={{ fontSize: 11, color: "#f87171" }}>{publishError}</span>
-          )}
-          {authenticated && (
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              style={{
-                background: "none", color: "rgba(255,255,255,0.35)",
-                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 5,
-                padding: "4px 10px", fontSize: 11, cursor: "pointer",
-              }}
-            >
-              {loggingOut ? "…" : "Log out"}
-            </button>
-          )}
-        </div>
-      </div>
-      {desktopPreviewContent}
-    </>
-  );
-
-  // Presence panels: split desktop vs mobile
-  const desktopPresence = !isMobile && presenceOpen && (
-    <PresencePanel
-      open={presenceOpen}
-      onClose={handlePresenceClose}
-      config={config}
-      surface={surface}
-      voice={voice}
-      light={light}
-      layoutTemplate={layoutTemplate}
-      onSurfaceChange={handleSurfaceChange}
-      onVoiceChange={handleVoiceChange}
-      onLightChange={handleLightChange}
-      onComboSelect={handleComboSelect}
-      onLayoutChange={handleLayoutTemplateChange}
-      onAvatarChange={handleAvatarChange}
-      language={language}
-      inlineFullscreen={false}
-      showMiniPreview={false}
-    />
-  );
-
-  const mobilePresence = isMobile && presenceOpen && (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#0e0e10", overflowY: "auto" }}>
-      <PresencePanel
-        open={true}
-        onClose={handlePresenceClose}
-        config={config}
-        surface={surface}
-        voice={voice}
-        light={light}
-        layoutTemplate={layoutTemplate}
-        onSurfaceChange={handleSurfaceChange}
-        onVoiceChange={handleVoiceChange}
-        onLightChange={handleLightChange}
-        onComboSelect={handleComboSelect}
-        onLayoutChange={handleLayoutTemplateChange}
-        onAvatarChange={handleAvatarChange}
-        language={language}
-        inlineFullscreen={true}
-        showMiniPreview={true}
-        miniPreviewConfig={displayConfig}
-      />
-    </div>
-  );
-
   return (
     <VoiceProvider language={language}>
       <>
-        {/* Signup modal — rendered at top level */}
         <SignupModal
           open={signupOpen}
           onClose={() => setSignupOpen(false)}
@@ -586,95 +300,76 @@ export function SplitView({
           language={language}
         />
 
-        {/* Desktop: full-width navbar + side-by-side */}
+        {/* Desktop */}
         <div className="hidden h-screen md:flex flex-col">
-          {navBar}
-          <div className="flex flex-1 min-h-0">
-            {/* Chat pane */}
-            <div style={{ width: 400, flexShrink: 0, background: "#0d0d0f", borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", display: "flex", flexDirection: "column" }}>
-              {chatDataReady && (
-                <ChatPanel
-                  language={language}
-                  authV2={authState?.authV2}
-                  authState={authState}
-                  onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }}
-                  initialBootstrap={bootstrapData}
-                  initialMessages={chatInitialMessages}
-                  disableInitialFetch={chatDataReady}
-                  isPrimaryVoiceConsumer={!isMobile}
-                />
-              )}
-            </div>
-            {/* Preview pane */}
-            <div style={{ flex: 1, background: "#1a1a1e", overflowY: "auto" }}>
-              {desktopPreviewContent}
-            </div>
-          </div>
-          {desktopPresence}
-          <ActivityDrawer
-            open={activityOpen}
-            onClose={() => setActivityOpen(false)}
-            language={language}
-            t={t}
-            isMobile={false}
-            onUnreadRefresh={refreshUnread}
+          <BuilderNavBar
+            authState={authState}
+            hasUnpublishedChanges={hasUnpublishedChanges}
+            publishing={publishing}
+            publishError={publishError}
+            onPublish={handlePublish}
+            onSignup={() => setSignupOpen(true)}
+            onPresenceOpen={() => { setActivityOpen(false); setPresenceOpen(true); }}
+            pageName={heroName}
+            publishedUsername={authState?.publishedUsername ?? null}
+            unreadCount={unreadCount}
+            onActivityOpen={handleActivityToggle}
             bellRef={bellRef}
           />
+          <div className="flex flex-1 min-h-0">
+            <div style={{ width: 400, flexShrink: 0, background: "#0d0d0f", borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+              {chatDataReady && <ChatPanel {...chatPanelProps(!isMobile)} />}
+            </div>
+            <div style={{ flex: 1, background: "#1a1a1e", overflowY: "auto" }}>
+              {previewContent}
+            </div>
+          </div>
+          {!isMobile && presenceOpen && (
+            <PresencePanel {...presenceProps} open={presenceOpen} inlineFullscreen={false} showMiniPreview={false} />
+          )}
+          <ActivityDrawer open={activityOpen} onClose={() => setActivityOpen(false)} language={language} t={t} isMobile={false} onUnreadRefresh={refreshUnread} bellRef={bellRef} />
         </div>
 
-        {/* Mobile: bottom tab bar */}
+        {/* Mobile */}
         <div className="flex h-dvh flex-col overflow-hidden md:hidden" style={{ background: "#0d0d0f" }}>
-          {/* Content area */}
           <div className="flex-1 overflow-hidden relative">
             {/* Chat tab */}
             <div className={`absolute inset-0 flex flex-col ${activeMobileTab === "chat" ? "" : "hidden"}`}>
-              {/* Mobile chat header — hidden when keyboard is open to maximise space */}
               {!keyboardOpen && (
-                <div style={{
-                  textAlign: "center", padding: "12px 0 8px",
-                  fontSize: 12, fontFamily: "monospace", letterSpacing: "0.1em",
-                  color: "rgba(255,255,255,0.5)", background: "#0d0d0f", flexShrink: 0,
-                }}>
-                  {heroName ? `${heroName}'s page` : "My page"} · Draft
+                <div style={{ textAlign: "center", padding: "12px 0 8px", fontSize: 12, fontFamily: "monospace", letterSpacing: "0.1em", color: "rgba(255,255,255,0.5)", background: "#0d0d0f", flexShrink: 0 }}>
+                  {heroName ? `${heroName}'s page` : "My page"} &middot; Draft
                 </div>
               )}
               {!chatDataReady && (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
-                  Loading…
-                </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Loading&hellip;</div>
               )}
               {chatDataReady && (
                 <div className="flex-1 overflow-hidden">
-                  <ChatPanel
-                    language={language}
-                    authV2={authState?.authV2}
-                    authState={authState}
-                    onSignupRequest={() => { setPresenceOpen(false); setSignupOpen(true); }}
-                    initialBootstrap={bootstrapData}
-                    initialMessages={chatInitialMessages}
-                    disableInitialFetch={chatDataReady}
-                    isPrimaryVoiceConsumer={isMobile}
-                  />
+                  <ChatPanel {...chatPanelProps(isMobile)} />
                 </div>
               )}
             </div>
-
             {/* Preview tab */}
             <div className={`absolute inset-0 overflow-y-auto ${activeMobileTab === "preview" ? "block" : "hidden"}`}>
-              {mobilePreviewContent}
+              <MobilePreviewHeader
+                hasUnpublishedChanges={hasUnpublishedChanges}
+                publishing={publishing}
+                authenticated={authenticated}
+                publishError={publishError}
+                loggingOut={loggingOut}
+                onPublish={handlePublish}
+                onSignup={() => setSignupOpen(true)}
+                onPresenceOpen={() => { setActivityOpen(false); setPresenceOpen(true); }}
+                onLogout={handleLogout}
+              />
+              {previewContent}
             </div>
-
           </div>
 
-          {/* Voice FAB — fixed above tab bar, only on preview tab */}
           {voiceEnabled && activeMobileTab === "preview" && <VoiceOverlay />}
 
-          {/* Bottom tab bar — 56px, hidden when keyboard is open */}
-          <div style={{
-            height: keyboardOpen ? 0 : 56, flexShrink: 0, overflow: "hidden",
-            background: "#111113", borderTop: keyboardOpen ? "none" : "1px solid rgba(255,255,255,0.07)",
-            display: "flex",
-          }}>
+          {/* Bottom tab bar */}
+          <div style={{ height: keyboardOpen ? 0 : 56, flexShrink: 0, overflow: "hidden", background: "#111113", borderTop: keyboardOpen ? "none" : "1px solid rgba(255,255,255,0.07)", display: "flex" }}>
             {([
               { id: "chat", label: "Chat", icon: <ChatIcon /> },
               { id: "preview", label: "Preview", icon: <PreviewIcon /> },
@@ -697,16 +392,12 @@ export function SplitView({
             ))}
           </div>
 
-          {mobilePresence}
-          <ActivityDrawer
-            open={activityOpen}
-            onClose={() => setActivityOpen(false)}
-            language={language}
-            t={t}
-            isMobile={true}
-            onUnreadRefresh={refreshUnread}
-            bellRef={bellRef}
-          />
+          {isMobile && presenceOpen && (
+            <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#0e0e10", overflowY: "auto" }}>
+              <PresencePanel {...presenceProps} open={true} inlineFullscreen={true} showMiniPreview={true} miniPreviewConfig={displayConfig} />
+            </div>
+          )}
+          <ActivityDrawer open={activityOpen} onClose={() => setActivityOpen(false)} language={language} t={t} isMobile={true} onUnreadRefresh={refreshUnread} bellRef={bellRef} />
         </div>
       </>
     </VoiceProvider>
