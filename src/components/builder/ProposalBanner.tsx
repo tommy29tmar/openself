@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getUiL10n } from "@/lib/i18n/ui-strings";
-import { formatProposalContent } from "@/lib/i18n/format-proposal-content";
+import { formatProposalContent, translateIssueType, translateSeverity } from "@/lib/i18n/format-proposal-content";
 
 type Proposal = {
   id: number;
@@ -114,14 +114,14 @@ function ProposalReviewPanel({
               <div className="mb-2 flex items-center gap-2">
                 <span className="font-medium capitalize">{p.sectionType}</span>
                 <span className="rounded bg-gray-100 px-2 py-0.5 text-xs">
-                  {p.issueType.replace("_", " ")}
+                  {translateIssueType(p.issueType, language)}
                 </span>
                 <span
                   className={`rounded px-2 py-0.5 text-xs ${
                     p.severity === "medium" ? "bg-amber-100" : "bg-gray-100"
                   }`}
                 >
-                  {p.severity}
+                  {translateSeverity(p.severity, language)}
                 </span>
               </div>
               <p className="mb-3 text-sm text-gray-600">{p.reason}</p>
@@ -131,7 +131,7 @@ function ProposalReviewPanel({
                     {t.current}
                   </div>
                   <div className="whitespace-pre-line rounded bg-red-50 p-2">
-                    {formatProposalContent(p.currentContent)}
+                    {formatProposalContent(p.currentContent, language)}
                   </div>
                 </div>
                 <div>
@@ -139,7 +139,7 @@ function ProposalReviewPanel({
                     {t.proposed}
                   </div>
                   <div className="whitespace-pre-line rounded bg-green-50 p-2">
-                    {formatProposalContent(p.proposedContent)}
+                    {formatProposalContent(p.proposedContent, language)}
                   </div>
                 </div>
               </div>

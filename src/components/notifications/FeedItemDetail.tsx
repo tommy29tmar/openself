@@ -3,7 +3,7 @@
 import { FeedItemActions } from "./FeedItemActions";
 import type { FeedItem } from "@/lib/services/activity-feed-types";
 import type { UiStrings } from "@/lib/i18n/ui-strings";
-import { formatProposalContent } from "@/lib/i18n/format-proposal-content";
+import { formatProposalContent, translateSeverity } from "@/lib/i18n/format-proposal-content";
 import type { CSSProperties } from "react";
 
 interface FeedItemDetailProps {
@@ -29,17 +29,17 @@ export function FeedItemDetail({ item, onAction, language, t }: FeedItemDetailPr
 
       {d.type === "conformity_proposal" && (
         <div>
-          <DetailRow label={t.activitySeverity} value={d.severity} />
+          <DetailRow label={t.activitySeverity} value={translateSeverity(d.severity, language)} />
           <DetailRow label={t.activityReason} value={d.reason} />
 
           <div style={diffContainerStyle}>
             <div style={diffBlockStyle}>
               <div style={diffLabelStyle}>{t.activityCurrent}</div>
-              <div style={{ ...diffContentStyle, whiteSpace: "pre-line" }}>{formatProposalContent(d.currentContent)}</div>
+              <div style={{ ...diffContentStyle, whiteSpace: "pre-line" }}>{formatProposalContent(d.currentContent, language)}</div>
             </div>
             <div style={diffBlockStyle}>
               <div style={{ ...diffLabelStyle, color: "rgba(80,200,120,0.8)" }}>{t.activityProposed}</div>
-              <div style={{ ...diffContentStyle, whiteSpace: "pre-line" }}>{formatProposalContent(d.proposedContent)}</div>
+              <div style={{ ...diffContentStyle, whiteSpace: "pre-line" }}>{formatProposalContent(d.proposedContent, language)}</div>
             </div>
           </div>
 
