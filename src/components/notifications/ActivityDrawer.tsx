@@ -237,6 +237,8 @@ const markAllReadStyle: CSSProperties = {
   cursor: "pointer",
   fontSize: 12,
   padding: "4px 8px",
+  minHeight: 44,
+  minWidth: 44,
 };
 
 const emptyStyle: CSSProperties = {

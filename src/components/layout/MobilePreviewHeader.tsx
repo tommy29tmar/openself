@@ -44,6 +44,7 @@ export function MobilePreviewHeader({
           style={{
             background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)",
             border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer",
+            minHeight: 44,
           }}
         >
           Presence
@@ -55,6 +56,7 @@ export function MobilePreviewHeader({
             style={{
               background: "#c9a96e", color: "#111", border: "none",
               borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+              minHeight: 44,
             }}
           >
             Publish &rarr;
@@ -67,6 +69,7 @@ export function MobilePreviewHeader({
             style={{
               background: "#c9a96e", color: "#111", border: "none",
               borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+              minHeight: 44,
             }}
           >
             Sign up &rarr;
@@ -87,6 +90,7 @@ export function MobilePreviewHeader({
               background: "none", color: "rgba(255,255,255,0.35)",
               border: "1px solid rgba(255,255,255,0.1)", borderRadius: 5,
               padding: "4px 10px", fontSize: 11, cursor: "pointer",
+              minHeight: 44,
             }}
           >
             {loggingOut ? "\u2026" : "Log out"}
