@@ -57,12 +57,6 @@ export type CreateFactInput = {
   parentFactId?: string;
 };
 
-/** @deprecated Immutable facts pattern — use delete + create instead. Will be removed in next cleanup. */
-export type UpdateFactInput = {
-  factId: string;
-  value: Record<string, unknown>;
-};
-
 export type FactRow = {
   id: string;
   category: string;
@@ -248,88 +242,6 @@ export async function createFact(
     return { ...(row as FactRow), _clusterResult: clusterResult };
   }
   return row as FactRow;
-}
-
-/**
- * @deprecated Immutable facts pattern — use delete + create instead. Will be removed in next cleanup.
- * Update a fact. Accepts knowledgePrimaryKey (anchor session) to enable cross-session updates.
- * The fact lookup is scoped to knowledgeReadKeys (all sessions for the profile).
- */
-export function updateFact(
-  input: UpdateFactInput,
-  sessionId: string = "__default__",
-  readKeys?: string[],
-): FactRow | null {
-  // Find existing fact to get category/key for validation
-  let existing;
-  if (readKeys && readKeys.length > 0) {
-    existing = db
-      .select()
-      .from(facts)
-      .where(and(eq(facts.id, input.factId), inArray(facts.sessionId, readKeys)))
-      .get();
-  } else {
-    existing = db
-      .select()
-      .from(facts)
-      .where(and(eq(facts.id, input.factId), eq(facts.sessionId, sessionId)))
-      .get();
-  }
-
-  if (!existing) return null;
-
-  // Validate new value before persisting
-  validateFactValue(existing.category, existing.key, input.value);
-
-  // Current uniqueness check — dormant (CURRENT_UNIQUE_CATEGORIES is empty)
-  if (CURRENT_UNIQUE_CATEGORIES.has(existing.category)) {
-    const newVal = typeof input.value === "object" ? input.value : {};
-    if ((newVal as Record<string, unknown>).status === "current") {
-      const existingCurrent = db.select().from(facts)
-        .where(and(
-          eq(facts.sessionId, existing.sessionId),
-          eq(facts.category, existing.category),
-          isNull(facts.archivedAt),
-          sql`json_extract(value, '$.status') = 'current'`,
-          sql`${facts.id} != ${input.factId}`,
-        )).get();
-      if (existingCurrent) {
-        throw new FactConstraintError({
-          code: "EXISTING_CURRENT",
-          existingFactId: existingCurrent.id,
-          suggestion: `Another fact (${existingCurrent.id}) already has status:"current". Update it to "past" first.`,
-        });
-      }
-    }
-  }
-
-  // Cascade warning: check if fact has children
-  const children = db.select({ count: sql<number>`count(*)` })
-    .from(facts)
-    .where(and(eq(facts.parentFactId, input.factId), isNull(facts.archivedAt)))
-    .get();
-  const hasChildren = (children?.count ?? 0) > 0;
-
-  const now = new Date().toISOString();
-  db.update(facts)
-    .set({ value: input.value, updatedAt: now })
-    .where(eq(facts.id, input.factId))
-    .run();
-
-  logEvent({
-    eventType: "fact_updated",
-    actor: "assistant",
-    payload: { factId: input.factId, newValue: input.value },
-    entityType: "fact",
-    entityId: input.factId,
-  });
-
-  return {
-    ...existing,
-    value: input.value,
-    updatedAt: now,
-    ...(hasChildren ? { _warnings: [`This fact has ${children!.count} child fact(s) that may need updating`] } : {}),
-  } as FactRow;
 }
 
 /**
@@ -626,17 +538,21 @@ export function setFactVisibility(
 
 /**
  * Bulk-promote facts to public by ID. Used by publish pipeline for cluster memberIds.
- * Bypasses session scoping — caller must have already verified ownership.
+ * When profileId is provided, only facts belonging to that profile are promoted.
  * Idempotent: skips facts already public, sensitive, or not found.
  */
-export function bulkPromoteToPublic(factIds: string[]): void {
+export function bulkPromoteToPublic(factIds: string[], profileId?: string): void {
   if (factIds.length === 0) return;
   const now = new Date().toISOString();
   for (const factId of factIds) {
+    const conditions = [eq(facts.id, factId)];
+    if (profileId) {
+      conditions.push(eq(facts.profileId, profileId));
+    }
     const existing = db
       .select()
       .from(facts)
-      .where(eq(facts.id, factId))
+      .where(and(...conditions))
       .get();
     if (!existing) continue;
     const vis = (existing.visibility ?? "private") as Visibility;

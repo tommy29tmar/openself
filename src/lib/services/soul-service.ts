@@ -217,8 +217,8 @@ export function expireStaleProposals(ttlHours: number = 48): number {
       `UPDATE soul_change_proposals
        SET status = 'expired', resolved_at = datetime('now')
        WHERE status = 'pending'
-       AND created_at < datetime('now', '-${ttlHours} hours')`,
+       AND created_at < datetime('now', '-' || ? || ' hours')`,
     )
-    .run();
+    .run(String(ttlHours));
   return result.changes;
 }

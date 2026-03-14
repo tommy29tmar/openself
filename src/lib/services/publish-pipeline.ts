@@ -98,7 +98,7 @@ export async function prepareAndPublish(
   }
 
   // Step B: Canonical config + hash guard (BEFORE any side-effects)
-  const { language, factLanguage } = getPreferences(sessionId);
+  const { language, factLanguage } = getPreferences(ownerKey ?? sessionId);
   const factLang = factLanguage ?? language ?? "en";
   const targetLang = language ?? "en";
 
@@ -211,12 +211,11 @@ export async function prepareAndPublish(
     }
 
     // Promote all publishable facts to public (including cluster companions).
-    // Uses bulkPromoteToPublic (ID-only lookup, no session scope) because cluster
-    // companions may be stored under a different sessionId than the publishing user.
+    // Scoped to profileId to prevent cross-owner promotion.
     const allMemberIds = publishable.flatMap(
       (f) => (f as any).memberIds ?? [f.id],
     );
-    bulkPromoteToPublic(allMemberIds);
+    bulkPromoteToPublic(allMemberIds, profileId);
 
     // Persist rendered (translated) config and publish
     upsertDraft(username, renderedConfig, sessionId);

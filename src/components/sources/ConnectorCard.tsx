@@ -244,6 +244,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
       {/* Not connected */}
       {!isConnected && !hasError && definition.authType === "oauth" && (
         <button
+          type="button"
           onClick={handleConnect}
           disabled={loading}
           style={{
@@ -256,6 +257,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
       )}
       {!isConnected && !hasError && definition.authType === "zip_upload" && (
         <button
+          type="button"
           onClick={handleImport}
           disabled={loading}
           style={btnStyle("rgba(255,255,255,0.1)", "#e8e4de")}
@@ -301,6 +303,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
         <div style={{ display: "flex", gap: 8 }}>
           {definition.syncUrl && (
             <button
+              type="button"
               onClick={handleSync}
               disabled={loading || disconnecting}
               style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
@@ -327,6 +330,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
           <div style={{ display: "flex", gap: 8 }}>
             {definition.syncUrl && (
               <button
+                type="button"
                 onClick={handleSync}
                 disabled={loading || disconnecting}
                 style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
@@ -396,6 +400,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <button
+              type="button"
               onClick={handleConnect}
               disabled={loading}
               style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1, opacity: loading ? 0.5 : 1 }}
@@ -425,6 +430,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             {definition.syncUrl && (
               <button
+                type="button"
                 onClick={handleSync}
                 disabled={loading || disconnecting}
                 style={{ ...btnStyle("rgba(255,255,255,0.08)", "#e8e4de"), flex: 1 }}
@@ -480,6 +486,7 @@ export function ConnectorCard({ definition, status, onRefresh, language = "en" }
       {definition.authType === "zip_upload" && isConnected && (
         <div style={{ marginTop: 8 }}>
           <button
+            type="button"
             onClick={handleImport}
             disabled={loading}
             style={{ ...btnStyle("rgba(255,255,255,0.06)", "#e8e4de"), width: "100%", marginBottom: 8 }}

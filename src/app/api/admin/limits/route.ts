@@ -56,7 +56,11 @@ export async function PATCH(req: Request) {
 
   const updates: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (PATCHABLE_FIELDS.has(key)) updates[key] = value;
+    if (!PATCHABLE_FIELDS.has(key)) continue;
+    if (key === "hardStop" && typeof value !== "boolean") continue;
+    if (key === "dailyTokenLimit" && (typeof value !== "number" || !Number.isInteger(value) || value < 0)) continue;
+    if (key.includes("Cost") && (typeof value !== "number" || value < 0)) continue;
+    updates[key] = value;
   }
 
   if (Object.keys(updates).length === 0) {

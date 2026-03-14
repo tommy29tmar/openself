@@ -95,7 +95,7 @@ function buildReturningNoPage(lang: string, name: string | null): string {
   const n = name ? ` ${name}` : "";
   const templates: L10n = {
     en: `Welcome back${n}! Ready to pick up where we left off?`,
-    it: `Bentornato${n}! Riprendiamo da dove eravamo rimasti?`,
+    it: `Bentornato/a${n}! Riprendiamo da dove eravamo rimasti?`,
     de: `Willkommen zurück${n}! Sollen wir weitermachen, wo wir aufgehört haben?`,
     fr: `Re-bonjour${n}\u00a0! On reprend là où on en était\u00a0?`,
     es: `¡Bienvenido de nuevo${n}! ¿Seguimos donde lo dejamos?`,
@@ -110,7 +110,7 @@ function buildDraftReady(lang: string, name: string | null): string {
   const n = name ? ` ${name}` : "";
   const templates: L10n = {
     en: `Welcome back${n}! Your page is ready for review — take a look on the right. Want to make any changes?`,
-    it: `Bentornato${n}! La tua pagina è pronta — dai un'occhiata a destra. Vuoi modificare qualcosa?`,
+    it: `Bentornato/a${n}! La tua pagina è pronta — dai un'occhiata a destra. Vuoi modificare qualcosa?`,
     de: `Willkommen zurück${n}! Deine Seite ist fertig — schau rechts. Möchtest du etwas ändern?`,
     fr: `Re-bonjour${n}\u00a0! Ta page est prête — jette un œil à droite. Tu veux modifier quelque chose\u00a0?`,
     es: `¡Bienvenido${n}! Tu página está lista — mira a la derecha. ¿Quieres cambiar algo?`,
@@ -141,7 +141,7 @@ function buildActiveStale(lang: string, name: string | null, days: number | null
   if (days != null && days >= 30) {
     const templates: L10n = {
       en: `Welcome back${n}! It's been over a month — anything new you'd like to share?`,
-      it: `Bentornato${n}! È passato più di un mese — ci sono novità da raccontare?`,
+      it: `Bentornato/a${n}! È passato più di un mese — ci sono novità da raccontare?`,
       de: `Willkommen zurück${n}! Es ist über einen Monat her — gibt es Neuigkeiten?`,
       fr: `Re-bonjour${n}\u00a0! Ça fait plus d\u2019un mois — du nouveau à partager\u00a0?`,
       es: `¡Bienvenido de nuevo${n}! Ha pasado más de un mes — ¿hay novedades?`,

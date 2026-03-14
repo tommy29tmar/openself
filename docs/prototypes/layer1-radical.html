@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tommaso Rinaldi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,700;1,700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;800&display=swap" rel="stylesheet">
+<style>
+  /* =========================================================
+     RESET & BASE
+     ========================================================= */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    /* Day (default) */
+    --bg: #fafaf9;
+    --fg: #111110;
+    --fg-secondary: #555550;
+    --fg-tertiary: #888883;
+    --accent: #b8860b;
+    --accent2: #c49a1a;
+    --line: #11111018;
+    --breath-color: rgba(218, 185, 107, 0.12);
+    --grain-opacity: 0.03;
+    --name-font: 'Plus Jakarta Sans', sans-serif;
+    --name-weight: 800;
+    --name-style: normal;
+    --body-font: 'Plus Jakarta Sans', sans-serif;
+    --ticker-font: 'Plus Jakarta Sans', sans-serif;
+    --name-size: clamp(52px, 14vw, 72px);
+    --cursor-display: none;
+    --ticker-separator-style: normal;
+  }
+
+  html.noir {
+    --bg: #08080f;
+    --fg: #eef0f8;
+    --fg-secondary: #9a9db8;
+    --fg-tertiary: #6366786e;
+    --accent: #7b8cde;
+    --accent2: #5e6bbf;
+    --line: #eef0f812;
+    --breath-color: rgba(90, 100, 200, 0.08);
+    --grain-opacity: 0.06;
+    --name-font: 'Cormorant Garamond', serif;
+    --name-weight: 700;
+    --name-style: italic;
+    --body-font: 'Plus Jakarta Sans', sans-serif;
+    --ticker-font: 'Plus Jakarta Sans', sans-serif;
+    --name-size: clamp(54px, 15vw, 78px);
+    --cursor-display: none;
+    --ticker-separator-style: normal;
+  }
+
+  html.dev {
+    --bg: #0e0e0d;
+    --fg: #d4d0c8;
+    --fg-secondary: #8a8778;
+    --fg-tertiary: #5a584e6e;
+    --accent: #8bc34a;
+    --accent2: #6b9e3a;
+    --line: #d4d0c810;
+    --breath-color: rgba(139, 195, 74, 0.05);
+    --grain-opacity: 0.04;
+    --name-font: 'JetBrains Mono', monospace;
+    --name-weight: 500;
+    --name-style: normal;
+    --body-font: 'JetBrains Mono', monospace;
+    --ticker-font: 'JetBrains Mono', monospace;
+    --name-size: clamp(40px, 11vw, 58px);
+    --cursor-display: inline-block;
+    --ticker-separator-style: normal;
+  }
+
+  html {
+    height: 100%;
+    height: 100svh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--body-font);
+    transition: background 0.8s ease, color 0.6s ease;
+  }
+
+  body {
+    height: 100%;
+    height: 100svh;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0;
+  }
+
+  /* =========================================================
+     BREATHING GRADIENT
+     ========================================================= */
+  .breath {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .breath::before {
+    content: '';
+    position: absolute;
+    width: 140%;
+    height: 140%;
+    top: -20%;
+    left: -20%;
+    background: radial-gradient(ellipse at 30% 50%, var(--breath-color) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 30%, var(--breath-color) 0%, transparent 50%);
+    animation: breathe 8s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.6; }
+    33% { transform: scale(1.08) translate(2%, 1%); opacity: 1; }
+    66% { transform: scale(0.95) translate(-1%, -2%); opacity: 0.7; }
+  }
+
+  /* =========================================================
+     GRAIN OVERLAY
+     ========================================================= */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 180px;
+  }
+
+  /* =========================================================
+     VERTICAL ACCENT LINE
+     ========================================================= */
+  .v-line {
+    position: fixed;
+    left: 28px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(
+      to bottom,
+      transparent 10%,
+      var(--accent) 30%,
+      var(--accent) 50%,
+      var(--line) 70%,
+      transparent 90%
+    );
+    opacity: 0.35;
+    z-index: 2;
+    transition: opacity 0.8s ease;
+  }
+
+  /* =========================================================
+     MAIN CONTENT WRAPPER
+     ========================================================= */
+  .content {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    padding: 0 32px;
+  }
+
+  /* =========================================================
+     NAME — KINETIC TYPOGRAPHY
+     ========================================================= */
+  .name-block {
+    margin-bottom: 16px;
+    line-height: 1.02;
+  }
+
+  .name-line {
+    display: block;
+    font-family: var(--name-font);
+    font-weight: var(--name-weight);
+    font-style: var(--name-style);
+    font-size: var(--name-size);
+    letter-spacing: -0.03em;
+    color: var(--fg);
+    transition: font-family 0.5s, font-weight 0.3s, font-size 0.5s, color 0.6s;
+    position: relative;
+  }
+
+  .name-line .letter {
+    display: inline-block;
+    animation: letterFloat var(--float-dur, 5s) ease-in-out infinite;
+    animation-delay: var(--float-delay, 0s);
+    will-change: transform;
+  }
+
+  @keyframes letterFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(var(--float-y, -2px)); }
+  }
+
+  /* Cursor blink for dev mode */
+  .cursor {
+    display: var(--cursor-display);
+    width: 0.55em;
+    height: 1.05em;
+    background: var(--accent);
+    vertical-align: baseline;
+    margin-left: 4px;
+    animation: cursorBlink 1s step-end infinite;
+    transition: background 0.6s;
+  }
+
+  @keyframes cursorBlink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  /* =========================================================
+     ROLE SUBTITLE
+     ========================================================= */
+  .role {
+    font-family: var(--body-font);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--fg-secondary);
+    letter-spacing: 0.04em;
+    margin-bottom: 28px;
+    padding-left: 2px;
+    transition: color 0.6s;
+  }
+
+  /* =========================================================
+     BIO
+     ========================================================= */
+  .bio {
+    font-family: var(--body-font);
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--fg);
+    max-width: 340px;
+    margin-bottom: 40px;
+    padding-left: 2px;
+    transition: color 0.6s, font-family 0.5s;
+  }
+
+  /* =========================================================
+     TICKERS
+     ========================================================= */
+  .tickers {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100vw;
+    margin-left: -32px;
+    overflow: hidden;
+  }
+
+  .ticker-row {
+    display: flex;
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
+    font-family: var(--ticker-font);
+    transition: color 0.6s, font-family 0.5s;
+  }
+
+  .ticker-row::before,
+  .ticker-row::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .ticker-row::before {
+    left: 0;
+    background: linear-gradient(to right, var(--bg), transparent);
+  }
+
+  .ticker-row::after {
+    right: 0;
+    background: linear-gradient(to left, var(--bg), transparent);
+  }
+
+  .ticker-track {
+    display: flex;
+    animation: tickerScroll var(--ticker-speed, 30s) linear infinite;
+    will-change: transform;
+  }
+
+  .ticker-row.reverse .ticker-track {
+    animation: tickerScrollReverse var(--ticker-speed, 30s) linear infinite;
+  }
+
+  .ticker-text {
+    flex-shrink: 0;
+    padding-right: 0;
+  }
+
+  .ticker-row.t1 {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--accent);
+    --ticker-speed: 25s;
+  }
+
+  .ticker-row.t2 {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--fg-secondary);
+    --ticker-speed: 38s;
+  }
+
+  .ticker-row.t3 {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--fg-tertiary);
+    --ticker-speed: 22s;
+  }
+
+  @keyframes tickerScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  @keyframes tickerScrollReverse {
+    0% { transform: translateX(-50%); }
+    100% { transform: translateX(0); }
+  }
+
+  /* =========================================================
+     BOTTOM BAR: SOCIAL + SWITCHER
+     ========================================================= */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 28px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  .social {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .social a {
+    color: var(--fg-secondary);
+    text-decoration: none;
+    transition: color 0.3s, transform 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .social a:hover {
+    color: var(--accent);
+    transform: translateY(-1px);
+  }
+
+  .social svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  /* =========================================================
+     PRESENCE SWITCHER (3-dot toggle)
+     ========================================================= */
+  .switcher {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .switcher button {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--fg-secondary);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    padding: 0;
+    position: relative;
+  }
+
+  .switcher button:hover {
+    border-color: var(--accent);
+    transform: scale(1.25);
+  }
+
+  .switcher button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.2);
+  }
+
+  .switcher button.active::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    opacity: 0.3;
+    animation: dotPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes dotPulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.4); opacity: 0; }
+  }
+
+  /* Dot colors */
+  .switcher .dot-day { border-color: #b8860b; }
+  .switcher .dot-day.active { background: #b8860b; border-color: #b8860b; }
+  .switcher .dot-noir { border-color: #7b8cde; }
+  .switcher .dot-noir.active { background: #7b8cde; border-color: #7b8cde; }
+  .switcher .dot-dev { border-color: #8bc34a; }
+  .switcher .dot-dev.active { background: #8bc34a; border-color: #8bc34a; }
+
+  /* =========================================================
+     ENTRY ANIMATION
+     ========================================================= */
+  .name-block, .role, .bio, .tickers, .bottom-bar {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.8s ease forwards;
+  }
+
+  .name-block { animation-delay: 0.1s; }
+  .role { animation-delay: 0.25s; }
+  .bio { animation-delay: 0.4s; }
+  .tickers { animation-delay: 0.6s; }
+  .bottom-bar { animation-delay: 0.9s; transform: translateY(8px); }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* =========================================================
+     DEV MODE EXTRAS
+     ========================================================= */
+  html.dev .ticker-text {
+    letter-spacing: 0.02em;
+  }
+
+  html.dev .bio {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  html.dev .role {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* =========================================================
+     REDUCED MOTION
+     ========================================================= */
+  @media (prefers-reduced-motion: reduce) {
+    .letter { animation: none !important; }
+    .ticker-track { animation: none !important; }
+    .breath::before { animation: none !important; opacity: 0.5 !important; }
+    .cursor { animation: none !important; opacity: 1 !important; }
+    .switcher button.active::after { animation: none !important; }
+    .name-block, .role, .bio, .tickers, .bottom-bar {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+
+  /* =========================================================
+     SMALL SCREEN ADJUSTMENTS
+     ========================================================= */
+  @media (max-width: 375px) {
+    .content { padding: 0 24px; }
+    .tickers { margin-left: -24px; }
+    .v-line { left: 20px; }
+  }
+
+  @media (min-width: 768px) {
+    .content { padding: 0 64px; }
+    .tickers { margin-left: -64px; }
+    .v-line { left: 48px; }
+    .bio { max-width: 440px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Atmospheric layers -->
+<div class="breath" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="v-line" aria-hidden="true"></div>
+
+<!-- Main content -->
+<div class="content">
+
+  <!-- Name -->
+  <div class="name-block" aria-label="Tommaso Rinaldi">
+    <span class="name-line" id="name-1"></span>
+    <span class="name-line" id="name-2"></span>
+  </div>
+
+  <!-- Role -->
+  <div class="role">Identity &amp; AI &middot; Milano</div>
+
+  <!-- Bio -->
+  <p class="bio">Ingegnere che costruisce strumenti per l'identit&agrave; digitale.</p>
+
+  <!-- Tickers -->
+  <div class="tickers" aria-label="Streaming identity data">
+    <div class="ticker-row t1">
+      <div class="ticker-track" id="ticker-1"></div>
+    </div>
+    <div class="ticker-row t2 reverse">
+      <div class="ticker-track" id="ticker-2"></div>
+    </div>
+    <div class="ticker-row t3">
+      <div class="ticker-track" id="ticker-3"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">
+  <div class="social">
+    <!-- GitHub -->
+    <a href="https://github.com/tommasorinaldi" aria-label="GitHub" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
+    </a>
+    <!-- LinkedIn -->
+    <a href="https://linkedin.com/in/tommasorinaldi" aria-label="LinkedIn" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+    </a>
+    <!-- Web/OpenSelf -->
+    <a href="https://openself.dev" aria-label="OpenSelf" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+    </a>
+  </div>
+
+  <div class="switcher" role="radiogroup" aria-label="Presence style">
+    <button class="dot-day active" data-mode="day" role="radio" aria-checked="true" aria-label="Day"></button>
+    <button class="dot-noir" data-mode="noir" role="radio" aria-checked="false" aria-label="Noir"></button>
+    <button class="dot-dev" data-mode="dev" role="radio" aria-checked="false" aria-label="Dev"></button>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Letter animation setup ──────────────────────────────
+  function animateLetters(el, text) {
+    el.innerHTML = '';
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const span = document.createElement('span');
+      if (ch === ' ') {
+        span.innerHTML = '&nbsp;';
+      } else {
+        span.textContent = ch;
+        span.classList.add('letter');
+        const dur = 3 + Math.random() * 5;            // 3–8s
+        const delay = Math.random() * -8;              // staggered start
+        const y = -(1.5 + Math.random() * 2);         // -1.5 to -3.5px
+        span.style.setProperty('--float-dur', dur + 's');
+        span.style.setProperty('--float-delay', delay + 's');
+        span.style.setProperty('--float-y', y + 'px');
+      }
+      el.appendChild(span);
+    }
+  }
+
+  // Build name
+  animateLetters(document.getElementById('name-1'), 'Tommaso');
+  animateLetters(document.getElementById('name-2'), 'Rinaldi');
+
+  // Append cursor to second name line
+  const cursor = document.createElement('span');
+  cursor.classList.add('cursor');
+  cursor.setAttribute('aria-hidden', 'true');
+  document.getElementById('name-2').appendChild(cursor);
+
+  // ── Ticker setup ────────────────────────────────────────
+  const tickerData = {
+    't1': 'building OpenSelf \u00b7 AI-powered identity \u00b7 TypeScript \u00b7 Next.js \u00b7 SQLite \u00b7 distributed systems \u00b7 10 years engineering \u00b7 conversation-first design \u00b7 local-first architecture \u00b7 ',
+    't2': 'PB 1:42:03 half-marathon \u00b7 847km this year \u00b7 Burial \u2014 Untrue \u00b7 Boards of Canada \u2014 MHTRTC \u00b7 Tycho \u2014 Dive \u00b7 The Pragmatic Programmer \u00b7 Designing Data-Intensive Applications \u00b7 ',
+    't3': 'committed to openself \u00b7 2h ago \u00b7 ran 6.2km this morning \u00b7 listening to Tycho \u2014 Dive \u00b7 3 repos this week \u00b7 12 runs this month \u00b7 '
+  };
+
+  function buildTicker(id) {
+    const track = document.getElementById('ticker-' + id);
+    const text = tickerData['t' + id];
+    // We need enough repetitions so that 50% translateX still shows text.
+    // 4 copies is generous for any screen width.
+    const repeated = text.repeat(6);
+    const half = text.repeat(3);
+
+    const span1 = document.createElement('span');
+    span1.classList.add('ticker-text');
+    span1.textContent = half;
+
+    const span2 = document.createElement('span');
+    span2.classList.add('ticker-text');
+    span2.textContent = half;
+
+    track.appendChild(span1);
+    track.appendChild(span2);
+  }
+
+  buildTicker('1');
+  buildTicker('2');
+  buildTicker('3');
+
+  // ── Presence switcher ───────────────────────────────────
+  const html = document.documentElement;
+  const dots = document.querySelectorAll('.switcher button');
+
+  function setMode(mode) {
+    html.classList.remove('noir', 'dev');
+    if (mode !== 'day') html.classList.add(mode);
+
+    dots.forEach(d => {
+      const isActive = d.dataset.mode === mode;
+      d.classList.toggle('active', isActive);
+      d.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    });
+
+    // Rebuild name letters (font changes need re-render for metrics)
+    requestAnimationFrame(() => {
+      animateLetters(document.getElementById('name-1'), 'Tommaso');
+      animateLetters(document.getElementById('name-2'), 'Rinaldi');
+      const c = document.createElement('span');
+      c.classList.add('cursor');
+      c.setAttribute('aria-hidden', 'true');
+      document.getElementById('name-2').appendChild(c);
+    });
+  }
+
+  dots.forEach(d => {
+    d.addEventListener('click', () => setMode(d.dataset.mode));
+  });
+
+  // Keyboard navigation for radio group
+  const switcher = document.querySelector('.switcher');
+  switcher.addEventListener('keydown', (e) => {
+    const modes = ['day', 'noir', 'dev'];
+    const current = html.classList.contains('dev') ? 'dev' :
+                    html.classList.contains('noir') ? 'noir' : 'day';
+    const idx = modes.indexOf(current);
+    let next;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      next = modes[(idx + 1) % 3];
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      next = modes[(idx + 2) % 3];
+    }
+    if (next) {
+      e.preventDefault();
+      setMode(next);
+      document.querySelector('[data-mode="' + next + '"]').focus();
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>

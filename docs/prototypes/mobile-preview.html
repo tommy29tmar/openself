@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>OpenSelf Layer 1 — Mobile Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; color: #eee; font-family: system-ui, sans-serif; padding: 24px; }
+    h1 { font-size: 18px; font-weight: 500; margin-bottom: 24px; text-align: center; color: #888; letter-spacing: 0.05em; }
+    .row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+    .phone { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .phone-label { font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #666; }
+    .phone-frame {
+      width: 375px; height: 812px;
+      border-radius: 40px;
+      border: 6px solid #333;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .phone-frame iframe {
+      width: 100%; height: 100%; border: none;
+    }
+    /* Notch */
+    .phone-frame::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 120px; height: 28px;
+      background: #333;
+      border-radius: 0 0 16px 16px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <h1>OpenSelf — Layer 1 Prototypes (Mobile 375×812)</h1>
+  <div class="row">
+    <div class="phone">
+      <div class="phone-label">A — Editorial</div>
+      <div class="phone-frame">
+        <iframe src="layer1-editorial.html"></iframe>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-label">B — Living Canvas</div>
+      <div class="phone-frame">
+        <iframe src="layer1-canvas.html"></iframe>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-label">C — Signal</div>
+      <div class="phone-frame">
+        <iframe src="layer1-signal.html"></iframe>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-label" style="color:#aaa">D — Apple Minimal</div>
+      <div class="phone-frame">
+        <iframe src="layer1-apple.html"></iframe>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-label" style="color:#e8b4ff">E — Floating Identity</div>
+      <div class="phone-frame" style="border-color:#555">
+        <iframe src="layer1-disruptive.html?v=3"></iframe>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-label" style="color:#ff8b8b">F — Kinetic Typography ★★</div>
+      <div class="phone-frame" style="border-color:#666">
+        <iframe src="layer1-radical.html"></iframe>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -57,8 +57,7 @@ export async function batchRecordEvents(
     }
 
     try {
-      sqlite.exec("BEGIN");
-      try {
+      sqlite.transaction(() => {
         const eventId = insertEvent({
           ownerKey: ctx.ownerKey,
           sessionId: ctx.sessionId,
@@ -79,13 +78,8 @@ export async function batchRecordEvents(
                event_id = excluded.event_id, last_seen_at = excluded.last_seen_at`,
           )
           .run(randomUUID(), ctx.connectorId, event.externalId, eventId);
-
-        sqlite.exec("COMMIT");
-        report.eventsWritten++;
-      } catch (innerError) {
-        sqlite.exec("ROLLBACK");
-        throw innerError;
-      }
+      })();
+      report.eventsWritten++;
     } catch (error) {
       report.errors.push({
         externalId: event.externalId,

@@ -132,10 +132,10 @@ export function SplitView({
   // Section interaction (canvas-style preview)
   const previewInteraction = usePreviewInteraction();
   const [pendingAction, setPendingAction] = useState<SectionAction | null>(null);
-  const [hasSeenHint, setHasSeenHint] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return localStorage.getItem("openself:longpress-hint-seen") === "1";
-  });
+  const [hasSeenHint, setHasSeenHint] = useState(true);
+  useEffect(() => {
+    setHasSeenHint(localStorage.getItem("openself:longpress-hint-seen") === "1");
+  }, []);
   const dismissHint = useCallback(() => {
     setHasSeenHint(true);
     if (typeof window !== "undefined") {
@@ -336,7 +336,7 @@ export function SplitView({
         toastManager.add("Failed to reorder section", "error");
       });
     }
-  }, [previewInteraction, isMobile]);
+  }, [previewInteraction, isMobile, toastManager]);
 
   // Section action handler — mobile opens bottom sheet, desktop handles inline
   const handleSectionAction = useCallback((action: SectionAction) => {

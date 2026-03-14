@@ -66,15 +66,18 @@ export async function fetchProfile(token: string): Promise<GitHubProfile> {
 }
 
 export async function fetchRepos(token: string): Promise<GitHubRepo[]> {
+  const MAX_PAGES = 10;
   const repos: GitHubRepo[] = [];
   let url: string | null =
     "https://api.github.com/user/repos?type=public&per_page=100&sort=pushed";
+  let pageCount = 0;
 
-  while (url) {
+  while (url && pageCount < MAX_PAGES) {
     const res = await ghFetch(url, token);
     if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
     const page: GitHubRepo[] = await res.json();
     repos.push(...page);
+    pageCount++;
 
     // Parse Link header for next page
     const link = res.headers.get("Link");

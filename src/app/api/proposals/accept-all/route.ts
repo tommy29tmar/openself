@@ -41,7 +41,8 @@ export async function POST(req: Request) {
     sqlite.exec("COMMIT");
   } catch (err) {
     sqlite.exec("ROLLBACK");
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("[accept-all]", err);
+    return NextResponse.json({ error: "Failed to accept proposals" }, { status: 500 });
   }
 
   return NextResponse.json({ accepted, stale, errors });

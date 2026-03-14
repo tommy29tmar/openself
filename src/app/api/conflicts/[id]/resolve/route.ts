@@ -49,6 +49,16 @@ export async function POST(
     );
   }
 
+  if (resolution === "merge") {
+    const serialized = JSON.stringify(mergedValue);
+    if (serialized.length > 10_000) {
+      return NextResponse.json(
+        { success: false, error: "mergedValue too large" },
+        { status: 400 },
+      );
+    }
+  }
+
   try {
     const result = resolveConflict(conflictId, ownerKey, resolution as ConflictResolution, mergedValue);
 

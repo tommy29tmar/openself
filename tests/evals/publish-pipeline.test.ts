@@ -235,10 +235,11 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "publish" });
 
-    // All publishable memberIds are promoted via bulkPromoteToPublic
+    // All publishable memberIds are promoted via bulkPromoteToPublic with profileId
     expect(mockBulkPromoteToPublic).toHaveBeenCalledTimes(1);
     expect(mockBulkPromoteToPublic).toHaveBeenCalledWith(
       [facts[0].id, facts[1].id],
+      "session-1",
     );
   });
 
@@ -271,6 +272,7 @@ describe("prepareAndPublish", () => {
     );
     expect(mockBulkPromoteToPublic).toHaveBeenCalledWith(
       [facts[0].id],
+      "profile-1",
     );
   });
 
@@ -289,8 +291,8 @@ describe("prepareAndPublish", () => {
 
     await prepareAndPublish("testuser", "session-1", { mode: "publish" });
 
-    // bulkPromoteToPublic is called with all memberIds — handles idempotency internally
-    expect(mockBulkPromoteToPublic).toHaveBeenCalledWith([facts[0].id]);
+    // bulkPromoteToPublic is called with all memberIds + profileId — handles idempotency internally
+    expect(mockBulkPromoteToPublic).toHaveBeenCalledWith([facts[0].id], "session-1");
   });
 
   it("publishes from zero when no draft exists", async () => {
@@ -454,6 +456,7 @@ describe("prepareAndPublish", () => {
     expect(mockBulkPromoteToPublic).toHaveBeenCalledTimes(1);
     expect(mockBulkPromoteToPublic).toHaveBeenCalledWith(
       [facts[1].id],
+      "session-1",
     );
   });
 });

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tommaso Rinaldi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* canvas/signal/day — warm luminous */
+  --blob1: radial-gradient(ellipse 80% 70% at 20% 30%, rgba(255, 167, 38, 0.7) 0%, transparent 70%);
+  --blob2: radial-gradient(ellipse 60% 80% at 75% 60%, rgba(255, 111, 97, 0.6) 0%, transparent 65%);
+  --blob3: radial-gradient(ellipse 90% 60% at 50% 80%, rgba(255, 236, 179, 0.5) 0%, transparent 60%);
+  --blob4: radial-gradient(ellipse 70% 90% at 30% 70%, rgba(255, 183, 77, 0.45) 0%, transparent 55%);
+  --blob5: radial-gradient(ellipse 50% 50% at 60% 20%, rgba(255, 204, 128, 0.5) 0%, transparent 60%);
+  --canvas-bg: #fdf6ee;
+  --text-primary: #1a1a1a;
+  --text-secondary: rgba(26, 26, 26, 0.7);
+  --text-muted: rgba(26, 26, 26, 0.45);
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-shadow: rgba(0, 0, 0, 0.06);
+  --chip-bg: rgba(255, 255, 255, 0.45);
+  --chip-border: rgba(255, 255, 255, 0.6);
+  --blend: screen;
+  --dot-active: #ff6f61;
+  --dot-colors: #ffa726, #5c6bc0, #26a69a;
+  --pulse-color: rgba(26, 26, 26, 0.3);
+}
+
+.presence-archive {
+  --blob1: radial-gradient(ellipse 80% 70% at 25% 25%, rgba(63, 81, 181, 0.7) 0%, transparent 65%);
+  --blob2: radial-gradient(ellipse 70% 80% at 70% 65%, rgba(103, 58, 183, 0.6) 0%, transparent 60%);
+  --blob3: radial-gradient(ellipse 85% 55% at 45% 85%, rgba(26, 35, 126, 0.55) 0%, transparent 55%);
+  --blob4: radial-gradient(ellipse 60% 75% at 80% 20%, rgba(149, 117, 205, 0.4) 0%, transparent 55%);
+  --blob5: radial-gradient(ellipse 55% 65% at 15% 60%, rgba(255, 193, 7, 0.2) 0%, transparent 50%);
+  --canvas-bg: #0d0f1a;
+  --text-primary: #e8e6f0;
+  --text-secondary: rgba(232, 230, 240, 0.7);
+  --text-muted: rgba(232, 230, 240, 0.35);
+  --glass-bg: rgba(20, 22, 40, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: rgba(0, 0, 0, 0.3);
+  --chip-bg: rgba(30, 33, 60, 0.5);
+  --chip-border: rgba(255, 255, 255, 0.12);
+  --blend: screen;
+  --dot-active: #5c6bc0;
+  --pulse-color: rgba(232, 230, 240, 0.25);
+}
+
+.presence-terminal {
+  --blob1: radial-gradient(ellipse 75% 65% at 20% 35%, rgba(0, 105, 62, 0.65) 0%, transparent 65%);
+  --blob2: radial-gradient(ellipse 65% 75% at 80% 55%, rgba(0, 172, 133, 0.45) 0%, transparent 60%);
+  --blob3: radial-gradient(ellipse 80% 50% at 50% 90%, rgba(18, 28, 22, 0.7) 0%, transparent 55%);
+  --blob4: radial-gradient(ellipse 55% 80% at 70% 15%, rgba(0, 230, 180, 0.2) 0%, transparent 50%);
+  --blob5: radial-gradient(ellipse 60% 55% at 35% 55%, rgba(0, 150, 136, 0.35) 0%, transparent 55%);
+  --canvas-bg: #0a0f0d;
+  --text-primary: #c8e6c9;
+  --text-secondary: rgba(200, 230, 201, 0.7);
+  --text-muted: rgba(200, 230, 201, 0.3);
+  --glass-bg: rgba(10, 18, 14, 0.6);
+  --glass-border: rgba(0, 230, 180, 0.12);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
+  --chip-bg: rgba(10, 20, 16, 0.55);
+  --chip-border: rgba(0, 230, 180, 0.15);
+  --blend: screen;
+  --dot-active: #26a69a;
+  --pulse-color: rgba(200, 230, 201, 0.22);
+}
+
+html, body {
+  height: 100svh;
+  overflow: hidden;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--canvas-bg);
+  color: var(--text-primary);
+  transition: background 1.2s ease, color 0.8s ease;
+}
+
+/* ================================================================
+   LIVING CANVAS — the gradient blobs
+   ================================================================ */
+
+.canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.blob {
+  position: absolute;
+  inset: -40% -40% -40% -40%;
+  background: var(--bg);
+  mix-blend-mode: var(--blend);
+  will-change: transform, opacity;
+  transition: background 1.5s ease;
+}
+
+.blob-1 {
+  --bg: var(--blob1);
+  animation: drift1 11s ease-in-out infinite alternate, pulse1 8s ease-in-out infinite;
+}
+.blob-2 {
+  --bg: var(--blob2);
+  animation: drift2 14s ease-in-out infinite alternate-reverse, pulse2 10s ease-in-out infinite;
+}
+.blob-3 {
+  --bg: var(--blob3);
+  animation: drift3 9s ease-in-out infinite alternate, pulse3 13s ease-in-out infinite;
+}
+.blob-4 {
+  --bg: var(--blob4);
+  animation: drift4 16s ease-in-out infinite alternate-reverse, pulse4 7s ease-in-out infinite;
+}
+.blob-5 {
+  --bg: var(--blob5);
+  animation: drift5 12s ease-in-out infinite alternate, pulse5 15s ease-in-out infinite;
+}
+
+@keyframes drift1 {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  33%  { transform: translate(8%, -5%) rotate(3deg) scale(1.08); }
+  66%  { transform: translate(-4%, 8%) rotate(-2deg) scale(0.95); }
+  100% { transform: translate(6%, 3%) rotate(4deg) scale(1.05); }
+}
+@keyframes drift2 {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  25%  { transform: translate(-10%, 6%) rotate(-4deg) scale(1.1); }
+  50%  { transform: translate(5%, -8%) rotate(2deg) scale(0.92); }
+  75%  { transform: translate(-3%, -4%) rotate(-1deg) scale(1.06); }
+  100% { transform: translate(7%, 5%) rotate(3deg) scale(0.97); }
+}
+@keyframes drift3 {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate(6%, 10%) rotate(-3deg) scale(1.12); }
+  100% { transform: translate(-8%, -3%) rotate(5deg) scale(0.93); }
+}
+@keyframes drift4 {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  30%  { transform: translate(-6%, -7%) rotate(2deg) scale(1.06); }
+  60%  { transform: translate(9%, 4%) rotate(-4deg) scale(0.94); }
+  100% { transform: translate(-3%, 9%) rotate(1deg) scale(1.1); }
+}
+@keyframes drift5 {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  40%  { transform: translate(5%, -9%) rotate(-3deg) scale(1.07); }
+  80%  { transform: translate(-7%, 6%) rotate(4deg) scale(0.96); }
+  100% { transform: translate(3%, -2%) rotate(-1deg) scale(1.03); }
+}
+
+@keyframes pulse1 {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}
+@keyframes pulse2 {
+  0%, 100% { opacity: 0.8; }
+  40%      { opacity: 0.95; }
+  70%      { opacity: 0.7; }
+}
+@keyframes pulse3 {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1; }
+}
+@keyframes pulse4 {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 0.9; }
+}
+@keyframes pulse5 {
+  0%, 100% { opacity: 0.65; }
+  35%      { opacity: 0.85; }
+  65%      { opacity: 0.55; }
+}
+
+/* ================================================================
+   CONTENT LAYER
+   ================================================================ */
+
+.content {
+  position: relative;
+  z-index: 1;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* Name */
+.name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  opacity: 0;
+  animation: fadeIn 1.5s ease 0.3s forwards;
+}
+
+/* Statement — glassmorphism card */
+.statement-card {
+  max-width: 580px;
+  width: 100%;
+  padding: 32px 36px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px var(--glass-shadow),
+              inset 0 1px 0 rgba(255,255,255,0.15);
+  text-align: center;
+  opacity: 0;
+  animation: fadeUp 1.2s ease 0.6s forwards;
+  transition: background 0.8s ease, border-color 0.8s ease, box-shadow 0.8s ease;
+}
+
+.statement {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+/* Dimensions — floating glass pills */
+.dimensions {
+  margin-top: 48px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 500px;
+  opacity: 0;
+  animation: fadeUp 1s ease 1.1s forwards;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--chip-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--chip-border);
+  border-radius: 100px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  white-space: nowrap;
+  transition: transform 0.3s ease, background 0.3s ease, border-color 0.5s ease;
+  animation: floatChip var(--float-dur, 6s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+.chip:hover {
+  transform: translateY(-2px) scale(1.04);
+  background: var(--glass-bg);
+}
+
+.chip-label {
+  font-weight: 500;
+}
+
+.chip-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 300;
+}
+
+.chip-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chip--large {
+  padding: 10px 22px;
+  font-size: 14px;
+}
+
+@keyframes floatChip {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* Pulse — ambient bottom */
+.pulse {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.5px;
+  color: var(--pulse-color);
+  opacity: 0;
+  animation: fadeIn 2s ease 1.8s forwards, breathe 4s ease-in-out infinite 2s;
+  z-index: 2;
+  transition: color 0.8s ease;
+}
+
+.pulse-sep {
+  display: inline-block;
+  margin: 0 10px;
+  opacity: 0.5;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 0.9; }
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ================================================================
+   PRESENCE TOGGLE
+   ================================================================ */
+
+.presence-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 100px;
+  opacity: 0;
+  animation: fadeIn 1s ease 2.2s forwards;
+  transition: background 0.5s ease, border-color 0.5s ease;
+}
+
+.presence-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.presence-dot:hover {
+  transform: scale(1.3);
+}
+
+.presence-dot.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 8px var(--glass-shadow);
+}
+
+.presence-dot--canvas   { background: #ffa726; }
+.presence-dot--archive  { background: #5c6bc0; }
+.presence-dot--terminal { background: #26a69a; }
+
+/* Presence label */
+.presence-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 300;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: 4px;
+  transition: color 0.5s ease;
+}
+
+/* ================================================================
+   REDUCED MOTION
+   ================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .blob { animation: none !important; opacity: 0.8; }
+  .chip { animation: none !important; }
+  .pulse { animation: fadeIn 0.5s ease forwards !important; opacity: 0.7 !important; }
+  .statement-card, .name, .dimensions { animation: fadeIn 0.3s ease forwards !important; }
+}
+
+/* ================================================================
+   MOBILE (390px target)
+   ================================================================ */
+
+@media (max-width: 480px) {
+  .content {
+    padding: 20px 16px;
+    justify-content: center;
+  }
+
+  .statement-card {
+    padding: 24px 22px;
+    border-radius: 16px;
+  }
+
+  .statement {
+    font-size: 20px;
+    line-height: 1.45;
+  }
+
+  .name {
+    font-size: 11px;
+    letter-spacing: 2.5px;
+  }
+
+  .dimensions {
+    margin-top: 32px;
+    gap: 8px;
+  }
+
+  .chip {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+
+  .chip--large {
+    padding: 8px 18px;
+    font-size: 13px;
+  }
+
+  .chip-detail {
+    font-size: 10px;
+  }
+
+  .pulse {
+    bottom: 16px;
+    font-size: 10px;
+    padding: 0 16px;
+  }
+
+  .pulse-sep {
+    margin: 0 6px;
+  }
+
+  .presence-toggle {
+    top: 12px;
+    right: 12px;
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .presence-dot {
+    width: 9px;
+    height: 9px;
+  }
+
+  .presence-label {
+    font-size: 8px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- LIVING CANVAS -->
+<div class="canvas" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
+  <div class="blob blob-5"></div>
+</div>
+
+<!-- PRESENCE TOGGLE -->
+<div class="presence-toggle" role="radiogroup" aria-label="Presence">
+  <span class="presence-label">Presence</span>
+  <div class="presence-dot presence-dot--canvas active"
+       role="radio" aria-checked="true" aria-label="Canvas day"
+       tabindex="0" data-presence="canvas"></div>
+  <div class="presence-dot presence-dot--archive"
+       role="radio" aria-checked="false" aria-label="Archive night"
+       tabindex="0" data-presence="archive"></div>
+  <div class="presence-dot presence-dot--terminal"
+       role="radio" aria-checked="false" aria-label="Terminal night"
+       tabindex="0" data-presence="terminal"></div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+  <div class="name">Tommaso Rinaldi</div>
+
+  <div class="statement-card">
+    <p class="statement">
+      Ingegnere che costruisce strumenti per l'identit&agrave; digitale.
+      Prima di questo, 10 anni a scrivere sistemi distribuiti per startup e corporate.
+    </p>
+  </div>
+
+  <div class="dimensions">
+    <div class="chip chip--large" style="--float-dur:7s; --float-delay:0s">
+      <span class="chip-icon">&#9670;</span>
+      <span class="chip-label">Builder</span>
+      <span class="chip-detail">OpenSelf</span>
+    </div>
+    <div class="chip" style="--float-dur:8s; --float-delay:0.4s">
+      <span class="chip-icon">&#9654;</span>
+      <span class="chip-label">Runner</span>
+      <span class="chip-detail">PB 1:42:03</span>
+    </div>
+    <div class="chip" style="--float-dur:6.5s; --float-delay:0.8s">
+      <span class="chip-icon">&#9835;</span>
+      <span class="chip-label">Music</span>
+      <span class="chip-detail">Burial, Tycho</span>
+    </div>
+    <div class="chip" style="--float-dur:9s; --float-delay:1.2s">
+      <span class="chip-icon">&#9633;</span>
+      <span class="chip-label">Reader</span>
+    </div>
+  </div>
+</div>
+
+<!-- PULSE -->
+<div class="pulse">
+  committed to openself
+  <span class="pulse-sep">&middot;</span>
+  2h ago
+  <span class="pulse-sep">&middot;</span>
+  ran 6.2km
+  <span class="pulse-sep">&middot;</span>
+  listening to Tycho
+</div>
+
+<script>
+(function() {
+  const body = document.body;
+  const dots = document.querySelectorAll('.presence-dot');
+  const presenceClasses = {
+    canvas: '',
+    archive: 'presence-archive',
+    terminal: 'presence-terminal'
+  };
+
+  function setPresence(key) {
+    body.classList.remove('presence-archive', 'presence-terminal');
+    if (presenceClasses[key]) {
+      body.classList.add(presenceClasses[key]);
+    }
+    dots.forEach(function(d) {
+      const isActive = d.dataset.presence === key;
+      d.classList.toggle('active', isActive);
+      d.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    });
+  }
+
+  dots.forEach(function(dot) {
+    dot.addEventListener('click', function() {
+      setPresence(this.dataset.presence);
+    });
+    dot.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setPresence(this.dataset.presence);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

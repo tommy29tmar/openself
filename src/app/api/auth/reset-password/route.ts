@@ -4,6 +4,8 @@ import { hashPassword } from "@/lib/services/auth-service";
 import { db } from "@/lib/db";
 import { users, profiles, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getClientIp } from "@/lib/middleware/rate-limit";
+import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 
 /**
  * POST /api/auth/reset-password
@@ -11,6 +13,15 @@ import { eq } from "drizzle-orm";
  * Consume token and set a new password.
  */
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const rateResult = checkAuthRateLimit(ip, "password_reset");
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many attempts" },
+      { status: 429 },
+    );
+  }
+
   try {
     const body = await req.json();
     const { token, password } = body;
@@ -89,6 +100,15 @@ export async function POST(req: Request) {
  * Validate a token without consuming it (for UI rendering).
  */
 export async function GET(req: Request) {
+  const ip = getClientIp(req);
+  const rateResult = checkAuthRateLimit(ip, "password_reset");
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many attempts" },
+      { status: 429 },
+    );
+  }
+
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
 

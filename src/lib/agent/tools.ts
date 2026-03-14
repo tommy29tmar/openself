@@ -1215,7 +1215,7 @@ export function createAgentTools(
           success: true,
           movedTo: targetSlot,
           widgetChanged,
-          ...(widgetChanged ? { previousWidget, newWidget: section.widgetId } : {}),
+          ...(widgetChanged ? { previousWidget, newWidget: sectionCopy.widgetId } : {}),
         };
       } catch (error) {
         logEvent({
@@ -1894,7 +1894,7 @@ Do NOT call in a loop.`,
         const hasUsername = usernameValidation.ok;
 
         // 3. Quality checks
-        const allFacts = getActiveFacts(sessionId, readKeys);
+        const allFacts = getProjectedFacts(effectiveOwnerKey, readKeys);
         const publishableFacts = filterPublishableFacts(allFacts);
         const proposedCount = allFacts.filter((f: any) => f.visibility === "proposed").length;
 
@@ -2098,7 +2098,7 @@ Do NOT call in a loop.`,
         const config = draft.config;
         const template = resolveLayoutTemplate(config);
         const slotGroups = groupSectionsBySlot(config.sections, template);
-        const allFacts = getActiveFacts(sessionId, readKeys);
+        const allFacts = getProjectedFacts(effectiveOwnerKey, readKeys);
         const publishable = filterPublishableFacts(allFacts);
 
         const sections = config.sections.map((s) => {

@@ -4,6 +4,11 @@ import MarkdownIt from "markdown-it";
 // SECURITY: html defaults to false — markdown-it escapes all HTML tags.
 // Do NOT enable html: true — assistant content is rendered via dangerouslySetInnerHTML.
 const md = new MarkdownIt({ breaks: true, linkify: true });
+md.renderer.rules.link_open = (tokens, idx, options, _env, self) => {
+  tokens[idx].attrSet("target", "_blank");
+  tokens[idx].attrSet("rel", "noopener noreferrer");
+  return self.renderToken(tokens, idx, options);
+};
 
 type MessageBubbleProps = {
   role: string;

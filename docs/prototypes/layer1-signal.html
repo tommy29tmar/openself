@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tommaso Rinaldi — Signal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #fafaf9;
+    --fg: #141412;
+    --fg-dim: rgba(20, 20, 18, 0.42);
+    --fg-ghost: rgba(20, 20, 18, 0.09);
+    --fg-orbit: rgba(20, 20, 18, 0.07);
+    --ring-stroke: #141412;
+    --ring-track: rgba(20, 20, 18, 0.07);
+    --accent: #141412;
+    --accent-dim: rgba(20, 20, 18, 0.18);
+    --font-primary: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --satellite-line: rgba(20, 20, 18, 0.05);
+    --ticker-border: rgba(20, 20, 18, 0.07);
+    --dot-color: rgba(20, 20, 18, 0.18);
+    --dot-active: #141412;
+    --glow: transparent;
+  }
+
+  [data-presence="archive-narrative-night"] {
+    --bg: #07080f;
+    --fg: #eef0f8;
+    --fg-dim: rgba(238, 240, 248, 0.35);
+    --fg-ghost: rgba(238, 240, 248, 0.07);
+    --fg-orbit: rgba(238, 240, 248, 0.05);
+    --ring-stroke: #eef0f8;
+    --ring-track: rgba(238, 240, 248, 0.07);
+    --accent: #eef0f8;
+    --accent-dim: rgba(238, 240, 248, 0.15);
+    --font-primary: 'Cormorant Garamond', 'Georgia', serif;
+    --satellite-line: rgba(238, 240, 248, 0.04);
+    --ticker-border: rgba(238, 240, 248, 0.05);
+    --dot-color: rgba(238, 240, 248, 0.18);
+    --dot-active: #eef0f8;
+    --glow: rgba(238, 240, 248, 0.02);
+  }
+
+  [data-presence="canvas-terminal-night"] {
+    --bg: #0f0f0e;
+    --fg: #e8e4de;
+    --fg-dim: rgba(232, 228, 222, 0.35);
+    --fg-ghost: rgba(232, 228, 222, 0.07);
+    --fg-orbit: rgba(232, 228, 222, 0.05);
+    --ring-stroke: #8ab46a;
+    --ring-track: rgba(138, 180, 106, 0.10);
+    --accent: #8ab46a;
+    --accent-dim: rgba(138, 180, 106, 0.18);
+    --font-primary: 'JetBrains Mono', monospace;
+    --font-mono: 'JetBrains Mono', monospace;
+    --satellite-line: rgba(138, 180, 106, 0.05);
+    --ticker-border: rgba(138, 180, 106, 0.08);
+    --dot-color: rgba(138, 180, 106, 0.22);
+    --dot-active: #8ab46a;
+    --glow: rgba(138, 180, 106, 0.015);
+  }
+
+  html, body {
+    height: 100svh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-primary);
+    transition: background 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+                color 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+                font-family 0.9s;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Radial glow from center */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(
+      ellipse 50% 45% at 50% 46%,
+      var(--glow) 0%,
+      var(--fg-ghost) 0%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+    transition: background 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Presence toggle ── */
+  .presence-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 20px;
+    transition: background 0.3s;
+  }
+  .presence-toggle:hover { background: var(--fg-ghost); }
+  .presence-toggle:focus-visible { outline: 1px solid var(--fg-dim); outline-offset: 2px; }
+  .presence-toggle .dot {
+    width: 4.5px;
+    height: 4.5px;
+    border-radius: 50%;
+    background: var(--dot-color);
+    transition: background 0.5s, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .presence-toggle .dot.active {
+    background: var(--dot-active);
+    transform: scale(1.4);
+  }
+
+  /* ── Stage (mobile frame) ── */
+  .stage {
+    position: relative;
+    width: 390px;
+    height: 100svh;
+    max-height: 844px;
+    z-index: 1;
+  }
+
+  /* ── Orbital SVG layer ── */
+  .orbitals {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .orbital-svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -53%);
+  }
+
+  .orbit-ring {
+    fill: none;
+    stroke: var(--fg-orbit);
+    stroke-width: 0.5;
+    transition: stroke 0.9s;
+  }
+  .orbit-dot {
+    fill: var(--fg-orbit);
+    transition: fill 0.9s;
+  }
+
+  .orbit-rotate-cw {
+    animation: orbitCW 90s linear infinite;
+    transform-origin: center;
+  }
+  .orbit-rotate-ccw {
+    animation: orbitCCW 120s linear infinite;
+    transform-origin: center;
+  }
+  .orbit-rotate-slow {
+    animation: orbitCW 200s linear infinite;
+    transform-origin: center;
+  }
+
+  @keyframes orbitCW {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes orbitCCW {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+  }
+
+  .sat-line {
+    stroke: var(--satellite-line);
+    stroke-width: 0.5;
+    stroke-dasharray: 1.5 5;
+    transition: stroke 0.9s;
+  }
+  .crosshair {
+    stroke: var(--fg-ghost);
+    stroke-width: 0.5;
+    transition: stroke 0.9s;
+  }
+
+  /* ── Center identity ── */
+  .center-identity {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -56%);
+    text-align: center;
+    z-index: 10;
+    width: 220px;
+  }
+
+  .activity-ring-wrap {
+    position: relative;
+    width: 152px;
+    height: 152px;
+    margin: 0 auto 16px;
+  }
+  .activity-ring-wrap svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .ring-track {
+    fill: none;
+    stroke: var(--ring-track);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke 0.9s;
+  }
+  .ring-fill {
+    fill: none;
+    stroke: var(--ring-stroke);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 0 377;
+    animation: ringFill 2.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.4s forwards;
+    transition: stroke 0.9s;
+  }
+  @keyframes ringFill {
+    to { stroke-dasharray: 282.75 377; }
+  }
+
+  .ring-inner-track {
+    fill: none;
+    stroke: var(--ring-track);
+    stroke-width: 1;
+    transition: stroke 0.9s;
+  }
+  .ring-inner-fill {
+    fill: none;
+    stroke: var(--accent-dim);
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-dasharray: 0 264;
+    animation: ringInnerFill 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.9s forwards;
+    transition: stroke 0.9s;
+  }
+  @keyframes ringInnerFill {
+    to { stroke-dasharray: 145.2 264; }
+  }
+
+  .ring-tick {
+    stroke: var(--fg-ghost);
+    stroke-width: 0.7;
+    stroke-linecap: round;
+    transition: stroke 0.9s;
+  }
+
+  /* Pulsing dot at the end of the activity arc */
+  .ring-endpoint {
+    fill: var(--ring-stroke);
+    opacity: 0;
+    animation: endpointAppear 0.4s ease 3.2s forwards;
+    transition: fill 0.9s;
+  }
+  @keyframes endpointAppear {
+    to { opacity: 1; }
+  }
+  .ring-endpoint-pulse {
+    fill: var(--ring-stroke);
+    opacity: 0;
+    animation: endpointPulse 3s ease-in-out 3.6s infinite;
+    transition: fill 0.9s;
+  }
+  @keyframes endpointPulse {
+    0%, 100% { opacity: 0; r: 3; }
+    50% { opacity: 0.15; r: 7; }
+  }
+
+  /* Center text inside ring */
+  .ring-number {
+    fill: var(--fg);
+    opacity: 0.12;
+    font-size: 24px;
+    font-weight: 300;
+    transition: fill 0.9s;
+  }
+  .ring-label {
+    fill: var(--fg-dim);
+    font-size: 5.5px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    transition: fill 0.9s;
+  }
+
+  .name {
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    line-height: 1;
+  }
+  [data-presence="archive-narrative-night"] .name {
+    font-size: 23px;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    font-style: italic;
+  }
+  [data-presence="canvas-terminal-night"] .name {
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .statement {
+    margin-top: 9px;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: var(--fg-dim);
+    text-transform: uppercase;
+    font-weight: 300;
+    transition: color 0.9s;
+  }
+  [data-presence="archive-narrative-night"] .statement {
+    text-transform: none;
+    font-style: italic;
+    font-size: 12.5px;
+    letter-spacing: 0.025em;
+    font-weight: 300;
+  }
+  [data-presence="canvas-terminal-night"] .statement {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.10em;
+  }
+
+  /* ── Satellite dimensions ── */
+  .satellite {
+    position: absolute;
+    z-index: 10;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    animation: satFadeIn 0.6s ease forwards;
+  }
+  .satellite:nth-child(1) { animation-delay: 1.0s; }
+  .satellite:nth-child(2) { animation-delay: 1.3s; }
+  .satellite:nth-child(3) { animation-delay: 1.6s; }
+  .satellite:nth-child(4) { animation-delay: 1.9s; }
+
+  @keyframes satFadeIn {
+    from { opacity: 0; transform: translateY(4px) scale(0.92); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  /* Override for sat-12 and sat-6 which use translateX centering */
+  .sat-12, .sat-6 {
+    animation-name: satFadeInCenter;
+  }
+  @keyframes satFadeInCenter {
+    from { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.92); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  }
+
+  .sat-12 {
+    top: 13.5%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .sat-3 {
+    top: 41%;
+    right: 22px;
+  }
+  .sat-6 {
+    bottom: 16%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .sat-9 {
+    top: 41%;
+    left: 22px;
+  }
+
+  .sat-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 0.5px solid var(--fg-ghost);
+    transition: border-color 0.9s;
+  }
+  .sat-icon svg {
+    width: 13px;
+    height: 13px;
+    stroke: var(--fg-dim);
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.9s;
+  }
+
+  .sat-label {
+    font-size: 7.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    font-weight: 500;
+    transition: color 0.9s;
+  }
+  [data-presence="archive-narrative-night"] .sat-label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: none;
+    font-style: italic;
+    font-weight: 400;
+  }
+  [data-presence="canvas-terminal-night"] .sat-label {
+    font-family: var(--font-mono);
+    font-size: 7px;
+    letter-spacing: 0.14em;
+  }
+
+  .sat-value {
+    font-size: 10.5px;
+    color: var(--fg);
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    line-height: 1.3;
+    transition: color 0.9s;
+  }
+  [data-presence="archive-narrative-night"] .sat-value {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    font-weight: 300;
+  }
+  [data-presence="canvas-terminal-night"] .sat-value {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Micro progress arc around runner satellite */
+  .sat-micro-arc {
+    position: relative;
+    width: 30px;
+    height: 30px;
+  }
+  .sat-micro-arc > svg {
+    position: absolute;
+    inset: 0;
+    width: 30px;
+    height: 30px;
+  }
+  .sat-micro-arc .sat-icon {
+    position: absolute;
+    inset: 0;
+    border: none;
+  }
+  .micro-arc-track {
+    fill: none;
+    stroke: var(--ring-track);
+    stroke-width: 1.5;
+    transition: stroke 0.9s;
+  }
+  .micro-arc-fill {
+    fill: none;
+    stroke: var(--accent-dim);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-dasharray: 0 81.7;
+    animation: microArc 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 1.8s forwards;
+    transition: stroke 0.9s;
+  }
+  @keyframes microArc {
+    to { stroke-dasharray: 65.3 81.7; } /* 80% of 2*pi*13 */
+  }
+
+  /* ── Ticker ── */
+  .ticker-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    z-index: 10;
+    border-top: 0.5px solid var(--ticker-border);
+    transition: border-color 0.9s;
+  }
+  .ticker-track {
+    display: flex;
+    white-space: nowrap;
+    animation: tickerScroll 32s linear infinite;
+  }
+  .ticker-text {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--fg-dim);
+    font-weight: 300;
+    padding-right: 0;
+    transition: color 0.9s;
+  }
+  [data-presence="canvas-terminal-night"] .ticker-text {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+  }
+  [data-presence="archive-narrative-night"] .ticker-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    font-style: italic;
+  }
+
+  .ticker-sep {
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--fg-ghost);
+    margin: 0 16px;
+    vertical-align: middle;
+    position: relative;
+    top: -0.5px;
+    transition: background 0.9s;
+  }
+
+  @keyframes tickerScroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* ── Status indicator ── */
+  .status-indicator {
+    position: fixed;
+    top: 22px;
+    left: 22px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .status-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: statusPulse 3s ease-in-out infinite;
+    transition: background 0.9s;
+  }
+  @keyframes statusPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+  .status-label {
+    font-size: 7.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    font-weight: 400;
+    transition: color 0.9s;
+  }
+  [data-presence="canvas-terminal-night"] .status-label {
+    font-family: var(--font-mono);
+    font-size: 7px;
+    color: var(--accent-dim);
+  }
+
+  /* ── Timestamp ── */
+  .timestamp {
+    position: fixed;
+    top: 52px;
+    right: 22px;
+    z-index: 10;
+    font-size: 7.5px;
+    letter-spacing: 0.12em;
+    color: var(--fg-ghost);
+    font-weight: 300;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.9s;
+  }
+  [data-presence="canvas-terminal-night"] .timestamp {
+    font-family: var(--font-mono);
+    font-size: 7px;
+    color: var(--accent-dim);
+    opacity: 0.5;
+  }
+
+  /* ── Coordinate labels (data art detail) ── */
+  .coord-label {
+    position: absolute;
+    z-index: 5;
+    font-size: 6px;
+    letter-spacing: 0.18em;
+    color: var(--fg-ghost);
+    font-family: var(--font-mono);
+    font-weight: 300;
+    pointer-events: none;
+    transition: color 0.9s;
+  }
+  .coord-tl { top: 60px; left: 22px; }
+  .coord-br { bottom: 52px; right: 22px; text-align: right; }
+  [data-presence="canvas-terminal-night"] .coord-label {
+    color: var(--accent-dim);
+    opacity: 0.3;
+  }
+
+  /* ── Reduced motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    .orbit-rotate-cw,
+    .orbit-rotate-ccw,
+    .orbit-rotate-slow { animation: none; }
+    .ticker-track { animation: none; }
+    .ring-fill {
+      animation: none;
+      stroke-dasharray: 282.75 377;
+    }
+    .ring-inner-fill {
+      animation: none;
+      stroke-dasharray: 145.2 264;
+    }
+    .micro-arc-fill {
+      animation: none;
+      stroke-dasharray: 65.3 81.7;
+    }
+    .satellite {
+      animation: none !important;
+      opacity: 1;
+    }
+    .status-dot {
+      animation: none;
+      opacity: 0.6;
+    }
+    .ring-endpoint {
+      animation: none;
+      opacity: 1;
+    }
+    .ring-endpoint-pulse {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>
+</head>
+<body data-presence="canvas-signal-day">
+
+  <!-- Status -->
+  <div class="status-indicator">
+    <div class="status-dot"></div>
+    <span class="status-label">Signal active</span>
+  </div>
+
+  <!-- Presence toggle -->
+  <button class="presence-toggle" aria-label="Switch presence" id="presenceToggle">
+    <span class="dot active" data-idx="0"></span>
+    <span class="dot" data-idx="1"></span>
+    <span class="dot" data-idx="2"></span>
+  </button>
+
+  <!-- Timestamp -->
+  <div class="timestamp" id="timestamp"></div>
+
+  <!-- Data-art coordinate labels -->
+  <span class="coord-label coord-tl">45.464N</span>
+  <span class="coord-label coord-br">9.190E</span>
+
+  <div class="stage">
+
+    <!-- Orbital lines -->
+    <div class="orbitals">
+      <svg class="orbital-svg" width="440" height="700" viewBox="-220 -350 440 700" overflow="visible">
+
+        <!-- Outermost orbit (very faint, very slow) -->
+        <g class="orbit-rotate-slow">
+          <circle r="220" class="orbit-ring" stroke-dasharray="1.5 38" opacity="0.35" />
+          <circle cx="220" cy="0" r="0.8" class="orbit-dot" opacity="0.4" />
+          <circle cx="-155.6" cy="155.6" r="0.8" class="orbit-dot" opacity="0.3" />
+        </g>
+
+        <!-- Main orbit -->
+        <g class="orbit-rotate-cw">
+          <circle r="172" class="orbit-ring" stroke-dasharray="6 18" />
+          <circle cx="172" cy="0" r="1.2" class="orbit-dot" />
+          <circle cx="-172" cy="0" r="1.2" class="orbit-dot" />
+          <circle cx="0" cy="172" r="1.2" class="orbit-dot" />
+          <circle cx="0" cy="-172" r="1.2" class="orbit-dot" />
+          <!-- Additional node markers at 45deg -->
+          <circle cx="121.6" cy="-121.6" r="0.6" class="orbit-dot" opacity="0.5" />
+          <circle cx="-121.6" cy="121.6" r="0.6" class="orbit-dot" opacity="0.5" />
+        </g>
+
+        <!-- Inner orbit -->
+        <g class="orbit-rotate-ccw">
+          <circle r="125" class="orbit-ring" stroke-dasharray="3 28" opacity="0.5" />
+          <circle cx="88.4" cy="88.4" r="0.8" class="orbit-dot" opacity="0.4" />
+        </g>
+
+        <!-- Connector lines to satellites -->
+        <line x1="0" y1="-78" x2="0" y2="-162" class="sat-line" />
+        <line x1="78" y1="-12" x2="142" y2="-12" class="sat-line" />
+        <line x1="0" y1="78" x2="0" y2="155" class="sat-line" />
+        <line x1="-78" y1="-12" x2="-142" y2="-12" class="sat-line" />
+
+        <!-- Crosshair at center -->
+        <line x1="-8" y1="0" x2="-3" y2="0" class="crosshair" />
+        <line x1="3" y1="0" x2="8" y2="0" class="crosshair" />
+        <line x1="0" y1="-8" x2="0" y2="-3" class="crosshair" />
+        <line x1="0" y1="3" x2="0" y2="8" class="crosshair" />
+
+        <!-- Degree markers (tiny, like a protractor) -->
+        <line x1="0" y1="-98" x2="0" y2="-94" class="crosshair" opacity="0.4" />
+        <line x1="98" y1="0" x2="94" y2="0" class="crosshair" opacity="0.4" />
+        <line x1="0" y1="98" x2="0" y2="94" class="crosshair" opacity="0.4" />
+        <line x1="-98" y1="0" x2="-94" y2="0" class="crosshair" opacity="0.4" />
+      </svg>
+    </div>
+
+    <!-- Center identity -->
+    <div class="center-identity">
+      <div class="activity-ring-wrap">
+        <svg viewBox="0 0 152 152">
+          <!-- Tick marks (watch-face style) -->
+          <g>
+            <!-- Cardinal ticks -->
+            <line x1="76" y1="2" x2="76" y2="9" class="ring-tick" />
+            <line x1="76" y1="143" x2="76" y2="150" class="ring-tick" />
+            <line x1="2" y1="76" x2="9" y2="76" class="ring-tick" />
+            <line x1="143" y1="76" x2="150" y2="76" class="ring-tick" />
+            <!-- Diagonal ticks (smaller) -->
+            <line x1="23.7" y1="23.7" x2="28.3" y2="28.3" class="ring-tick" opacity="0.4" />
+            <line x1="128.3" y1="23.7" x2="123.7" y2="28.3" class="ring-tick" opacity="0.4" />
+            <line x1="23.7" y1="128.3" x2="28.3" y2="123.7" class="ring-tick" opacity="0.4" />
+            <line x1="128.3" y1="128.3" x2="123.7" y2="123.7" class="ring-tick" opacity="0.4" />
+          </g>
+
+          <!-- Outer activity ring (75% filled) -->
+          <circle cx="76" cy="76" r="60" class="ring-track" transform="rotate(-90 76 76)" />
+          <circle cx="76" cy="76" r="60" class="ring-fill" transform="rotate(-90 76 76)" />
+
+          <!-- Endpoint dot at 75% position (270deg from -90 start = 180deg position) -->
+          <!-- 75% of 360 = 270deg. Start at -90, so endpoint at 180deg. cos(180)=-1, sin(180)=0 -->
+          <!-- Actually: -90 + 270 = 180deg. x=76+60*cos(180)=16, y=76+60*sin(180)=76 -->
+          <circle cx="16" cy="76" r="2.5" class="ring-endpoint" />
+          <circle cx="16" cy="76" r="3" class="ring-endpoint-pulse" />
+
+          <!-- Inner ring (55% filled) -->
+          <circle cx="76" cy="76" r="42" class="ring-inner-track" transform="rotate(-90 76 76)" />
+          <circle cx="76" cy="76" r="42" class="ring-inner-fill" transform="rotate(-90 76 76)" />
+
+          <!-- Center number and label -->
+          <text x="76" y="71" text-anchor="middle" class="ring-number"
+                font-family="'Plus Jakarta Sans', system-ui, sans-serif">75</text>
+          <text x="76" y="82" text-anchor="middle" class="ring-label"
+                font-family="'Plus Jakarta Sans', system-ui, sans-serif">SIGNAL</text>
+        </svg>
+      </div>
+
+      <div class="name">Tommaso Rinaldi</div>
+      <div class="statement">Building tools for digital identity</div>
+    </div>
+
+    <!-- Satellite: 12 o'clock — Builder -->
+    <div class="satellite sat-12">
+      <div class="sat-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+      </div>
+      <span class="sat-label">Builder</span>
+      <span class="sat-value">OpenSelf</span>
+    </div>
+
+    <!-- Satellite: 3 o'clock — Runner (with micro arc) -->
+    <div class="satellite sat-3">
+      <div class="sat-micro-arc">
+        <svg viewBox="0 0 30 30">
+          <circle cx="15" cy="15" r="13" class="micro-arc-track" transform="rotate(-90 15 15)" />
+          <circle cx="15" cy="15" r="13" class="micro-arc-fill" transform="rotate(-90 15 15)" />
+        </svg>
+        <div class="sat-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="15" cy="4" r="1.8" fill="var(--fg-dim)" stroke="none" />
+            <path d="M7.5 22l3.5-7 3 2v5" />
+            <path d="M5.5 12l4-3.5 3.5 3" />
+            <path d="M9 12l-4.5 4" />
+          </svg>
+        </div>
+      </div>
+      <span class="sat-label">Runner</span>
+      <span class="sat-value">PB 1:42:03</span>
+    </div>
+
+    <!-- Satellite: 6 o'clock — Music -->
+    <div class="satellite sat-6">
+      <div class="sat-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      </div>
+      <span class="sat-label">Music</span>
+      <span class="sat-value">Burial, Tycho</span>
+    </div>
+
+    <!-- Satellite: 9 o'clock — Reader -->
+    <div class="satellite sat-9">
+      <div class="sat-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+        </svg>
+      </div>
+      <span class="sat-label">Reader</span>
+    </div>
+
+    <!-- Ticker -->
+    <div class="ticker-wrap">
+      <div class="ticker-track" id="tickerTrack">
+        <span class="ticker-text">committed to openself<span class="ticker-sep"></span>2h ago<span class="ticker-sep"></span>ran 6.2km this morning<span class="ticker-sep"></span>listening to Tycho &mdash; Dive<span class="ticker-sep"></span></span><span class="ticker-text">committed to openself<span class="ticker-sep"></span>2h ago<span class="ticker-sep"></span>ran 6.2km this morning<span class="ticker-sep"></span>listening to Tycho &mdash; Dive<span class="ticker-sep"></span></span>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  const presences = [
+    'canvas-signal-day',
+    'archive-narrative-night',
+    'canvas-terminal-night'
+  ];
+  let currentIdx = 0;
+
+  const toggle = document.getElementById('presenceToggle');
+  const dots = toggle.querySelectorAll('.dot');
+  const timestampEl = document.getElementById('timestamp');
+
+  function updateTimestamp() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    timestampEl.textContent = h + ':' + m + ':' + s;
+  }
+  updateTimestamp();
+  setInterval(updateTimestamp, 1000);
+
+  toggle.addEventListener('click', function() {
+    currentIdx = (currentIdx + 1) % presences.length;
+    document.body.setAttribute('data-presence', presences[currentIdx]);
+    dots.forEach(function(d, i) {
+      d.classList.toggle('active', i === currentIdx);
+    });
+  });
+</script>
+</body>
+</html>

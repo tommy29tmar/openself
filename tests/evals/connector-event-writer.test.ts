@@ -8,16 +8,15 @@ vi.mock("@/lib/services/episodic-service", () => ({
   insertEvent: (...args: any[]) => mockInsertEvent(...args),
 }));
 
-// sqlite mock: prepare() returns { all, run }, exec() for transactions
+// sqlite mock: prepare() returns { all, run }, transaction() wraps fn in try/catch
 const mockAll = vi.fn().mockReturnValue([]);
 const mockRun = vi.fn();
 const mockPrepare = vi.fn().mockReturnValue({ all: mockAll, run: mockRun });
-const mockExec = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   sqlite: {
     prepare: (...args: any[]) => mockPrepare(...args),
-    exec: (...args: any[]) => mockExec(...args),
+    transaction: (fn: () => void) => fn,
   },
 }));
 
@@ -86,7 +85,6 @@ describe("connector-event-writer", () => {
     expect(report.errors).toHaveLength(0);
     expect(mockInsertEvent).not.toHaveBeenCalled();
     expect(mockPrepare).not.toHaveBeenCalled();
-    expect(mockExec).not.toHaveBeenCalled();
   });
 
   it("isolates per-event errors — one failure does not crash the batch", async () => {
@@ -120,22 +118,24 @@ describe("connector-event-writer", () => {
     expect(mockInsertEvent).toHaveBeenCalledTimes(2);
   });
 
-  it("calls BEGIN/COMMIT for each successful event", async () => {
+  it("writes event and connector_items within a transaction on success", async () => {
     await batchRecordEvents([makeEvent("push-1")], ctx);
 
-    expect(mockExec).toHaveBeenCalledWith("BEGIN");
-    expect(mockExec).toHaveBeenCalledWith("COMMIT");
-    expect(mockExec).not.toHaveBeenCalledWith("ROLLBACK");
+    // insertEvent and connector_items upsert both called (transaction committed)
+    expect(mockInsertEvent).toHaveBeenCalledTimes(1);
+    expect(mockRun).toHaveBeenCalledTimes(1);
   });
 
-  it("calls ROLLBACK on failure and does not COMMIT", async () => {
+  it("records error on failure and does not write connector_items", async () => {
     mockInsertEvent.mockImplementationOnce(() => { throw new Error("write failed"); });
 
-    await batchRecordEvents([makeEvent("push-fail")], ctx);
+    const report = await batchRecordEvents([makeEvent("push-fail")], ctx);
 
-    expect(mockExec).toHaveBeenCalledWith("BEGIN");
-    expect(mockExec).toHaveBeenCalledWith("ROLLBACK");
-    expect(mockExec).not.toHaveBeenCalledWith("COMMIT");
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors[0].reason).toContain("write failed");
+    expect(report.eventsWritten).toBe(0);
+    // connector_items upsert should not have been reached
+    expect(mockRun).not.toHaveBeenCalled();
   });
 
   it("passes source=connectorType to insertEvent", async () => {

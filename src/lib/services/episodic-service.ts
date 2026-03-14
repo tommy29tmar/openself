@@ -125,7 +125,7 @@ export function supersedeEvent(oldId: string, newId: string): void {
 }
 
 export function deleteEvent(id: string): void {
-  sqlite.prepare("UPDATE episodic_events SET superseded_by = 'deleted' WHERE id = ?").run(id);
+  sqlite.prepare("DELETE FROM episodic_events WHERE id = ?").run(id);
 }
 
 // --- Queries ---

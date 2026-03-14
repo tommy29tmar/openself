@@ -9,6 +9,11 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(() => ({
+              all: (...args: any[]) => mockSelectAll(...args),
+            })),
+          })),
           all: (...args: any[]) => mockSelectAll(...args),
         })),
       })),

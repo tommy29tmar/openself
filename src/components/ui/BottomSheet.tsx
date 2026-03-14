@@ -27,6 +27,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
   const backdropRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const translateYRef = useRef(0);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [translateY, setTranslateY] = useState(0);
   const [closing, setClosing] = useState(false);
   const titleId = useMemo(
@@ -94,7 +95,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
   const handleTouchEnd = useCallback(() => {
     if (translateYRef.current > SWIPE_DISMISS_PX) {
       setClosing(true);
-      setTimeout(() => {
+      dismissTimerRef.current = setTimeout(() => {
         setClosing(false);
         translateYRef.current = 0;
         setTranslateY(0);
@@ -105,6 +106,11 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
       setTranslateY(0);
     }
   }, [onClose]);
+
+  // Cleanup dismiss timer on unmount
+  useEffect(() => () => {
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+  }, []);
 
   if (!open && !closing) return null;
 

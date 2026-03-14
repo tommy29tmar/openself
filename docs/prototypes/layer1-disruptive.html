@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#fafaf9" id="tc">
+  <title>OpenSelf — Living Portrait</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%}
+    button{font:inherit;border:none;background:none;cursor:pointer;color:inherit}
+
+    :root,[data-p="day"]{
+      --bg:#fafaf9;--fg:#111;--fg2:#888;--fg3:#bbb;--accent:#111;
+      --blob1:rgba(255,195,90,.4);--blob2:rgba(255,140,110,.28);--blob3:rgba(170,155,255,.22);
+      --grain:0;--wave1:rgba(0,0,0,.07);--wave2:rgba(0,0,0,.03);
+      --tile-bg:rgba(0,0,0,.03);--tile-glow:rgba(0,0,0,.08);--now-bg:rgba(0,0,0,.04);
+      --h:'Plus Jakarta Sans',sans-serif;--b:'Plus Jakarta Sans',sans-serif;
+      --ns:40px;--nw:800;--nlh:.94;--nls:-.03em;--bst:normal;color-scheme:light
+    }
+    [data-p="noir"]{
+      --bg:#08080f;--fg:#eee8e0;--fg2:rgba(238,232,224,.45);--fg3:rgba(238,232,224,.2);--accent:#a0b4e0;
+      --blob1:rgba(70,90,200,.35);--blob2:rgba(150,70,200,.22);--blob3:rgba(50,140,180,.18);
+      --grain:.018;--wave1:rgba(160,180,224,.1);--wave2:rgba(160,180,224,.05);
+      --tile-bg:rgba(255,255,255,.04);--tile-glow:rgba(160,180,224,.15);--now-bg:rgba(255,255,255,.04);
+      --h:'Cormorant Garamond',serif;--b:'Plus Jakarta Sans',sans-serif;
+      --ns:44px;--nw:700;--nlh:.9;--nls:-.01em;--bst:italic;color-scheme:dark
+    }
+    [data-p="dev"]{
+      --bg:#0e0e0d;--fg:#d4d0c8;--fg2:rgba(212,208,200,.4);--fg3:rgba(212,208,200,.15);--accent:#d4d0c8;
+      --blob1:rgba(90,200,110,.14);--blob2:rgba(70,170,200,.11);--blob3:rgba(200,170,70,.09);
+      --grain:0;--wave1:rgba(120,180,120,.08);--wave2:rgba(120,180,120,.04);
+      --tile-bg:rgba(255,255,255,.04);--tile-glow:rgba(120,180,120,.1);--now-bg:rgba(255,255,255,.04);
+      --h:'JetBrains Mono',monospace;--b:'JetBrains Mono',monospace;
+      --ns:30px;--nw:500;--nlh:1;--nls:-.02em;--bst:normal;color-scheme:dark
+    }
+
+    body{background:var(--bg);color:var(--fg);font-family:var(--b);height:100svh;overflow:hidden;transition:background .6s,color .6s}
+
+    .mesh{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+    .blob{position:absolute;border-radius:50%;will-change:transform;filter:blur(80px);transition:background .8s,filter .5s}
+    .b1{width:340px;height:340px;background:var(--blob1);top:-12%;left:-18%;animation:f1 12s ease-in-out infinite alternate}
+    .b2{width:300px;height:300px;background:var(--blob2);top:28%;right:-22%;animation:f2 16s ease-in-out infinite alternate}
+    .b3{width:260px;height:260px;background:var(--blob3);bottom:5%;left:8%;animation:f3 19s ease-in-out infinite alternate}
+    @keyframes f1{to{transform:translate(70px,90px) scale(1.15)}}
+    @keyframes f2{to{transform:translate(-80px,-55px) scale(1.2)}}
+    @keyframes f3{to{transform:translate(45px,-65px) scale(1.12)}}
+    .mesh.react .blob{filter:blur(60px)}
+
+    .grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:var(--grain);transition:opacity .6s;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size:200px}
+
+    .page{position:relative;z-index:2;height:100svh;display:flex;flex-direction:column;
+      padding:0 24px;max-width:480px;width:100%;margin:0 auto}
+    .spacer{flex:0 0 10vh;min-height:44px}
+
+    .name{font-family:var(--h);font-size:var(--ns);font-weight:var(--nw);line-height:var(--nlh);letter-spacing:var(--nls);margin-bottom:4px;
+      opacity:0;animation:rise .7s cubic-bezier(.16,1,.3,1) .2s forwards}
+    .role{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;color:var(--fg2);margin-bottom:12px;
+      opacity:0;animation:rise .6s cubic-bezier(.16,1,.3,1) .5s forwards}
+
+    /* ── NOW STRIP ── */
+    .now{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:8px;
+      background:var(--now-bg);margin-bottom:14px;opacity:0;animation:rise .5s ease .7s forwards}
+    .now-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;animation:dp 2s ease-in-out infinite}
+    @keyframes dp{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+    .now-text{font-size:12px;color:var(--fg2);flex:1;overflow:hidden}
+    .now-text span{display:block;transition:all .4s cubic-bezier(.16,1,.3,1)}
+    .now-text span.sw{opacity:0;transform:translateY(-6px)}
+    .eq{display:flex;gap:2px;align-items:flex-end;height:14px;flex-shrink:0}
+    .eq i{display:block;width:3px;border-radius:1px;background:var(--accent);opacity:.4}
+    .eq i:nth-child(1){animation:e1 .6s ease-in-out infinite alternate}
+    .eq i:nth-child(2){animation:e2 .5s ease-in-out infinite alternate}
+    .eq i:nth-child(3){animation:e3 .7s ease-in-out infinite alternate}
+    @keyframes e1{from{height:4px}to{height:12px}}
+    @keyframes e2{from{height:8px}to{height:5px}}
+    @keyframes e3{from{height:3px}to{height:10px}}
+
+    /* ── BIO ── */
+    .bio{font-size:15px;line-height:1.6;font-style:var(--bst);margin-bottom:16px;
+      opacity:0;animation:rise .6s cubic-bezier(.16,1,.3,1) .9s forwards}
+
+    /* ═══ FLIP TILES ═══ */
+    .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;
+      opacity:0;animation:rise .6s cubic-bezier(.16,1,.3,1) 1.1s forwards}
+    .tile{perspective:600px;height:72px}
+    .tile-inner{
+      position:relative;width:100%;height:100%;
+      transition:transform 1s cubic-bezier(.4,0,.2,1);
+      transform-style:preserve-3d}
+    .tile-inner.flipped{transform:rotateX(180deg)}
+    .tile-face{
+      position:absolute;inset:0;backface-visibility:hidden;
+      padding:10px 12px;border-radius:10px;
+      background:transparent;
+      border:1px solid transparent;
+      transition:border-color .4s ease, background .4s ease;
+      display:flex;flex-direction:column;justify-content:center;
+      overflow:hidden}
+    .tile-back{transform:rotateX(180deg)}
+    /* Pre-flip: subtle border materializes, background stays page color */
+    .tile.materializing .tile-face{
+      border-color:var(--tile-border, rgba(0,0,0,.1));
+      background:var(--bg)}
+    .tile-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--fg3);margin-bottom:2px}
+    .tile-val{font-size:12px;line-height:1.4;color:var(--fg)}
+    .tile-val strong{font-weight:600}
+    .tile-wide{grid-column:span 2;height:68px}
+
+    /* ── BOTTOM ── */
+    .bottom{margin-top:auto;padding-bottom:max(10px,env(safe-area-inset-bottom,0px));
+      opacity:0;animation:fadeIn .5s ease 1.4s forwards}
+    .wave-wrap{height:36px;margin-bottom:8px;overflow:hidden;position:relative}
+    .wave-svg{position:absolute;bottom:0;left:-100%;width:300%;height:100%}
+    .wave-path{fill:none;stroke-width:1.5;stroke-linecap:round;transition:stroke .6s,stroke-width .5s}
+    .wp1{stroke:var(--wave1);animation:wf 8s linear infinite}
+    .wp2{stroke:var(--wave2);animation:wf 12s linear infinite reverse;stroke-width:1}
+    @keyframes wf{to{transform:translateX(33.33%)}}
+    .wave-wrap.react .wp1{stroke-width:2.5}
+    .wave-wrap.react .wp2{stroke-width:1.8}
+
+    .pulse-text{font-size:11px;color:var(--fg3);line-height:1.5;margin-bottom:8px;
+      transition:opacity .3s}
+    .foot{display:flex;gap:14px;align-items:center}
+    .foot a{color:var(--fg3);display:flex;transition:color .2s}
+    .foot a:hover{color:var(--fg)}
+    .foot-spacer{flex:1}
+    .hint{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--fg3);
+      opacity:0;animation:fadeIn .5s ease 2.5s forwards}
+
+    [data-p="dev"] .name::after{content:'▋';margin-left:3px;font-size:.6em;animation:blink 1s step-end infinite}
+    @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+    @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+    /* ═══ DEEP BREATH — INHALE ═══ */
+    .page{transition:transform .8s cubic-bezier(.4,0,.2,1),opacity .5s ease;touch-action:none;user-select:none;-webkit-user-select:none}
+    body.inhaling .page{transform:scale(.97)}
+    body.inhaling .blob{filter:blur(50px)!important;transition:filter .6s}
+    body.inhaling .bottom{opacity:.3!important;transition:opacity .6s}
+    body.inhaling .hint{opacity:0!important}
+    body.charged::after{
+      content:'';position:fixed;inset:0;z-index:5;pointer-events:none;
+      box-shadow:inset 0 0 80px var(--tile-glow);
+      animation:edge-glow 1s ease-in-out infinite alternate}
+    @keyframes edge-glow{from{opacity:.2}to{opacity:.5}}
+    /* ═══ DEEP BREATH — EXHALE ═══ */
+    body.exhaling .page{transform:scale(1.04);opacity:0;transition:all .6s cubic-bezier(.16,1,.3,1)}
+    body.exhaling .mesh .blob{filter:blur(30px)!important;opacity:.5;transition:all .5s}
+
+    /* ═══ LAYER 2 ═══ */
+    .l2{display:none;min-height:100svh;position:relative;z-index:2;
+      padding:max(20px,env(safe-area-inset-top,0px)+8px) 24px max(32px,env(safe-area-inset-bottom,0px)+16px);
+      overflow-y:auto}
+    .l2.visible{display:block}
+    .l2-inner{max-width:560px;margin:0 auto}
+    .l2-header{display:flex;align-items:center;gap:16px;margin-bottom:36px;padding-bottom:16px;
+      border-bottom:1px solid var(--tile-glow)}
+    .back-btn{font-size:13px;color:var(--fg2);padding:8px 0;display:flex;align-items:center;gap:6px;transition:color .2s}
+    .back-btn:hover{color:var(--fg)}
+    .l2-name{font-family:var(--h);font-size:15px;font-weight:600;margin-left:auto;color:var(--fg2)}
+    .l2-section{margin-bottom:36px;opacity:0;transform:translateY(16px)}
+    .l2.visible .l2-section{animation:rise .5s cubic-bezier(.16,1,.3,1) calc(var(--i)*80ms + 150ms) forwards}
+    .l2-label{font-size:10px;text-transform:uppercase;letter-spacing:.2em;font-weight:600;color:var(--fg3);
+      margin-bottom:16px;display:flex;align-items:center;gap:10px}
+    .l2-label::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:1px}
+    .l2-card{padding:20px;border-radius:10px;background:var(--tile-bg);border:1px solid var(--tile-glow)}
+    .l2-card h3{font-family:var(--h);font-size:18px;font-weight:600;margin-bottom:8px}
+    .l2-card p{font-size:14px;color:var(--fg2);line-height:1.6}
+    .l2-tags{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    .l2-tag{font-size:11px;padding:4px 10px;border-radius:20px;background:var(--tile-bg);border:1px solid var(--tile-glow);color:var(--fg2)}
+    .l2-pills{display:flex;gap:8px;flex-wrap:wrap}
+    .l2-pill{font-size:13px;padding:8px 16px;border-radius:20px;background:var(--tile-bg);border:1px solid var(--tile-glow)}
+    .l2-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .l2-stat{text-align:center}
+    .l2-stat strong{display:block;font-family:var(--h);font-size:22px;font-weight:600;margin-bottom:4px}
+    .l2-stat span{font-size:12px;color:var(--fg2)}
+    .l2-list{display:flex;flex-direction:column;gap:10px}
+    .l2-item{font-size:14px;padding:12px 16px;border-radius:8px;background:var(--tile-bg);border:1px solid var(--tile-glow)}
+    .l2-item span{color:var(--fg2)}
+    .l2.exiting{opacity:0;transform:scale(.98);transition:all .4s cubic-bezier(.4,0,.2,1)}
+    .page.returning{animation:return-in .6s cubic-bezier(.16,1,.3,1) forwards}
+    @keyframes return-in{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+
+    .ctrl{position:fixed;top:12px;right:12px;z-index:100;display:flex;gap:5px;padding:3px;
+      background:rgba(128,128,128,.12);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+    .ctrl button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;transition:border-color .3s;position:relative}
+    .ctrl button.on{border-color:var(--accent)}
+    .ctrl .d{width:12px;height:12px;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important}
+      .tile-inner{transition:none!important}
+      .blob{filter:blur(80px)}.name,.role,.bio,.tiles,.now,.bottom{opacity:1!important;transform:none!important}
+    }
+  </style>
+</head>
+<body data-p="day">
+  <div class="mesh" id="mesh"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+  <div class="grain"></div>
+
+  <div class="page">
+    <div class="spacer"></div>
+    <h1 class="name">Tommaso<br>Rinaldi</h1>
+    <p class="role">Ingegnere · Identity & AI · Milano</p>
+
+    <div class="now">
+      <span class="now-dot"></span>
+      <div class="now-text"><span id="nowText">Sta ascoltando Tycho — Dive</span></div>
+      <div class="eq"><i></i><i></i><i></i></div>
+    </div>
+
+    <p class="bio">
+      Ingegnere con 10 anni di esperienza in sistemi distribuiti.
+      Oggi costruisce OpenSelf, uno strumento AI che cura la tua
+      identità digitale e la mantiene viva nel tempo.
+    </p>
+
+    <!-- ═══ FLIP TILES ═══ -->
+    <div class="tiles" id="tiles">
+      <div class="tile tile-wide" data-tile="builder">
+        <div class="tile-inner">
+          <div class="tile-face tile-front">
+            <div class="tile-label">Building</div>
+            <div class="tile-val"><strong>OpenSelf</strong> · AI-powered personal identity</div>
+          </div>
+          <div class="tile-face tile-back">
+            <div class="tile-label">Stack</div>
+            <div class="tile-val"><strong>TypeScript</strong> · Next.js · SQLite · AI SDK</div>
+          </div>
+        </div>
+      </div>
+      <div class="tile" data-tile="runner">
+        <div class="tile-inner">
+          <div class="tile-face tile-front">
+            <div class="tile-label">Running</div>
+            <div class="tile-val">PB <strong>1:42:03</strong><br>847km quest'anno</div>
+          </div>
+          <div class="tile-face tile-back">
+            <div class="tile-label">This week</div>
+            <div class="tile-val"><strong>68km</strong> in 5 sessioni<br>Passo medio 4:52/km</div>
+          </div>
+        </div>
+      </div>
+      <div class="tile" data-tile="music">
+        <div class="tile-inner">
+          <div class="tile-face tile-front">
+            <div class="tile-label">Listening</div>
+            <div class="tile-val"><strong>Burial</strong> · BoC<br>Tycho</div>
+          </div>
+          <div class="tile-face tile-back">
+            <div class="tile-label">This month</div>
+            <div class="tile-val"><strong>142h</strong> ascoltate<br>Top: Electronic</div>
+          </div>
+        </div>
+      </div>
+      <div class="tile" data-tile="reading">
+        <div class="tile-inner">
+          <div class="tile-face tile-front">
+            <div class="tile-label">Reading</div>
+            <div class="tile-val"><strong>The Pragmatic Programmer</strong></div>
+          </div>
+          <div class="tile-face tile-back">
+            <div class="tile-label">2024</div>
+            <div class="tile-val"><strong>7 libri</strong> letti<br>3 in corso</div>
+          </div>
+        </div>
+      </div>
+      <div class="tile" data-tile="lang">
+        <div class="tile-inner">
+          <div class="tile-face tile-front">
+            <div class="tile-label">Languages</div>
+            <div class="tile-val">🇮🇹 Italiano · 🇬🇧 English</div>
+          </div>
+          <div class="tile-face tile-back">
+            <div class="tile-label">Location</div>
+            <div class="tile-val"><strong>Milano</strong>, Italia<br>45.464°N 9.190°E</div>
+          </div>
+        </div>
+      </div>
+      <div class="tile" data-tile="exp">
+        <div class="tile-inner">
+          <div class="tile-face tile-front">
+            <div class="tile-label">Experience</div>
+            <div class="tile-val"><strong>10 anni</strong><br>Distributed systems</div>
+          </div>
+          <div class="tile-face tile-back">
+            <div class="tile-label">Career</div>
+            <div class="tile-val">3 startup · 2 corporate<br>Now: <strong>indie</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="wave-wrap" id="waveWrap">
+        <svg class="wave-svg" id="waveSvg" viewBox="0 0 2160 36" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="pulse-text" id="pulseText">
+        committed to openself · 2h ago · ran 6.2km · listening to Tycho
+      </div>
+      <div class="foot">
+        <a href="#" aria-label="GitHub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></a>
+        <a href="#" aria-label="LinkedIn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
+        <a href="#" aria-label="Email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></a>
+        <span class="foot-spacer"></span>
+        <span class="hint">hold to explore</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ LAYER 2 ═══ -->
+  <div class="l2" id="l2">
+    <div class="l2-inner">
+      <header class="l2-header">
+        <button class="back-btn" type="button" id="backBtn"><span>←</span> Portrait</button>
+        <span class="l2-name">Tommaso Rinaldi</span>
+      </header>
+      <section class="l2-section" style="--i:0">
+        <div class="l2-label">Progetti</div>
+        <div class="l2-card">
+          <h3>OpenSelf</h3>
+          <p>AI-powered personal page builder. La tua identità digitale, curata da un agente che ti conosce. Conversation-first, local-first.</p>
+          <div class="l2-tags">
+            <span class="l2-tag">TypeScript</span><span class="l2-tag">Next.js</span>
+            <span class="l2-tag">AI SDK</span><span class="l2-tag">SQLite</span>
+          </div>
+        </div>
+      </section>
+      <section class="l2-section" style="--i:1">
+        <div class="l2-label">Skills</div>
+        <div class="l2-pills">
+          <span class="l2-pill">TypeScript</span><span class="l2-pill">React</span>
+          <span class="l2-pill">Node.js</span><span class="l2-pill">System Design</span>
+          <span class="l2-pill">AI/ML</span><span class="l2-pill">SQLite</span>
+        </div>
+      </section>
+      <section class="l2-section" style="--i:2">
+        <div class="l2-label">Running</div>
+        <div class="l2-stats">
+          <div class="l2-stat"><strong>1:42:03</strong><span>Mezza maratona PB</span></div>
+          <div class="l2-stat"><strong>847 km</strong><span>Quest'anno</span></div>
+          <div class="l2-stat"><strong>4:52</strong><span>/km passo medio</span></div>
+        </div>
+      </section>
+      <section class="l2-section" style="--i:3">
+        <div class="l2-label">Musica</div>
+        <div class="l2-list">
+          <div class="l2-item">Burial — <span>Untrue</span></div>
+          <div class="l2-item">Boards of Canada — <span>Music Has the Right to Children</span></div>
+          <div class="l2-item">Tycho — <span>Dive</span></div>
+        </div>
+      </section>
+      <section class="l2-section" style="--i:4">
+        <div class="l2-label">Letture</div>
+        <div class="l2-list">
+          <div class="l2-item">The Pragmatic Programmer <span>— Hunt & Thomas</span></div>
+          <div class="l2-item">Designing Data-Intensive Applications <span>— Kleppmann</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <nav class="ctrl"><button data-v="day" class="on" title="Day"><span class="d" style="background:#fafaf9;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)"></span></button><button data-v="noir" title="Noir"><span class="d" style="background:#08080f;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></span></button><button data-v="dev" title="Dev"><span class="d" style="background:#0e0e0d;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></span></button></nav>
+
+  <script>
+    // ── Wave ──
+    function wavePath(w,amp,freq,ph,yc){
+      let d=`M0,${yc}`;
+      for(let x=2;x<=w;x+=2){
+        const y=yc+Math.sin(x*freq*Math.PI/180+ph)*amp+Math.sin(x*freq*.6*Math.PI/180+ph*1.3)*(amp*.35);
+        d+=` L${x},${y.toFixed(1)}`}
+      return d}
+    const svg=document.getElementById('waveSvg');
+    const wp1=document.createElementNS('http://www.w3.org/2000/svg','path');
+    wp1.setAttribute('d',wavePath(2160,5,1.8,0,18));wp1.classList.add('wave-path','wp1');svg.appendChild(wp1);
+    const wp2=document.createElementNS('http://www.w3.org/2000/svg','path');
+    wp2.setAttribute('d',wavePath(2160,3,2.5,2,20));wp2.classList.add('wave-path','wp2');svg.appendChild(wp2);
+
+    // ── Tile flip content pools ──
+    const TILE_CONTENT = {
+      builder: [
+        {label:'Building', val:'<strong>OpenSelf</strong> · AI-powered personal identity'},
+        {label:'Stack', val:'<strong>TypeScript</strong> · Next.js · SQLite · AI SDK'},
+        {label:'This week', val:'<strong>14 commits</strong> · 3 PRs merged'},
+        {label:'Deploy', val:'Ultimo deploy <strong>2h fa</strong><br>v2.4.1 in produzione'},
+        {label:'Architecture', val:'<strong>Local-first</strong> · Conversation-driven'},
+      ],
+      runner: [
+        {label:'Running', val:'PB <strong>1:42:03</strong><br>847km quest\'anno'},
+        {label:'This week', val:'<strong>68km</strong> in 5 sessioni<br>Passo medio 4:52/km'},
+        {label:'Last run', val:'<strong>6.2km</strong> stamattina<br>Ritmo: 4:48/km'},
+        {label:'Goal', val:'Obiettivo: <strong>1000km</strong><br>Mancano 153km'},
+      ],
+      music: [
+        {label:'Listening', val:'<strong>Burial</strong> · BoC<br>Tycho'},
+        {label:'This month', val:'<strong>142h</strong> ascoltate<br>Top: Electronic'},
+        {label:'Now playing', val:'<strong>Tycho — Dive</strong><br>dall\'album Dive (2011)'},
+        {label:'Discovery', val:'Ha scoperto <strong>Rival Consoles</strong><br>3 settimane fa'},
+      ],
+      reading: [
+        {label:'Reading', val:'<strong>The Pragmatic Programmer</strong>'},
+        {label:'2024', val:'<strong>7 libri</strong> letti<br>3 in corso'},
+        {label:'Highlight', val:'<em>"Good enough software<br>is often best"</em>'},
+        {label:'Next', val:'<strong>DDIA</strong> — Kleppmann<br>In lista da 2 mesi'},
+      ],
+      lang: [
+        {label:'Languages', val:'🇮🇹 Italiano · 🇬🇧 English'},
+        {label:'Location', val:'<strong>Milano</strong>, Italia<br>45.464°N 9.190°E'},
+        {label:'Timezone', val:'CET <strong>UTC+1</strong><br>Disponibile 9–18'},
+      ],
+      exp: [
+        {label:'Experience', val:'<strong>10 anni</strong><br>Distributed systems'},
+        {label:'Career', val:'3 startup · 2 corporate<br>Now: <strong>indie</strong>'},
+        {label:'Domains', val:'<strong>FinTech</strong> · Identity<br>Real-time systems'},
+        {label:'Education', val:'<strong>Politecnico</strong><br>Computer Engineering'},
+      ],
+    };
+
+    // Track current content index for each tile (front and back independently)
+    const tileState = {};
+    document.querySelectorAll('.tile').forEach(tile => {
+      const key = tile.dataset.tile;
+      tileState[key] = { flipped: false, frontIdx: 0, backIdx: 1 };
+    });
+
+    function flipTile(tileKey) {
+      const tile = document.querySelector(`[data-tile="${tileKey}"]`);
+      if (!tile || tile.classList.contains('materializing')) return;
+      const inner = tile.querySelector('.tile-inner');
+      const st = tileState[tileKey];
+      const pool = TILE_CONTENT[tileKey];
+      if (!pool || pool.length < 2) return;
+
+      // Phase 1: Border materializes (0.4s)
+      tile.classList.add('materializing');
+
+      // Phase 2: After border is visible, flip slowly (1s transition)
+      setTimeout(() => {
+        st.flipped = !st.flipped;
+        if (st.flipped) {
+          inner.classList.add('flipped');
+          // Update hidden front with next content
+          const nextIdx = (st.backIdx + 1) % pool.length;
+          st.frontIdx = nextIdx;
+          setTimeout(() => {
+            const front = tile.querySelector('.tile-front');
+            front.querySelector('.tile-label').textContent = pool[st.frontIdx].label;
+            front.querySelector('.tile-val').innerHTML = pool[st.frontIdx].val;
+          }, 500);
+        } else {
+          inner.classList.remove('flipped');
+          // Update hidden back with next content
+          const nextIdx = (st.frontIdx + 1) % pool.length;
+          st.backIdx = nextIdx;
+          setTimeout(() => {
+            const back = tile.querySelector('.tile-back');
+            back.querySelector('.tile-label').textContent = pool[st.backIdx].label;
+            back.querySelector('.tile-val').innerHTML = pool[st.backIdx].val;
+          }, 500);
+        }
+
+        // Gradient + wave react subtly
+        document.getElementById('mesh').classList.add('react');
+        setTimeout(() => document.getElementById('mesh').classList.remove('react'), 800);
+        document.getElementById('waveWrap').classList.add('react');
+        setTimeout(() => document.getElementById('waveWrap').classList.remove('react'), 1200);
+      }, 500);
+
+      // Phase 3: After flip completes, border dematerializes
+      setTimeout(() => {
+        tile.classList.remove('materializing');
+      }, 2000);
+    }
+
+    // ── Random tile flip scheduler ──
+    const TILE_KEYS = Object.keys(TILE_CONTENT);
+    let lastFlipped = '';
+
+    function scheduleRandomFlip() {
+      // Pick a random tile that's not the last one flipped
+      let key;
+      do { key = TILE_KEYS[Math.floor(Math.random() * TILE_KEYS.length)]; } while (key === lastFlipped && TILE_KEYS.length > 1);
+      lastFlipped = key;
+      flipTile(key);
+    }
+
+    // Start flipping after entrance
+    setTimeout(() => {
+      scheduleRandomFlip();
+      setInterval(scheduleRandomFlip, 5000);
+    }, 3000);
+
+    // ── Now strip updates (tied to tile flips) ──
+    const NOW_MESSAGES = [
+      'Sta ascoltando Tycho — Dive',
+      'Ha pushato su openself · just now',
+      'Ha corso 6.2km stamattina',
+      'Sta ascoltando Boards of Canada — Dayvan Cowboy',
+      'Ha mergiato la PR #48',
+      'Sta ascoltando Burial — Archangel',
+      'Nuovo PB sui 10km: 42:18 🎉',
+      'Ha deployato openself v2.4.1',
+      'Ha iniziato il capitolo 9',
+      'Sta ascoltando Rival Consoles — Articulation',
+    ];
+    let nowIdx = 0;
+
+    // Update now strip every 8s
+    setInterval(() => {
+      nowIdx = (nowIdx + 1) % NOW_MESSAGES.length;
+      const el = document.getElementById('nowText');
+      el.classList.add('sw');
+      setTimeout(() => {
+        el.textContent = NOW_MESSAGES[nowIdx];
+        el.classList.remove('sw');
+      }, 300);
+    }, 8000);
+
+    // ═══ DEEP BREATH ═══
+    const page = document.querySelector('.page');
+    const l2 = document.getElementById('l2');
+    let breathState = 'portrait'; // portrait | inhaling | transitioning | layer2
+    let pressStart = 0, pressTimer = null;
+
+    page.addEventListener('pointerdown', e => {
+      if (breathState !== 'portrait' || e.target.closest('.ctrl') || e.target.closest('.now') || e.target.closest('a')) return;
+      pressStart = Date.now();
+      document.body.classList.add('inhaling');
+      if (navigator.vibrate) navigator.vibrate(10);
+      pressTimer = setTimeout(() => {
+        document.body.classList.add('charged');
+        if (navigator.vibrate) navigator.vibrate(5);
+      }, 350);
+    });
+
+    function handleRelease() {
+      if (breathState !== 'portrait') return;
+      if (!document.body.classList.contains('inhaling')) return;
+      clearTimeout(pressTimer);
+      const held = Date.now() - pressStart;
+      if (held < 350) {
+        document.body.classList.remove('inhaling', 'charged');
+        return;
+      }
+      // Exhale → Layer 2
+      document.body.classList.remove('inhaling', 'charged');
+      document.body.classList.add('exhaling');
+      breathState = 'transitioning';
+      if (navigator.vibrate) navigator.vibrate([10, 40, 20]);
+      setTimeout(() => {
+        page.style.display = 'none';
+        document.body.classList.remove('exhaling');
+        l2.classList.add('visible');
+        document.body.style.overflow = 'auto';
+        breathState = 'layer2';
+      }, 650);
+    }
+
+    page.addEventListener('pointerup', handleRelease);
+    page.addEventListener('pointercancel', () => {
+      if (breathState === 'portrait') {
+        clearTimeout(pressTimer);
+        document.body.classList.remove('inhaling', 'charged');
+      }
+    });
+    page.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Back to portrait
+    document.getElementById('backBtn').addEventListener('click', () => {
+      l2.classList.add('exiting');
+      setTimeout(() => {
+        l2.classList.remove('visible', 'exiting');
+        document.querySelectorAll('.l2-section').forEach(s => { s.style.opacity = '0'; s.style.transform = 'translateY(16px)'; });
+        page.style.display = '';
+        page.classList.add('returning');
+        document.body.style.overflow = 'hidden';
+        breathState = 'portrait';
+        setTimeout(() => page.classList.remove('returning'), 700);
+      }, 400);
+    });
+
+    // ── Presence toggle ──
+    const tc={day:'#fafaf9',noir:'#08080f',dev:'#0e0e0d'};
+    document.querySelectorAll('.ctrl button').forEach(b=>{
+      b.addEventListener('click',()=>{
+        document.body.setAttribute('data-p',b.dataset.v);
+        document.querySelectorAll('.ctrl button').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');
+        document.getElementById('tc').content=tc[b.dataset.v]||'#fafaf9'})});
+  </script>
+</body>
+</html>

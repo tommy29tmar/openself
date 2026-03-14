@@ -64,9 +64,9 @@ export function saveMemory(
     .prepare(
       `SELECT COUNT(*) as cnt FROM agent_memory
        WHERE owner_key = ? AND COALESCE(source, 'agent') = 'agent'
-       AND created_at > datetime('now', '-${COOLDOWN_WINDOW_SECONDS} seconds')`,
+       AND created_at > datetime('now', '-' || ? || ' seconds')`,
     )
-    .get(ownerKey) as { cnt: number };
+    .get(ownerKey, String(COOLDOWN_WINDOW_SECONDS)) as { cnt: number };
   if (recentCount.cnt >= MAX_WRITES_IN_COOLDOWN) return null;
 
   // Quota: count active memories; evict lowest-scoring if at cap

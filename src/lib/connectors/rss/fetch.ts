@@ -21,6 +21,11 @@ const MAX_REDIRECTS = 3;
  * Streaming body with size limit.
  */
 export async function fetchFeedSafe(url: string): Promise<string> {
+  // DNS-level SSRF check before first fetch
+  const hostname = new URL(url).hostname;
+  const dnsCheck = await validateResolvedIp(hostname);
+  if (!dnsCheck.valid) throw new Error(`SSRF blocked: ${dnsCheck.error}`);
+
   let currentUrl = url;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {

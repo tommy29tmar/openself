@@ -82,8 +82,8 @@ export function runGlobalHousekeeping(): void {
       const activeFactIds = activeFacts.map((f: { id: string }) => f.id);
       overrideService.cleanupOrphans(ownerKey, activeFactIds, scope.knowledgeReadKeys);
     }
-  } catch {
-    // Non-fatal — orphans will be cleaned next cycle
+  } catch (err) {
+    console.error("[housekeeping] Override orphan cleanup failed:", err);
   }
 
   // Clean up empty fact clusters (no active facts referencing them)

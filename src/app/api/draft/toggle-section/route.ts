@@ -43,6 +43,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const STRUCTURAL_SECTIONS = new Set(["hero", "footer"]);
+    if (STRUCTURAL_SECTIONS.has(sectionType)) {
+      return NextResponse.json(
+        { success: false, error: "Cannot hide structural sections" },
+        { status: 400 },
+      );
+    }
+
     // visible = !hidden (toggleSectionVisibility uses visible=true to show)
     const hiddenSections = toggleSectionVisibility(primaryKey, sectionType, !hidden);
 

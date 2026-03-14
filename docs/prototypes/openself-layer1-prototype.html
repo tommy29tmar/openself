@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#fafaf9" id="tc">
+  <title>OpenSelf — Living Portrait</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { overscroll-behavior: none; }
+    button { font: inherit; border: none; background: none; cursor: pointer; color: inherit; }
+
+    /* ═══ PRESENCE VARIANTS ═══ */
+    body, body[data-presence="canvas-signal-day"] {
+      --bg: #fafaf9; --fg: #141412; --fg2: #8a8a86; --accent: #141412;
+      --card-bg: rgba(0,0,0,0.03); --card-border: rgba(0,0,0,0.06);
+      --breath-color: rgba(200,170,90,0.05); --breath-intense: rgba(200,170,90,0.18);
+      --grain: 0; --breath-speed: 5.5s;
+      --h-font: 'Plus Jakarta Sans', sans-serif; --b-font: 'Plus Jakarta Sans', sans-serif;
+      --st-weight: 500; --st-style: normal; --st-size: clamp(20px, 5.5vw, 30px);
+      --name-ls: 0.18em; color-scheme: light;
+    }
+    body[data-presence="archive-narrative-night"] {
+      --bg: #07080f; --fg: #eef0f8; --fg2: rgba(238,240,248,0.45); --accent: #8b9fd4;
+      --card-bg: rgba(255,255,255,0.04); --card-border: rgba(255,255,255,0.06);
+      --breath-color: rgba(139,159,212,0.07); --breath-intense: rgba(139,159,212,0.25);
+      --grain: 0.022; --breath-speed: 7s;
+      --h-font: 'Cormorant Garamond', serif; --b-font: 'Plus Jakarta Sans', sans-serif;
+      --st-weight: 400; --st-style: italic; --st-size: clamp(22px, 6vw, 34px);
+      --name-ls: 0.22em; color-scheme: dark;
+    }
+    body[data-presence="canvas-terminal-night"] {
+      --bg: #0f0f0e; --fg: #e8e4de; --fg2: rgba(232,228,222,0.4); --accent: #e8e4de;
+      --card-bg: rgba(255,255,255,0.04); --card-border: rgba(255,255,255,0.06);
+      --breath-color: rgba(232,228,222,0.03); --breath-intense: rgba(232,228,222,0.12);
+      --grain: 0; --breath-speed: 4s;
+      --h-font: 'JetBrains Mono', monospace; --b-font: 'JetBrains Mono', monospace;
+      --st-weight: 400; --st-style: normal; --st-size: clamp(15px, 4vw, 21px);
+      --name-ls: 0.3em; color-scheme: dark;
+    }
+
+    /* ═══ BASE ═══ */
+    body {
+      background: var(--bg); color: var(--fg); font-family: var(--b-font);
+      min-height: 100svh; overflow: hidden;
+      transition: background 0.5s ease, color 0.5s ease;
+    }
+
+    /* ═══ PORTRAIT (Layer 1) ═══ */
+    .portrait {
+      position: relative; min-height: 100svh;
+      display: flex; flex-direction: column; overflow: hidden;
+      user-select: none; -webkit-user-select: none; touch-action: none;
+    }
+    .portrait-content {
+      position: relative; z-index: 2; flex: 1;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: max(44px, env(safe-area-inset-top,0px) + 20px) 28px max(24px, env(safe-area-inset-bottom,0px) + 8px);
+      max-width: 480px; width: 100%; margin: 0 auto;
+      gap: 0;
+    }
+
+    /* ═══ BREATH GRADIENT ═══ */
+    .breath-wrap {
+      position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      opacity: 0; transition: opacity 1.8s ease-out;
+    }
+    .breath-wrap.on { opacity: 1; }
+    .breath-bg {
+      position: absolute; inset: -25%;
+      background: radial-gradient(ellipse at 50% 40%, var(--breath-color), transparent 65%);
+      transform-origin: 50% 40%;
+      animation: breath var(--breath-speed) ease-in-out infinite;
+      will-change: transform, opacity;
+    }
+    .breath-intense {
+      position: absolute; inset: -10%;
+      background: radial-gradient(ellipse at 50% 50%, var(--breath-intense), transparent 40%);
+      opacity: 0; transform: scale(0.8);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+      pointer-events: none;
+    }
+    @keyframes breath {
+      0%, 100% { opacity: 0.5; transform: scale(1) translateY(0); }
+      50% { opacity: 1; transform: scale(1.08) translateY(1.5%); }
+    }
+
+    /* ═══ GRAIN OVERLAY ═══ */
+    .grain {
+      position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      opacity: var(--grain);
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 200px;
+    }
+
+    /* ═══ LA VOCE ═══ */
+    .voice-zone { flex: 0 0 auto; margin-bottom: 28px; }
+    .identity-statement {
+      font-family: var(--h-font); font-size: var(--st-size);
+      font-weight: var(--st-weight); font-style: var(--st-style);
+      line-height: 1.4; letter-spacing: -0.01em; color: var(--fg);
+      opacity: 0; transform: translateY(10px);
+      animation: reveal 0.8s cubic-bezier(0.16,1,0.3,1) 0.4s forwards;
+    }
+    .person-name {
+      margin-top: 16px; font-family: var(--b-font);
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: var(--name-ls); color: var(--fg2);
+      opacity: 0; animation: reveal 0.6s cubic-bezier(0.16,1,0.3,1) 0.8s forwards;
+    }
+    /* Terminal: cursor blink */
+    body[data-presence="canvas-terminal-night"] .identity-statement::after {
+      content: '▋'; display: inline; margin-left: 2px; color: var(--accent);
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+
+    /* ═══ LE DIMENSIONI ═══ */
+    .dimensions-zone {
+      flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 24px;
+    }
+    .dimension {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: 10px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      transition: transform 0.3s ease, background 0.3s ease;
+      cursor: pointer;
+      opacity: 0; transform: translateY(10px);
+    }
+    .dimension:active { transform: scale(0.98); background: var(--card-border); }
+    .dim-icon { font-size: 18px; flex-shrink: 0; line-height: 1; }
+    .dim-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .dim-title {
+      font-family: var(--h-font); font-size: 13px; font-weight: 600;
+      letter-spacing: 0.02em; color: var(--fg);
+    }
+    .dim-detail {
+      font-size: 12px; color: var(--fg2); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    /* Primary dimension */
+    .dim-primary {
+      padding: 18px 20px; border-left: 3px solid var(--accent);
+    }
+    .dim-primary .dim-title { font-size: 14px; }
+    .dim-primary .dim-detail { font-size: 13px; }
+    /* Dimensions grid (secondary + tertiary) */
+    .dim-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    /* Recency opacity */
+    .recency-high { opacity: 1; }
+    .recency-med { opacity: 0.85; }
+    .recency-low { opacity: 0.6; }
+    /* Stagger */
+    .dim-s0 { animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) 1.0s forwards; }
+    .dim-s1 { animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) 1.15s forwards; }
+    .dim-s2 { animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) 1.25s forwards; }
+    .dim-s3 { animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) 1.4s forwards; }
+
+    /* ═══ IL POLSO ═══ */
+    .pulse-zone { flex: 0 0 auto; margin-top: auto; }
+    .life-traces {
+      font-size: 12px; color: var(--fg2); line-height: 1.7;
+    }
+    .trace {
+      opacity: 0;
+      animation: fade-in 0.5s ease 1.6s forwards;
+    }
+    .trace:nth-child(2) { animation-delay: 1.8s; }
+    .trace:nth-child(3) { animation-delay: 2.0s; }
+    .trace-sep { color: var(--fg2); opacity: 0.3; margin: 0 6px; }
+    .social-row {
+      display: flex; gap: 16px; margin-top: 16px;
+      opacity: 0; animation: fade-in 0.4s ease 2.2s forwards;
+    }
+    .social-row a {
+      color: var(--fg2); transition: color 0.2s;
+      display: flex; align-items: center;
+    }
+    .social-row a:hover { color: var(--fg); }
+    .explore-hint {
+      margin-top: 20px; text-align: center;
+      font-size: 11px; color: var(--fg2); opacity: 0;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      animation: hint-appear 0.6s ease 3s forwards;
+    }
+    @keyframes hint-appear {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 0.4; transform: translateY(0); }
+    }
+
+    /* ═══ REVEAL KEYFRAMES ═══ */
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* ═══ DEEP BREATH — INHALE ═══ */
+    .portrait.inhaling .breath-bg { animation-duration: 1.5s; }
+    .portrait.inhaling .breath-intense { opacity: 1; transform: scale(0.7); }
+    .portrait.inhaling .dimensions-zone {
+      transform: scale(0.96) translateY(-6px);
+      transition: transform 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+    .portrait.inhaling .voice-zone {
+      transform: scale(1.01);
+      transition: transform 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+    .portrait.inhaling .pulse-zone {
+      opacity: 0.3; transition: opacity 0.8s ease;
+    }
+    .portrait.inhaling .explore-hint { opacity: 0 !important; }
+
+    /* Charged glow */
+    .portrait.charged { box-shadow: inset 0 0 0 1px var(--accent); }
+    .portrait.charged::after {
+      content: ''; position: absolute; inset: 0; z-index: 10; pointer-events: none;
+      box-shadow: inset 0 0 60px rgba(139,159,212,0.08);
+      animation: edge-pulse 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes edge-pulse { from { opacity: 0.3; } to { opacity: 0.6; } }
+
+    /* ═══ DEEP BREATH — EXHALE ═══ */
+    .portrait.exhaling .breath-intense {
+      opacity: 0; transform: scale(4);
+      transition: opacity 0.5s ease, transform 0.7s cubic-bezier(0.16,1,0.3,1);
+    }
+    .portrait.exhaling .breath-bg { opacity: 0; transition: opacity 0.4s ease; }
+    .portrait.exhaling .portrait-content {
+      opacity: 0; transform: scale(1.04);
+      transition: all 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    /* ═══ LAYER 2 ═══ */
+    .layer2 {
+      display: none; min-height: 100svh;
+      padding: max(20px, env(safe-area-inset-top,0px) + 8px) 24px max(32px, env(safe-area-inset-bottom,0px) + 16px);
+      overflow-y: auto;
+    }
+    .layer2.visible { display: block; }
+    .l2-inner {
+      max-width: 560px; margin: 0 auto;
+    }
+    .l2-header {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 40px; padding-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .back-btn {
+      font-size: 13px; color: var(--fg2); padding: 8px 0;
+      transition: color 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .back-btn:hover { color: var(--fg); }
+    .l2-name {
+      font-family: var(--h-font); font-size: 16px; font-weight: 600;
+      margin-left: auto; color: var(--fg2);
+    }
+    .l2-section {
+      margin-bottom: 40px;
+      opacity: 0; transform: translateY(16px);
+    }
+    .layer2.visible .l2-section {
+      animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) calc(var(--i) * 80ms + 150ms) forwards;
+    }
+    .l2-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;
+      font-weight: 600; color: var(--fg2); margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .l2-label::before {
+      content: ''; width: 3px; height: 14px;
+      background: var(--accent); border-radius: 1px; flex-shrink: 0;
+    }
+    .l2-card {
+      padding: 20px; border-radius: 10px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+    }
+    .l2-card h3 {
+      font-family: var(--h-font); font-size: 18px; font-weight: 600; margin-bottom: 8px;
+    }
+    .l2-card p { font-size: 14px; color: var(--fg2); line-height: 1.6; }
+    .l2-tags { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .l2-tag {
+      font-size: 11px; padding: 4px 10px; border-radius: 20px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      color: var(--fg2);
+    }
+    .l2-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .l2-pill {
+      font-size: 13px; padding: 8px 16px; border-radius: 20px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+    }
+    .l2-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    .l2-stat { text-align: center; }
+    .l2-stat strong {
+      display: block; font-family: var(--h-font);
+      font-size: 22px; font-weight: 600; margin-bottom: 4px;
+    }
+    .l2-stat span { font-size: 12px; color: var(--fg2); }
+    .l2-list { display: flex; flex-direction: column; gap: 12px; }
+    .l2-list-item {
+      font-size: 14px; padding: 12px 16px; border-radius: 8px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+    }
+    .l2-list-item span { color: var(--fg2); }
+
+    /* ═══ LAYER 2 EXIT ═══ */
+    .layer2.exiting {
+      opacity: 0; transform: scale(0.98);
+      transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ═══ PORTRAIT RETURN ═══ */
+    .portrait.returning .portrait-content {
+      animation: return-reveal 0.6s cubic-bezier(0.16,1,0.3,1) forwards;
+    }
+    .portrait.returning .breath-wrap { opacity: 1; }
+    .portrait.returning .breath-bg { opacity: 0.5; }
+    @keyframes return-reveal {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* ═══ PROTOTYPE CONTROLS ═══ */
+    .proto {
+      position: fixed; top: 12px; right: 12px; z-index: 100;
+      display: flex; gap: 6px; padding: 4px;
+      background: rgba(128,128,128,0.15); border-radius: 20px;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    .proto button {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid transparent; transition: border-color 0.2s;
+      position: relative;
+    }
+    .proto button.on { border-color: var(--accent); }
+    .proto button .dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* ═══ RESPONSIVE ═══ */
+    @media (min-width: 640px) {
+      .portrait-content { padding-left: 40px; padding-right: 40px; }
+      .layer2 { padding-left: 40px; padding-right: 40px; }
+    }
+
+    /* ═══ REDUCED MOTION ═══ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .breath-bg, .breath-intense { display: none; }
+      .identity-statement, .person-name, .dimension, .trace, .social-row, .explore-hint,
+      .l2-section { opacity: 1 !important; transform: none !important; }
+    }
+  </style>
+</head>
+<body data-presence="canvas-signal-day">
+
+  <!-- ═══ LAYER 1: THE LIVING PORTRAIT ═══ -->
+  <div class="portrait" id="portrait">
+    <div class="breath-wrap" id="breathWrap">
+      <div class="breath-bg"></div>
+      <div class="breath-intense"></div>
+    </div>
+    <div class="grain"></div>
+
+    <div class="portrait-content">
+      <!-- La Voce -->
+      <section class="voice-zone">
+        <p class="identity-statement">Ingegnere che costruisce strumenti per l'identità digitale. Prima di questo, 10 anni a scrivere sistemi distribuiti per startup e corporate.</p>
+        <p class="person-name">Tommaso Rinaldi</p>
+      </section>
+
+      <!-- Le Dimensioni -->
+      <section class="dimensions-zone">
+        <div class="dimension dim-primary dim-s0 recency-high" data-section="projects">
+          <span class="dim-icon">🛠</span>
+          <div class="dim-body">
+            <span class="dim-title">Builder</span>
+            <span class="dim-detail">OpenSelf · AI-powered identity</span>
+          </div>
+        </div>
+        <div class="dim-row">
+          <div class="dimension dim-s1 recency-med" data-section="running">
+            <span class="dim-icon">🏃</span>
+            <div class="dim-body">
+              <span class="dim-title">Runner</span>
+              <span class="dim-detail">PB 1:42:03</span>
+            </div>
+          </div>
+          <div class="dimension dim-s2 recency-high" data-section="music">
+            <span class="dim-icon">🎵</span>
+            <div class="dim-body">
+              <span class="dim-title">Music</span>
+              <span class="dim-detail">Burial, Tycho</span>
+            </div>
+          </div>
+        </div>
+        <div class="dimension dim-s3 recency-low" data-section="reading">
+          <span class="dim-icon">📚</span>
+          <div class="dim-body">
+            <span class="dim-title">Reader</span>
+            <span class="dim-detail">The Pragmatic Programmer</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Il Polso -->
+      <section class="pulse-zone">
+        <div class="life-traces">
+          <span class="trace">committed to openself · 2h ago</span>
+          <span class="trace-sep">·</span>
+          <span class="trace">ran 6.2km this morning</span>
+          <span class="trace-sep">·</span>
+          <span class="trace">listening to Tycho — Dive</span>
+        </div>
+        <div class="social-row">
+          <a href="#" aria-label="GitHub"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></a>
+          <a href="#" aria-label="LinkedIn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
+          <a href="#" aria-label="Email"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></a>
+        </div>
+        <div class="explore-hint">hold to explore</div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══ LAYER 2: THE DEEP DIVE ═══ -->
+  <div class="layer2" id="layer2">
+    <div class="l2-inner">
+      <header class="l2-header">
+        <button class="back-btn" type="button" id="backBtn">
+          <span>←</span> Portrait
+        </button>
+        <span class="l2-name">Tommaso Rinaldi</span>
+      </header>
+
+      <section class="l2-section" style="--i:0">
+        <div class="l2-label">Progetti</div>
+        <div class="l2-card">
+          <h3>OpenSelf</h3>
+          <p>AI-powered personal page builder. La tua identità digitale, curata da un agente che ti conosce. Conversation-first, local-first.</p>
+          <div class="l2-tags">
+            <span class="l2-tag">TypeScript</span>
+            <span class="l2-tag">Next.js</span>
+            <span class="l2-tag">AI SDK</span>
+            <span class="l2-tag">SQLite</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="l2-section" style="--i:1">
+        <div class="l2-label">Skills</div>
+        <div class="l2-pills">
+          <span class="l2-pill">TypeScript</span>
+          <span class="l2-pill">React</span>
+          <span class="l2-pill">Node.js</span>
+          <span class="l2-pill">System Design</span>
+          <span class="l2-pill">AI/ML</span>
+          <span class="l2-pill">SQLite</span>
+          <span class="l2-pill">DevOps</span>
+        </div>
+      </section>
+
+      <section class="l2-section" style="--i:2">
+        <div class="l2-label">Running</div>
+        <div class="l2-stats">
+          <div class="l2-stat">
+            <strong>1:42:03</strong>
+            <span>Mezza maratona PB</span>
+          </div>
+          <div class="l2-stat">
+            <strong>847 km</strong>
+            <span>Quest'anno</span>
+          </div>
+          <div class="l2-stat">
+            <strong>4:52</strong>
+            <span>/km passo medio</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="l2-section" style="--i:3">
+        <div class="l2-label">Musica</div>
+        <div class="l2-list">
+          <div class="l2-list-item">Burial — <span>Untrue</span></div>
+          <div class="l2-list-item">Boards of Canada — <span>Music Has the Right to Children</span></div>
+          <div class="l2-list-item">Tycho — <span>Dive</span></div>
+        </div>
+      </section>
+
+      <section class="l2-section" style="--i:4">
+        <div class="l2-label">Letture</div>
+        <div class="l2-list">
+          <div class="l2-list-item">The Pragmatic Programmer <span>— Hunt & Thomas</span></div>
+          <div class="l2-list-item">Designing Data-Intensive Applications <span>— Kleppmann</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══ PRESENCE TOGGLE (prototype only) ═══ -->
+  <nav class="proto" id="proto" aria-label="Presence variants">
+    <button data-p="canvas-signal-day" class="on" title="Default Professional">
+      <span class="dot" style="background:#fafaf9;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.15)"></span>
+    </button>
+    <button data-p="archive-narrative-night" title="Noir Editorial">
+      <span class="dot" style="background:#07080f;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.2)"></span>
+    </button>
+    <button data-p="canvas-terminal-night" title="The Developer">
+      <span class="dot" style="background:#0f0f0e;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.2)"></span>
+    </button>
+  </nav>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+    const portrait = $('#portrait');
+    const layer2 = $('#layer2');
+    const breathWrap = $('#breathWrap');
+
+    let pressStart = 0, pressTimer = null, state = 'portrait';
+
+    // ─── Entrance ───
+    requestAnimationFrame(() => {
+      setTimeout(() => breathWrap.classList.add('on'), 400);
+    });
+
+    // ─── Deep Breath ───
+    function enterInhale() {
+      portrait.classList.add('inhaling');
+      if (navigator.vibrate) navigator.vibrate(10);
+      pressTimer = setTimeout(() => {
+        portrait.classList.add('charged');
+        if (navigator.vibrate) navigator.vibrate(5);
+      }, 350);
+    }
+
+    function cancelInhale() {
+      clearTimeout(pressTimer);
+      portrait.classList.remove('inhaling', 'charged');
+    }
+
+    function triggerExhale() {
+      portrait.classList.remove('inhaling', 'charged');
+      portrait.classList.add('exhaling');
+      state = 'transitioning';
+      if (navigator.vibrate) navigator.vibrate([10, 40, 20]);
+      setTimeout(() => {
+        portrait.style.display = 'none';
+        portrait.classList.remove('exhaling');
+        layer2.classList.add('visible');
+        document.body.style.overflow = 'auto';
+        state = 'layer2';
+      }, 650);
+    }
+
+    function returnToPortrait() {
+      layer2.classList.add('exiting');
+      setTimeout(() => {
+        layer2.classList.remove('visible', 'exiting');
+        // Reset l2-section animations
+        $$('.l2-section').forEach(s => { s.style.opacity = '0'; s.style.transform = 'translateY(16px)'; });
+        portrait.style.display = '';
+        portrait.classList.add('returning');
+        breathWrap.classList.add('on');
+        document.body.style.overflow = 'hidden';
+        state = 'portrait';
+        setTimeout(() => portrait.classList.remove('returning'), 700);
+      }, 400);
+    }
+
+    // Pointer events on portrait
+    portrait.addEventListener('pointerdown', e => {
+      if (state !== 'portrait' || e.target.closest('.proto')) return;
+      pressStart = Date.now();
+      enterInhale();
+    });
+
+    const handleRelease = () => {
+      if (!portrait.classList.contains('inhaling') && !portrait.classList.contains('charged')) return;
+      const held = Date.now() - pressStart;
+      if (held < 350) { cancelInhale(); return; }
+      triggerExhale();
+    };
+
+    portrait.addEventListener('pointerup', handleRelease);
+    portrait.addEventListener('pointercancel', () => { if (state === 'portrait') cancelInhale(); });
+    portrait.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Back button
+    $('#backBtn').addEventListener('click', returnToPortrait);
+
+    // Dimension tap → jump to L2 section
+    $$('.dimension').forEach(dim => {
+      dim.addEventListener('click', e => {
+        // Don't trigger if mid-inhale
+        if (portrait.classList.contains('inhaling')) return;
+      });
+    });
+
+    // ─── Presence Toggle ───
+    const themeColors = {
+      'canvas-signal-day': '#fafaf9',
+      'archive-narrative-night': '#07080f',
+      'canvas-terminal-night': '#0f0f0e'
+    };
+
+    $$('.proto button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = btn.dataset.p;
+        document.body.setAttribute('data-presence', p);
+        $$('.proto button').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        $('#tc').content = themeColors[p] || '#fafaf9';
+      });
+    });
+  </script>
+</body>
+</html>

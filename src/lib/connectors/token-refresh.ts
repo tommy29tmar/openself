@@ -41,6 +41,11 @@ export async function withTokenRefresh<T>(
   } catch (error) {
     if (!(error instanceof TokenExpiredError)) throw error;
 
+    // Guard: if no refresh token available, we can't recover
+    if (!creds.refresh_token) {
+      throw new TokenExpiredError();
+    }
+
     // Refresh token
     const newTokens = await refreshFn(creds.refresh_token);
     updateConnectorCredentials(connectorId, {

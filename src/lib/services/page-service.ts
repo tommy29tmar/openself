@@ -230,7 +230,11 @@ export function requestPublish(username: string, sessionId: string = "__default_
 
 /**
  * Promote draft → published. Called by POST /api/publish (user action).
- * Atomic: reads draft, creates/updates published row, resets draft status.
+ * Reads draft, creates/updates published row, resets draft status.
+ *
+ * NOTE: This function does NOT wrap itself in a transaction. When called from
+ * the publish pipeline it runs inside the pipeline's outer transaction. When
+ * called standalone (e.g. tests), the caller must provide its own transaction.
  */
 export function confirmPublish(
   username: string,
@@ -242,59 +246,55 @@ export function confirmPublish(
     throw new PublishError(`Username "${username}" is reserved`, "USERNAME_RESERVED", 400);
   }
 
-  const txn = sqlite.transaction(() => {
-    // Guard 2: draft must be in approval_pending
-    const draftRow = sqlite
-      .prepare("SELECT * FROM page WHERE id = ?")
-      .get(sessionId) as any;
+  // Guard 2: draft must be in approval_pending
+  const draftRow = sqlite
+    .prepare("SELECT * FROM page WHERE id = ?")
+    .get(sessionId) as any;
 
-    if (!draftRow || draftRow.status !== "approval_pending") {
-      throw new Error("No page pending approval");
+  if (!draftRow || draftRow.status !== "approval_pending") {
+    throw new Error("No page pending approval");
+  }
+
+  // Guard 3: ownership — reject if username is already published by another profile/session
+  const profileId = draftRow.profile_id ?? draftRow.session_id;
+  const existingPublished = sqlite
+    .prepare("SELECT session_id, profile_id FROM page WHERE id = ? AND status = 'published'")
+    .get(username) as { session_id: string; profile_id: string | null } | undefined;
+
+  if (existingPublished) {
+    const existingProfile = existingPublished.profile_id ?? existingPublished.session_id;
+    if (existingProfile !== profileId) {
+      throw new PublishError("Username already claimed by another user", "USERNAME_TAKEN", 409);
     }
+  }
 
-    // Guard 3: ownership — reject if username is already published by another profile/session
-    const profileId = draftRow.profile_id ?? draftRow.session_id;
-    const existingPublished = sqlite
-      .prepare("SELECT session_id, profile_id FROM page WHERE id = ? AND status = 'published'")
-      .get(username) as { session_id: string; profile_id: string | null } | undefined;
+  // Step 1: de-publish any previously published page with a different username,
+  // scoped to this profile (fallback: session).
+  sqlite
+    .prepare(
+      "DELETE FROM page WHERE status = 'published' AND (profile_id = ? OR session_id = ?) AND username != ?",
+    )
+    .run(profileId, sessionId, username);
 
-    if (existingPublished) {
-      const existingProfile = existingPublished.profile_id ?? existingPublished.session_id;
-      if (existingProfile !== profileId) {
-        throw new PublishError("Username already claimed by another user", "USERNAME_TAKEN", 409);
-      }
-    }
+  // Step 2: upsert published row (id=username, status="published", config from draft)
+  const now = new Date().toISOString();
+  sqlite
+    .prepare(
+      `INSERT INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at, source_language)
+       VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         username = excluded.username,
+         config = excluded.config,
+         config_hash = excluded.config_hash,
+         status = 'published',
+         generated_at = excluded.generated_at,
+         updated_at = excluded.updated_at,
+         source_language = excluded.source_language`,
+    )
+    .run(username, sessionId, profileId, username, draftRow.config, draftRow.config_hash, draftRow.generated_at, now, sourceLanguage ?? null);
 
-    // Step 1: de-publish any previously published page with a different username,
-    // scoped to this profile (fallback: session).
-    sqlite
-      .prepare(
-        "DELETE FROM page WHERE status = 'published' AND (profile_id = ? OR session_id = ?) AND username != ?",
-      )
-      .run(profileId, sessionId, username);
-
-    // Step 2: upsert published row (id=username, status="published", config from draft)
-    const now = new Date().toISOString();
-    sqlite
-      .prepare(
-        `INSERT INTO page (id, session_id, profile_id, username, config, config_hash, status, generated_at, updated_at, source_language)
-         VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           username = excluded.username,
-           config = excluded.config,
-           config_hash = excluded.config_hash,
-           status = 'published',
-           generated_at = excluded.generated_at,
-           updated_at = excluded.updated_at,
-           source_language = excluded.source_language`,
-      )
-      .run(username, sessionId, profileId, username, draftRow.config, draftRow.config_hash, draftRow.generated_at, now, sourceLanguage ?? null);
-
-    // Step 3: reset draft status back to "draft"
-    sqlite
-      .prepare("UPDATE page SET status = 'draft', updated_at = ? WHERE id = ?")
-      .run(now, sessionId);
-  });
-
-  txn();
+  // Step 3: reset draft status back to "draft"
+  sqlite
+    .prepare("UPDATE page SET status = 'draft', updated_at = ? WHERE id = ?")
+    .run(now, sessionId);
 }

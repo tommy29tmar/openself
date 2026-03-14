@@ -3,6 +3,8 @@ import { consumeAuthToken } from "@/lib/auth/tokens";
 import { db } from "@/lib/db";
 import { profiles, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getClientIp } from "@/lib/middleware/rate-limit";
+import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 
 /**
  * POST /api/auth/verify-email
@@ -10,6 +12,15 @@ import { eq } from "drizzle-orm";
  * Consume an email verification token and mark the user as verified.
  */
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const rateResult = checkAuthRateLimit(ip, "magic_link");
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many attempts" },
+      { status: 429 },
+    );
+  }
+
   try {
     const body = await req.json();
     const { token } = body;

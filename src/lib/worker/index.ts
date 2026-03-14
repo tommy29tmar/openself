@@ -298,12 +298,22 @@ export async function processJobs(): Promise<number> {
       AND datetime(COALESCE(heartbeat_at, updated_at)) < datetime('now', '-${STALE_JOB_TIMEOUT_MINUTES} minutes')
   `).run(new Date().toISOString());
 
+  // Recover any other stale running jobs (non-connector_sync) — universal fallback for worker crashes
+  sqlite.prepare(`
+    UPDATE jobs SET status = 'failed', last_error = 'stale running job (worker crash)', updated_at = ?
+    WHERE status = 'running'
+      AND job_type != 'connector_sync'
+      AND datetime(updated_at) < datetime('now', '-30 minutes')
+  `).run(new Date().toISOString());
+
   const now = new Date().toISOString();
 
   const dueJobs = db
     .select()
     .from(jobs)
     .where(and(eq(jobs.status, "queued"), lte(jobs.runAfter, now)))
+    .orderBy(jobs.runAfter)
+    .limit(50)
     .all();
 
   let processed = 0;
