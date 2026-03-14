@@ -63,6 +63,7 @@ export async function createUser(
       id,
       email: email.toLowerCase().trim(),
       passwordHash,
+      emailVerified: 1,
       displayName: displayName ?? null,
       createdAt: now,
       updatedAt: now,
@@ -72,7 +73,7 @@ export async function createUser(
   return {
     id,
     email: email.toLowerCase().trim(),
-    emailVerified: 0,
+    emailVerified: 1,
     displayName: displayName ?? null,
     createdAt: now,
     updatedAt: now,

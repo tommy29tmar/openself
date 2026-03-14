@@ -128,6 +128,10 @@ export async function POST(req: Request) {
           }
           // Retry: reuse existing user
           user = existingUser;
+          // Ensure existing user is verified (may have registered via /api/auth/signup without verifying)
+          if (existingUser.emailVerified !== 1) {
+            sqlite.prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(existingUser.id);
+          }
         } else {
           // Different owner or unlinked profile — opaque rejection (no password oracle)
           return NextResponse.json(
@@ -148,6 +152,7 @@ export async function POST(req: Request) {
                 id: userId,
                 email: email.toLowerCase().trim(),
                 passwordHash,
+                emailVerified: 1,
                 createdAt: now,
                 updatedAt: now,
               })
