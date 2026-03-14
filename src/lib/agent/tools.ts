@@ -24,6 +24,7 @@ import { type PageConfig } from "@/lib/page-config/schema";
 import { listSurfaces, listVoices } from "@/lib/presence";
 import { logEvent } from "@/lib/services/event-service";
 import { repairJsonValue } from "@/lib/agent/tool-call-repair";
+import { stableDeepEqual } from "@/lib/utils/stable-deep-equal";
 import { getFactLanguage } from "@/lib/services/preferences-service";
 import { translatePageContent } from "@/lib/ai/translate";
 import { saveMemory, type MemoryType } from "@/lib/services/memory-service";
@@ -265,18 +266,6 @@ export function createAgentTools(
     _identityBlockedThisTurn = true;
     mergeSessionMeta(sessionId, { pendingConfirmations: pendings });
     return { requiresConfirmation: true, message: `Deleting identity/${key} requires confirmation. Explain to the user what will be removed and ask them to confirm.` };
-  }
-
-  // --- Stable deep equality for duplicate detection ---
-  function stableDeepEqual(a: unknown, b: unknown): boolean {
-    return JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
-  }
-  function sortKeys(obj: unknown): unknown {
-    if (obj === null || typeof obj !== "object") return obj;
-    if (Array.isArray(obj)) return obj.map(sortKeys);
-    return Object.fromEntries(
-      Object.entries(obj as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortKeys(v)])
-    );
   }
 
   type DeleteGateResult =
