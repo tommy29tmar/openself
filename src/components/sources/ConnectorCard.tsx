@@ -231,9 +231,14 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
           />
         )}
       </div>
-      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 10 }}>
+      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: status?.lastSync ? 4 : 10 }}>
         {definition.description}
       </p>
+      {status?.lastSync && (
+        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginBottom: 10 }}>
+          Last sync: {relativeTime(status.lastSync)}
+        </p>
+      )}
 
       {/* Not connected */}
       {!isConnected && !hasError && definition.authType === "oauth" && (
@@ -506,6 +511,18 @@ export function ConnectorCard({ definition, status, onRefresh }: ConnectorCardPr
       )}
     </div>
   );
+}
+
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return "just now";
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function btnStyle(bg: string, color: string): CSSProperties {
