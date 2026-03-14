@@ -124,6 +124,16 @@ export type ActivityItem = {
   activityType?: "sport" | "volunteering" | "event" | "club" | "other";
   frequency?: string;
   description?: string;
+  /** Structured numeric data preserved from connector facts (Strava etc.).
+   *  Survives translation pipeline untouched — rendered directly by component. */
+  stats?: {
+    activityCount?: number;
+    distanceKm?: number;
+    timeHrs?: number;
+    elevationM?: number;
+    /** Pre-formatted pace string (e.g. "5:30/km") — locale-independent. */
+    pace?: string;
+  };
 };
 export type ActivitiesContent = { items: ActivityItem[]; title?: string; collapseLabel?: string; moreLabel?: string };
 

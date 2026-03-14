@@ -370,6 +370,10 @@ export function createAgentTools(
    * Anti-loop: _recomposing flag prevents re-entry.
    * Idempotency: computeConfigHash(composed) compared to draft.configHash
    * (both are SHA-256 of full config JSON). Skip upsertDraft on match.
+   *
+   * In steady_state mode, triggers fire-and-forget re-personalization for
+   * impacted sections so that personalized copy is refreshed when facts change
+   * (prevents bio revert when e.g. title changes).
    */
   let _recomposing = false;
   function recomposeAfterMutation(): void {
@@ -412,6 +416,41 @@ export function createAgentTools(
       }
 
       upsertDraft(currentDraft?.username ?? "draft", composed, sessionId);
+
+      // Fire-and-forget re-personalization in steady_state mode.
+      // When facts change, section_copy_state hashes become stale and
+      // mergeActiveSectionCopy falls back to deterministic content.
+      // Re-personalizing here refreshes the hashes so preview/publish
+      // continue to show LLM-personalized copy.
+      if (mode === "steady_state" && effectiveOwnerKey) {
+        const soul = getActiveSoul(effectiveOwnerKey);
+        if (soul?.compiled) {
+          const publishable = filterPublishableFacts(allFacts);
+          const soulHash = computeHash(soul.compiled);
+          const impacted = detectImpactedSections(publishable, effectiveOwnerKey, factLang, soulHash);
+          if (impacted.length > 0) {
+            (async () => {
+              try {
+                const meta = getSessionMeta(sessionId);
+                const archetype = typeof meta.archetype === "string" ? meta.archetype : undefined;
+                const impactedSections = impacted
+                  .map(type => composed.sections.find((s: any) => s.type === type))
+                  .filter((s): s is typeof composed.sections[number] => !!s);
+                const orderedSections = prioritizeSections(impactedSections, archetype);
+                for (const section of orderedSections) {
+                  await personalizeSection({
+                    section, ownerKey: effectiveOwnerKey, language: factLang,
+                    publishableFacts: publishable,
+                    soulCompiled: soul.compiled, username: currentDraft?.username ?? "draft",
+                  });
+                }
+              } catch (err) {
+                console.error("[recompose] personalization error:", err);
+              }
+            })();
+          }
+        }
+      }
     } finally {
       _recomposing = false;
     }

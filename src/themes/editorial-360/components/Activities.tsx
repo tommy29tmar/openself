@@ -2,11 +2,20 @@
 import React, { useState } from "react";
 import type { SectionProps } from "../../types";
 
+type ActivityStats = {
+    activityCount?: number;
+    distanceKm?: number;
+    timeHrs?: number;
+    elevationM?: number;
+    pace?: string;
+};
+
 type ActivityItem = {
     name: string;
     activityType?: string;
     frequency?: string;
     description?: string;
+    stats?: ActivityStats;
 };
 
 type ActivitiesContent = {
@@ -15,6 +24,22 @@ type ActivitiesContent = {
     collapseLabel?: string;
     moreLabel?: string;
 };
+
+/** Render structured stats as locale-independent segments separated by middle dot.
+ *  Falls back to description string for non-structured items. */
+function renderDescription(item: ActivityItem): string | null {
+    if (item.stats) {
+        const s = item.stats;
+        const parts: string[] = [];
+        if (s.activityCount != null) parts.push(`${s.activityCount}`);
+        if (s.distanceKm != null) parts.push(`${s.distanceKm} km`);
+        if (s.timeHrs != null) parts.push(`${s.timeHrs} h`);
+        if (s.elevationM != null) parts.push(`${s.elevationM}m D+`);
+        if (s.pace) parts.push(s.pace);
+        return parts.length > 0 ? parts.join(" \u00b7 ") : null;
+    }
+    return item.description || null;
+}
 
 export function Activities({ content, variant }: SectionProps<ActivitiesContent>) {
     const { items = [], title, collapseLabel, moreLabel } = content;
@@ -45,13 +70,16 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
             <section className="theme-reveal">
                 <h2 className="section-label">{title || "Activities"}</h2>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {(expanded ? items : visible).map((item, i) => (
-                        <div key={i} style={cardStyle}>
-                            <div style={nameStyle}>{item.name}</div>
-                            {item.description && <div style={descStyle}>{item.description}</div>}
-                            {item.activityType && <div style={typeStyle}>{item.activityType}</div>}
-                        </div>
-                    ))}
+                    {(expanded ? items : visible).map((item, i) => {
+                        const desc = renderDescription(item);
+                        return (
+                            <div key={i} style={cardStyle}>
+                                <div style={nameStyle}>{item.name}</div>
+                                {desc && <div style={descStyle}>{desc}</div>}
+                                {item.activityType && <div style={typeStyle}>{item.activityType}</div>}
+                            </div>
+                        );
+                    })}
                 </div>
                 {hidden.length > 0 && (
                     <button type="button" onClick={() => setExpanded(!expanded)}
@@ -64,7 +92,7 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
                         onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
                         onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
                     >
-                        <span>{expanded ? "▴" : "▾"}</span>
+                        <span>{expanded ? "\u25b4" : "\u25be"}</span>
                         <span>{expanded ? (collapseLabel || "collapse") : `${hidden.length} ${moreLabel || "more"}`}</span>
                     </button>
                 )}
@@ -97,36 +125,39 @@ export function Activities({ content, variant }: SectionProps<ActivitiesContent>
                 </div>
             ) : (
                 <div className="space-y-12">
-                    {items.map((item, index) => (
-                        <React.Fragment key={index}>
-                            <article className="group">
-                                <div className="flex items-baseline gap-4 mb-2">
-                                    <h3 className="text-2xl md:text-3xl font-[var(--page-font-heading)] font-medium group-hover:text-[var(--page-accent)] transition-colors">
-                                        {item.name}
-                                    </h3>
-                                    {item.activityType && (
-                                        <span className="px-3 py-1 text-xs uppercase tracking-widest font-medium text-[var(--page-fg-secondary)] bg-[var(--page-badge-bg)] border border-[var(--page-card-border)] rounded-full">
-                                            {item.activityType}
-                                        </span>
-                                    )}
-                                </div>
-                                {item.frequency && (
-                                    <div className="text-sm font-mono tracking-tight text-[var(--page-fg-secondary)] mt-1">
-                                        {item.frequency}
+                    {items.map((item, index) => {
+                        const desc = renderDescription(item);
+                        return (
+                            <React.Fragment key={index}>
+                                <article className="group">
+                                    <div className="flex items-baseline gap-4 mb-2">
+                                        <h3 className="text-2xl md:text-3xl font-[var(--page-font-heading)] font-medium group-hover:text-[var(--page-accent)] transition-colors">
+                                            {item.name}
+                                        </h3>
+                                        {item.activityType && (
+                                            <span className="px-3 py-1 text-xs uppercase tracking-widest font-medium text-[var(--page-fg-secondary)] bg-[var(--page-badge-bg)] border border-[var(--page-card-border)] rounded-full">
+                                                {item.activityType}
+                                            </span>
+                                        )}
                                     </div>
-                                )}
-                                {item.description && (
-                                    <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-2xl text-lg mt-3">
-                                        {item.description}
-                                    </p>
-                                )}
-                            </article>
+                                    {item.frequency && (
+                                        <div className="text-sm font-mono tracking-tight text-[var(--page-fg-secondary)] mt-1">
+                                            {item.frequency}
+                                        </div>
+                                    )}
+                                    {desc && (
+                                        <p className="text-[var(--page-fg-secondary)] leading-relaxed max-w-2xl text-lg mt-3">
+                                            {desc}
+                                        </p>
+                                    )}
+                                </article>
 
-                            {index < items.length - 1 && (
-                                <div className="entry-dot-separator" />
-                            )}
-                        </React.Fragment>
-                    ))}
+                                {index < items.length - 1 && (
+                                    <div className="entry-dot-separator" />
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
                 </div>
             )}
         </section>
