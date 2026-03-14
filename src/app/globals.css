@@ -430,6 +430,7 @@
 
 .theme-reveal {
   opacity: 0;
+  pointer-events: none;
   transform: translateY(var(--os-dna-reveal-distance, var(--reveal-distance, 12px)));
   transition:
     opacity var(--reveal-duration, 600ms) var(--os-dna-ease, var(--reveal-easing, cubic-bezier(0.16, 1, 0.3, 1))),
@@ -438,12 +439,14 @@
 
 .theme-reveal.revealed {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
 }
 
 /* Builder preview: show all sections immediately (no scroll-reveal) */
 .preview-mode .theme-reveal {
   opacity: 1;
+  pointer-events: auto;
   transform: none;
 }
 
@@ -539,6 +542,7 @@
 @media (prefers-reduced-motion: reduce) {
   .theme-reveal {
     opacity: 1;
+    pointer-events: auto;
     transform: none;
     transition: none;
     animation: none;
