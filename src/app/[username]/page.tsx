@@ -8,9 +8,51 @@ import { translatePageContent } from "@/lib/ai/translate";
 import { parseAcceptLanguage, isCrawler } from "@/lib/i18n/accept-language";
 import { isLanguageCode } from "@/lib/i18n/languages";
 import { TranslationBanner } from "@/components/page/TranslationBanner";
+import type { PageConfig } from "@/lib/page-config/schema";
 
 // Disable Next.js route cache — always read fresh from DB
 export const dynamic = "force-dynamic";
+
+/** Build JSON-LD Person structured data from published page config. */
+function buildJsonLd(config: PageConfig, username: string): Record<string, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://openself.dev";
+  const hero = config.sections.find((s) => s.type === "hero");
+  const name = typeof hero?.content?.name === "string" ? hero.content.name : username;
+  const headline = typeof hero?.content?.tagline === "string" ? hero.content.tagline : undefined;
+
+  // Collect sameAs URLs from social section links + hero contact bar links
+  const sameAs: string[] = [];
+  const seen = new Set<string>();
+
+  const socialSection = config.sections.find((s) => s.type === "social");
+  if (Array.isArray(socialSection?.content?.links)) {
+    for (const link of socialSection.content.links as { url?: string }[]) {
+      if (typeof link?.url === "string" && !seen.has(link.url)) {
+        sameAs.push(link.url);
+        seen.add(link.url);
+      }
+    }
+  }
+  if (Array.isArray(hero?.content?.socialLinks)) {
+    for (const link of hero.content.socialLinks as { url?: string }[]) {
+      if (typeof link?.url === "string" && !seen.has(link.url)) {
+        sameAs.push(link.url);
+        seen.add(link.url);
+      }
+    }
+  }
+
+  const jsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name,
+    url: `${baseUrl}/${encodeURIComponent(username)}`,
+  };
+  if (headline) jsonLd.jobTitle = headline;
+  if (sameAs.length > 0) jsonLd.sameAs = sameAs;
+
+  return jsonLd;
+}
 
 type Props = {
   params: Promise<{ username: string }>;
@@ -22,14 +64,38 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const config = getPublishedPage(username);
 
   if (!config) {
-    return { title: "Not Found" };
+    return { title: "Not Found | OpenSelf" };
   }
 
-  const heroSection = config.sections.find((s) => s.type === "hero");
-  const name = heroSection?.content?.name;
-  const title = typeof name === "string" ? name : username;
+  const hero = config.sections.find((s) => s.type === "hero");
+  const bio = config.sections.find((s) => s.type === "bio");
+  const name = typeof hero?.content?.name === "string" ? hero.content.name : username;
+  const headline = typeof hero?.content?.tagline === "string" ? hero.content.tagline : "";
+  const description =
+    (typeof bio?.content?.text === "string" ? bio.content.text.slice(0, 160) : null) ??
+    `${name} on OpenSelf`;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://openself.dev";
+  const ogImageUrl = `${baseUrl}/api/og/${encodeURIComponent(username)}`;
+  const profileUrl = `${baseUrl}/${encodeURIComponent(username)}`;
+  const ogTitle = headline ? `${name} — ${headline}` : name;
 
-  return { title: `${title} | OpenSelf` };
+  return {
+    title: `${name} | OpenSelf`,
+    description,
+    openGraph: {
+      title: ogTitle,
+      description,
+      type: "profile",
+      url: profileUrl,
+      images: [{ url: ogImageUrl, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: ogTitle,
+      description,
+      images: [ogImageUrl],
+    },
+  };
 }
 
 export default async function UsernamePage({ params, searchParams }: Props) {
@@ -39,6 +105,15 @@ export default async function UsernamePage({ params, searchParams }: Props) {
   if (!config) {
     notFound();
   }
+
+  // JSON-LD structured data (always from original config, not translated)
+  const jsonLd = buildJsonLd(config, username);
+  const jsonLdScript = (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
 
   // Owner detection: check if logged-in user owns this page
   const cookieStore = await cookies();
@@ -51,14 +126,24 @@ export default async function UsernamePage({ params, searchParams }: Props) {
 
   // ?lang=original → skip translation
   if (langParam === "original") {
-    return <PageRenderer config={config} isOwner={isOwner} />;
+    return (
+      <>
+        {jsonLdScript}
+        <PageRenderer config={config} isOwner={isOwner} />
+      </>
+    );
   }
 
   // Bot detection: serve original for SEO
   const headerStore = await headers();
   const userAgent = headerStore.get("user-agent");
   if (isCrawler(userAgent)) {
-    return <PageRenderer config={config} isOwner={isOwner} />;
+    return (
+      <>
+        {jsonLdScript}
+        <PageRenderer config={config} isOwner={isOwner} />
+      </>
+    );
   }
 
   // Determine visitor language
@@ -74,7 +159,12 @@ export default async function UsernamePage({ params, searchParams }: Props) {
   // - visitor lang matches page source language
   // - sourceLanguage is null (old pages published before migration 0024)
   if (!visitorLang || !sourceLanguage || visitorLang === sourceLanguage) {
-    return <PageRenderer config={config} isOwner={isOwner} />;
+    return (
+      <>
+        {jsonLdScript}
+        <PageRenderer config={config} isOwner={isOwner} />
+      </>
+    );
   }
 
   // Translate (cache-first, graceful fallback)
@@ -89,6 +179,7 @@ export default async function UsernamePage({ params, searchParams }: Props) {
 
   return (
     <>
+      {jsonLdScript}
       {translationSucceeded && (
         <TranslationBanner
           sourceLanguage={sourceLanguage}
