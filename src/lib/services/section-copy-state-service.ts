@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db as defaultDb } from "@/lib/db";
 import { sectionCopyState } from "@/lib/db/schema";
 
@@ -102,19 +102,37 @@ export function createSectionCopyStateService(db: typeof defaultDb = defaultDb) 
     getAllActiveCopies(
       ownerKey: string,
       language: string,
+      readKeys?: string[],
     ): SectionCopyStateRow[] {
+      // Build the set of all keys to search (deduplicated)
+      const allKeys = readKeys?.length
+        ? [...new Set([...readKeys.filter((k) => k !== ownerKey), ownerKey])]
+        : [ownerKey];
+      // ownerKey is pushed LAST so that when callers build Map(sectionType → copy),
+      // the primary owner's copy wins over legacy readKeys copies.
+
       const rows = db
         .select()
         .from(sectionCopyState)
         .where(
           and(
-            eq(sectionCopyState.ownerKey, ownerKey),
+            allKeys.length === 1
+              ? eq(sectionCopyState.ownerKey, ownerKey)
+              : inArray(sectionCopyState.ownerKey, allKeys),
             eq(sectionCopyState.language, language),
           ),
         )
         .all();
 
-      return rows.map(rowToState);
+      // Sort: readKeys copies first, primary ownerKey copies last
+      // This ensures Map(sectionType → copy) overwrites with primary
+      return rows
+        .sort((a, b) => {
+          const aPrimary = a.ownerKey === ownerKey ? 1 : 0;
+          const bPrimary = b.ownerKey === ownerKey ? 1 : 0;
+          return aPrimary - bPrimary;
+        })
+        .map(rowToState);
     },
 
     /**
