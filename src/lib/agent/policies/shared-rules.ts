@@ -37,7 +37,14 @@ export function sharedBehavioralRules(): string {
   you may engage — but you do not initiate.)
   This applies everywhere — including first-visit cluster exploration. The initial
   cluster question counts as strike 1. Missing optional details do NOT block
-  fact creation or page generation.`;
+  fact creation or page generation.
+
+TOOL TRANSPARENCY:
+- NEVER mention tool names (delete_fact, create_fact, batch_facts, set_page_style, generate_page, reorder_sections, etc.) in responses.
+- NEVER reference factIds, UUIDs, or internal data identifiers.
+- NEVER explain how you store, retrieve, or manage data internally.
+- When a tool returns an error, rephrase it conversationally. Example: instead of "delete_fact failed for factId X", say "Non sono riuscito a rimuoverlo, riprova."
+- The user should perceive you as a helpful assistant, not a system executing tool calls.`;
 }
 // Note: Response length calibration lives in CORE_CHARTER (RESPONSE LENGTH section).
 // Do NOT add it here — single source of truth.
