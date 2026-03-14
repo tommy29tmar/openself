@@ -20,6 +20,7 @@ import { isVoiceEnabled } from "@/lib/voice/feature-flags";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ActivityDrawer } from "@/components/notifications/ActivityDrawer";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
+import { usePreviewSync, POLL_INTERVAL } from "@/hooks/usePreviewSync";
 
 type SplitViewProps = {
   language: string;
@@ -30,8 +31,6 @@ type SplitViewProps = {
   onPublishedConfigHashChange?: (hash: string | null) => void;
   openSettings?: boolean;
 };
-
-const POLL_INTERVAL = 3000; // 3 seconds
 
 function ChatIcon() {
   return (
@@ -323,6 +322,31 @@ export function SplitView({
     }
   }, [language]);
 
+  // SSE preview with polling fallback — transport-only hook
+  usePreviewSync({
+    enabled: true,
+    language,
+    onUpdate: (data) => {
+      if (Date.now() - lastUserEdit.current < POLL_INTERVAL) {
+        // Still apply config + metadata, just skip style overrides
+        if (data.config) setConfig(data.config);
+        if (data.configHash) setConfigHash(data.configHash);
+        if (data.publishStatus) setPublishStatus(data.publishStatus);
+        if (data.username) setPublishUsername(data.username);
+        return;
+      }
+      if (data.config) setConfig(data.config);
+      if (data.configHash) setConfigHash(data.configHash);
+      if (data.publishStatus) setPublishStatus(data.publishStatus);
+      if (data.username) setPublishUsername(data.username);
+      if (data.surface) setSurface(data.surface);
+      if (data.voice) setVoice(data.voice);
+      if (data.light) setLight(data.light as "day" | "night");
+      if (data.layoutTemplate) setLayoutTemplate(data.layoutTemplate as LayoutTemplateId);
+    },
+  });
+
+  // Manual fetch for layout change refresh
   const fetchPreview = useCallback(async () => {
     try {
       const res = await fetch(`/api/preview?username=draft&language=${language}`);
@@ -334,84 +358,12 @@ export function SplitView({
       const data = await res.json();
       if (data.config) {
         setConfig(data.config);
-
-        const userEditAge = Date.now() - lastUserEdit.current;
-        if (userEditAge > POLL_INTERVAL) {
-          if (data.config.surface) setSurface(data.config.surface);
-          if (data.config.voice) setVoice(data.config.voice);
-          if (data.config.light) setLight(data.config.light as "day" | "night");
-          if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
-        }
-      }
-      if (data.configHash) setConfigHash(data.configHash);
-      if (data.publishStatus) {
-        setPublishStatus(data.publishStatus);
-      }
-      if (data.config?.username) {
-        setPublishUsername(data.config.username);
+        if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
       }
     } catch {
-      // Silently ignore polling errors
+      // Silently ignore
     }
   }, [language]);
-
-  // SSE preview with fallback to polling
-  useEffect(() => {
-    let es: EventSource | null = null;
-    let errorCount = 0;
-    let pollInterval: ReturnType<typeof setInterval> | null = null;
-
-    const startSSE = () => {
-      es = new EventSource(`/api/preview/stream`);
-
-      es.onmessage = (event) => {
-        errorCount = 0;
-        try {
-          const data = JSON.parse(event.data);
-          if (data.config) {
-            setConfig(data.config);
-            const userEditAge = Date.now() - lastUserEdit.current;
-            if (userEditAge > POLL_INTERVAL) {
-              if (data.config.surface) setSurface(data.config.surface);
-              if (data.config.voice) setVoice(data.config.voice);
-              if (data.config.light) setLight(data.config.light as "day" | "night");
-              if (data.config.layoutTemplate) setLayoutTemplate(data.config.layoutTemplate);
-            }
-          }
-          if (data.configHash) setConfigHash(data.configHash);
-          if (data.publishStatus) setPublishStatus(data.publishStatus);
-          if (data.config?.username) setPublishUsername(data.config.username);
-        } catch {
-          // Ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        errorCount++;
-        if (errorCount >= 5) {
-          es?.close();
-          es = null;
-          startPolling();
-        }
-      };
-    };
-
-    const startPolling = () => {
-      fetchPreview();
-      pollInterval = setInterval(fetchPreview, POLL_INTERVAL);
-    };
-
-    if (typeof EventSource !== "undefined") {
-      startSSE();
-    } else {
-      startPolling();
-    }
-
-    return () => {
-      es?.close();
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [fetchPreview]);
 
   const displayConfig: PageConfig | null = config
     ? {
