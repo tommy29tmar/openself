@@ -25,6 +25,10 @@ import { useUnreadCount } from "@/hooks/useUnreadCount";
 import { usePreviewSync, POLL_INTERVAL } from "@/hooks/usePreviewSync";
 import { useChatPrefetch } from "@/hooks/useChatPrefetch";
 import { usePresenceHandlers } from "@/hooks/usePresenceHandlers";
+import { useToastManager } from "@/hooks/useToastManager";
+import { ToastContainer } from "@/components/ui/Toast";
+import { getToolToastMessage } from "@/lib/i18n/tool-toast-messages";
+import type { PageChange } from "@/lib/services/page-diff-service";
 
 type SplitViewProps = {
   language: string;
@@ -135,12 +139,50 @@ export function SplitView({
     if (openSettings) setPresenceOpen(true);
   }, [openSettings]);
 
+  // Toast manager
+  const toastManager = useToastManager();
+  const handleToolComplete = useCallback((toolName: string) => {
+    const msg = getToolToastMessage(toolName, language);
+    if (msg) toastManager.add(msg, "success");
+  }, [language, toastManager]);
+
   const hasUnpublishedChanges = Boolean(
     configHash && (
       (publishedConfigHash && configHash !== publishedConfigHash) ||
       (!publishedConfigHash && config)
     )
   );
+
+  // Diff changes for unpublished banner
+  const [pageChanges, setPageChanges] = useState<PageChange[]>([]);
+  useEffect(() => {
+    if (!hasUnpublishedChanges || !publishedConfigHash) {
+      setPageChanges([]);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/draft/diff", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data.success && Array.isArray(data.changes)) {
+          setPageChanges(data.changes);
+        }
+      })
+      .catch(() => {
+        // Diff fetch failure is non-critical
+      });
+    return () => { cancelled = true; };
+  }, [hasUnpublishedChanges, configHash, publishedConfigHash]);
+
+  // Discard draft changes
+  const handleDiscardDraft = useCallback(async () => {
+    const res = await fetch("/api/draft/discard", { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      onPublishedConfigHashChange?.(configHash);
+      setPageChanges([]);
+    }
+  }, [configHash, onPublishedConfigHashChange]);
 
   const t = getUiL10n(language);
   const authenticated = authState?.authenticated ?? false;
@@ -253,6 +295,7 @@ export function SplitView({
     initialMessages: chatInitialMessages,
     disableInitialFetch: chatDataReady,
     isPrimaryVoiceConsumer: isPrimary,
+    onToolComplete: handleToolComplete,
   });
 
   const usernameInput = usernameInputOpen && (
@@ -286,6 +329,9 @@ export function SplitView({
         onPublish={handlePublish}
         unpublishedChangesLabel={t.unpublishedChanges}
         publishLabel={t.publish}
+        changes={pageChanges}
+        language={language}
+        onDiscard={publishedConfigHash ? handleDiscardDraft : undefined}
       />
       <PageRenderer config={displayConfig} previewMode={true} hiddenSections={hiddenSections} />
     </>
@@ -402,6 +448,13 @@ export function SplitView({
           )}
           <ActivityDrawer open={activityOpen} onClose={() => setActivityOpen(false)} language={language} t={t} isMobile={true} onUnreadRefresh={refreshUnread} bellRef={bellRef} />
         </div>
+
+        <ToastContainer
+          toasts={toastManager.toasts}
+          onDismiss={toastManager.dismiss}
+          mobile={isMobile}
+          tabBarVisible={!keyboardOpen}
+        />
       </>
     </VoiceProvider>
   );
