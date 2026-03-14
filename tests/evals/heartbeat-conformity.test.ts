@@ -191,7 +191,7 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
 
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "it");
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "it", ["sess-a"]);
     expect(mockGetActiveSoul).toHaveBeenCalledWith("owner1");
     expect(mockAnalyzeConformity).toHaveBeenCalledWith(
       copies,
@@ -356,7 +356,7 @@ describe("handleHeartbeatDeep — Phase 1c conformity integration", () => {
 
     await handleHeartbeatDeep({ ownerKey: "owner1" });
 
-    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "de");
+    expect(mockGetAllActiveCopies).toHaveBeenCalledWith("owner1", "de", ["sess-a"]);
   });
 
   it("reports action_taken when conformity proposals are created", async () => {

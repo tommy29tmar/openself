@@ -25,7 +25,7 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
   const language = preferences.language ?? preferences.factLanguage ?? "en";
 
   const overrideService = getFactDisplayOverrideService();
-  const existingOverrides = overrideService.getOverridesForOwner(scope.cognitiveOwnerKey);
+  const existingOverrides = overrideService.getOverridesForOwner(scope.cognitiveOwnerKey, scope.knowledgeReadKeys);
   const agentCuratedFactIds = new Set(
     existingOverrides.filter((o) => o.source === "agent").map((o) => o.factId),
   );

@@ -73,6 +73,16 @@ identity infrastructure**.
 3. **AI Aligned With the User** — Every existing AI-powered platform optimizes for
    engagement, ads, or retention. OpenSelf optimizes for identity coherence, personal
    growth, and privacy. This is a philosophical shift.
+4. **Verified Identity Layer** — The digital twin becomes *spendable*. By anchoring
+   data to institutional sources (SPID/CIE, Open Banking, university credentials),
+   OpenSelf evolves from a personal page into a **portable verified identity** that
+   users can share with banks, services, and employers — selectively, with consent,
+   sharing only what's needed. The user experience stays the same: chat, connect,
+   build. But the value of the profile becomes exponentially higher. This is the
+   B2B2C evolution: free for users, paid by businesses that receive verified profiles.
+
+> **The evolution path: Living Page → Digital Twin → Verified Identity.**
+> Same product, same UX. Each layer adds trust and economic value.
 
 What OpenSelf is **not**:
 - No feed, no likes, no followers, no algorithmic ranking
@@ -1388,6 +1398,30 @@ The agent can:
 
 This is not a feature. It is a new product category:
 **the operating system of your digital identity**.
+
+**Level 5 — Verified Identity Broker** (Phase 3+)
+
+The digital twin becomes a **trusted intermediary**. The agent manages not just your
+identity narrative, but your verified identity credentials — and shares them on your
+behalf.
+
+Capabilities:
+- **Identity anchoring** — SPID/CIE verification links the digital twin to a real
+  government-certified identity. Open Banking (PSD2) confirms financial data.
+- **Selective disclosure** — When a bank asks "what's your average income?", the agent
+  shares only that data point — not your entire profile. Consent screen shows exactly
+  what will be shared before transmission.
+- **Trust scoring** — Each fact carries a trust tier (self-declared → connector-verified
+  → institutionally-verified → cross-referenced). The agent computes an overall
+  reliability score.
+- **"Login with OpenSelf"** — OAuth/OIDC provider mode. Services integrate OpenSelf
+  like they integrate "Login with Google", but receive rich verified data instead
+  of just an email address.
+- **Audit trail** — Dashboard showing who received what data, when, with revocation
+  capability.
+
+This transforms OpenSelf from a personal tool into a B2B2C platform: free for users,
+paid by businesses that receive verified profiles (replacing expensive KYC processes).
 
 **Anti-social boundary:** At every level, the agent remains a private assistant.
 No public feed, no likes, no ranking, no comparison. Only private suggestions,
@@ -2888,8 +2922,10 @@ filterPublishableFacts(facts: FactRow[]): FactRow[]
 // Shows ALL sections including incomplete — used for builder preview display
 projectCanonicalConfig(
   facts: FactRow[], username: string, factLanguage: string,
-  draftMeta?: DraftMeta,
+  draftMeta?: DraftMeta, profileId?: string, readKeys?: string[],
 ): PageConfig
+// profileId: avatar lookup + fact_display_overrides owner scoping
+// readKeys: multi-session lookup for curations stored under anon sessionId (found after signup)
 
 // Thin wrapper: applies completeness filter to canonical config
 publishableFromCanonical(canonical: PageConfig): PageConfig
@@ -2898,7 +2934,7 @@ publishableFromCanonical(canonical: PageConfig): PageConfig
 // Convenience: canonical + completeness filter in one call
 projectPublishableConfig(
   facts: FactRow[], username: string, factLanguage: string,
-  draftMeta?: DraftMeta,
+  draftMeta?: DraftMeta, profileId?: string, readKeys?: string[],
 ): PageConfig
 // Equivalent to: publishableFromCanonical(projectCanonicalConfig(...))
 ```
@@ -2915,7 +2951,11 @@ projectPublishableConfig(
 After `projectCanonicalConfig()` produces the deterministic base, `mergeActiveSectionCopy()`
 queries `section_copy_state` for active personalized copies and overlays text-only fields.
 Hash guard: each copy's `factsHash` + `soulHash` must match the current state; stale
-entries are skipped (deterministic fallback). See Section 6.3 Stage 2 for full details.
+entries are skipped (deterministic fallback). `readKeys` is passed through to
+`getAllActiveCopies()` enabling multi-session lookup — curations stored under an anonymous
+sessionId are found after signup via the profile's readKeys. Primary ownerKey copies are
+sorted last so `Map(sectionType → copy)` overwrites correctly (primary wins).
+See Section 6.3 Stage 2 for full details.
 
 **Two configs in publish flow:**
 1. **Canonical config** — composed from publishable facts in `factLanguage`, no translation.
