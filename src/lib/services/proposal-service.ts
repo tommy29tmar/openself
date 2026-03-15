@@ -15,6 +15,41 @@ import {
   filterEditableFields,
 } from "@/lib/services/fact-display-override-service";
 
+/** Safe JSON parse — returns null on failure instead of throwing */
+function safeJsonParse(s: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(s);
+    return typeof parsed === "object" && parsed !== null ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Known content fields that can be added even if not in current */
+const ADDITIVE_FIELDS = new Set([
+  "text", "description", "intro", "title", "frequency",
+  "groups", "items", "links",
+]);
+
+/**
+ * Merge proposed delta fields into current content.
+ * Only overlays keys that exist in current OR are known additive content fields.
+ * Null/undefined values in proposed are ignored (treated as "no change").
+ */
+export function deepMergeProposal(
+  current: Record<string, unknown>,
+  proposed: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...current };
+  for (const [key, val] of Object.entries(proposed)) {
+    if (val === null || val === undefined) continue;
+    if (key in current || ADDITIVE_FIELDS.has(key)) {
+      merged[key] = val;
+    }
+  }
+  return merged;
+}
+
 export type CreateProposalInput = {
   ownerKey: string;
   sectionType: string;
@@ -245,13 +280,19 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
         }
       }
 
-      // All guards pass — upsert into section_copy_state
+      // All guards pass — merge proposed delta into current, then upsert
+      const currentObj = safeJsonParse(proposal.currentContent);
+      const proposedObj = safeJsonParse(proposal.proposedContent);
+      const mergedContent = currentObj && proposedObj
+        ? JSON.stringify(deepMergeProposal(currentObj, proposedObj))
+        : proposal.proposedContent; // fallback for plain-string content
+
       db.insert(sectionCopyState)
         .values({
           ownerKey: proposal.ownerKey,
           sectionType: proposal.sectionType,
           language: proposal.language,
-          personalizedContent: proposal.proposedContent,
+          personalizedContent: mergedContent,
           factsHash: proposal.factsHash,
           soulHash: proposal.soulHash,
           source: "proposal",
@@ -263,7 +304,7 @@ export function createProposalService(db: typeof defaultDb = defaultDb) {
             sectionCopyState.language,
           ],
           set: {
-            personalizedContent: proposal.proposedContent,
+            personalizedContent: mergedContent,
             factsHash: proposal.factsHash,
             soulHash: proposal.soulHash,
             source: "proposal",
