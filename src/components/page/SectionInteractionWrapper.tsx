@@ -122,7 +122,7 @@ export function SectionInteractionWrapper({
       }}
     >
       {actionBar}
-      {children}
+      <div style={{ position: "relative", zIndex: 0 }}>{children}</div>
     </div>
   );
 }
