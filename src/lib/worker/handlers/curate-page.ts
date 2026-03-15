@@ -10,6 +10,15 @@ import { resolveOwnerScopeForWorker } from "@/lib/auth/session";
 import { getPreferences } from "@/lib/services/preferences-service";
 import { logEvent } from "@/lib/services/event-service";
 
+export function hasRealChange(
+  proposedFields: Record<string, unknown>,
+  currentContent: Record<string, unknown>,
+): boolean {
+  return Object.entries(proposedFields).some(([key, val]) =>
+    JSON.stringify(val) !== JSON.stringify(currentContent[key])
+  );
+}
+
 export async function handlePageCuration(payload: Record<string, unknown>): Promise<void> {
   const { ownerKey } = payload as { ownerKey: string };
   const scope = resolveOwnerScopeForWorker(ownerKey);
@@ -69,6 +78,10 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
         const fact = publishable.find((f) => f.id === suggestion.factId);
         if (!fact) continue;
 
+        // fact.value is already parsed (Drizzle mode: "json")
+        const factObj = fact.value as Record<string, unknown>;
+        if (factObj && !hasRealChange(suggestion.fields, factObj)) continue;
+
         createProposal({
           ownerKey: scope.cognitiveOwnerKey,
           sectionType,
@@ -84,11 +97,16 @@ export async function handlePageCuration(payload: Record<string, unknown>): Prom
         });
         totalProposals++;
       } else {
+        const currentContentStr = JSON.stringify(section.content);
+        let sectionObj: Record<string, unknown> | null = null;
+        try { sectionObj = JSON.parse(currentContentStr); } catch {}
+        if (sectionObj && !hasRealChange(suggestion.fields, sectionObj)) continue;
+
         createProposal({
           ownerKey: scope.cognitiveOwnerKey,
           sectionType,
           language,
-          currentContent: JSON.stringify(section.content),
+          currentContent: currentContentStr,
           proposedContent: JSON.stringify(suggestion.fields),
           issueType: "curation",
           reason: suggestion.reason,
