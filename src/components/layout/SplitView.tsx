@@ -423,10 +423,9 @@ export function SplitView({
           <span className="text-blue-800 dark:text-blue-200">
             Verify your email to publish your page.
           </span>
-          <a
-            href="/api/auth/resend-verification"
-            onClick={async (e) => {
-              e.preventDefault();
+          <button
+            type="button"
+            onClick={async () => {
               try {
                 await fetch("/api/auth/resend-verification", { method: "POST" });
               } catch { /* silent */ }
@@ -434,7 +433,7 @@ export function SplitView({
             className="shrink-0 text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
           >
             Resend email
-          </a>
+          </button>
         </div>
       )}
       <UnpublishedBanner
